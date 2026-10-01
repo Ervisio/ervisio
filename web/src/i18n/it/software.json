@@ -1,1 +1,211 @@
-{}
+{
+  "title": "Software",
+  "tab": { "updates": "Aggiornamenti", "store": "Trova software", "installed": "Installati", "history": "Cronologia" },
+  "checkNow": "Controlla ora",
+  "checked": "Controllato {when}",
+  "check": {
+    "done": "Controllo aggiornamenti completato",
+    "warning": "Controllo completato, con un avviso",
+    "failed": "Impossibile controllare gli aggiornamenti"
+  },
+  "cancel": "Annulla",
+  "terminal": "Terminale",
+  "openTerminal": "Apri nel terminale",
+  "update": "Aggiorna",
+  "updateAll": "Aggiorna tutto",
+  "updateSelected_one": "Aggiorna 1 selezionato",
+  "updateSelected_other": "Aggiorna {count} selezionati",
+  "update.to": "Aggiorna alla {version}",
+  "installedBadge": "Installato",
+  "newDependency": "nuova dipendenza",
+  "selectAll": "Seleziona tutto",
+  "selectNone": "Deseleziona tutto",
+  "select": "Seleziona {name}",
+  "showMore": "Mostra altri {count}",
+  "showLess": "Mostra meno",
+  "rebootPending": "Il sistema è stato aggiornato e va riavviato per usare il nuovo kernel o le librerie di base.",
+  "unsupported": { "title": "Nessun gestore di pacchetti trovato" },
+  "error": {
+    "load": "Impossibile caricare l'elenco del software",
+    "search": "La ricerca non è riuscita",
+    "notInstalled": "{name} non è installato"
+  },
+  "hero": {
+    "ready_one": "Aggiornamento pronto",
+    "ready_other": "Aggiornamenti pronti",
+    "aurOnly": "I pacchetti AUR per ora si aggiornano dal terminale.",
+    "size": "{size} da scaricare.",
+    "reboot_one": "{names} richiede un riavvio.",
+    "reboot_other": "{names} richiedono un riavvio.",
+    "security_one": "{names} ha una correzione di sicurezza.",
+    "security_other": "{names} hanno correzioni di sicurezza.",
+    "upToDate": "Tutto è aggiornato",
+    "upToDateText": "Il sistema e le app sono alle versioni più recenti."
+  },
+  "schedule": {
+    "tonight": "Stanotte alle {time}",
+    "at": "Ogni giorno alle {time}",
+    "title": "Aggiorna automaticamente",
+    "text": "Il server installa tutti gli aggiornamenti ogni giorno a quest'ora, come Aggiorna tutto. Usa un timer systemd chiamato linuxadmin-update.timer.",
+    "time": "Ora del giorno",
+    "hint": "Ora del server, formato 24 ore. Se a quell'ora la macchina è spenta, l'aggiornamento parte all'accensione.",
+    "save": "Pianifica gli aggiornamenti",
+    "remove": "Disattiva",
+    "saved": "Aggiornamenti pianificati ogni giorno alle {time}",
+    "removed": "Aggiornamenti automatici disattivati"
+  },
+  "group": { "repo": "Repository ufficiali", "aur": "AUR", "flatpak": "Flatpak" },
+  "aur": {
+    "warning": "I pacchetti AUR sono compilati da script della comunità. Controlla il PKGBUILD prima di aggiornare. Restano deselezionati.",
+    "terminal": "Per ora aggiornali da un terminale (ad esempio: {helper} -Sua)."
+  },
+  "note": {
+    "reboot": "Serve riavviare",
+    "security": "Correzione di sicurezza",
+    "restart": "Riavvia {unit}"
+  },
+  "partial": {
+    "title": "Aggiornare tutto?",
+    "text": "Arch Linux non supporta gli aggiornamenti parziali: aggiornare solo alcuni pacchetti può impedire ai programmi di avviarsi.",
+    "all": "Aggiorna tutti i {count}",
+    "size": "Verranno scaricati circa {size}.",
+    "hint": "Arch non supporta gli aggiornamenti parziali. Se non sai perché, usa Aggiorna tutto."
+  },
+  "store": {
+    "search": "Cerca app e pacchetti",
+    "src": { "repo": "Repo", "aur": "AUR", "flatpak": "Flatpak" },
+    "cat": {
+      "development": "Sviluppo",
+      "internet": "Internet",
+      "graphics": "Grafica",
+      "media": "Multimedia",
+      "system": "Sistema",
+      "servers": "Server"
+    },
+    "yourApps": "Le tue app",
+    "withUpdates_one": "1 con un aggiornamento",
+    "withUpdates_other": "{count} con aggiornamenti",
+    "showAll": "Mostra tutte le {count} app",
+    "popular": "Popolari su {distro}",
+    "results": "Risultati",
+    "none": "Nessun risultato per \"{query}\"",
+    "noneText": "Prova un'altra parola, o una più breve.",
+    "noSuggest": "Nessun suggerimento su questo sistema",
+    "installedCount_one": "1 pacchetto installato",
+    "installedCount_other": "{count} pacchetti installati",
+    "installedText_one": "1 installato da te, gli altri sono dipendenze. Le app qui sopra sono quelle con una voce nel menu.",
+    "installedText_other": "{count} installati da te, gli altri sono dipendenze. Le app qui sopra sono quelle con una voce nel menu.",
+    "allPackages": "Tutti i pacchetti"
+  },
+  "install": {
+    "button": "Installa",
+    "title": "Installare {name}?",
+    "text": "Il software viene aggiunto a tutto il sistema e l'operazione è eseguita da amministratore.",
+    "source": "Da",
+    "version": "Versione",
+    "package": "Pacchetto",
+    "runsAs": "Eseguito come",
+    "admin": "Amministratore (potrebbe servire la tua password)",
+    "deps": "Vengono installati anche i pacchetti da cui dipende.",
+    "confirm": "Installa"
+  },
+  "remove": {
+    "button": "Rimuovi",
+    "title": "Rimuovere {name}?",
+    "titleMany_one": "Rimuovere 1 pacchetto?",
+    "titleMany_other": "Rimuovere {count} pacchetti?",
+    "text": "Il software viene disinstallato insieme alle dipendenze che non servono più a nessuno. I tuoi file restano.",
+    "confirm": "Rimuovi",
+    "word": "rimuovi"
+  },
+  "removeSelected_one": "Rimuovi 1",
+  "removeSelected_other": "Rimuovi {count}",
+  "filterInstalled": "Filtra gli installati",
+  "filter": {
+    "all": "Tutti",
+    "explicit": "Installati da te",
+    "deps": "Dipendenze",
+    "orphans": "Orfani",
+    "aur": "AUR",
+    "flatpak": "Flatpak"
+  },
+  "col": { "package": "Pacchetto", "version": "Versione", "source": "Origine", "size": "Dimensione", "reason": "Motivo", "installed": "Installato" },
+  "reason": { "explicit": "Esplicito", "dependency": "Dipendenza", "orphan": "Orfano" },
+  "installed": {
+    "none": "Nessun pacchetto corrisponde",
+    "noneText": "Cambia il filtro o il testo cercato.",
+    "more": "Mostra altri {count}"
+  },
+  "history": {
+    "none": "Nessuna modifica registrata",
+    "noneText": "Installazioni, aggiornamenti e rimozioni compaiono qui.",
+    "more": "Mostra modifiche precedenti",
+    "installed_one": "1 installato",
+    "installed_other": "{count} installati",
+    "upgraded_one": "1 aggiornato",
+    "upgraded_other": "{count} aggiornati",
+    "removed_one": "1 rimosso",
+    "removed_other": "{count} rimossi",
+    "downgraded_one": "1 riportato a una versione precedente",
+    "downgraded_other": "{count} riportati a una versione precedente",
+    "reinstalled_one": "1 reinstallato",
+    "reinstalled_other": "{count} reinstallati",
+    "verb": { "installed": "Installato", "upgraded": "Aggiornato", "removed": "Rimosso", "downgraded": "Retrocesso", "reinstalled": "Reinstallato" }
+  },
+  "tx": {
+    "show": "Mostra",
+    "hide": "Nascondi",
+    "close": "Chiudi",
+    "busy": "Un'altra modifica al software è già in corso.",
+    "lost": "La connessione è caduta. La modifica potrebbe essere ancora in corso sul server.",
+    "working": "In corso",
+    "failed": "La modifica non è riuscita",
+    "finished": "Completato senza problemi.",
+    "attached": "Avviata in precedenza, ne mostro l'avanzamento",
+    "step": "Passo {step} di {steps}",
+    "preparing": "Preparazione",
+    "counter": "{done} di {total} pacchetti",
+    "secondsLeft": "Mancano circa {count} s",
+    "minutesLeft_one": "Manca circa 1 min",
+    "minutesLeft_other": "Mancano circa {count} min",
+    "log": "Output",
+    "rebootLater": "Si sta aggiornando il kernel o una libreria di base. Riavvia al termine per usarli.",
+    "rebootNow": "Riavvia il computer per concludere: il nuovo kernel o le librerie di base si usano solo dopo un riavvio.",
+    "rebootNeeded": "Riavvia per concludere l'aggiornamento",
+    "title": {
+      "updateAll": "Aggiornamento del sistema",
+      "updateSelected_one": "Aggiornamento di 1 pacchetto",
+      "updateSelected_other": "Aggiornamento di {count} pacchetti",
+      "update": "Aggiornamento di {name}",
+      "upgrade": "Aggiornamento di {name}",
+      "install": "Installazione di {name}",
+      "remove": "Rimozione di {name}",
+      "removeMany_one": "Rimozione di 1 pacchetto",
+      "removeMany_other": "Rimozione di {count} pacchetti"
+    },
+    "done": {
+      "updateAll": "Sistema aggiornato",
+      "updateSelected_one": "1 pacchetto aggiornato",
+      "updateSelected_other": "{count} pacchetti aggiornati",
+      "update": "{name} aggiornato",
+      "upgrade": "{name} aggiornato",
+      "install": "{name} installato",
+      "remove": "{name} rimosso",
+      "removeMany_one": "1 pacchetto rimosso",
+      "removeMany_other": "{count} pacchetti rimossi"
+    },
+    "hint": {
+      "locked": "È in corso un altro gestore di pacchetti. Aspetta che finisca e riprova.",
+      "outdated": "Gli elenchi dei pacchetti non sono aggiornati. Aggiorna prima tutto il sistema, poi riprova.",
+      "conflict": "I file di questo pacchetto entrano in conflitto con file già presenti nel sistema. Guarda l'output qui sopra.",
+      "signature": "Non è stato possibile verificare la firma di un pacchetto. Potrebbe servire aggiornare il portachiavi.",
+      "network": "Impossibile raggiungere i server dei pacchetti. Controlla la connessione di rete."
+    }
+  },
+  "palette": {
+    "updates": "Software: controlla gli aggiornamenti",
+    "store": "Software: trova e installa app",
+    "installed": "Software: pacchetti installati",
+    "history": "Software: cronologia degli aggiornamenti"
+  }
+}

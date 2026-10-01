@@ -1,1 +1,211 @@
-{}
+{
+  "title": "Software",
+  "tab": { "updates": "Updates", "store": "Find software", "installed": "Installed", "history": "History" },
+  "checkNow": "Check now",
+  "checked": "Checked {when}",
+  "check": {
+    "done": "Checked for updates",
+    "warning": "Checked, with a warning",
+    "failed": "Could not check for updates"
+  },
+  "cancel": "Cancel",
+  "terminal": "Terminal",
+  "openTerminal": "Open in terminal",
+  "update": "Update",
+  "updateAll": "Update all",
+  "updateSelected_one": "Update 1 selected",
+  "updateSelected_other": "Update {count} selected",
+  "update.to": "Update to {version}",
+  "installedBadge": "Installed",
+  "newDependency": "new dependency",
+  "selectAll": "Select all",
+  "selectNone": "Select none",
+  "select": "Select {name}",
+  "showMore": "Show {count} more",
+  "showLess": "Show less",
+  "rebootPending": "The system was updated and needs a restart to use the new kernel or core libraries.",
+  "unsupported": { "title": "No package manager found" },
+  "error": {
+    "load": "Could not load the software list",
+    "search": "The search failed",
+    "notInstalled": "{name} is not installed"
+  },
+  "hero": {
+    "ready_one": "Update ready",
+    "ready_other": "Updates ready",
+    "aurOnly": "AUR packages are updated from the terminal for now.",
+    "size": "{size} to download.",
+    "reboot_one": "{names} needs a reboot.",
+    "reboot_other": "{names} need a reboot.",
+    "security_one": "{names} has a security fix.",
+    "security_other": "{names} have security fixes.",
+    "upToDate": "Everything is up to date",
+    "upToDateText": "Your system and apps are on the latest versions."
+  },
+  "schedule": {
+    "tonight": "Tonight at {time}",
+    "at": "Daily at {time}",
+    "title": "Update automatically",
+    "text": "The server installs all updates every day at this time, like Update all. It uses a systemd timer called linuxadmin-update.timer.",
+    "time": "Time of day",
+    "hint": "Server time, 24-hour clock. If the machine is off at that time, the update runs when it starts.",
+    "save": "Schedule updates",
+    "remove": "Turn off",
+    "saved": "Updates scheduled every day at {time}",
+    "removed": "Automatic updates turned off"
+  },
+  "group": { "repo": "Official repositories", "aur": "AUR", "flatpak": "Flatpak" },
+  "aur": {
+    "warning": "AUR packages are built from community scripts. Review the PKGBUILD before updating. They are left unselected.",
+    "terminal": "For now, update them from a terminal (for example: {helper} -Sua)."
+  },
+  "note": {
+    "reboot": "Reboot needed",
+    "security": "Security fix",
+    "restart": "Restarts {unit}"
+  },
+  "partial": {
+    "title": "Update everything instead?",
+    "text": "Arch Linux does not support partial upgrades: updating only some packages can leave the system unable to start programs.",
+    "all": "Update all {count}",
+    "size": "This downloads about {size}.",
+    "hint": "Arch does not support partial upgrades. Unless you know why, use Update all."
+  },
+  "store": {
+    "search": "Search apps and packages",
+    "src": { "repo": "Repos", "aur": "AUR", "flatpak": "Flatpak" },
+    "cat": {
+      "development": "Development",
+      "internet": "Internet",
+      "graphics": "Graphics",
+      "media": "Media",
+      "system": "System",
+      "servers": "Servers"
+    },
+    "yourApps": "Your apps",
+    "withUpdates_one": "1 with an update",
+    "withUpdates_other": "{count} with updates",
+    "showAll": "Show all {count} apps",
+    "popular": "Popular on {distro}",
+    "results": "Results",
+    "none": "Nothing found for \"{query}\"",
+    "noneText": "Try another word, or a shorter one.",
+    "noSuggest": "No suggestions on this system",
+    "installedCount_one": "1 package installed",
+    "installedCount_other": "{count} packages installed",
+    "installedText_one": "1 installed by you, the rest are dependencies. Apps above are the ones with a desktop entry.",
+    "installedText_other": "{count} installed by you, the rest are dependencies. Apps above are the ones with a desktop entry.",
+    "allPackages": "All packages"
+  },
+  "install": {
+    "button": "Install",
+    "title": "Install {name}?",
+    "text": "This adds the software to the whole system and runs as administrator.",
+    "source": "From",
+    "version": "Version",
+    "package": "Package",
+    "runsAs": "Runs as",
+    "admin": "Administrator (you may be asked for your password)",
+    "deps": "Packages it depends on are installed too.",
+    "confirm": "Install"
+  },
+  "remove": {
+    "button": "Remove",
+    "title": "Remove {name}?",
+    "titleMany_one": "Remove 1 package?",
+    "titleMany_other": "Remove {count} packages?",
+    "text": "The software is uninstalled and dependencies nothing else needs are removed. Your own files stay.",
+    "confirm": "Remove",
+    "word": "remove"
+  },
+  "removeSelected_one": "Remove 1",
+  "removeSelected_other": "Remove {count}",
+  "filterInstalled": "Filter installed",
+  "filter": {
+    "all": "All",
+    "explicit": "Installed by you",
+    "deps": "Dependencies",
+    "orphans": "Orphans",
+    "aur": "AUR",
+    "flatpak": "Flatpak"
+  },
+  "col": { "package": "Package", "version": "Version", "source": "Source", "size": "Size", "reason": "Reason", "installed": "Installed" },
+  "reason": { "explicit": "Explicit", "dependency": "Dependency", "orphan": "Orphan" },
+  "installed": {
+    "none": "No packages match",
+    "noneText": "Change the filter or the search text.",
+    "more": "Show {count} more"
+  },
+  "history": {
+    "none": "No changes recorded yet",
+    "noneText": "Installs, updates and removals show up here.",
+    "more": "Show older changes",
+    "installed_one": "1 installed",
+    "installed_other": "{count} installed",
+    "upgraded_one": "1 updated",
+    "upgraded_other": "{count} updated",
+    "removed_one": "1 removed",
+    "removed_other": "{count} removed",
+    "downgraded_one": "1 downgraded",
+    "downgraded_other": "{count} downgraded",
+    "reinstalled_one": "1 reinstalled",
+    "reinstalled_other": "{count} reinstalled",
+    "verb": { "installed": "Installed", "upgraded": "Updated", "removed": "Removed", "downgraded": "Downgraded", "reinstalled": "Reinstalled" }
+  },
+  "tx": {
+    "show": "Show",
+    "hide": "Hide",
+    "close": "Close",
+    "busy": "Another software change is already running.",
+    "lost": "The connection was lost. The change may still be running on the server.",
+    "working": "Working",
+    "failed": "The change failed",
+    "finished": "Finished without problems.",
+    "attached": "Started earlier, showing its progress",
+    "step": "Step {step} of {steps}",
+    "preparing": "Preparing",
+    "counter": "{done} of {total} packages",
+    "secondsLeft": "About {count} s left",
+    "minutesLeft_one": "About 1 min left",
+    "minutesLeft_other": "About {count} min left",
+    "log": "Output",
+    "rebootLater": "A kernel or core library is being updated. Restart when this finishes to use it.",
+    "rebootNow": "Restart the computer to finish: the new kernel or core libraries are only used after a reboot.",
+    "rebootNeeded": "Restart to finish the update",
+    "title": {
+      "updateAll": "Updating system",
+      "updateSelected_one": "Updating 1 package",
+      "updateSelected_other": "Updating {count} packages",
+      "update": "Updating {name}",
+      "upgrade": "Updating {name}",
+      "install": "Installing {name}",
+      "remove": "Removing {name}",
+      "removeMany_one": "Removing 1 package",
+      "removeMany_other": "Removing {count} packages"
+    },
+    "done": {
+      "updateAll": "System updated",
+      "updateSelected_one": "1 package updated",
+      "updateSelected_other": "{count} packages updated",
+      "update": "{name} updated",
+      "upgrade": "{name} updated",
+      "install": "{name} installed",
+      "remove": "{name} removed",
+      "removeMany_one": "1 package removed",
+      "removeMany_other": "{count} packages removed"
+    },
+    "hint": {
+      "locked": "Another package manager is running. Wait for it to finish, then try again.",
+      "outdated": "The package lists are out of date. Update the whole system first, then try again.",
+      "conflict": "Files of this package clash with files already on the system. Check the output above.",
+      "signature": "A package signature could not be verified. The keyring may need refreshing.",
+      "network": "The package servers could not be reached. Check the network connection."
+    }
+  },
+  "palette": {
+    "updates": "Software: check for updates",
+    "store": "Software: find and install apps",
+    "installed": "Software: installed packages",
+    "history": "Software: update history"
+  }
+}
