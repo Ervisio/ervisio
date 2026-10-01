@@ -194,7 +194,7 @@ func hRestore(ctx context.Context, c *rpc.Call) (any, error) {
 			if _, err := os.Lstat(dest); err == nil {
 				return rpc.Errorf(rpc.Conflict, "%s already exists. Move or rename it, then restore again.", dest)
 			}
-			if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+			if err := mkdirAll(filepath.Dir(dest), 0o755); err != nil {
 				return err
 			}
 			if err := movePath(filepath.Join(filesDir, id), dest); err != nil {
@@ -234,7 +234,7 @@ func hTrashDelete(ctx context.Context, c *rpc.Call) (any, error) {
 		if err := trashID(id); err != nil {
 			return nil, err
 		}
-		if err := os.RemoveAll(filepath.Join(filesDir, id)); err != nil {
+		if err := removePath(filepath.Join(filesDir, id)); err != nil {
 			return nil, err
 		}
 		os.Remove(filepath.Join(infoDir, id+".trashinfo"))
@@ -258,7 +258,7 @@ func hTrashEmpty(ctx context.Context, c *rpc.Call) (any, error) {
 			return nil, err
 		}
 		for _, de := range des {
-			if err := os.RemoveAll(filepath.Join(d, de.Name())); err != nil {
+			if err := removePath(filepath.Join(d, de.Name())); err != nil {
 				return nil, err
 			}
 			if d == filesDir {

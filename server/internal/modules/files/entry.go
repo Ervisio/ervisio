@@ -12,6 +12,8 @@ import (
 	"sync"
 	"syscall"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
 )
 
@@ -298,11 +300,19 @@ func hMkdir(ctx context.Context, c *rpc.Call) (any, error) {
 		return nil, err
 	}
 	if p.Parents {
-		if err := os.MkdirAll(path, 0o755); err != nil {
+		if err := mkdirAll(path, 0o755); err != nil {
 			return nil, err
 		}
-	} else if err := os.Mkdir(path, 0o755); err != nil {
-		return nil, err
+	} else {
+		d, name, err := openParent(path)
+		if err != nil {
+			return nil, err
+		}
+		err = unix.Mkdirat(dfd(d), name, 0o755)
+		d.Close()
+		if err != nil {
+			return nil, pathErr("mkdir", path, err)
+		}
 	}
 	return statEntry(path)
 }
@@ -318,11 +328,16 @@ func hCreate(ctx context.Context, c *rpc.Call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	d, name, err := openParent(path)
 	if err != nil {
 		return nil, err
 	}
-	f.Close()
+	fd, err := unix.Openat(dfd(d), name, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o644)
+	d.Close()
+	if err != nil {
+		return nil, pathErr("create", path, err)
+	}
+	unix.Close(fd)
 	return statEntry(path)
 }
 

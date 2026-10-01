@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
 )
 
@@ -96,28 +98,32 @@ func hWriteStream(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
 	if err := validName(filepath.Base(path)); err != nil || path == "/" {
 		return rpc.Errorf(rpc.Invalid, "That is not a valid target file name.")
 	}
-	perm := os.FileMode(0o644)
-	if fi, err := os.Lstat(path); err == nil {
-		if !p.Overwrite {
-			return rpc.Errorf(rpc.Conflict, "%s already exists.", filepath.Base(path))
-		}
-		if fi.IsDir() {
-			return rpc.Errorf(rpc.Invalid, "%s is a folder and cannot be replaced by a file.", filepath.Base(path))
-		}
-		if fi.Mode().IsRegular() {
-			perm = fi.Mode().Perm()
-		}
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".upload-*")
+	d, name, err := openParent(path)
 	if err != nil {
 		return err
 	}
-	name := tmp.Name()
+	defer d.Close()
+	perm := uint32(0o644)
+	if st, err := lstatAt(dfd(d), name); err == nil {
+		if !p.Overwrite {
+			return rpc.Errorf(rpc.Conflict, "%s already exists.", name)
+		}
+		if isDir(&st) {
+			return rpc.Errorf(rpc.Invalid, "%s is a folder and cannot be replaced by a file.", name)
+		}
+		if isReg(&st) {
+			perm = st.Mode & 0o777
+		}
+	}
+	tmp, tname, err := createTempAt(dfd(d), ".upload-", filepath.Dir(path))
+	if err != nil {
+		return err
+	}
 	ok := false
 	defer func() {
 		if !ok {
 			tmp.Close()
-			os.Remove(name)
+			_ = unix.Unlinkat(dfd(d), tname, 0)
 		}
 	}()
 	var size int64
@@ -140,20 +146,22 @@ func hWriteStream(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
 				if p.Size >= 0 && size != p.Size {
 					return rpc.Errorf(rpc.Invalid, "The upload ended early (%d of %d bytes). Try again.", size, p.Size)
 				}
-				if err := tmp.Chmod(perm); err != nil {
-					return err
+				if err := unix.Fchmod(int(tmp.Fd()), perm); err != nil {
+					return pathErr("chmod", path, err)
 				}
 				if err := tmp.Close(); err != nil {
 					return err
 				}
 				if !p.Overwrite {
 					// Refuse to replace a file that appeared meanwhile.
-					if _, err := os.Lstat(path); err == nil {
-						return rpc.Errorf(rpc.Conflict, "%s already exists.", filepath.Base(path))
+					if err := renameNoReplace(dfd(d), tname, dfd(d), name, path); err != nil {
+						if rpc.IsCode(err, rpc.Conflict) {
+							return rpc.Errorf(rpc.Conflict, "%s already exists.", name)
+						}
+						return err
 					}
-				}
-				if err := os.Rename(name, path); err != nil {
-					return err
+				} else if err := unix.Renameat(dfd(d), tname, dfd(d), name); err != nil {
+					return pathErr("rename", path, err)
 				}
 				ok = true
 				return s.Send(map[string]any{"done": true, "size": size, "path": path})

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"os/user"
@@ -13,6 +12,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"golang.org/x/sys/unix"
 
 	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
 )
@@ -26,117 +27,47 @@ func isInside(child, parent string) bool {
 }
 
 // movePath renames from to to without ever overwriting. Across file systems it
-// copies and then removes the source.
+// copies and then removes the source. Both ends are reached through directory
+// descriptors (safefs.go), so a link swapped into either path is never followed.
 func movePath(from, to string) error {
 	if err := checkNotProtected(from); err != nil {
 		return err
 	}
-	fi, err := os.Lstat(from)
+	sd, sname, err := openParent(from)
 	if err != nil {
 		return err
 	}
-	if _, err := os.Lstat(to); err == nil {
+	defer sd.Close()
+	st, err := lstatAt(dfd(sd), sname)
+	if err != nil {
+		return pathErr("lstat", from, err)
+	}
+	dd, dname, err := openParent(to)
+	if err != nil {
+		return err
+	}
+	defer dd.Close()
+	if _, err := lstatAt(dfd(dd), dname); err == nil {
 		return rpc.Errorf(rpc.Conflict, "%s already exists. Choose another name.", to)
 	}
-	if fi.IsDir() && isInside(to, from) {
+	if isDir(&st) && isInside(to, from) {
 		return rpc.Errorf(rpc.Invalid, "A folder cannot be moved into itself.")
 	}
-	err = os.Rename(from, to)
+	err = renameNoReplace(dfd(sd), sname, dfd(dd), dname, to)
 	if err == nil {
 		return nil
 	}
 	if !errors.Is(err, syscall.EXDEV) {
 		return err
 	}
-	if err := copyTree(context.Background(), from, to, nil); err != nil {
-		_ = os.RemoveAll(to)
+	c := newCopier(context.Background(), nil)
+	if err := c.copyAt(dfd(sd), sname, from, dfd(dd), dname, to); err != nil {
+		if c.madeTop {
+			_ = removeAllAt(dfd(dd), dname, to)
+		}
 		return err
 	}
-	return os.RemoveAll(from)
-}
-
-// copyTree copies src to dst (which must not exist), without following symlinks.
-func copyTree(ctx context.Context, src, dst string, progress func(n int64)) error {
-	if err := ctx.Err(); err != nil {
-		return rpc.Errorf(rpc.Unavailable, "The copy was cancelled.")
-	}
-	fi, err := os.Lstat(src)
-	if err != nil {
-		return err
-	}
-	switch {
-	case fi.Mode()&os.ModeSymlink != 0:
-		t, err := os.Readlink(src)
-		if err != nil {
-			return err
-		}
-		return os.Symlink(t, dst)
-	case fi.IsDir():
-		if err := os.Mkdir(dst, fi.Mode().Perm()|0o700); err != nil {
-			return err
-		}
-		des, err := os.ReadDir(src)
-		if err != nil {
-			return err
-		}
-		for _, de := range des {
-			if err := copyTree(ctx, filepath.Join(src, de.Name()), filepath.Join(dst, de.Name()), progress); err != nil {
-				return err
-			}
-		}
-		if err := os.Chmod(dst, fi.Mode().Perm()); err != nil {
-			return err
-		}
-		return os.Chtimes(dst, time.Now(), fi.ModTime())
-	case fi.Mode().IsRegular():
-		return copyFile(ctx, src, dst, fi, progress)
-	}
-	return nil // sockets, devices and pipes are skipped
-}
-
-func copyFile(ctx context.Context, src, dst string, fi os.FileInfo, progress func(n int64)) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, fi.Mode().Perm()|0o600)
-	if err != nil {
-		return err
-	}
-	buf := make([]byte, 256<<10)
-	for {
-		if err := ctx.Err(); err != nil {
-			out.Close()
-			os.Remove(dst)
-			return rpc.Errorf(rpc.Unavailable, "The copy was cancelled.")
-		}
-		n, rerr := in.Read(buf)
-		if n > 0 {
-			if _, werr := out.Write(buf[:n]); werr != nil {
-				out.Close()
-				os.Remove(dst)
-				return werr
-			}
-			if progress != nil {
-				progress(int64(n))
-			}
-		}
-		if rerr == io.EOF {
-			break
-		}
-		if rerr != nil {
-			out.Close()
-			os.Remove(dst)
-			return rerr
-		}
-	}
-	if err := out.Close(); err != nil {
-		os.Remove(dst)
-		return err
-	}
-	_ = os.Chmod(dst, fi.Mode().Perm())
-	return os.Chtimes(dst, time.Now(), fi.ModTime())
+	return removeAllAt(dfd(sd), sname, from)
 }
 
 // treeSize sums regular file sizes below p (symlinks are not followed).
@@ -211,12 +142,17 @@ func doCopy(ctx context.Context, p copyParams, s rpc.Stream) error {
 	} else if !ti.IsDir() {
 		return rpc.Errorf(rpc.Invalid, "%s is not a folder.", to)
 	}
+	toDir, err := openDir(to)
+	if err != nil {
+		return err
+	}
+	defer toDir.Close()
 	// Plan.
 	type job struct{ src, dst string }
 	var jobs []job
 	var total int64
 	for _, src := range from {
-		fi, err := os.Lstat(src)
+		st, err := lstatPath(src)
 		if err != nil {
 			return err
 		}
@@ -226,7 +162,7 @@ func doCopy(ctx context.Context, p copyParams, s rpc.Stream) error {
 			}
 		}
 		dst := filepath.Join(to, filepath.Base(src))
-		if fi.IsDir() && isInside(to, src) {
+		if isDir(&st) && isInside(to, src) {
 			return rpc.Errorf(rpc.Invalid, "A folder cannot be copied or moved into itself.")
 		}
 		if p.Move && filepath.Dir(src) == to {
@@ -250,42 +186,52 @@ func doCopy(ctx context.Context, p copyParams, s rpc.Stream) error {
 		return nil
 	}
 	var results []string
-	for i, j := range jobs {
+	for _, j := range jobs {
 		cur = filepath.Base(j.src)
 		if err := emit(true); err != nil {
 			return err
 		}
-		if p.Move {
-			if err := os.Rename(j.src, j.dst); err == nil {
-				sz, _ := treeSize(ctx, j.dst)
-				done += sz
-				results = append(results, j.dst)
-				continue
-			} else if !errors.Is(err, syscall.EXDEV) {
+		if err := func() error {
+			sd, sname, err := openParent(j.src)
+			if err != nil {
 				return err
 			}
-		}
-		var perr error
-		cerr := copyTree(ctx, j.src, j.dst, func(n int64) {
-			done += n
-			if perr == nil {
-				perr = emit(false)
+			defer sd.Close()
+			dname := filepath.Base(j.dst)
+			if p.Move {
+				err := renameNoReplace(dfd(sd), sname, dfd(toDir), dname, j.dst)
+				if err == nil {
+					sz, _ := treeSize(ctx, j.dst)
+					done += sz
+					return nil
+				} else if !errors.Is(err, syscall.EXDEV) {
+					return err
+				}
 			}
-		})
-		if cerr != nil {
-			_ = os.RemoveAll(j.dst)
-			return cerr
-		}
-		if perr != nil {
-			return perr
-		}
-		if p.Move {
-			if err := os.RemoveAll(j.src); err != nil {
-				return err
+			var perr error
+			c := newCopier(ctx, func(n int64) {
+				done += n
+				if perr == nil {
+					perr = emit(false)
+				}
+			})
+			if cerr := c.copyAt(dfd(sd), sname, j.src, dfd(toDir), dname, j.dst); cerr != nil {
+				if c.madeTop {
+					_ = removeAllAt(dfd(toDir), dname, j.dst)
+				}
+				return cerr
 			}
+			if perr != nil {
+				return perr
+			}
+			if p.Move {
+				return removeAllAt(dfd(sd), sname, j.src)
+			}
+			return nil
+		}(); err != nil {
+			return err
 		}
 		results = append(results, j.dst)
-		_ = i
 	}
 	_ = emit(true)
 	return s.Send(map[string]any{"done": true, "paths": results})
@@ -325,7 +271,7 @@ func doDelete(paths []string, trash bool) (any, error) {
 			err = rpc.Errorf(rpc.Forbidden, "Your home folder cannot be deleted from here.")
 		}
 		if err == nil {
-			if _, e := os.Lstat(p); e != nil {
+			if _, e := lstatPath(p); e != nil {
 				err = e
 			}
 		}
@@ -333,7 +279,7 @@ func doDelete(paths []string, trash bool) (any, error) {
 			if trash {
 				err = moveToTrash(p)
 			} else {
-				err = os.RemoveAll(p) // never follows symlinks
+				err = removePath(p) // never follows symlinks, not even in parent folders as root
 			}
 		}
 		if err != nil {
@@ -410,42 +356,51 @@ func hChmod(ctx context.Context, c *rpc.Call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	fi, err := os.Lstat(path)
+	d, name, err := openParent(path)
 	if err != nil {
 		return nil, err
 	}
-	if fi.Mode()&os.ModeSymlink != 0 {
-		return nil, rpc.Errorf(rpc.Invalid, "Permissions cannot be changed on a link. Change the item it points to instead.")
+	defer d.Close()
+	st, err := lstatAt(dfd(d), name)
+	if err != nil {
+		return nil, pathErr("lstat", path, err)
 	}
-	changed := 0
-	if !p.Recursive || !fi.IsDir() {
-		if err := os.Chmod(path, mode); err != nil {
-			return nil, err
+	errLink := rpc.Errorf(rpc.Invalid, "Permissions cannot be changed on a link. Change the item it points to instead.")
+	if isLink(&st) {
+		return nil, errLink
+	}
+	m := unixMode(mode)
+	if !p.Recursive || !isDir(&st) {
+		if err := chmodNoFollow(dfd(d), name, m); err != nil {
+			if errors.Is(err, errIsLink) {
+				return nil, errLink
+			}
+			return nil, pathErr("chmod", path, err)
 		}
 		return map[string]any{"changed": 1}, nil
 	}
+	changed := 0
 	var first error
-	err = filepath.WalkDir(path, func(q string, d fs.DirEntry, werr error) error {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if werr != nil {
-			if first == nil {
-				first = werr
+	err = walkAt(ctx, dfd(d), name, path, func(dirfd int, name string, st *unix.Stat_t, self int) error {
+		var err error
+		switch {
+		case self >= 0:
+			err = unix.Fchmod(self, m)
+		case isLink(st):
+			return nil // links have no permissions of their own
+		default:
+			if err = chmodNoFollow(dirfd, name, m); errors.Is(err, errIsLink) {
+				return nil
 			}
-			return nil
 		}
-		if d.Type()&os.ModeSymlink != 0 {
-			return nil
+		if err == nil {
+			changed++
 		}
-		if err := os.Chmod(q, mode); err != nil {
-			if first == nil {
-				first = err
-			}
-			return nil
+		return err
+	}, func(err error) {
+		if first == nil {
+			first = err
 		}
-		changed++
-		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -506,36 +461,38 @@ func hChown(ctx context.Context, c *rpc.Call) (any, error) {
 	if uid == -1 && gid == -1 {
 		return nil, rpc.Errorf(rpc.Invalid, "Choose a new owner or group.")
 	}
-	fi, err := os.Lstat(path)
+	d, name, err := openParent(path)
 	if err != nil {
 		return nil, err
 	}
-	changed := 0
-	if !p.Recursive || !fi.IsDir() {
-		if err := os.Lchown(path, uid, gid); err != nil {
-			return nil, err
+	defer d.Close()
+	st, err := lstatAt(dfd(d), name)
+	if err != nil {
+		return nil, pathErr("lstat", path, err)
+	}
+	if !p.Recursive || !isDir(&st) {
+		if err := unix.Fchownat(dfd(d), name, uid, gid, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+			return nil, pathErr("chown", path, err)
 		}
 		return map[string]any{"changed": 1}, nil
 	}
+	changed := 0
 	var first error
-	err = filepath.WalkDir(path, func(q string, d fs.DirEntry, werr error) error {
-		if err := ctx.Err(); err != nil {
-			return err
+	err = walkAt(ctx, dfd(d), name, path, func(dirfd int, name string, st *unix.Stat_t, self int) error {
+		var err error
+		if self >= 0 {
+			err = unix.Fchown(self, uid, gid)
+		} else {
+			err = unix.Fchownat(dirfd, name, uid, gid, unix.AT_SYMLINK_NOFOLLOW)
 		}
-		if werr != nil {
-			if first == nil {
-				first = werr
-			}
-			return nil
+		if err == nil {
+			changed++
 		}
-		if err := os.Lchown(q, uid, gid); err != nil {
-			if first == nil {
-				first = err
-			}
-			return nil
+		return err
+	}, func(err error) {
+		if first == nil {
+			first = err
 		}
-		changed++
-		return nil
 	})
 	if err != nil {
 		return nil, err

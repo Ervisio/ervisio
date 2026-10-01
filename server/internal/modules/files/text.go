@@ -3,11 +3,14 @@ package files
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
-	"syscall"
+	"time"
 	"unicode/utf8"
+
+	"golang.org/x/sys/unix"
 
 	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
 )
@@ -157,52 +160,103 @@ func hWriteText(ctx context.Context, c *rpc.Call) (any, error) {
 	return writeTextFile(path, data, p.ExpectedMtime)
 }
 
-func writeTextFile(path string, data []byte, expected int64) (any, error) {
-	if r, err := filepath.EvalSymlinks(path); err == nil {
-		path = r
+// resolveFinal follows the links at the end of path, so saving a link saves
+// the file it points to. In the root bridge only links owned by root are
+// followed; each hop is resolved through directory descriptors.
+func resolveFinal(path string) (string, error) {
+	if !strictLinks {
+		if r, err := filepath.EvalSymlinks(path); err == nil {
+			return r, nil
+		}
+		return path, nil
 	}
-	fi, err := os.Stat(path)
-	exists := err == nil
-	if err != nil && !os.IsNotExist(err) {
+	for i := 0; i < maxLinkHops; i++ {
+		d, name, err := openParent(path)
+		if err != nil {
+			return "", err
+		}
+		fd, err := unix.Openat(dfd(d), name, unix.O_PATH|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+		d.Close()
+		if errors.Is(err, unix.ENOENT) {
+			return path, nil
+		}
+		if err != nil {
+			return "", pathErr("open", path, err)
+		}
+		var st unix.Stat_t
+		err = unix.Fstat(fd, &st)
+		if err != nil || !isLink(&st) {
+			unix.Close(fd)
+			return path, pathErr("stat", path, err)
+		}
+		if st.Uid != trustedLinkUID {
+			unix.Close(fd)
+			return "", errUntrustedLink(path)
+		}
+		t, err := readlinkAt(fd, "")
+		unix.Close(fd)
+		if err != nil {
+			return "", pathErr("readlink", path, err)
+		}
+		if !filepath.IsAbs(t) {
+			t = filepath.Join(filepath.Dir(path), t)
+		}
+		path = filepath.Clean(t)
+	}
+	return "", pathErr("open", path, unix.ELOOP)
+}
+
+func writeTextFile(path string, data []byte, expected int64) (any, error) {
+	path, err := resolveFinal(path)
+	if err != nil {
 		return nil, err
 	}
+	d, name, err := openParent(path)
+	if err != nil {
+		return nil, err
+	}
+	defer d.Close()
+	st, err := lstatAt(dfd(d), name)
+	exists := err == nil
+	if err != nil && !errors.Is(err, unix.ENOENT) {
+		return nil, pathErr("lstat", path, err)
+	}
 	if exists {
-		if !fi.Mode().IsRegular() {
+		if !isReg(&st) {
 			return nil, rpc.Errorf(rpc.Invalid, "Only regular files can be saved as text.")
 		}
-		if expected != 0 && fi.ModTime().UnixMilli() != expected {
+		mt := time.Unix(st.Mtim.Unix()).UnixMilli()
+		if expected != 0 && mt != expected {
 			return nil, rpc.Errorf(rpc.Conflict, "This file was changed by someone else since you opened it. Reload it, or copy your text first.").
-				WithData(map[string]any{"mtime": fi.ModTime().UnixMilli()})
+				WithData(map[string]any{"mtime": mt})
 		}
 	} else if expected != 0 {
 		return nil, rpc.Errorf(rpc.Conflict, "This file was removed since you opened it.")
 	}
-	perm := os.FileMode(0o644)
+	perm := uint32(0o644)
 	if exists {
-		perm = fi.Mode()
+		perm = st.Mode & 0o7777
 	}
-	dir := filepath.Dir(path)
-	tmp, terr := os.CreateTemp(dir, ".save-*")
+	tmp, tname, terr := createTempAt(dfd(d), ".save-", filepath.Dir(path))
 	if terr == nil {
-		name := tmp.Name()
+		tfd := int(tmp.Fd())
 		_, werr := tmp.Write(data)
+		if werr == nil && exists && os.Geteuid() == 0 {
+			_ = unix.Fchown(tfd, int(st.Uid), int(st.Gid)) // before chmod: chown clears setuid bits
+		}
+		if werr == nil {
+			werr = unix.Fchmod(tfd, perm)
+		}
 		cerr := tmp.Close()
 		if werr == nil && cerr == nil {
-			werr = os.Chmod(name, perm&(os.ModePerm|os.ModeSetuid|os.ModeSetgid|os.ModeSticky))
-		}
-		if werr == nil && cerr == nil && exists {
-			if st, ok := fi.Sys().(*syscall.Stat_t); ok && os.Geteuid() == 0 {
-				_ = os.Lchown(name, int(st.Uid), int(st.Gid))
-			}
-		}
-		if werr == nil && cerr == nil {
-			if rerr := os.Rename(name, path); rerr == nil {
+			// renameat replaces whatever is at name now, never what a link points to.
+			rerr := unix.Renameat(dfd(d), tname, dfd(d), name)
+			if rerr == nil {
 				return saved(path)
-			} else {
-				werr = rerr
 			}
+			werr = pathErr("rename", path, rerr)
 		}
-		os.Remove(name)
+		_ = unix.Unlinkat(dfd(d), tname, 0)
 		if werr == nil {
 			werr = cerr
 		}
@@ -210,16 +264,25 @@ func writeTextFile(path string, data []byte, expected int64) (any, error) {
 	}
 	// The folder may not be writable although the file is: write in place.
 	if exists && os.IsPermission(terr) {
-		f, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, 0)
+		fd, err := unix.Openat(dfd(d), name, unix.O_WRONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_NOCTTY|unix.O_CLOEXEC, 0)
 		if err != nil {
-			return nil, err
+			return nil, pathErr("open", path, err)
 		}
-		_, err = f.Write(data)
+		f := os.NewFile(uintptr(fd), path)
+		var now unix.Stat_t
+		if err := unix.Fstat(fd, &now); err != nil || !isReg(&now) {
+			f.Close()
+			return nil, rpc.Errorf(rpc.Invalid, "Only regular files can be saved as text.")
+		}
+		err = unix.Ftruncate(fd, 0)
+		if err == nil {
+			_, err = f.Write(data)
+		}
 		if cerr := f.Close(); err == nil {
 			err = cerr
 		}
 		if err != nil {
-			return nil, err
+			return nil, pathErr("write", path, err)
 		}
 		return saved(path)
 	}

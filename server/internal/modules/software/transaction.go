@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -29,7 +30,8 @@ type TxParams struct {
 }
 
 // txState is the public state of the running (or last finished) transaction.
-// It is mirrored to a world-readable file so the user bridge can show it.
+// It is mirrored to a state file; for the root bridge a copy without the log
+// is world-readable so the user bridge can show progress.
 type txState struct {
 	Running      bool     `json:"running"`
 	PID          int      `json:"pid"`
@@ -55,23 +57,36 @@ var (
 	txMu      sync.Mutex
 	txRunning bool
 
-	// stateRoot is where the root bridge publishes the transaction state.
-	stateRoot = "/run/linuxadmin/software-transaction.json"
+	// stateRoot is where the root bridge keeps the full transaction state
+	// (0600: the log may show package names, paths and errors), and
+	// stateRootPublic a summary without the log (0644) for the user bridges.
+	stateRoot       = "/run/linuxadmin/software-transaction.json"
+	stateRootPublic = "/run/linuxadmin/software-transaction.public.json"
+	// stateRootOwner owns the root state files; readers ignore any other file.
+	stateRootOwner = 0
 )
 
+// userStatePath is the state file of user-scope transactions. It lives only in
+// $XDG_RUNTIME_DIR (a 0700 folder of the user): without one there is no user
+// state file, never a predictable name in a shared folder.
 func userStatePath() string {
+	if isRoot() {
+		return ""
+	}
 	dir := os.Getenv("XDG_RUNTIME_DIR")
-	if dir == "" {
-		dir = os.TempDir()
+	if !filepath.IsAbs(dir) || checkTrustedDir(dir, os.Geteuid()) != nil {
+		return ""
 	}
 	return filepath.Join(dir, fmt.Sprintf("linuxadmin-software-%d.json", os.Getuid()))
 }
 
-func statePath(admin bool) string {
-	if admin {
-		return stateRoot
+// statePaths returns where a transaction's state goes: the full file and, for
+// the root bridge, the public summary.
+func statePaths(admin bool) (full, public string) {
+	if admin || isRoot() {
+		return stateRoot, stateRootPublic
 	}
-	return userStatePath()
+	return userStatePath(), ""
 }
 
 const logKeep = 300
@@ -95,7 +110,8 @@ func scanLines(data []byte, atEOF bool) (int, []byte, error) {
 type txRun struct {
 	mu       sync.Mutex
 	st       txState
-	path     string
+	path     string // full state, readable by the owner only
+	public   string // summary without the log, readable by everyone ("" = none)
 	lastSave time.Time
 	send     func(any) bool
 }
@@ -112,10 +128,17 @@ func (r *txRun) save(force bool) {
 	if err != nil {
 		return
 	}
-	_ = os.MkdirAll(filepath.Dir(r.path), 0o755)
-	tmp := r.path + ".tmp"
-	if os.WriteFile(tmp, b, 0o644) == nil {
-		_ = os.Rename(tmp, r.path)
+	dir := filepath.Dir(r.path)
+	if _, err := os.Lstat(dir); errors.Is(err, os.ErrNotExist) {
+		_ = os.Mkdir(dir, 0o755)
+	}
+	_ = writeFileAtomic(r.path, b, 0o600)
+	if r.public != "" {
+		sum := r.st
+		sum.Log = []string{}
+		if b, err := json.Marshal(&sum); err == nil {
+			_ = writeFileAtomic(r.public, b, 0o644)
+		}
 	}
 }
 
@@ -303,7 +326,8 @@ func runTransaction(ctx context.Context, c *rpc.Call, s rpc.Stream, user bool) e
 
 	var sendMu sync.Mutex
 	alive := true
-	run := &txRun{path: statePath(c.Admin)}
+	full, public := statePaths(c.Admin)
+	run := &txRun{path: full, public: public}
 	run.send = func(v any) bool {
 		sendMu.Lock()
 		defer sendMu.Unlock()
@@ -457,11 +481,26 @@ func lastErrors(tail []string) []string {
 }
 
 // readStatus returns the transaction currently running (or finished last),
-// reading the files of both bridges.
+// reading the files of both bridges. The root bridge reads its full file; a
+// user bridge reads the root's summary (no log) and its own file. A file is
+// trusted only when it is a regular file of the expected owner.
 func readStatus() (busy bool, tx *txState) {
+	type src struct {
+		path  string
+		owner int
+	}
+	var srcs []src
+	if isRoot() {
+		srcs = []src{{stateRoot, stateRootOwner}}
+	} else {
+		srcs = []src{{stateRootPublic, stateRootOwner}}
+		if p := userStatePath(); p != "" {
+			srcs = append(srcs, src{p, os.Geteuid()})
+		}
+	}
 	var best *txState
-	for _, p := range []string{stateRoot, userStatePath()} {
-		b, err := os.ReadFile(p)
+	for _, sf := range srcs {
+		b, err := readOwnedFile(sf.path, sf.owner)
 		if err != nil {
 			continue
 		}
@@ -469,8 +508,11 @@ func readStatus() (busy bool, tx *txState) {
 		if json.Unmarshal(b, &st) != nil {
 			continue
 		}
+		if st.Log == nil {
+			st.Log = []string{}
+		}
 		if st.Running {
-			if _, err := os.Stat(fmt.Sprintf("/proc/%d", st.PID)); err != nil {
+			if _, err := os.Stat(fmt.Sprintf("/proc/%d", st.PID)); err != nil || st.PID <= 0 {
 				st.Running, st.OK, st.Message = false, false, "interrupted"
 			}
 		}

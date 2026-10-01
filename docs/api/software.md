@@ -31,7 +31,10 @@ or `software.check` / `force: true` refreshes them.
 ## Updates without root
 
 On Arch, `software.check` copies the sync databases to a private directory
-(`$TMPDIR/linuxadmin-checkdb-<uid>`), syncs them there with `fakeroot pacman -Sy --disable-sandbox`
+(`/var/cache/linuxadmin/checkdb` for the root bridge, `$XDG_CACHE_HOME/linuxadmin/checkdb` or
+`~/.cache/linuxadmin/checkdb` for a user; never a shared folder such as `/tmp`). The folder must be a real 0700
+directory of the bridge's user in a parent only that user or root can write; otherwise it is not used (the check
+fails, and `pacman -Qu` reads the system databases). Copies are created with `O_EXCL|O_NOFOLLOW`. It syncs them there with `fakeroot pacman -Sy --disable-sandbox`
 (plain `pacman -Sy` when the bridge is root) like `checkupdates`, and reads `pacman -Qu` / `pacman -Sup`
 against it. The system databases are never partially synced. Without `fakeroot` it reports the state of the
 last real sync and a warning. The private copy is deleted after a transaction.
@@ -130,8 +133,12 @@ Newest first (default 300, max 3000). Sources: `/var/log/pacman.log`, `/var/log/
 last finished one (kept 1 hour):
 `{running, pid, op, source, packages, startedAt, finishedAt?, done, total, current, step, steps, ok, message?,
 hint?, rebootNeeded, log[last 300 lines]}`. The root bridge writes it to `/run/linuxadmin/software-transaction.json`
-(0644), user-scope Flatpak runs to `$XDG_RUNTIME_DIR/linuxadmin-software-<uid>.json`. A page reload uses it to
-re-attach to a running transaction.
+(0600, root only) and a summary with an empty `log` to `/run/linuxadmin/software-transaction.public.json` (0644);
+user-scope Flatpak runs write `$XDG_RUNTIME_DIR/linuxadmin-software-<uid>.json` (no file when `XDG_RUNTIME_DIR` is
+unset or not a private folder). Files are written to a fresh `O_EXCL` name and renamed into place. Readers open them
+with `O_NOFOLLOW` and ignore anything that is not a regular file of the expected owner (root, or the user). The user
+bridge therefore shows a root transaction's progress without its log; the root bridge returns the full log.
+A page reload uses it to re-attach to a running transaction.
 
 ### `software.transaction` {op, packages, source, scope?} (admin, **stream**)
 `op`: `upgrade | install | remove`. `packages`: names (validated: letters, digits and `@._+:~-`, never

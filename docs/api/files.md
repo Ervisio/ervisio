@@ -8,6 +8,15 @@ on the root bridge it answers `forbidden`.
 Paths must be absolute (`invalid` otherwise); they are cleaned (`/a/b/../c//` becomes `/a/c`) and must not
 contain NUL. Times are Unix **milliseconds**. Messages are written for people and shown as they are.
 
+### Links and the root bridge
+Every method that changes something (mkdir, create, rename/move, copy, delete, Trash, chmod, chown, writeText,
+writeStream) opens the parent folder once and works on the last name with `*at()` calls that never follow a link
+(`server/internal/modules/files/safefs.go`). Recursive chmod/chown, copy and delete walk the tree with directory
+descriptors (`O_NOFOLLOW|O_DIRECTORY`), so a folder swapped for a link during the walk is never entered.
+On the **root bridge** the parent folder itself is resolved one component at a time and only links owned by root
+are followed: a path that goes through another user's link (for example `/home/bob/link/file`) answers
+`forbidden` — open the folder the link points to instead. The user bridge resolves paths normally.
+
 ## Entry
 
 Returned by `files.list`, `files.stat`, `files.search`, `files.places` (recent) and inside `files.trashList`.
@@ -40,7 +49,7 @@ Returned by `files.list`, `files.stat`, `files.search`, `files.places` (recent) 
 | `files.trashDelete` | `{ids:[id]}` | `{deleted:n}` |
 | `files.trashEmpty` (alias `files.empty`) | `{}` | `{deleted:n}` |
 | `files.chmod` | `{path, mode:"755", recursive?}` | `{changed:n, warning?}`. `mode` is an octal string of up to 4 digits. Symlinks are refused (`invalid`); recursion never follows or changes links. |
-| `files.chown` (**admin**) | `{path, owner?, group?, recursive?}` | `{changed:n}`. Names or numeric ids; an empty field leaves it unchanged. Uses `lchown`. |
+| `files.chown` (**admin**) | `{path, owner?, group?, recursive?}` | `{changed:n}`. Names or numeric ids; an empty field leaves it unchanged. Uses `fchownat(AT_SYMLINK_NOFOLLOW)` (links themselves are changed, never their targets). |
 | `files.readText` | `{path, maxBytes?}` | `{path, content, encoding, size, mtime, truncated}` |
 | `files.writeText` | `{path, content, encoding?, expectedMtime?}` | `{path, size, mtime}` |
 | `files.search` (stream) | `{root, query, maxResults?}` | see below |
@@ -51,7 +60,7 @@ Returned by `files.list`, `files.stat`, `files.search`, `files.places` (recent) 
 ### Deleting and the Trash
 `trash:true` moves items to the freedesktop Trash of the account running the bridge
 (`~/.local/share/Trash/{files,info}` with a `.trashinfo` file; names are made unique). Items on other
-file systems are copied into it. `trash:false` removes for good (`os.RemoveAll`: **symlinks are removed, never followed**).
+file systems are copied into it. `trash:false` removes for good (`unlinkat`/descriptor walk: **symlinks are removed, never followed**).
 Protected folders (`/`, `/etc`, `/usr`, `/var`, `/home`, `/root`, `/boot`, ...) and the account's home folder are refused
 (`forbidden`). If nothing could be deleted, the first error is returned as the call's error (so `needs_admin` reaches
 the client); otherwise partial failures are listed in `failed`. The client uses permanent deletion (after a confirmation)
@@ -73,8 +82,9 @@ Cancel by closing the stream: the partial copy of the current item is removed.
 `readText` refuses non-regular files and binary data (NUL bytes in the first 8 000 bytes, UTF-16 BOMs) with `invalid`.
 `maxBytes` defaults to 1 MiB (cap 8 MiB); `truncated:true` means the file is longer (do not offer saving it).
 `encoding` is `utf-8`, `utf-8-bom` or `latin1` (used when the bytes are not valid UTF-8); send it back to `writeText`
-to keep it. `writeText` writes a temp file in the same folder and renames it (mode and, as root, owner are kept; if the
-folder is not writable but the file is, it writes in place). `expectedMtime` (from `readText`) makes it answer
+to keep it. `writeText` writes a temp file in the same folder (`O_EXCL`) and renames it (mode and, as root, owner are
+kept; if the folder is not writable but the file is, it writes in place with `O_NOFOLLOW`). Saving a link saves the
+file it points to; on the root bridge only links owned by root are followed (`forbidden` otherwise). `expectedMtime` (from `readText`) makes it answer
 `conflict` with `data:{mtime}` when the file changed since; `0` or missing skips the check. A non-zero value for a file
 that no longer exists also answers `conflict`.
 

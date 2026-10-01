@@ -2,15 +2,17 @@ package software
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"io"
 	"os"
+	"os/user"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
@@ -133,15 +135,47 @@ func (p *pacman) ListInstalled(ctx context.Context) ([]Package, error) {
 
 // ---- updates ----
 
-func (p *pacman) tmpDir() string {
-	return filepath.Join(os.TempDir(), fmt.Sprintf("linuxadmin-checkdb-%d", os.Getuid()))
+// checkDBBase returns the folder that holds the private sync copy: root's
+// /var/cache/linuxadmin, or the user's own cache folder. Never a shared
+// directory such as /tmp, where another user could plant it first.
+var checkDBBase = func() (string, error) {
+	if isRoot() {
+		return "/var/cache/linuxadmin", nil
+	}
+	if d := os.Getenv("XDG_CACHE_HOME"); filepath.IsAbs(d) {
+		return filepath.Join(d, "linuxadmin"), nil
+	}
+	home := ""
+	if u, err := user.Current(); err == nil {
+		home = u.HomeDir
+	}
+	if home == "" {
+		home = os.Getenv("HOME")
+	}
+	if !filepath.IsAbs(home) {
+		return "", errors.New("no home folder for the private package database")
+	}
+	return filepath.Join(home, ".cache", "linuxadmin"), nil
 }
 
-// dbArgs selects the private sync copy when it is newer than the system one.
-func (p *pacman) dbArgs() []string {
-	tmp := p.tmpDir()
-	ti, err := os.Stat(filepath.Join(tmp, "sync", "core.db"))
+// checkDir returns the private sync copy's folder (it may not exist yet).
+func (p *pacman) checkDir() (string, error) {
+	base, err := checkDBBase()
 	if err != nil {
+		return "", err
+	}
+	return filepath.Join(base, "checkdb"), nil
+}
+
+// dbArgs selects the private sync copy when it is newer than the system one,
+// and only when it is still a 0700 folder of ours.
+func (p *pacman) dbArgs() []string {
+	tmp, err := p.checkDir()
+	if err != nil || ensurePrivateDir(tmp, false) != nil {
+		return nil
+	}
+	ti, err := os.Lstat(filepath.Join(tmp, "sync", "core.db"))
+	if err != nil || !ti.Mode().IsRegular() {
 		return nil
 	}
 	si, err := os.Stat(filepath.Join(p.db(), "sync", "core.db"))
@@ -152,31 +186,66 @@ func (p *pacman) dbArgs() []string {
 }
 
 // forget drops the private sync copy (after a real transaction).
-func (p *pacman) forget() { _ = os.RemoveAll(p.tmpDir()) }
+func (p *pacman) forget() {
+	if tmp, err := p.checkDir(); err == nil && ensurePrivateDir(tmp, false) == nil {
+		_ = os.RemoveAll(tmp)
+	}
+}
+
+// prepareCheckDB creates the private copy: a 0700 folder of ours holding a
+// link to the system's local database and copies of its sync databases.
+// Anything in it that is not what we put there is replaced.
+func (p *pacman) prepareCheckDB() (string, error) {
+	tmp, err := p.checkDir()
+	if err != nil {
+		return "", err
+	}
+	if err := ensurePrivateDir(tmp, true); err != nil {
+		return "", rpc.Errorf(rpc.Internal, "The private package database folder is not safe to use: %v", err)
+	}
+	local := filepath.Join(tmp, "local")
+	want := filepath.Join(p.db(), "local")
+	if t, err := os.Readlink(local); err != nil || t != want {
+		if err := os.RemoveAll(local); err != nil {
+			return "", err
+		}
+		if err := os.Symlink(want, local); err != nil {
+			return "", err
+		}
+	}
+	syncDir := filepath.Join(tmp, "sync")
+	if fi, err := os.Lstat(syncDir); err == nil && (!fi.IsDir() || ownerOf(fi) != os.Geteuid()) {
+		if err := os.RemoveAll(syncDir); err != nil {
+			return "", err
+		}
+	}
+	if err := os.Mkdir(syncDir, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
+		return "", err
+	}
+	// Start from the system sync databases, so only changes are downloaded.
+	if ents, err := os.ReadDir(filepath.Join(p.db(), "sync")); err == nil {
+		for _, e := range ents {
+			dst := filepath.Join(syncDir, e.Name())
+			if fi, err := os.Lstat(dst); err == nil {
+				if fi.Mode().IsRegular() && ownerOf(fi) == os.Geteuid() {
+					continue
+				}
+				if err := os.RemoveAll(dst); err != nil {
+					return "", err
+				}
+			}
+			copyFile(filepath.Join(p.db(), "sync", e.Name()), dst)
+		}
+	}
+	return tmp, nil
+}
 
 func (p *pacman) Refresh(ctx context.Context) error {
 	p.tmpMu.Lock()
 	defer p.tmpMu.Unlock()
-	tmp := p.tmpDir()
-	if err := os.MkdirAll(tmp, 0o700); err != nil {
+	tmp, err := p.prepareCheckDB()
+	if err != nil {
 		return err
-	}
-	local := filepath.Join(tmp, "local")
-	if _, err := os.Lstat(local); err != nil {
-		if err := os.Symlink(filepath.Join(p.db(), "local"), local); err != nil {
-			return err
-		}
-	}
-	// Start from the system sync databases, so only changes are downloaded.
-	_ = os.MkdirAll(filepath.Join(tmp, "sync"), 0o700)
-	if ents, err := os.ReadDir(filepath.Join(p.db(), "sync")); err == nil {
-		for _, e := range ents {
-			dst := filepath.Join(tmp, "sync", e.Name())
-			if _, err := os.Stat(dst); err == nil {
-				continue
-			}
-			copyFile(filepath.Join(p.db(), "sync", e.Name()), dst)
-		}
 	}
 	args := []string{"-Sy", "--disable-sandbox", "--dbpath", tmp, "--logfile", "/dev/null"}
 	name, full := "pacman", args
@@ -186,26 +255,34 @@ func (p *pacman) Refresh(ctx context.Context) error {
 		}
 		name, full = "fakeroot", append([]string{"--", "pacman"}, args...)
 	}
-	_, err := run(ctx, 2*time.Minute, nil, name, full...)
+	_, err = run(ctx, 2*time.Minute, nil, name, full...)
 	if err != nil {
 		return rpc.Errorf(rpc.Unavailable, "Could not refresh the package databases: %v", err)
 	}
 	return nil
 }
 
+// copyFile copies a system sync database into the private folder. The target
+// is created with O_EXCL|O_NOFOLLOW, so it is never written through a link.
 func copyFile(src, dst string) {
 	in, err := os.Open(src)
 	if err != nil {
 		return
 	}
 	defer in.Close()
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_EXCL|os.O_WRONLY|syscall.O_NOFOLLOW, 0o600)
 	if err != nil {
 		return
 	}
-	defer out.Close()
-	_, _ = io.Copy(out, in)
-	if fi, err := os.Stat(src); err == nil {
+	_, cerr := io.Copy(out, in)
+	if err := out.Close(); cerr == nil {
+		cerr = err
+	}
+	if cerr != nil {
+		os.Remove(dst)
+		return
+	}
+	if fi, err := in.Stat(); err == nil {
 		_ = os.Chtimes(dst, fi.ModTime(), fi.ModTime())
 	}
 }

@@ -512,14 +512,11 @@ func TestExecutePlansFailure(t *testing.T) {
 }
 
 func TestReadStatus(t *testing.T) {
-	old := stateRoot
-	stateRoot = filepath.Join(t.TempDir(), "tx.json")
-	defer func() { stateRoot = old }()
-	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	useTempState(t)
 	if busy, tx := readStatus(); busy || tx != nil {
 		t.Fatal("idle expected")
 	}
-	r := &txRun{path: stateRoot}
+	r := &txRun{path: stateRoot, public: stateRootPublic}
 	r.st = txState{Running: true, PID: os.Getpid(), Op: "upgrade", Total: 3, Done: 1, Log: []string{"x"}}
 	r.save(true)
 	if busy, tx := readStatus(); !busy || tx == nil || tx.Done != 1 {
