@@ -1,0 +1,135 @@
+/* Terminal section. Every class starts with terminal-. No divider lines: panels, tints and spacing only. */
+.terminal-root {
+  --tbg: var(--bg);
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  position: relative;
+  background: var(--surface);
+}
+html[data-scheme='light'] .terminal-root { --tbg: var(--sunk); }
+.terminal-root.terminal-focus { position: fixed; inset: 0; z-index: 90; padding: 10px; }
+.terminal-root.terminal-focus .terminal-body { border-radius: 18px; }
+
+/* ---- sessions sidebar ---- */
+.terminal-sess { width: 256px; flex: none; display: flex; flex-direction: column; gap: 4px; overflow: auto; padding: 6px 2px 6px 0; }
+.terminal-newrow { display: flex; gap: 6px; margin-bottom: 10px; }
+.terminal-newrow .terminal-newb { flex: 1; justify-content: flex-start; height: 44px; border-radius: 16px; padding: 0 16px; }
+.terminal-newrow .ui-btn--primary { background: var(--h-term); color: var(--surface); }
+.terminal-newrow .ui-btn--primary:hover { background: color-mix(in srgb, var(--h-term) 85%, #fff); }
+.terminal-newrow .ui-btn--icon { height: 44px; width: 44px; border-radius: 16px; }
+.terminal-grp { font-size: 12.5px; color: var(--ink3); font-weight: 700; margin: 12px 8px 4px; }
+.terminal-none { color: var(--ink3); font-size: 13px; padding: 4px 8px 8px; }
+.terminal-ss { --h: var(--h-term); --s: var(--h-term-s); display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 14px; cursor: pointer; border: 2px solid transparent; position: relative; }
+.terminal-ss.terminal-k-root { --h: var(--h-svc); --s: var(--h-svc-s); }
+.terminal-ss.terminal-k-ssh { --h: var(--h-ov); --s: var(--h-ov-s); }
+.terminal-ss.det { --h: var(--h-log); --s: var(--h-log-s); opacity: 0.8; }
+.terminal-ss:hover { background: var(--sunk); }
+.terminal-ss.on { background: var(--s); border-color: var(--h); }
+.terminal-ic { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; flex: none; background: var(--s); color: var(--h); }
+.terminal-ic .ui-icon { width: 18px; height: 18px; }
+.terminal-ss-txt { min-width: 0; flex: 1; }
+.terminal-ss-txt b { display: block; font-weight: 700; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.terminal-ss-txt small { display: block; color: var(--ink3); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.terminal-st { font-size: 11.5px; color: var(--ink3); font-weight: 600; white-space: nowrap; }
+.terminal-more { display: none; flex: none; }
+.terminal-ss:hover .terminal-more, .terminal-ss:focus-within .terminal-more { display: block; }
+.terminal-ss:hover .terminal-st, .terminal-ss:focus-within .terminal-st { display: none; }
+@media (hover: none) { .terminal-more { display: block; } .terminal-st { display: none; } }
+.terminal-addhost { display: flex; align-items: center; gap: 8px; margin-top: 4px; padding: 9px 12px; border-radius: 14px; border: 2px dashed var(--line); color: var(--ink3); font-weight: 700; font-size: 13px; background: none; cursor: pointer; }
+.terminal-addhost:hover { color: var(--ink); background: var(--sunk); }
+.terminal-addhost .ui-icon { width: 15px; height: 15px; }
+.terminal-sheet .terminal-sess { width: auto; max-height: 70vh; }
+
+/* ---- body: tabs strip (phones), toolbar, panes, snippets ---- */
+.terminal-body { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--tbg); border-radius: 18px; overflow: hidden; }
+.terminal-tb { display: flex; align-items: center; gap: 6px; padding: 8px 10px 8px 16px; background: var(--sunk); flex-wrap: wrap; }
+.terminal-ttl { display: flex; align-items: center; gap: 8px; font-weight: 800; min-width: 0; }
+.terminal-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--h-term); flex: none; display: inline-block; }
+.terminal-dot.terminal-k-root { background: var(--h-svc); }
+.terminal-dot.terminal-k-ssh { background: var(--h-file); }
+.terminal-sudo { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 8px; background: var(--warn-s); color: var(--warn); font-weight: 700; font-size: 12.5px; margin-left: 6px; border: 0; cursor: pointer; }
+.terminal-sudo .ui-icon { width: 14px; height: 14px; }
+.terminal-tb .sp { flex: 1; }
+.terminal-tb > button:not(.terminal-sudo) { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 12px; border-radius: 12px; font-weight: 700; font-size: 13px; color: var(--ink2); background: none; border: 0; cursor: pointer; }
+.terminal-tb > button:not(.terminal-sudo):hover { background: var(--surface); color: var(--ink); }
+.terminal-tb > button.on { background: var(--h-term-s); color: var(--h-term); }
+.terminal-tb .ui-icon { width: 16px; height: 16px; }
+
+.terminal-panes { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 0; }
+.terminal-split .terminal-panes { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 8px; background: var(--sunk); }
+.terminal-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--tbg); position: relative; }
+.terminal-split .terminal-pane { border-radius: 14px; overflow: hidden; }
+.terminal-pane-h { display: flex; align-items: center; gap: 8px; padding: 6px 14px; color: var(--ink3); font: 12px var(--mono); }
+.terminal-split .terminal-pane-h.act { color: var(--h-term); background: var(--h-term-s); }
+.terminal-pane-h.act { color: var(--h-term); }
+.terminal-pane-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.terminal-pane-h .sp { flex: 1; }
+.terminal-pane-h button { color: inherit; display: grid; background: none; border: 0; cursor: pointer; padding: 3px; border-radius: 6px; }
+.terminal-pane-h button:hover { background: var(--sunk); }
+.terminal-pane-h .ui-icon { width: 13px; height: 13px; }
+.terminal-pane-empty, .terminal-center { flex: 1; display: grid; place-items: center; padding: 24px; }
+
+.terminal-view { flex: 1; min-height: 0; position: relative; }
+.terminal-host { position: absolute; inset: 0; padding: 4px 6px 6px 14px; }
+.terminal-host .xterm { height: 100%; }
+.terminal-host .xterm-viewport { background-color: transparent !important; }
+.terminal-banner { position: absolute; top: 8px; right: 12px; background: var(--warn-s); color: var(--warn); font-weight: 700; font-size: 12.5px; padding: 5px 10px; border-radius: 8px; }
+.terminal-ended { position: absolute; left: 12px; right: 12px; bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--surface); color: var(--ink2); font-weight: 600; font-size: 13px; padding: 8px 8px 8px 14px; border-radius: 14px; box-shadow: var(--shadow); }
+
+/* ---- snippet chips ---- */
+.terminal-chips { display: flex; gap: 8px; padding: 10px 14px 12px; background: var(--sunk); overflow-x: auto; flex: none; }
+.terminal-chip { --h: var(--h-sw); --s: var(--h-sw-s); display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 12px; background: var(--s); color: var(--h); font-weight: 700; font-size: 13px; white-space: nowrap; border: 0; cursor: pointer; flex: none; }
+.terminal-chip:hover { background: color-mix(in srgb, var(--h) 24%, var(--s)); }
+.terminal-chip .ui-icon { width: 15px; height: 15px; }
+.terminal-chip-add { background: none; color: var(--ink3); border: 2px dashed var(--line); padding: 5px 12px; }
+.terminal-chip-add:hover { background: var(--surface); color: var(--ink); }
+
+/* ---- command palette ---- */
+.terminal-palscrim { position: absolute; inset: 0; z-index: 5; display: flex; justify-content: center; align-items: flex-start; padding: 56px 16px 16px; background: var(--scrim); border-radius: inherit; }
+.terminal-pal { width: min(580px, 100%); max-height: calc(100% - 20px); display: flex; flex-direction: column; background: var(--surface); border-radius: 22px; box-shadow: var(--shadow); overflow: hidden; }
+.terminal-pal-in { display: flex; align-items: center; gap: 12px; padding: 16px 18px; background: var(--sunk); font-size: 15px; }
+.terminal-pal-in input { flex: 1; min-width: 0; background: none; border: 0; outline: 0; font: inherit; color: var(--ink); }
+.terminal-pal-in .ui-icon { width: 18px; height: 18px; color: var(--ink3); }
+.terminal-pal-in kbd { font: 600 11.5px var(--mono); padding: 2px 7px; border-radius: 6px; background: var(--surface); color: var(--ink3); }
+.terminal-pal-list { overflow: auto; padding: 0 8px 8px; }
+.terminal-pal-grp { font-size: 12.5px; color: var(--ink3); font-weight: 700; padding: 10px 10px 4px; }
+.terminal-pal-empty { padding: 22px; color: var(--ink3); text-align: center; }
+.terminal-snip { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 14px; cursor: pointer; }
+.terminal-snip.on { background: var(--h-term-s); }
+.terminal-snip .terminal-ic { width: 32px; height: 32px; border-radius: 10px; }
+.terminal-snip .terminal-ic .ui-icon { width: 16px; height: 16px; }
+.terminal-snip b { display: block; font-weight: 700; font-size: 13.5px; }
+.terminal-snip code { display: block; font: 12px var(--mono); color: var(--ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 440px; }
+.terminal-snip > div { min-width: 0; }
+.terminal-run { margin-left: auto; color: var(--h-term); display: grid; }
+.terminal-run .ui-icon { width: 16px; height: 16px; }
+
+/* ---- dialogs ---- */
+.terminal-form { display: flex; flex-direction: column; gap: 14px; margin: 14px 0 4px; }
+.terminal-form-row { display: grid; grid-template-columns: 1fr 110px; gap: 12px; }
+
+/* ---- phones: session strip + extra keys ---- */
+.terminal-strip { display: flex; gap: 6px; padding: 8px 10px; background: var(--surface); align-items: center; overflow-x: auto; flex: none; }
+.terminal-tab { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 11px; border-radius: 10px; background: var(--sunk); font-weight: 700; font-size: 12.5px; white-space: nowrap; border: 0; color: var(--ink2); cursor: pointer; flex: none; }
+.terminal-tab.on { background: var(--h-term); color: var(--surface); }
+.terminal-tab.on .terminal-dot { background: var(--surface); }
+.terminal-tab-add { padding: 0 9px; }
+.terminal-tab .ui-icon { width: 16px; height: 16px; }
+.terminal-keys { display: flex; gap: 4px; padding: 8px 10px; background: var(--surface); overflow-x: auto; flex: none; }
+.terminal-keys button { flex: 1 1 0; min-width: 30px; height: 38px; padding: 0 6px; border-radius: 10px; background: var(--sunk); color: var(--ink); font: 700 13px var(--mono); border: 0; cursor: pointer; }
+.terminal-keys button.on { background: var(--h-term); color: var(--surface); }
+.terminal-keys button:active { background: var(--h-term-s); }
+
+@media (max-width: 1100px) { .terminal-sess { display: none; } .terminal-sheet .terminal-sess { display: flex; } }
+@media (max-width: 859px) {
+  .terminal-root { height: calc(var(--term-vh, 100dvh) - 176px); min-height: 360px; flex: none; padding: 8px; }
+  .terminal-root.terminal-focus { height: auto; min-height: 0; inset: 0; }
+  .terminal-body { border-radius: 14px; }
+  .terminal-tb > button span { display: none; }
+  .terminal-tb > button:not(.terminal-sudo) { padding: 0 9px; }
+  .terminal-host { padding-left: 8px; }
+}
+@media (prefers-reduced-motion: reduce) { .terminal-view * { transition: none !important; } }
