@@ -1,0 +1,29 @@
+{
+  "title": "Login: glow, square accounts, IP",
+  "question": "Which refined login do you prefer?",
+  "kind": "page",
+  "parent": "006-login-logo",
+  "head": [],
+  "variants": [
+    {
+      "id": "a",
+      "label": "Fila di 4",
+      "notes": "Quattro quadrati in fila con nome e ruolo sotto, come su Netflix. IP su una riga propria sotto il nome host. In tutte: alone dietro il logo come in C."
+    },
+    {
+      "id": "b",
+      "label": "Griglia 2×2",
+      "notes": "Quadrati più grandi su due righe. IP e distro in due pillole sotto il nome host. In tutte: alone dietro il logo come in C."
+    },
+    {
+      "id": "c",
+      "label": "Locandine",
+      "notes": "Quattro quadrati con il nome dentro il riquadro, senza ruolo. IP grande con pulsante per copiarlo, poi distro e interfaccia. In tutte: alone dietro il logo come in C."
+    }
+  ],
+  "created": "2026-10-01T14:40:05.929Z",
+  "viewports": [
+    "laptop",
+    "mobile"
+  ]
+}

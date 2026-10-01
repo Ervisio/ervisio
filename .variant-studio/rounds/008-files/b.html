@@ -1,0 +1,173 @@
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+.rail a.it .pi{background:var(--s);color:var(--h)}
+.rail a.it:hover .pi{background:color-mix(in srgb,var(--h) 22%,var(--s))}
+.rail a.it.on{color:var(--h)}
+.rail a.it.on .pi{background:var(--h);color:var(--surface)}
+.rsep{width:36px;height:1px;background:var(--line);margin:6px 0}
+.q{--mono:"JetBrains Mono",ui-monospace,monospace}
+.fm{background:var(--surface);border-radius:22px;flex:1;min-height:0;display:flex;overflow:hidden}
+.ft-ic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;flex:none;background:var(--s);color:var(--h)}
+.ft-ic .i{width:18px;height:18px}
+/* file type colours reuse section hues */
+.t-dir{--h:var(--h-file);--s:var(--h-file-s)}.t-img{--h:var(--h-plg);--s:var(--h-plg-s)}.t-code{--h:var(--h-term);--s:var(--h-term-s)}
+.t-arc{--h:var(--h-log);--s:var(--h-log-s)}.t-doc{--h:var(--h-ov);--s:var(--h-ov-s)}.t-txt{--h:var(--h-sw);--s:var(--h-sw-s)}.t-pdf{--h:var(--h-svc);--s:var(--h-svc-s)}
+.tbtn{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 14px;border-radius:999px;font-weight:700;border:1px solid var(--line)}
+.tbtn:hover{border-color:var(--ink3)}
+.tbtn.p{background:var(--h-file);border-color:var(--h-file);color:var(--surface)}
+.seg{display:inline-flex;background:var(--sunk);border-radius:999px;padding:3px}
+.seg button{width:34px;height:32px;border-radius:999px;display:grid;place-items:center;color:var(--ink3)}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.seg .i{width:17px;height:17px}
+.crumb{display:flex;align-items:center;gap:2px;font-weight:700;font-size:15px;min-width:0;flex-wrap:wrap}
+.crumb a{padding:5px 9px;border-radius:9px;color:var(--ink2);text-decoration:none}
+.crumb a:hover{background:var(--sunk);color:var(--ink)}
+.crumb a:last-child{color:var(--ink)}
+.crumb .i{width:14px;height:14px;color:var(--ink3);transform:rotate(-90deg)}
+.muted{color:var(--ink3)}
+.perm{display:grid;grid-template-columns:auto repeat(3,1fr);gap:6px 8px;align-items:center;font-size:13px}
+.perm .h{color:var(--ink3);font-weight:600;text-align:center;font-size:12px}
+.perm .r{font-weight:600}
+.perm .ck{height:28px;border-radius:9px;display:grid;place-items:center;background:var(--sunk);color:var(--ink3)}
+.perm .ck.on{background:var(--h-file-s);color:var(--h-file)}
+.perm .ck .i{width:15px;height:15px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:8px 14px;font-size:13.5px;margin:0}
+.kv dt{color:var(--ink3)}.kv dd{margin:0;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mono{font-family:var(--mono);font-size:12.5px}
+@media (max-width:860px){ .fm{border-radius:18px} }
+
+.places{width:228px;flex:none;padding:18px 12px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:2px;box-sizing:border-box}
+.newb{height:46px;justify-content:flex-start;padding:0 18px;margin-bottom:14px;border-radius:16px}
+.pl-t{font-size:12.5px;color:var(--ink3);font-weight:700;margin:14px 12px 4px}
+.pl-g a{display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:999px;color:var(--ink2);text-decoration:none;font-weight:600}
+.pl-g a:hover{background:var(--sunk);color:var(--ink)}
+.pl-g a.on{background:var(--h-file-s);color:var(--h-file)}
+.pl-g .i{width:18px;height:18px}
+.sftp{margin-left:auto;font-size:10.5px;font-weight:800;padding:2px 6px;border-radius:6px;background:var(--h-term-s);color:var(--h-term)}
+.store{margin-top:auto;padding:12px;border-radius:16px;background:var(--sunk)}
+.store .l{display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px}
+.store .l span{color:var(--ink3)}
+.store .b{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.store .b i{display:block;height:100%;background:var(--h-file);border-radius:3px}
+@media (max-width:1100px){ .places{display:none} }
+
+.fb-body{flex:1;min-width:0;display:flex;flex-direction:column}
+.tabs{display:flex;align-items:flex-end;gap:4px;padding:10px 14px 0;border-bottom:1px solid var(--line)}
+.tab{display:flex;align-items:center;gap:8px;padding:9px 14px;border-radius:12px 12px 0 0;font-weight:700;color:var(--ink3);font-size:13.5px}
+.tab.on{background:var(--sunk);color:var(--ink)}
+.tab .i{width:15px;height:15px}
+.tab .x{opacity:.6}
+.fb-bar{display:flex;align-items:center;gap:10px;padding:12px 18px;background:var(--sunk);flex-wrap:wrap}
+.fb-bar .sp{flex:1}
+.pathin{flex:1;min-width:220px;display:flex;align-items:center;gap:10px;height:38px;padding:0 14px;border-radius:12px;background:var(--surface);font-family:var(--mono);font-size:13px}
+.fb-split{flex:1;display:flex;min-height:0}
+.tbl{flex:1;min-width:0;overflow:auto;position:relative}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{position:sticky;top:0;background:var(--surface);text-align:left;font-weight:700;color:var(--ink3);font-size:12.5px;padding:10px 12px;border-bottom:1px solid var(--line)}
+td{padding:7px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+tr:hover td{background:var(--sunk)}
+tr.sel td{background:var(--h-file-s)}
+tr.act td:nth-child(2){font-weight:800}
+.nm{display:flex;align-items:center;gap:10px;font-weight:600}
+.cb{width:28px}
+.box{width:18px;height:18px;border-radius:6px;border:2px solid var(--line);display:grid;place-items:center;box-sizing:border-box}
+.box.on{background:var(--h-file);border-color:var(--h-file);color:var(--surface)}
+.box .i{width:12px;height:12px}
+.ft-ic.sm{width:26px;height:26px;border-radius:8px}
+.ft-ic.sm .i{width:15px;height:15px}
+.bulk{position:sticky;bottom:16px;margin:16px auto 16px;width:max-content;display:flex;align-items:center;gap:4px;padding:6px 6px 6px 18px;border-radius:999px;background:var(--ink);color:var(--surface);box-shadow:0 10px 30px -10px rgba(0,0,0,.4)}
+.bulk b{margin-right:10px}
+.bulk button{display:flex;align-items:center;gap:6px;padding:8px 12px;border-radius:999px;font-weight:700;font-size:13px;color:var(--surface)}
+.bulk button:hover{background:rgba(127,127,127,.25)}
+.bulk .i{width:16px;height:16px}
+.prev{width:380px;flex:none;border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.prev .hd{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.prev .hd b{flex:1;font-weight:800}
+.prev .hd .tbtn{height:34px}
+.prev pre{margin:0;padding:14px 16px;font:12.5px/1.65 var(--mono);color:var(--ink2);overflow:auto;flex:1;counter-reset:l}
+.prev .k{color:var(--h-file)}.prev .s{color:var(--h-term)}
+.prev .ft{padding:12px 16px;border-top:1px solid var(--line);font-size:12.5px;color:var(--ink3);display:flex;gap:12px}
+@media (max-width:1240px){ .prev{display:none} }
+@media (max-width:860px){ th:nth-child(4),td:nth-child(4),th:nth-child(5),td:nth-child(5){display:none} }
+</style>
+<div class="q vb">
+  <nav class="rail">
+    <a class="distro" href="#"><span class="lg"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.39.605C10.376 3.092 9.764 4.72 8.635 7.132c.693.734 1.543 1.589 2.923 2.554-1.484-.61-2.496-1.224-3.252-1.86C6.86 10.842 4.596 15.138 0 23.395c3.612-2.085 6.412-3.37 9.021-3.862a6.61 6.61 0 0 1-.171-1.547l.003-.115c.058-2.315 1.261-4.095 2.687-3.973 1.426.12 2.534 2.096 2.478 4.409a6.52 6.52 0 0 1-.146 1.243c2.58.505 5.352 1.787 8.914 3.844-.702-1.293-1.33-2.459-1.929-3.57-.943-.73-1.926-1.682-3.933-2.713 1.38.359 2.367.772 3.137 1.234-6.09-11.334-6.582-12.84-8.67-17.74z"/></svg></span><span class="dn">arch</span></a>
+    <a class="it c-ov" href="#"><span class="pi"><svg class="i"><use href="#i-overview"/></svg></span><span class="lb">Overview</span></a><a class="it c-term" href="#"><span class="pi"><svg class="i"><use href="#i-terminal"/></svg></span><span class="lb">Terminal</span></a><a class="it c-file on" href="#"><span class="pi"><svg class="i"><use href="#i-files"/></svg></span><span class="lb">Files</span></a><a class="it c-log" href="#"><span class="pi"><svg class="i"><use href="#i-logs"/></svg></span><span class="lb">Logs</span></a><a class="it c-svc" href="#"><span class="pi"><svg class="i"><use href="#i-services"/></svg></span><span class="lb">Services</span><span class="n">1</span></a><a class="it c-sw" href="#"><span class="pi"><svg class="i"><use href="#i-software"/></svg></span><span class="lb">Software</span><span class="n">23</span></a><a class="it c-usr" href="#"><span class="pi"><svg class="i"><use href="#i-users"/></svg></span><span class="lb">Users</span></a><div class="rsep"></div><a class="it c-plg" href="#"><span class="pi"><svg class="i"><use href="#i-plugins"/></svg></span><span class="lb">Plugins</span></a><div class="sp"></div><div class="me"><div class="av">F</div></div></nav>
+  <main class="main">
+    <div class="top">
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search files and contents</div><div class="sp"></div>
+      <div class="pill"><i></i>arch<svg class="i" style="width:16px;height:16px"><use href="#i-chevron"/></svg></div>
+      <button class="ib" data-toggle-theme title="Theme"><svg class="i"><use href="#i-moon"/></svg></button>
+      <button class="ib" title="Notifications"><svg class="i"><use href="#i-bell"/></svg></button></div>
+    <section class="fm">
+      <aside class="places">
+      <button class="tbtn p newb"><svg class="i"><use href="#i-plus"/></svg>New</button>
+      <div class="pl-g">
+        <a class="on" href="#"><svg class="i"><use href="#i-home"/></svg>Home</a>
+        <a href="#"><svg class="i"><use href="#i-server"/></svg>Root <span class="muted mono">/</span></a>
+        <a href="#"><svg class="i"><use href="#i-clock"/></svg>Recent</a>
+        <a href="#"><svg class="i"><use href="#i-star"/></svg>Starred</a>
+        <a href="#"><svg class="i"><use href="#i-trash"/></svg>Trash</a>
+      </div>
+      <div class="pl-t">Bookmarks</div>
+      <div class="pl-g">
+        <a href="#"><svg class="i"><use href="#i-files"/></svg><span class="mono">/etc</span></a>
+        <a href="#"><svg class="i"><use href="#i-files"/></svg><span class="mono">/var/log</span></a>
+        <a href="#"><svg class="i"><use href="#i-files"/></svg><span class="mono">/srv/www</span></a>
+      </div>
+      <div class="pl-t">Remote</div>
+      <div class="pl-g">
+        <a href="#"><svg class="i"><use href="#i-server"/></svg>backup-nas<span class="sftp">SFTP</span></a>
+      </div>
+      <div class="store">
+        <div class="l"><b>Disk /</b><span>65 of 382 GB</span></div>
+        <div class="b"><i style="width:17%"></i></div>
+      </div></aside>
+      <div class="fb-body">
+        <div class="tabs">
+          <div class="tab on"><svg class="i"><use href="#i-home"/></svg>fonlogen<span class="x"><svg class="i"><use href="#i-close"/></svg></span></div>
+          <div class="tab"><svg class="i"><use href="#i-files"/></svg>nginx<span class="x"><svg class="i"><use href="#i-close"/></svg></span></div>
+          <div class="tab"><svg class="i"><use href="#i-lock"/></svg>/var/log<span class="x"><svg class="i"><use href="#i-close"/></svg></span></div>
+          <button class="tab"><svg class="i"><use href="#i-plus"/></svg></button>
+        </div>
+        <div class="fb-bar">
+          <div class="pathin"><svg class="i"><use href="#i-files"/></svg>/home/fonlogen</div>
+          <button class="tbtn"><svg class="i"><use href="#i-upload"/></svg>Upload</button>
+          <div class="seg"><button title="Grid"><svg class="i"><use href="#i-grid"/></svg></button><button class="on" title="List"><svg class="i"><use href="#i-list"/></svg></button><button title="Columns"><svg class="i"><use href="#i-columns"/></svg></button></div>
+        </div>
+        <div class="fb-split">
+          <div class="tbl">
+            <table><thead><tr><th></th><th>Name</th><th>Size</th><th>Owner</th><th>Permissions</th><th>Modified</th></tr></thead><tbody><tr class="t-dir"><td class="cb"><span class="box"></span></td><td><div class="nm"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span>Desktop</div></td><td class="muted">4 items</td><td>fonlogen</td><td class="mono">rwxr-xr-x</td><td class="muted">Today</td></tr><tr class="t-dir"><td class="cb"><span class="box"></span></td><td><div class="nm"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span>Documenti</div></td><td class="muted">128 items</td><td>fonlogen</td><td class="mono">rwxr-xr-x</td><td class="muted">Today</td></tr><tr class="t-dir"><td class="cb"><span class="box"></span></td><td><div class="nm"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span>Immagini</div></td><td class="muted">342 items</td><td>fonlogen</td><td class="mono">rwxr-xr-x</td><td class="muted">Today</td></tr><tr class="t-dir"><td class="cb"><span class="box"></span></td><td><div class="nm"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span>Musica</div></td><td class="muted">57 items</td><td>fonlogen</td><td class="mono">rwxr-xr-x</td><td class="muted">Today</td></tr><tr class="t-dir"><td class="cb"><span class="box"></span></td><td><div class="nm"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span>Scaricati</div></td><td class="muted">23 items</td><td>fonlogen</td><td class="mono">rwxr-xr-x</td><td class="muted">Today</td></tr><tr class="t-dir"><td class="cb"><span class="box"></span></td><td><div class="nm"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span>Video</div></td><td class="muted">12 items</td><td>fonlogen</td><td class="mono">rwxr-xr-x</td><td class="muted">Today</td></tr><tr class="t-dir"><td class="cb"><span class="box"></span></td><td><div class="nm"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span>projects</div></td><td class="muted">9 items</td><td>fonlogen</td><td class="mono">rwxr-xr-x</td><td class="muted">Today</td></tr><tr class="t-img"><td class="cb"><span class="box"></span></td><td><div class="nm"><span class="ft-ic sm"><svg class="i"><use href="#i-image"/></svg></span>wallpaper-arch.jpg</div></td><td>5.4 MB</td><td>fonlogen</td><td class="mono">rw-r--r--</td><td class="muted">Today 13:12</td></tr><tr class="t-code sel act"><td class="cb"><span class="box on"><svg class="i"><use href="#i-check"/></svg></span></td><td><div class="nm"><span class="ft-ic sm"><svg class="i"><use href="#i-code"/></svg></span>docker-compose.yml</div></td><td>1.2 KB</td><td>fonlogen</td><td class="mono">rw-r--r--</td><td class="muted">Today 11:40</td></tr><tr class="t-code sel"><td class="cb"><span class="box on"><svg class="i"><use href="#i-check"/></svg></span></td><td><div class="nm"><span class="ft-ic sm"><svg class="i"><use href="#i-code"/></svg></span>deploy.sh</div></td><td>812 B</td><td>fonlogen</td><td class="mono">rwxr-xr-x</td><td class="muted">Yesterday</td></tr><tr class="t-txt"><td class="cb"><span class="box"></span></td><td><div class="nm"><span class="ft-ic sm"><svg class="i"><use href="#i-file"/></svg></span>notes.md</div></td><td>4.8 KB</td><td>fonlogen</td><td class="mono">rw-r--r--</td><td class="muted">Yesterday</td></tr><tr class="t-arc"><td class="cb"><span class="box"></span></td><td><div class="nm"><span class="ft-ic sm"><svg class="i"><use href="#i-archive"/></svg></span>backup-etc.tar.gz</div></td><td>38 MB</td><td>root</td><td class="mono">rw-------</td><td class="muted">28 Sep</td></tr><tr class="t-img"><td class="cb"><span class="box"></span></td><td><div class="nm"><span class="ft-ic sm"><svg class="i"><use href="#i-image"/></svg></span>screenshot-0928.png</div></td><td>2.1 MB</td><td>fonlogen</td><td class="mono">rw-r--r--</td><td class="muted">28 Sep</td></tr><tr class="t-pdf"><td class="cb"><span class="box"></span></td><td><div class="nm"><span class="ft-ic sm"><svg class="i"><use href="#i-file"/></svg></span>invoice-september.pdf</div></td><td>180 KB</td><td>fonlogen</td><td class="mono">rw-r--r--</td><td class="muted">26 Sep</td></tr><tr class="t-txt"><td class="cb"><span class="box"></span></td><td><div class="nm"><span class="ft-ic sm"><svg class="i"><use href="#i-logs"/></svg></span>server.log</div></td><td>220 KB</td><td>fonlogen</td><td class="mono">rw-r-----</td><td class="muted">25 Sep</td></tr></tbody></table>
+            <div class="bulk"><b>2 selected</b><button><svg class="i"><use href="#i-download"/></svg>Download</button><button><svg class="i"><use href="#i-copy"/></svg>Copy</button><button><svg class="i"><use href="#i-archive"/></svg>Compress</button><button><svg class="i"><use href="#i-trash"/></svg>Delete</button><button><svg class="i"><use href="#i-close"/></svg></button></div>
+          </div>
+          <aside class="prev">
+            <div class="hd"><span class="ft-ic t-code"><svg class="i"><use href="#i-code"/></svg></span><b>docker-compose.yml</b><button class="tbtn"><svg class="i"><use href="#i-edit"/></svg>Edit</button></div>
+            <pre><span class="k">services</span>:
+  <span class="k">web</span>:
+    <span class="k">image</span>: <span class="s">nginx:1.27-alpine</span>
+    <span class="k">ports</span>:
+      - <span class="s">"80:80"</span>
+      - <span class="s">"443:443"</span>
+    <span class="k">volumes</span>:
+      - <span class="s">/srv/www:/usr/share/nginx/html:ro</span>
+    <span class="k">restart</span>: <span class="s">unless-stopped</span>
+  <span class="k">db</span>:
+    <span class="k">image</span>: <span class="s">postgres:17</span>
+    <span class="k">environment</span>:
+      <span class="k">POSTGRES_PASSWORD_FILE</span>: <span class="s">/run/secrets/db</span></pre>
+            <div class="ft"><span>YAML</span><span>14 lines</span><span>1.2 KB</span><span class="mono">rw-r--r--</span></div>
+          </aside>
+        </div>
+      </div>
+    </section>
+  </main>
+  <nav class="dock">
+    <a class="c-ov" href="#"><span class="pi"><svg class="i"><use href="#i-overview"/></svg></span>Home</a>
+    <a class="c-term" href="#"><span class="pi"><svg class="i"><use href="#i-terminal"/></svg></span>Terminal</a>
+    <a class="on c-file" href="#"><span class="pi"><svg class="i"><use href="#i-files"/></svg></span>Files</a>
+    <a class="c-svc" href="#"><span class="pi"><svg class="i"><use href="#i-services"/></svg></span>Services</a>
+    <a href="#"><span class="pi"><svg class="i"><use href="#i-more"/></svg></span>More</a>
+  </nav>
+</div>
+<script src="kit.js"></script>

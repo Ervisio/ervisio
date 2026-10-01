@@ -1,0 +1,28 @@
+{
+  "title": "Direzione visiva: shell + Panoramica",
+  "question": "Quale direzione visiva vuoi come base per tutta la dashboard?",
+  "kind": "page",
+  "head": [],
+  "variants": [
+    {
+      "id": "a",
+      "label": "Strumento",
+      "notes": "Sidebar fissa raggruppata per area, IBM Plex, verde segnale. Densa e precisa: tante informazioni per schermata, angoli piccoli, widget tutti della stessa griglia."
+    },
+    {
+      "id": "b",
+      "label": "Console",
+      "notes": "Navigazione orizzontale in alto e barra comandi (Ctrl K) come punto di partenza. Instrument Sans, ambra. Widget a bento di misure diverse, compreso un terminale live."
+    },
+    {
+      "id": "c",
+      "label": "Morbida",
+      "notes": "Stile Google Drive: sidebar flottante con pulsante Nuovo, forme arrotondate, Figtree, indaco. Anelli per le risorse e azioni personali colorate. Meno densa, più accogliente."
+    }
+  ],
+  "created": "2026-10-01T13:55:40.317Z",
+  "viewports": [
+    "laptop",
+    "mobile"
+  ]
+}

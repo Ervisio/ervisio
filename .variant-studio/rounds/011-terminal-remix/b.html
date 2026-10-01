@@ -1,0 +1,223 @@
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+.rail a.it .pi{background:var(--s);color:var(--h)}
+.rail a.it:hover .pi{background:color-mix(in srgb,var(--h) 22%,var(--s))}
+.rail a.it.on{color:var(--h)}
+.rail a.it.on .pi{background:var(--h);color:var(--surface)}
+.rsep{width:36px;height:1px;background:var(--line);margin:6px 0}
+.q{--mono:"JetBrains Mono",ui-monospace,monospace}
+.fm{background:var(--surface);border-radius:22px;flex:1;min-height:0;display:flex;overflow:hidden}
+.ft-ic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;flex:none;background:var(--s);color:var(--h)}
+.ft-ic .i{width:18px;height:18px}
+/* file type colours reuse section hues */
+.t-dir{--h:var(--h-file);--s:var(--h-file-s)}.t-img{--h:var(--h-plg);--s:var(--h-plg-s)}.t-code{--h:var(--h-term);--s:var(--h-term-s)}
+.t-arc{--h:var(--h-log);--s:var(--h-log-s)}.t-doc{--h:var(--h-ov);--s:var(--h-ov-s)}.t-txt{--h:var(--h-sw);--s:var(--h-sw-s)}.t-pdf{--h:var(--h-svc);--s:var(--h-svc-s)}
+.tbtn{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 14px;border-radius:999px;font-weight:700;border:1px solid var(--line)}
+.tbtn:hover{border-color:var(--ink3)}
+.tbtn.p{background:var(--h-file);border-color:var(--h-file);color:var(--surface)}
+.seg{display:inline-flex;background:var(--sunk);border-radius:999px;padding:3px}
+.seg button{width:34px;height:32px;border-radius:999px;display:grid;place-items:center;color:var(--ink3)}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.seg .i{width:17px;height:17px}
+.crumb{display:flex;align-items:center;gap:2px;font-weight:700;font-size:15px;min-width:0;flex-wrap:wrap}
+.crumb a{padding:5px 9px;border-radius:9px;color:var(--ink2);text-decoration:none}
+.crumb a:hover{background:var(--sunk);color:var(--ink)}
+.crumb a:last-child{color:var(--ink)}
+.crumb .i{width:14px;height:14px;color:var(--ink3);transform:rotate(-90deg)}
+.muted{color:var(--ink3)}
+.perm{display:grid;grid-template-columns:auto repeat(3,1fr);gap:6px 8px;align-items:center;font-size:13px}
+.perm .h{color:var(--ink3);font-weight:600;text-align:center;font-size:12px}
+.perm .r{font-weight:600}
+.perm .ck{height:28px;border-radius:9px;display:grid;place-items:center;background:var(--sunk);color:var(--ink3)}
+.perm .ck.on{background:var(--h-file-s);color:var(--h-file)}
+.perm .ck .i{width:15px;height:15px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:8px 14px;font-size:13.5px;margin:0}
+.kv dt{color:var(--ink3)}.kv dd{margin:0;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mono{font-family:var(--mono);font-size:12.5px}
+@media (max-width:860px){ .fm{border-radius:18px} }
+
+.q{--tb:#0F1218;--tf:#D9DEE8;--tdim:#6B7385;--tg:#6FDDB0;--tb2:#7DB6FF;--ty:#F5B963;--tr:#FF8A9B;--tm:#C6A2FF;--tsel:#24304A}
+html:not([data-theme=dark]) .q{--tb:#FBFBFD;--tf:#1D2030;--tdim:#8D92A5;--tg:#16805A;--tb2:#2C73C9;--ty:#A9620D;--tr:#B5324A;--tm:#7A43C2;--tsel:#DDEBFB}
+.tw{background:var(--tb);color:var(--tf);font:13.5px/1.6 var(--mono);padding:14px 18px;overflow:auto;flex:1;min-height:0;white-space:pre;tab-size:4}
+.tw .g{color:var(--tg)}.tw .b{color:var(--tb2)}.tw .y{color:var(--ty)}.tw .r{color:var(--tr)}.tw .m{color:var(--tm)}.tw .d{color:var(--tdim)}
+.tw .bold{font-weight:700}
+.tw .cur{display:inline-block;width:8px;height:17px;background:var(--tg);vertical-align:-3px;animation:blink 1.1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.tw .cur{animation:none}}
+.ttabs{display:flex;align-items:flex-end;gap:4px;padding:10px 12px 0;border-bottom:1px solid var(--line);overflow-x:auto}
+.ttab{display:flex;align-items:center;gap:8px;padding:9px 12px 9px 12px;border-radius:12px 12px 0 0;font-weight:700;color:var(--ink3);font-size:13.5px;white-space:nowrap}
+.ttab:hover{color:var(--ink)}
+.ttab.on{background:var(--tb);color:var(--tf)}
+.ttab .dot{width:8px;height:8px;border-radius:50%;background:var(--h-term)}
+.ttab .dot.root{background:var(--h-svc)}
+.ttab .dot.ssh{background:var(--h-file)}
+.ttab .x{display:grid;opacity:.5}.ttab .i{width:15px;height:15px}
+.sbar{display:flex;align-items:center;gap:14px;padding:7px 14px;font-size:12.5px;color:var(--ink3);border-top:1px solid var(--line);background:var(--surface);flex-wrap:wrap}
+.sbar b{color:var(--ink2);font-weight:700}
+.sbar .chip{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:7px;font-weight:700}
+.sbar .chip.sudo{background:var(--h-log-s);color:var(--h-log)}
+.sbar .sp{flex:1}
+.sbar button{display:inline-flex;align-items:center;gap:6px;font-weight:700;color:var(--ink2);padding:3px 8px;border-radius:8px}
+.sbar button:hover{background:var(--sunk)}
+.sbar .i{width:14px;height:14px}
+.snip{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:14px;cursor:pointer}
+.snip:hover{background:var(--sunk)}
+.snip .ft-ic{width:32px;height:32px;border-radius:10px}
+.snip .ft-ic .i{width:16px;height:16px}
+.snip b{display:block;font-weight:700;font-size:13.5px}
+.snip code{display:block;font:12px var(--mono);color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px}
+.snip .run{margin-left:auto;opacity:0;color:var(--h-term)}
+.snip:hover .run{opacity:1}
+
+.tm{flex:1;display:flex;min-height:calc(100vh - 90px);position:relative}
+.sess{width:248px;flex:none;border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:4px;overflow:auto}
+.sess .newb{height:44px;justify-content:flex-start;padding:0 16px;margin-bottom:12px;border-radius:16px;background:var(--h-term);border-color:var(--h-term);color:var(--surface)}
+.sess .grp{font-size:12.5px;color:var(--ink3);font-weight:700;margin:10px 8px 4px}
+.ss{display:flex;align-items:center;gap:10px;padding:8px;border-radius:14px;cursor:pointer;border:2px solid transparent}
+.ss:hover{background:var(--sunk)}
+.ss.on{background:var(--h-term-s);border-color:var(--h-term)}
+.ss .ft-ic{width:34px;height:34px}
+.ss b{display:block;font-weight:700;font-size:13.5px}
+.ss small{color:var(--ink3);font-size:12px}
+.ss .st{margin-left:auto;font-size:11.5px;color:var(--ink3);font-weight:600;white-space:nowrap}
+.ss.det{opacity:.75}
+.tbody{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--tb)}
+.ttb{display:flex;align-items:center;gap:6px;padding:8px 10px 8px 16px;background:var(--surface);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.ttb .ttl{display:flex;align-items:center;gap:8px;font-weight:800}
+.ttb .dot{width:8px;height:8px;border-radius:50%;background:var(--h-term)}
+.ttb .chip{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;font-weight:700;font-size:12.5px;margin-left:6px}
+.ttb .chip.sudo{background:var(--h-log-s);color:var(--h-log)}
+.ttb .chip .i{width:14px;height:14px}
+.ttb .sp{flex:1}
+.ttb button{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 12px;border-radius:999px;font-weight:700;font-size:13px;color:var(--ink2)}
+.ttb button:hover{background:var(--sunk);color:var(--ink)}
+.ttb button.on{background:var(--h-term-s);color:var(--h-term)}
+.ttb .i{width:16px;height:16px}
+.panes{flex:1;display:grid;grid-template-columns:1fr;gap:2px;background:color-mix(in srgb,var(--tdim) 30%,transparent);min-height:0}
+.tm.split .panes{grid-template-columns:1.25fr 1fr}
+.pane{display:flex;flex-direction:column;min-width:0;background:var(--tb)}
+.pane + .pane{display:none}
+.tm.split .pane + .pane{display:flex}
+.pane-h{display:flex;align-items:center;gap:8px;padding:6px 14px;color:var(--tdim);font:12px var(--mono);border-bottom:1px solid color-mix(in srgb,var(--tdim) 22%,transparent)}
+.pane-h.act{color:var(--tg)}
+.pane-h .sp{flex:1}
+.pane-h button{color:inherit;display:grid}
+.pane-h .i{width:13px;height:13px}
+/* palette */
+.pal{display:none;position:absolute;left:50%;top:64px;transform:translateX(-50%);width:min(560px,calc(100% - 32px));background:var(--surface);border-radius:22px;box-shadow:0 30px 70px -20px rgba(0,0,0,.55);overflow:hidden;z-index:5}
+.tm.pal-open .pal{display:block}
+.pal .in{display:flex;align-items:center;gap:12px;padding:16px 18px;border-bottom:1px solid var(--line);font-size:15px}
+.pal .in kbd{margin-left:auto;font:600 11.5px var(--mono);padding:2px 7px;border-radius:6px;background:var(--sunk);color:var(--ink3)}
+.pal .grp{font-size:12.5px;color:var(--ink3);font-weight:700;padding:10px 18px 4px}
+.pal .list{padding:0 8px 6px}
+.pal .snip.on{background:var(--h-term-s)}
+.pal .snip code{max-width:none}
+/* focus mode: hide app chrome and the sessions list */
+.q.focus{grid-template-columns:1fr}
+.q.focus .rail,.q.focus .top,.q.focus .sess,.q.focus .drawer{display:none}
+.q.focus .tm{min-height:calc(100vh - 24px)}
+@media (max-width:1100px){ .sess{display:none} }
+@media (max-width:860px){ .tm.split .panes{grid-template-columns:1fr} .tm.split .pane + .pane{display:none} .ttb button span{display:none} }
+
+.drawer{width:270px;flex:none;border-left:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:4px;overflow:auto;background:var(--surface)}
+.tm.drawer-off .drawer{display:none}
+.drawer h3{margin:0 8px 2px;font-size:16px;font-weight:800}
+.drawer p{margin:0 8px 10px;color:var(--ink3);font-size:13px}
+.drawer .add{margin-top:8px;border:2px dashed var(--line);border-radius:14px;padding:10px;color:var(--ink3);font-weight:700;display:flex;align-items:center;gap:8px;justify-content:center}
+.drawer .snip code{max-width:160px}
+@media (max-width:1240px){ .drawer{display:none} }
+</style>
+<div class="q vb">
+  <nav class="rail">
+    <a class="distro" href="#"><span class="lg"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.39.605C10.376 3.092 9.764 4.72 8.635 7.132c.693.734 1.543 1.589 2.923 2.554-1.484-.61-2.496-1.224-3.252-1.86C6.86 10.842 4.596 15.138 0 23.395c3.612-2.085 6.412-3.37 9.021-3.862a6.61 6.61 0 0 1-.171-1.547l.003-.115c.058-2.315 1.261-4.095 2.687-3.973 1.426.12 2.534 2.096 2.478 4.409a6.52 6.52 0 0 1-.146 1.243c2.58.505 5.352 1.787 8.914 3.844-.702-1.293-1.33-2.459-1.929-3.57-.943-.73-1.926-1.682-3.933-2.713 1.38.359 2.367.772 3.137 1.234-6.09-11.334-6.582-12.84-8.67-17.74z"/></svg></span><span class="dn">arch</span></a>
+    <a class="it c-ov" href="#"><span class="pi"><svg class="i"><use href="#i-overview"/></svg></span><span class="lb">Overview</span></a><a class="it c-term on" href="#"><span class="pi"><svg class="i"><use href="#i-terminal"/></svg></span><span class="lb">Terminal</span></a><a class="it c-file" href="#"><span class="pi"><svg class="i"><use href="#i-files"/></svg></span><span class="lb">Files</span></a><a class="it c-log" href="#"><span class="pi"><svg class="i"><use href="#i-logs"/></svg></span><span class="lb">Logs</span></a><a class="it c-svc" href="#"><span class="pi"><svg class="i"><use href="#i-services"/></svg></span><span class="lb">Services</span><span class="n">1</span></a><a class="it c-sw" href="#"><span class="pi"><svg class="i"><use href="#i-software"/></svg></span><span class="lb">Software</span><span class="n">23</span></a><a class="it c-usr" href="#"><span class="pi"><svg class="i"><use href="#i-users"/></svg></span><span class="lb">Users</span></a><div class="rsep"></div><a class="it c-plg" href="#"><span class="pi"><svg class="i"><use href="#i-plugins"/></svg></span><span class="lb">Plugins</span></a><div class="sp"></div><div class="me"><div class="av">F</div></div></nav>
+  <main class="main">
+    <div class="top">
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search commands, snippets, history</div><div class="sp"></div>
+      <div class="pill"><i></i>arch<svg class="i" style="width:16px;height:16px"><use href="#i-chevron"/></svg></div>
+      <button class="ib" data-toggle-theme title="Theme"><svg class="i"><use href="#i-moon"/></svg></button>
+      <button class="ib" title="Notifications"><svg class="i"><use href="#i-bell"/></svg></button></div>
+    <section class="fm tm split">
+      <aside class="sess">
+        <button class="tbtn newb"><svg class="i"><use href="#i-plus"/></svg>New session</button>
+        <div class="grp">Open</div>
+        <div class="ss on"><span class="ft-ic t-code"><svg class="i"><use href="#i-terminal"/></svg></span><div><b>fonlogen@arch</b><small>bash, ~</small></div><span class="st">2 panes</span></div><div class="ss "><span class="ft-ic t-pdf"><svg class="i"><use href="#i-lock"/></svg></span><div><b>root@arch</b><small>Root shell</small></div><span class="st"></span></div><div class="ss "><span class="ft-ic t-doc"><svg class="i"><use href="#i-server"/></svg></span><div><b>backup-nas</b><small>SSH, 192.168.1.40</small></div><span class="st"></span></div><div class="ss det"><span class="ft-ic t-arc"><svg class="i"><use href="#i-clock"/></svg></span><div><b>long-build</b><small>Detached, still running</small></div><span class="st">2 h</span></div>
+        <div class="grp">Saved hosts</div>
+        <div class="ss"><span class="ft-ic t-doc"><svg class="i"><use href="#i-server"/></svg></span><div><b>web-01</b><small>SSH, not connected</small></div></div>
+        
+      </aside>
+      <div class="tbody">
+        <div class="ttb">
+          <span class="ttl"><span class="dot"></span>fonlogen@arch</span><span class="chip sudo"><svg class="i"><use href="#i-lock"/></svg>sudo, 4 min left</span>
+          <span class="sp"></span>
+          <button data-act="drawer" class="on" title="Snippets"><svg class="i"><use href="#i-play"/></svg><span>Snippets</span></button>
+          <button data-act="split" class="on" title="Split view"><svg class="i"><use href="#i-columns"/></svg><span>Split</span></button>
+          <button data-act="pal" title="Command palette (Ctrl Shift P)"><svg class="i"><use href="#i-search"/></svg><span>Palette</span></button>
+          <button data-act="focus" title="Focus mode"><svg class="i"><use href="#i-overview"/></svg><span>Focus</span></button>
+        </div>
+        <div class="panes">
+          <div class="pane"><div class="pane-h act">bash, ~<span class="sp"></span><button title="Close pane"><svg class="i"><use href="#i-close"/></svg></button></div><div class="tw"><span class="g bold">fonlogen@arch</span> <span class="b">~</span> <span class="d">$</span> sudo systemctl restart nginx
+<span class="d">[sudo] password for fonlogen: </span>
+<span class="g bold">fonlogen@arch</span> <span class="b">~</span> <span class="d">$</span> systemctl status nginx --no-pager
+<span class="g">●</span> nginx.service - A high performance web server
+     Loaded: loaded (/usr/lib/systemd/system/nginx.service; <span class="g">enabled</span>)
+     Active: <span class="g bold">active (running)</span> since Wed 2026-10-01 16:52:04 CEST; 3s ago
+   Main PID: 81244 (nginx)
+      Tasks: 17 (limit: 18923)
+     Memory: 14.2M
+        CPU: 41ms
+
+<span class="g bold">fonlogen@arch</span> <span class="b">~</span> <span class="d">$</span> docker ps --format '{{.Names}}\t{{.Status}}'
+web       Up 3 hours
+postgres  Up 3 hours
+<span class="y">redis     Restarting (1) 12 seconds ago</span>
+
+<span class="g bold">fonlogen@arch</span> <span class="b">~</span> <span class="d">$</span> <span class="cur"></span></div></div>
+          <div class="pane"><div class="pane-h">bash, /var/log<span class="sp"></span><button title="Close pane"><svg class="i"><use href="#i-close"/></svg></button></div><div class="tw"><span class="g bold">fonlogen@arch</span> <span class="b">/var/log</span> <span class="d">$</span> journalctl -fu nginx
+<span class="d">Oct 01 16:52:04</span> arch systemd[1]: Started nginx.service.
+<span class="d">Oct 01 16:52:31</span> arch nginx[81244]: 192.168.1.20 GET / 200
+<span class="d">Oct 01 16:52:33</span> arch nginx[81244]: 192.168.1.20 GET /api/stats 200
+<span class="d">Oct 01 16:52:40</span> arch nginx[81244]: <span class="y">192.168.1.77 GET /wp-login.php 404</span>
+<span class="d">Oct 01 16:52:41</span> arch nginx[81244]: <span class="r">upstream timed out (110) while reading response</span>
+<span class="d">Oct 01 16:52:55</span> arch nginx[81244]: 192.168.1.20 GET /api/stats 200
+</div></div>
+        </div>
+      </div>
+      <aside class="drawer">
+        <h3>Snippets</h3><p>Click to paste, double click to run.</p>
+        <div class="snip"><span class="ft-ic t-sw"><svg class="i"><use href="#i-download"/></svg></span><div><b>Update system</b><code>sudo pacman -Syu</code></div><span class="run"><svg class="i"><use href="#i-play"/></svg></span></div><div class="snip"><span class="ft-ic t-code"><svg class="i"><use href="#i-refresh"/></svg></span><div><b>Restart nginx</b><code>sudo systemctl restart nginx</code></div><span class="run"><svg class="i"><use href="#i-play"/></svg></span></div><div class="snip"><span class="ft-ic t-txt"><svg class="i"><use href="#i-logs"/></svg></span><div><b>Follow nginx log</b><code>journalctl -fu nginx</code></div><span class="run"><svg class="i"><use href="#i-play"/></svg></span></div><div class="snip"><span class="ft-ic t-arc"><svg class="i"><use href="#i-broom"/></svg></span><div><b>Clean package cache</b><code>sudo paccache -rk2</code></div><span class="run"><svg class="i"><use href="#i-play"/></svg></span></div><div class="snip"><span class="ft-ic t-img"><svg class="i"><use href="#i-server"/></svg></span><div><b>Docker status</b><code>docker ps -a</code></div><span class="run"><svg class="i"><use href="#i-play"/></svg></span></div><div class="snip"><span class="ft-ic t-pdf"><svg class="i"><use href="#i-disk"/></svg></span><div><b>Disk usage</b><code>df -h /</code></div><span class="run"><svg class="i"><use href="#i-play"/></svg></span></div>
+        <button class="add"><svg class="i"><use href="#i-plus"/></svg>Save a command</button>
+      </aside>
+      <div class="pal" role="dialog" aria-label="Command palette">
+        <div class="in"><svg class="i"><use href="#i-search"/></svg><span>restart</span><kbd>Esc</kbd></div>
+        <div class="grp">Snippets</div>
+        <div class="list">
+          <div class="snip on"><span class="ft-ic t-code"><svg class="i"><use href="#i-refresh"/></svg></span><div><b>Restart nginx</b><code>sudo systemctl restart nginx</code></div><span class="run" style="opacity:1"><svg class="i"><use href="#i-play"/></svg></span></div>
+          <div class="snip"><span class="ft-ic t-img"><svg class="i"><use href="#i-server"/></svg></span><div><b>Restart redis container</b><code>docker restart redis</code></div></div>
+        </div>
+        <div class="grp">Sessions</div>
+        <div class="list"><div class="snip"><span class="ft-ic t-pdf"><svg class="i"><use href="#i-lock"/></svg></span><div><b>Open root@arch</b><code>switch session</code></div></div></div>
+        <div class="grp">History</div>
+        <div class="list"><div class="snip"><span class="ft-ic t-txt"><svg class="i"><use href="#i-clock"/></svg></span><div><b>sudo systemctl restart docker</b><code>yesterday, 22:14</code></div></div></div>
+      </div>
+    </section>
+  </main>
+  <nav class="dock">
+    <a class="c-ov" href="#"><span class="pi"><svg class="i"><use href="#i-overview"/></svg></span>Home</a>
+    <a class="on c-term" href="#"><span class="pi"><svg class="i"><use href="#i-terminal"/></svg></span>Terminal</a>
+    <a class="c-file" href="#"><span class="pi"><svg class="i"><use href="#i-files"/></svg></span>Files</a>
+    <a class="c-svc" href="#"><span class="pi"><svg class="i"><use href="#i-services"/></svg></span>Services</a>
+    <a href="#"><span class="pi"><svg class="i"><use href="#i-more"/></svg></span>More</a>
+  </nav>
+</div>
+<script src="kit.js"></script><script>
+(function(){const q=document.querySelector('.q'),tm=q.querySelector('.tm');
+q.querySelectorAll('[data-act]').forEach(b=>b.addEventListener('click',()=>{const a=b.dataset.act;
+  if(a==='split'){tm.classList.toggle('split');b.classList.toggle('on',tm.classList.contains('split'))}
+  if(a==='pal'){tm.classList.toggle('pal-open');b.classList.toggle('on',tm.classList.contains('pal-open'))}
+  if(a==='focus'){q.classList.toggle('focus');b.classList.toggle('on',q.classList.contains('focus'))}
+  if(a==='drawer'){tm.classList.toggle('drawer-off');b.classList.toggle('on',!tm.classList.contains('drawer-off'))}}));
+document.addEventListener('keydown',e=>{if(e.ctrlKey&&e.shiftKey&&e.key.toLowerCase()==='p'){e.preventDefault();tm.classList.toggle('pal-open')}
+  if(e.key==='Escape'){tm.classList.remove('pal-open');q.querySelector('[data-act=pal]').classList.remove('on')}});
+})();
+</script>

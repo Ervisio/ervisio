@@ -1,0 +1,8 @@
+# variant-studio runtime state (server pid, keys, events)
+.variant-studio/state/
+node_modules/
+dist/
+target/
+*.log
+.env
+__pycache__/

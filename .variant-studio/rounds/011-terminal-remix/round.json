@@ -1,0 +1,29 @@
+{
+  "title": "Terminal: everything together",
+  "question": "Where should snippets live? (Try Split, Palette and Focus in each)",
+  "kind": "page",
+  "parent": "010-terminal",
+  "head": [],
+  "variants": [
+    {
+      "id": "a",
+      "label": "Snippet chips",
+      "notes": "Snippets as colored chips under the terminal, always one click away. All three: sessions sidebar (incl. detached sessions), split view, command palette (Ctrl Shift P or button), Focus mode that hides the app chrome."
+    },
+    {
+      "id": "b",
+      "label": "Snippet drawer",
+      "notes": "Snippets in a right drawer you can hide with the Snippets button. All three: sessions sidebar (incl. detached sessions), split view, command palette (Ctrl Shift P or button), Focus mode that hides the app chrome."
+    },
+    {
+      "id": "c",
+      "label": "Snippets in sidebar",
+      "notes": "Snippets listed under the sessions in the left sidebar, so the terminal keeps all its width. All three: sessions sidebar (incl. detached sessions), split view, command palette (Ctrl Shift P or button), Focus mode that hides the app chrome."
+    }
+  ],
+  "created": "2026-10-01T14:58:35.263Z",
+  "viewports": [
+    "laptop",
+    "mobile"
+  ]
+}

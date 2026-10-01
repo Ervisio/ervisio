@@ -1,0 +1,267 @@
+<title>Quadro design reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: product-style page on the product's own OLED palette; screens first, rules after. */
+:root{
+  --bg:#000000; --surface:#0E0E10; --sunk:#18181B; --line:#26262B;
+  --ink:#F4F4F6; --ink2:#A3A3AD; --ink3:#6C6C76; --acc:#8B93FF; --on-acc:#000000;
+  --scrim:rgba(0,0,0,.78);
+  --f-ui:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){
+  --bg:#ECEEF4; --surface:#FFFFFF; --sunk:#F3F4F8; --line:#E1E4EC;
+  --ink:#1D2030; --ink2:#575C70; --ink3:#8D92A5; --acc:#4651D0; --on-acc:#FFFFFF; --scrim:rgba(20,22,35,.55); color-scheme:light}}
+:root[data-theme="light"]{
+  --bg:#ECEEF4; --surface:#FFFFFF; --sunk:#F3F4F8; --line:#E1E4EC;
+  --ink:#1D2030; --ink2:#575C70; --ink3:#8D92A5; --acc:#4651D0; --on-acc:#FFFFFF; --scrim:rgba(20,22,35,.55); color-scheme:light}
+
+body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--f-ui);margin:0}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:20px;padding-block:40px 80px;display:flex;flex-direction:column;gap:56px}
+h1,h2,h3{text-wrap:balance;margin:0}
+h1{font-size:clamp(30px,5vw,44px);font-weight:800;letter-spacing:-.03em;line-height:1.05}
+h2{font-size:24px;font-weight:800;letter-spacing:-.02em}
+h3{font-size:16px;font-weight:800}
+p{margin:0}
+.muted{color:var(--ink2)}
+code,.mono{font-family:var(--f-mono);font-size:.86em}
+a{color:var(--acc)}
+:focus-visible{outline:2px solid var(--acc);outline-offset:3px;border-radius:6px}
+
+/* intro */
+.intro{display:grid;grid-template-columns:auto 1fr;gap:22px;align-items:center}
+.logo{width:72px;height:72px;border-radius:22px;background:var(--sunk);display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:14px;box-sizing:border-box}
+.logo i{border-radius:5px}
+.intro p{max-width:62ch;margin-top:10px;color:var(--ink2)}
+.facts{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.fact{display:inline-flex;align-items:center;gap:8px;height:30px;padding:0 12px;border-radius:8px;background:var(--surface);font-size:13px;font-weight:600;color:var(--ink2)}
+.fact b{color:var(--ink);font-weight:700}
+
+/* section headers */
+.sh{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+.sh p{color:var(--ink2)}
+
+/* screens */
+.screens{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px}
+.sc{background:var(--surface);border-radius:18px;padding:8px;display:flex;flex-direction:column;gap:10px;border:0;text-align:left;color:inherit;font:inherit;cursor:pointer;min-width:0}
+.sc:hover .thumb{outline-color:var(--acc)}
+.thumb{position:relative;width:100%;aspect-ratio:16/10;border-radius:12px;overflow:hidden;background:#000;outline:2px solid transparent;transition:outline-color .15s;max-width:100%}
+.thumb iframe{position:absolute;top:0;left:0;border:0;pointer-events:none;transform-origin:0 0}
+.sc .meta{padding:2px 8px 8px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.sc .meta .t{display:flex;align-items:center;gap:8px}
+.sc .meta .dot{width:10px;height:10px;border-radius:4px;flex:none}
+.sc .meta p{font-size:13.5px;color:var(--ink2)}
+.sc .meta small{font-family:var(--f-mono);font-size:11.5px;color:var(--ink3)}
+
+/* viewer */
+.viewer{position:fixed;inset:0;z-index:20;background:var(--scrim);display:flex;flex-direction:column;padding:calc(12px + env(safe-area-inset-top,0px)) 12px calc(12px + env(safe-area-inset-bottom,0px));gap:10px}
+.vbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.vbar h3{flex:1;min-width:0;color:#fff}
+.vbtn{height:38px;padding:0 14px;border-radius:12px;border:0;background:#18181B;color:#F4F4F6;font:700 13.5px var(--f-ui);cursor:pointer}
+.vbtn:hover{background:#26262B}
+.vframe{flex:1;border-radius:16px;overflow:hidden;background:#000;min-height:0}
+.vframe iframe{width:100%;height:100%;border:0;display:block}
+
+/* rules */
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.rule{background:var(--surface);border-radius:18px;padding:18px 20px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.rule p{color:var(--ink2);font-size:14.5px}
+
+/* tokens */
+.tok{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.panel{background:var(--surface);border-radius:18px;padding:18px 20px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.sw{display:grid;grid-template-columns:40px 1fr auto;align-items:center;gap:12px}
+.sw i{width:40px;height:40px;border-radius:12px;box-shadow:inset 0 0 0 1px rgba(127,127,127,.25)}
+.sw b{font-weight:700;font-size:14px}
+.sw small{display:block;color:var(--ink3);font-size:12.5px}
+.sw code{color:var(--ink2)}
+.radii{display:flex;flex-wrap:wrap;gap:12px}
+.rad{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12.5px;color:var(--ink2)}
+.rad i{width:56px;height:40px;background:var(--sunk);box-shadow:inset 0 0 0 2px var(--acc)}
+.type{display:flex;flex-direction:column;gap:6px}
+.type div{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.type small{font-family:var(--f-mono);font-size:11.5px;color:var(--ink3);min-width:84px}
+
+/* themes */
+.themes{display:flex;flex-wrap:wrap;gap:10px}
+.th{display:flex;align-items:center;gap:10px;padding:8px 12px 8px 8px;border-radius:12px;background:var(--surface);font-weight:700;font-size:14px}
+.th .pv{width:34px;height:34px;border-radius:10px;display:grid;grid-template-columns:1fr 1fr;gap:3px;padding:5px;box-sizing:border-box}
+.th .pv i{border-radius:3px}
+.th small{color:var(--ink3);font-weight:600;font-size:12px}
+.modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:14px}
+.mode{background:var(--surface);border-radius:18px;padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.bar{display:flex;gap:4px}
+.bar i{flex:1;height:22px;border-radius:6px}
+.distros{display:flex;flex-wrap:wrap;gap:6px}
+.distros span{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 9px 0 6px;border-radius:8px;background:var(--sunk);font-size:12.5px;font-weight:700}
+.distros i{width:12px;height:12px;border-radius:50%}
+
+/* decisions */
+.tablewrap{overflow-x:auto;background:var(--surface);border-radius:18px}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:14px}
+th,td{text-align:left;padding:11px 16px;vertical-align:top}
+th{font-size:12.5px;color:var(--ink3);font-weight:700}
+tbody tr:nth-child(odd){background:color-mix(in srgb,var(--sunk) 55%,transparent)}
+td.r{font-family:var(--f-mono);font-size:12.5px;color:var(--ink2);white-space:nowrap}
+td b{font-weight:700}
+
+@media (max-width:640px){.intro{grid-template-columns:1fr}.wrap{gap:44px}}
+@media (prefers-reduced-motion:reduce){.thumb{transition:none}}
+</style>
+
+<div class="wrap">
+  <header class="intro">
+    <div class="logo" aria-hidden="true"><i style="background:#8B93FF"></i><i style="background:#FFB547"></i><i style="background:#3DDC97"></i><i style="background:#FF6B81"></i></div>
+    <div>
+      <h1>Quadro design reference</h1>
+      <p>Every screen and rule approved for the Linux web console, collected in one place. Screens are live mock-ups in the default OLED theme: open one to scroll and click through it.</p>
+      <div class="facts">
+        <span class="fact">Default theme <b>OLED</b></span>
+        <span class="fact">Language <b>English</b>, Italian in settings</span>
+        <span class="fact">Type <b>Figtree</b> and <b>JetBrains Mono</b></span>
+        <span class="fact">Design rounds <b>24</b></span>
+      </div>
+    </div>
+  </header>
+
+  <section>
+    <div class="sh"><h2>Screens</h2><p>13 approved mock-ups.</p></div>
+    <div class="screens" id="screens"></div>
+  </section>
+
+  <section>
+    <div class="sh"><h2>Rules that apply everywhere</h2></div>
+    <div class="rules">
+      <div class="rule"><h3>Sign in with Linux accounts</h3><p>PAM login with the machine's own users. Users without sudo see only what they may do; sudo users can do everything after unlocking with their password (unlocked for 5 minutes). Root can sign in only if <code>allow_root = true</code>.</p></div>
+      <div class="rule"><h3>One colour per section</h3><p>Overview indigo, Terminal green, Files blue, Logs amber, Services red, Software violet, Users teal, Plugins pink. The rail, icons, tiles and file types reuse them.</p></div>
+      <div class="rule"><h3>Status colours stand apart</h3><p>Running, warning, failed and info have their own tokens, so a failed service stays red in monochrome or distro-colour mode.</p></div>
+      <div class="rule"><h3>No grey divider lines</h3><p>Separate things with spacing, tinted rows, tinted panels and hover highlights. Tables use soft zebra rows instead of hairlines.</p></div>
+      <div class="rule"><h3>Side panels, tabs inside</h3><p>Services, Users, Logs, Plugins and Files open details in a right panel with tabs. On phones the same panel becomes a bottom sheet.</p></div>
+      <div class="rule"><h3>Preferences follow the account</h3><p>Theme, language, colour mode, terminal options and dashboard layout are stored server-side per Linux user, so they follow you to any browser.</p></div>
+      <div class="rule"><h3>Distro aware</h3><p>The rail and sign-in page show the distro logo read from <code>/etc/os-release</code>, with Tux as fallback. The distro colour can become the accent.</p></div>
+      <div class="rule"><h3>Plugins declare what they do</h3><p>Each plugin lists its root commands, files, sockets and UI additions. Installing shows that list for consent. Plugin pages appear in the rail under Plugins.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sh"><h2>Default tokens</h2><p>OLED, lifted panels.</p></div>
+    <div class="tok">
+      <div class="panel"><h3>Neutrals</h3>
+        <div class="sw"><i style="background:#000000"></i><div><b>Background</b><small>page</small></div><code>#000000</code></div>
+        <div class="sw"><i style="background:#0E0E10"></i><div><b>Surface</b><small>rail, panels</small></div><code>#0E0E10</code></div>
+        <div class="sw"><i style="background:#18181B"></i><div><b>Sunk</b><small>cards, inputs</small></div><code>#18181B</code></div>
+        <div class="sw"><i style="background:#F4F4F6"></i><div><b>Ink</b><small>text</small></div><code>#F4F4F6</code></div>
+        <div class="sw"><i style="background:#A3A3AD"></i><div><b>Ink 2</b><small>secondary text</small></div><code>#A3A3AD</code></div>
+      </div>
+      <div class="panel"><h3>Section colours</h3>
+        <div class="sw"><i style="background:#8B93FF"></i><div><b>Overview</b></div><code>#8B93FF</code></div>
+        <div class="sw"><i style="background:#3DDC97"></i><div><b>Terminal</b></div><code>#3DDC97</code></div>
+        <div class="sw"><i style="background:#5AB0FF"></i><div><b>Files</b></div><code>#5AB0FF</code></div>
+        <div class="sw"><i style="background:#FFB547"></i><div><b>Logs</b></div><code>#FFB547</code></div>
+        <div class="sw"><i style="background:#FF6B81"></i><div><b>Services</b></div><code>#FF6B81</code></div>
+        <div class="sw"><i style="background:#B98CFF"></i><div><b>Software</b></div><code>#B98CFF</code></div>
+        <div class="sw"><i style="background:#3FD8DE"></i><div><b>Users</b></div><code>#3FD8DE</code></div>
+        <div class="sw"><i style="background:#FF7AC6"></i><div><b>Plugins</b></div><code>#FF7AC6</code></div>
+        <p class="muted" style="font-size:13px">Soft fills mix each colour 16% into black.</p>
+      </div>
+      <div class="panel"><h3>Shape and type</h3>
+        <div class="radii">
+          <div class="rad"><i style="border-radius:18px"></i>Card 18</div>
+          <div class="rad"><i style="border-radius:12px"></i>Control 12</div>
+          <div class="rad"><i style="border-radius:20px"></i>Dialog 20</div>
+          <div class="rad"><i style="border-radius:8px"></i>Badge 8</div>
+        </div>
+        <p class="muted" style="font-size:13px">Controls 36px high, inputs 40px, focus is a 2px accent ring.</p>
+        <div class="type">
+          <div><small>Title 26/800</small><span style="font-size:26px;font-weight:800;letter-spacing:-.02em">Services</span></div>
+          <div><small>Heading 15/800</small><span style="font-size:15px;font-weight:800">Recent log</span></div>
+          <div><small>Body 14/500</small><span style="font-size:14px">A high performance web server</span></div>
+          <div><small>Mono 12.5</small><span class="mono">nginx.service.d/override.conf</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sh"><h2>Themes and colour modes</h2><p>Chosen in Settings, Appearance. Plugins can add themes.</p></div>
+    <div class="themes" id="themes"></div>
+    <div class="modes">
+      <div class="mode"><h3>Per section</h3><p class="muted" style="font-size:14px">Default. Each area keeps its own colour.</p><div class="bar"><i style="background:#8B93FF"></i><i style="background:#3DDC97"></i><i style="background:#5AB0FF"></i><i style="background:#FFB547"></i><i style="background:#FF6B81"></i><i style="background:#B98CFF"></i></div></div>
+      <div class="mode"><h3>Distro colour</h3><p class="muted" style="font-size:14px">One accent from the detected distribution.</p>
+        <div class="distros"><span><i style="background:#1793D1"></i>Arch</span><span><i style="background:#E95420"></i>Ubuntu</span><span><i style="background:#87CF3E"></i>Mint</span><span><i style="background:#51A2DA"></i>Fedora</span><span><i style="background:#D70A53"></i>Debian</span><span><i style="background:#73BA25"></i>openSUSE</span><span><i style="background:#35BF5C"></i>Manjaro</span><span><i style="background:#48B9C7"></i>Pop!_OS</span></div></div>
+      <div class="mode"><h3>Monochrome</h3><p class="muted" style="font-size:14px">Greys only. Status colours stay.</p><div class="bar"><i style="background:#D4D4D8"></i><i style="background:#A3A3AD"></i><i style="background:#6C6C76"></i><i style="background:#3F3F46"></i><i style="background:#27272A"></i><i style="background:#18181B"></i></div></div>
+    </div>
+    <p class="muted" style="margin-top:12px;font-size:14px">Themes with their own colours (OLED Mono, Fjord, Forest, High contrast) ignore the colour mode.</p>
+  </section>
+
+  <section>
+    <div class="sh"><h2>Decisions</h2><p>Where each choice came from.</p></div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Area</th><th>Decision</th><th>Round</th></tr></thead>
+      <tbody>
+        <tr><td><b>Shell</b></td><td>Narrow icon rail with labels under icons, always in section colours, distro logo on top, Settings gear above the avatar. Dock on phones.</td><td class="r">003 a</td></tr>
+        <tr><td><b>Overview</b></td><td>Customizable widgets: tinted stat cards, activity chart, action tiles, alerts, machine info. Personalize mode with handles, resize and a widget library.</td><td class="r">003 a, 021 a</td></tr>
+        <tr><td><b>Sign in</b></td><td>Oversized distro logo with glow, host name and IP (can be hidden). Recent accounts as square tiles, password, root-disabled message.</td><td class="r">007 a</td></tr>
+        <tr><td><b>Files</b></td><td>Places sidebar, browser tabs always visible, split view, grid or list per pane, details and preview panel, transfer actions.</td><td class="r">009 c</td></tr>
+        <tr><td><b>Terminal</b></td><td>Sessions sidebar with detached sessions, split panes, command palette, focus mode, snippet chips that can be hidden.</td><td class="r">011 a</td></tr>
+        <tr><td><b>Logs</b></td><td>Sources sidebar (All, System, Services, Files, Watchers), level filters, histogram, live stream, details with surrounding lines.</td><td class="r">012 a</td></tr>
+        <tr><td><b>Services</b></td><td>State tabs, purpose chips, failed banner in plain words, table or cards, wide panel with Info, Logs, Unit file, Dependencies.</td><td class="r">014 b</td></tr>
+        <tr><td><b>Users</b></td><td>People as square tiles, table toggle, panel with groups, SSH keys and sessions.</td><td class="r">015 b</td></tr>
+        <tr><td><b>Software</b></td><td>Updates first (reboot and security notes, schedule), store tab, installed packages with live update panel. Real app icons, letter fallback.</td><td class="r">016 a b c</td></tr>
+        <tr><td><b>Plugins</b></td><td>Installed, Updates, Browse with consent dialog, Security overview, Developer mode.</td><td class="r">018 a</td></tr>
+        <tr><td><b>Settings</b></td><td>Section list with scroll-spy, one searchable page, instant save with Undo, config keys for server settings, open space without lines.</td><td class="r">020 c</td></tr>
+        <tr><td><b>Themes</b></td><td>Theme cards, create your own, colour modes, OLED as default.</td><td class="r">021 a, 022 c</td></tr>
+        <tr><td><b>Components</b></td><td>Rounded rectangles, compact controls, type-to-confirm deletes, sudo unlock dialog.</td><td class="r">023 b</td></tr>
+        <tr><td><b>Mobile</b></td><td>Dock with More sheet, panels as bottom sheets, terminal extra keys.</td><td class="r">024 a</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+</div>
+
+<div class="viewer" id="viewer" hidden role="dialog" aria-modal="true" aria-labelledby="vtitle">
+  <div class="vbar"><h3 id="vtitle"></h3><button class="vbtn" id="vprev">Previous</button><button class="vbtn" id="vnext">Next</button><button class="vbtn" id="vclose">Close</button></div>
+  <div class="vframe"><iframe id="vframe" title="Screen preview"></iframe></div>
+</div>
+
+<script>
+const SCREENS = [
+  ['overview','Overview','#8B93FF','Dashboard with widgets in the default OLED theme.',1280,'021 a'],
+  ['sign-in','Sign in','#3AB4F2','Distro logo, host and IP, recent accounts as tiles. Try user root or password wrong.',1280,'007 a'],
+  ['files','Files','#5AB0FF','Tabs, split view, grid or list per pane.',1280,'009 c'],
+  ['terminal','Terminal','#3DDC97','Sessions, split, palette and focus. The buttons work.',1280,'011 a'],
+  ['logs','Logs','#FFB547','Sources, levels, histogram and details.',1280,'012 a'],
+  ['services','Services','#FF6B81','Purpose chips, table or cards, tabbed panel.',1280,'014 b'],
+  ['users','Users','#3FD8DE','People tiles and the user panel.',1280,'015 b'],
+  ['software','Software','#B98CFF','Updates first, grouped by source.',1280,'016 a'],
+  ['plugins','Plugins','#FF7AC6','Tabs for installed, browse, security and developer.',1280,'018 a'],
+  ['settings','Settings','#A3A3AD','One searchable page with a section list.',1280,'020 c'],
+  ['themes','Themes','#8B93FF','Pick a theme, colour mode or build your own.',1280,'022 c'],
+  ['components','Components','#F4F4F6','Buttons, inputs, toasts, menus and dialogs.',1280,'023 b'],
+  ['mobile','Mobile','#3DDC97','Dock, More sheet, bottom sheets and terminal keys.',1600,'024 a'],
+];
+const grid = document.getElementById('screens');
+grid.innerHTML = SCREENS.map(([slug,name,col,desc,w,r],i)=>`
+  <button class="sc" data-i="${i}" aria-label="Open ${name}">
+    <div class="thumb" data-w="${w}"><iframe src="screens/${slug}.html" loading="lazy" tabindex="-1" title="${name} thumbnail" width="${w}" height="${Math.round(w*10/16)}"></iframe></div>
+    <div class="meta"><div class="t"><span class="dot" style="background:${col}"></span><h3>${name}</h3></div><p>${desc}</p><small>round ${r}</small></div>
+  </button>`).join('');
+function fit(){document.querySelectorAll('.thumb').forEach(t=>{const f=t.querySelector('iframe');f.style.transform=`scale(${t.clientWidth/+t.dataset.w})`})}
+fit(); addEventListener('resize',fit);
+
+const THEMES=[['OLED','#000000','#0E0E10','#8B93FF','#3DDC97','Default'],['OLED Mono','#000000','#0E0E10','#E4E4E7','#A3A3AD','own colours'],
+ ['Midnight','#13151E','#1C1F2B','#9BA3FF','#6FDDB0',''],['Graphite','#1A1A1C','#232326','#8E95F0','#4FCB91',''],
+ ['Fjord','#232A36','#2C3442','#88A6E0','#A3D49A','own colours'],['Forest','#0F1A16','#15231E','#9FB4FF','#6FE3A8','own colours'],
+ ['High contrast','#000000','#111111','#A5ABFF','#4DFFB0','own colours'],['Daylight','#ECEEF4','#FFFFFF','#4651D0','#16805A',''],['Linen','#F2EFE9','#FBFAF7','#4B55C4','#2E7D50','']];
+document.getElementById('themes').innerHTML=THEMES.map(([n,bg,s,a,b,note])=>`<span class="th"><span class="pv" style="background:${bg}"><i style="background:${s}"></i><i style="background:${a}"></i><i style="background:${b}"></i><i style="background:${s}"></i></span>${n}${note?` <small>${note}</small>`:''}</span>`).join('');
+
+const viewer=document.getElementById('viewer'),vf=document.getElementById('vframe'),vt=document.getElementById('vtitle');let cur=0,opener=null;
+function open(i){cur=(i+SCREENS.length)%SCREENS.length;const s=SCREENS[cur];vt.textContent=`${s[1]}, round ${s[5]}`;vf.src=`screens/${s[0]}.html`;viewer.hidden=false;document.body.style.overflow='hidden';document.getElementById('vclose').focus()}
+function close(){viewer.hidden=true;vf.removeAttribute('src');document.body.style.overflow='';opener&&opener.focus()}
+grid.addEventListener('click',e=>{const b=e.target.closest('.sc');if(b){opener=b;open(+b.dataset.i)}});
+document.getElementById('vclose').onclick=close;
+document.getElementById('vprev').onclick=()=>open(cur-1);
+document.getElementById('vnext').onclick=()=>open(cur+1);
+addEventListener('keydown',e=>{if(viewer.hidden)return;if(e.key==='Escape')close();if(e.key==='ArrowRight')open(cur+1);if(e.key==='ArrowLeft')open(cur-1)});
+</script>

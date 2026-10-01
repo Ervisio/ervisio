@@ -1,0 +1,24 @@
+{
+  "round": "014-services-v2",
+  "action": "choose",
+  "selected": [
+    "b"
+  ],
+  "note": "",
+  "variants": {},
+  "viewed_at": {
+    "viewport": "laptop",
+    "theme": "dark",
+    "layout": "side"
+  },
+  "id": "879ed2296560",
+  "at": "2026-10-01T15:13:40.184Z",
+  "consumed": true,
+  "files": {
+    "a": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/014-services-v2/a.html",
+    "b": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/014-services-v2/b.html",
+    "c": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/014-services-v2/c.html"
+  },
+  "round_dir": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/014-services-v2",
+  "consumed_at": "2026-10-01T15:13:40.202Z"
+}

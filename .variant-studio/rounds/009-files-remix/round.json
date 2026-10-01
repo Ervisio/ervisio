@@ -1,0 +1,29 @@
+{
+  "title": "Files: tabs + grid/list",
+  "question": "Which tabs + grid/list combination do you prefer?",
+  "kind": "page",
+  "parent": "008-files",
+  "head": [],
+  "variants": [
+    {
+      "id": "a",
+      "label": "Browser tabs",
+      "notes": "Tabs always on top like a browser, path and controls under them. Grid/list toggle works (top right). Right panel switches between Details and Preview."
+    },
+    {
+      "id": "b",
+      "label": "Tab cards",
+      "notes": "Tabs as bigger cards showing folder name and full path, easier to tell apart with many open. Same grid/list toggle and Details/Preview panel."
+    },
+    {
+      "id": "c",
+      "label": "Tabs + split view",
+      "notes": "Browser tabs plus a Split view button: two folders side by side, each with its own grid/list toggle. Copy or move between panes from the action bar."
+    }
+  ],
+  "created": "2026-10-01T14:49:20.578Z",
+  "viewports": [
+    "laptop",
+    "mobile"
+  ]
+}

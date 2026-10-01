@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en" data-theme="dark" class="dark" style="color-scheme:dark">
+<head><meta charset="utf-8"><meta name="viewport" content="width=1280"><title>Quadro, sign-in</title>
+<style>/* Variant Studio — base styles for HTML fragments.
+   Kept intentionally light so variants look like themselves, not like the tool.
+   Optional tokens (--vs-*) are available but never required. */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+html {
+  -webkit-font-smoothing: antialiased;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.5;
+  color: #16161a;
+  --vs-bg: #ffffff;
+  --vs-surface: #ffffff;
+  --vs-muted: #6b6b76;
+  --vs-border: #e6e6ea;
+  --vs-accent: #2f5bff;
+  --vs-radius: 12px;
+}
+html[data-theme="dark"] {
+  color: #ececf1;
+  --vs-bg: #0f0f12;
+  --vs-surface: #1a1a20;
+  --vs-muted: #9a9aa6;
+  --vs-border: #2a2a33;
+}
+img, svg, video { max-width: 100%; display: block; }
+button, input, select, textarea { font: inherit; color: inherit; }
+
+/* ---- canvas behind the variant ---- */
+html[data-vs-canvas="light"] body { background: #f4f4f6; }
+html[data-vs-canvas="dark"] body { background: #0c0c0f; }
+html[data-vs-canvas="white"] body { background: #fff; }
+html[data-vs-canvas="checker"] body {
+  background-color: #fff;
+  background-image: linear-gradient(45deg, #eee 25%, transparent 25%), linear-gradient(-45deg, #eee 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #eee 75%), linear-gradient(-45deg, transparent 75%, #eee 75%);
+  background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+html[data-theme="dark"]:not([data-vs-canvas]) body { background: var(--vs-bg); }
+
+/* ---- layout by kind ---- */
+html[data-vs-kind="component"] #vs-root {
+  padding: 40px 24px;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 24px;
+}
+html[data-vs-kind="section"] #vs-root { width: 100%; }
+html[data-vs-kind="page"] #vs-root { width: 100%; min-height: 100vh; }
+
+/* ---- states strip: show several states of one component side by side ----
+   <div class="vs-states">
+     <figure data-state="Default">…</figure>
+     <figure data-state="Hover">…</figure>
+   </div> */
+.vs-states { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; justify-content: center; }
+.vs-states > figure { margin: 0; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.vs-states > figure::before {
+  content: attr(data-state);
+  font: 600 10.5px/1 ui-sans-serif, system-ui, sans-serif; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--vs-muted);
+}
+
+/* ---- wireframe helpers (for low-fidelity layout rounds) ---- */
+.wf-box { border: 1.5px dashed #b9b9c3; border-radius: 8px; background: repeating-linear-gradient(135deg, transparent 0 8px, rgba(0,0,0,.03) 8px 16px); min-height: 48px; display: grid; place-items: center; color: #8a8a95; font-size: 12px; }
+.wf-line { height: 10px; border-radius: 5px; background: #e4e4ea; margin: 6px 0; }
+.wf-line.short { width: 40%; } .wf-line.mid { width: 70%; }
+.wf-img { aspect-ratio: 4/3; border-radius: 8px; background: linear-gradient(135deg, #e9e9ef, #d9d9e2); }
+</style><style>.q{
+  --bg:#ECEEF4; --surface:#FFFFFF; --sunk:#F3F4F8; --line:#E1E4EC; --ink:#1D2030; --ink2:#575C70; --ink3:#8D92A5;
+  --h-ov:#4651D0;  --h-ov-s:#E6E8FB;
+  --h-term:#16805A;--h-term-s:#DDF3EA;
+  --h-file:#2C73C9;--h-file-s:#DDEBFB;
+  --h-log:#A9620D; --h-log-s:#FCEBD6;
+  --h-svc:#B5324A; --h-svc-s:#FBE1E6;
+  --h-sw:#7A43C2;  --h-sw-s:#EEE3FB;
+  --h-usr:#0E8A8F; --h-usr-s:#D7F2F2;
+  --h-plg:#C04F8E; --h-plg-s:#FADFEE;
+  --distro:#1793D1; --distro-s:#DCEFF9;
+  
+  font-family:"Figtree",system-ui,sans-serif; font-size:14px; color:var(--ink); background:var(--bg); min-height:100vh;
+  font-variant-numeric:tabular-nums;
+  
+}
+html[data-theme=dark] .q{
+  --bg:#13151E; --surface:#1C1F2B; --sunk:#242836; --line:#2C3040; --ink:#E8EAF2; --ink2:#A6ABBE; --ink3:#6E7389;
+  --h-ov:#9BA3FF;  --h-ov-s:#2A2E52;
+  --h-term:#6FDDB0;--h-term-s:#1D3A30;
+  --h-file:#7DB6FF;--h-file-s:#1C3150;
+  --h-log:#F5B963; --h-log-s:#3D2F1C;
+  --h-svc:#FF97A7; --h-svc-s:#43232C;
+  --h-sw:#C6A2FF;  --h-sw-s:#33264D;
+  --h-usr:#6ADCDF; --h-usr-s:#163A3B;
+  --h-plg:#FF9FD2; --h-plg-s:#45233A;
+  --distro:#4FB8EC; --distro-s:#173244;
+}
+.q .i{width:19px;height:19px;flex:none}
+.q button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.q input{font:inherit;color:inherit}
+.c-ov{--h:var(--h-ov);--s:var(--h-ov-s)}.c-term{--h:var(--h-term);--s:var(--h-term-s)}.c-file{--h:var(--h-file);--s:var(--h-file-s)}.c-log{--h:var(--h-log);--s:var(--h-log-s)}
+.c-svc{--h:var(--h-svc);--s:var(--h-svc-s)}.c-sw{--h:var(--h-sw);--s:var(--h-sw-s)}.c-usr{--h:var(--h-usr);--s:var(--h-usr-s)}.c-plg{--h:var(--h-plg);--s:var(--h-plg-s)}
+/* shared form bits */
+.fld{display:flex;flex-direction:column;gap:6px}
+.fld label{font-weight:700;font-size:13.5px}
+.inp{display:flex;align-items:center;gap:10px;padding:0 6px 0 14px;height:48px;border-radius:14px;background:var(--sunk);border:2px solid transparent;transition:border-color .15s,background .15s}
+.inp:focus-within{border-color:var(--h-ov);background:var(--surface)}
+.inp input{flex:1;border:0;background:none;outline:0;font-size:15px;min-width:0}
+.inp .i{color:var(--ink3)}
+.inp .eye{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;color:var(--ink3)}
+.inp .eye:hover{background:var(--line);color:var(--ink)}
+.q.err .inp.pw{border-color:var(--h-svc)}
+.msg{display:none;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:14px;background:var(--s);color:var(--h);font-weight:600;font-size:13.5px;line-height:1.45}
+.msg .i{margin-top:1px}
+.msg code{font-family:ui-monospace,monospace;font-size:12.5px;font-weight:500}
+.q.err .msg.m-err,.q.root .msg.m-root{display:flex}
+.go{height:50px;border-radius:999px;background:var(--h-ov);color:var(--surface)!important;font-weight:800!important;font-size:15px!important;display:flex;align-items:center;justify-content:center;gap:10px}
+.go:hover{filter:brightness(1.08)}
+.q.busy .go{opacity:.75;pointer-events:none}
+.spin{display:none;width:18px;height:18px;border-radius:50%;border:2.5px solid currentColor;border-right-color:transparent;animation:sp .8s linear infinite}
+.q.busy .spin{display:block}
+@keyframes sp{to{transform:rotate(360deg)}}
+.chk{display:flex;align-items:center;gap:10px;font-weight:600;color:var(--ink2);cursor:pointer}
+.chk input{width:18px;height:18px;accent-color:var(--h-ov)}
+.hint{color:var(--ink3);font-size:12.5px}
+.distro-lg{display:grid;place-items:center;background:var(--distro-s);color:var(--distro)}
+:focus-visible{outline:2px solid var(--h-ov);outline-offset:2px}
+</style><style>html body .q.q{--bg:#000;--surface:#0E0E10;--sunk:#18181B;--line:#26262B;--ink:#F4F4F6;--ink2:#A3A3AD;--ink3:#6C6C76;
+--h-ov:#8B93FF;--h-term:#3DDC97;--h-file:#5AB0FF;--h-log:#FFB547;--h-svc:#FF6B81;--h-sw:#B98CFF;--h-usr:#3FD8DE;--h-plg:#FF7AC6;--distro:#3AB4F2;
+--h-ov-s:color-mix(in srgb,var(--h-ov) 16%,#000);--h-term-s:color-mix(in srgb,var(--h-term) 16%,#000);--h-file-s:color-mix(in srgb,var(--h-file) 16%,#000);--h-log-s:color-mix(in srgb,var(--h-log) 16%,#000);--h-svc-s:color-mix(in srgb,var(--h-svc) 16%,#000);--h-sw-s:color-mix(in srgb,var(--h-sw) 16%,#000);--h-usr-s:color-mix(in srgb,var(--h-usr) 16%,#000);--h-plg-s:color-mix(in srgb,var(--h-plg) 16%,#000);--distro-s:color-mix(in srgb,var(--distro) 16%,#000);}</style></head>
+<body><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+.ur{display:flex;align-items:center;gap:12px;padding:8px 10px!important;border-radius:16px!important;border:2px solid transparent!important;text-align:left;width:100%}
+.ur:hover{background:var(--sunk)!important}
+.ur .av{width:40px;height:40px;border-radius:14px;display:grid;place-items:center;font-weight:800;font-size:16px;background:var(--s);color:var(--h);flex:none}
+.ur .tx b{display:block;font-weight:800}
+.ur .tx small{color:var(--ink3);font-size:12.5px}
+.ur.on{border-color:var(--h)!important;background:var(--s)!important}
+.ur.on .av{background:var(--h);color:var(--surface)}
+.ur.other .av{background:var(--sunk);color:var(--ink2)}
+.ulist{display:flex;flex-direction:column;gap:4px;margin-bottom:18px}
+.q:not(.other) .ufld{display:none}
+.lb{min-height:100vh;display:grid;grid-template-columns:1.1fr 1fr;gap:12px;padding:12px;box-sizing:border-box}
+.lb-form{background:var(--surface);border-radius:28px;display:grid;place-items:center;padding:32px 24px}
+.lb-in{width:100%;max-width:380px}
+.lb-in h1{margin:0;font-size:28px;font-weight:800;letter-spacing:-.025em}
+.lb-in > p{margin:6px 0 20px;color:var(--ink2)}
+.lf{display:flex;flex-direction:column;gap:16px}
+.lb-foot{display:flex;justify-content:space-between;margin-top:22px;color:var(--ink3);font-size:12.5px}
+.lb-foot button{color:var(--ink2);font-weight:600}
+.art{border-radius:28px;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.art .big{color:var(--distro)}
+@media (max-width:860px){ .lb{grid-template-columns:1fr} .art{min-height:260px} }
+
+.art{background:var(--sunk);padding:36px;justify-content:flex-end}
+.art .big{position:absolute;width:118%;height:auto;right:-30%;top:-12%;z-index:1}
+.art .glow{position:absolute;z-index:0;border-radius:50%;width:110%;aspect-ratio:1;right:-26%;top:-14%;background:radial-gradient(circle,color-mix(in srgb,var(--distro) 30%,transparent),transparent 62%)}
+.art .nm{position:relative;z-index:3}
+.art h2{margin:0;font-size:56px;font-weight:800;letter-spacing:-.045em;line-height:1}
+.art::after{content:"";position:absolute;inset:0;z-index:2;background:linear-gradient(to top,var(--sunk) 18%,transparent 55%)}
+@media (max-width:860px){ .art h2{font-size:38px} .art .big{width:90%;right:-20%;top:-25%} .art .glow{width:90%;right:-16%;top:-26%} }
+
+.ugrid{display:grid;gap:10px;margin-bottom:20px}
+.ut{display:flex;flex-direction:column;align-items:center;gap:2px;padding:0!important;text-align:center;min-width:0}
+.ut .av{width:100%;aspect-ratio:1;border-radius:20px;display:grid;place-items:center;font-weight:800;font-size:34px;background:var(--s);color:var(--h);margin-bottom:8px;transition:transform .15s,box-shadow .15s}
+.ut:hover .av{transform:translateY(-3px)}
+.ut b{font-weight:800;font-size:14px;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.ut small{color:var(--ink3);font-size:12px}
+.ut.on .av{background:var(--h);color:var(--surface);box-shadow:0 0 0 3px var(--surface),0 0 0 6px var(--h)}
+.ut.other .av{background:none;border:2px dashed var(--line);color:var(--ink3);box-sizing:border-box}
+.ut.other .av .i{width:28px;height:28px}
+@media (prefers-reduced-motion:reduce){.ut .av{transition:none}}
+
+.g4{grid-template-columns:repeat(4,1fr)}
+.nm .ip{margin:10px 0 0;font-size:20px;font-weight:700;color:var(--ink);letter-spacing:-.01em}
+.nm .os{margin:4px 0 0;color:var(--ink2);font-size:15px}
+</style>
+<div class="q lb">
+  <section class="art"><span class="glow"></span><svg class="big" viewBox="0 0 24 24" fill="currentColor"><path d="M11.39.605C10.376 3.092 9.764 4.72 8.635 7.132c.693.734 1.543 1.589 2.923 2.554-1.484-.61-2.496-1.224-3.252-1.86C6.86 10.842 4.596 15.138 0 23.395c3.612-2.085 6.412-3.37 9.021-3.862a6.61 6.61 0 0 1-.171-1.547l.003-.115c.058-2.315 1.261-4.095 2.687-3.973 1.426.12 2.534 2.096 2.478 4.409a6.52 6.52 0 0 1-.146 1.243c2.58.505 5.352 1.787 8.914 3.844-.702-1.293-1.33-2.459-1.929-3.57-.943-.73-1.926-1.682-3.933-2.713 1.38.359 2.367.772 3.137 1.234-6.09-11.334-6.582-12.84-8.67-17.74z"/></svg><div class="nm"><h2>arch</h2><p class="ip">192.168.1.137</p><p class="os">Arch Linux</p></div></section>
+  <section class="lb-form">
+    <div class="lb-in">
+      <h1>Who's signing in?</h1>
+      <p>Pick your Linux account.</p>
+      <div class="ugrid g4"><button type="button" class="ut c-usr on" data-user="fonlogen"><span class="av">F</span><b>fonlogen</b><small>Administrator</small></button><button type="button" class="ut c-file" data-user="mario"><span class="av">M</span><b>mario</b><small>User</small></button><button type="button" class="ut c-log" data-user="backup"><span class="av">B</span><b>backup</b><small>Service</small></button><button type="button" class="ut other" data-user=""><span class="av"><svg class="i"><use href="#i-plus"/></svg></span><b>Other</b><small>Type a username</small></button></div>
+      <form class="lf" novalidate>
+    <div class="fld ufld"><label for="u">Username</label>
+      <div class="inp"><svg class="i"><use href="#i-users"/></svg><input id="u" name="u" autocomplete="username" placeholder="e.g. fonlogen" value="fonlogen"></div></div>
+    <div class="fld"><label for="p">Password</label>
+      <div class="inp pw"><svg class="i"><use href="#i-shield"/></svg><input id="p" name="p" type="password" autocomplete="current-password" placeholder="Your Linux account password"><button type="button" class="eye" title="Show password"><svg class="i"><use href="#i-search"/></svg></button></div></div>
+    <div class="msg m-err c-svc"><svg class="i"><use href="#i-alert"/></svg><div>Wrong username or password. Check Caps Lock and try again.</div></div>
+<div class="msg m-root c-log"><svg class="i"><use href="#i-shield"/></svg><div>Root login is disabled on this server. Sign in with your own user and use sudo, or enable root with <code>allow_root = true</code> in <code>/etc/quadro/quadro.conf</code>.</div></div>
+    <label class="chk"><input type="checkbox" checked> Stay signed in for 12 hours</label>
+    <button class="go" type="submit"><span class="spin"></span>Sign in</button>
+  </form>
+      <p class="hint try">Try: user <b>root</b>, or password <b>wrong</b>.</p>
+      <div class="lb-foot"><span>Accounts recently used in this browser</span><button data-toggle-theme>Theme</button></div>
+    </div>
+  </section>
+</div>
+<script src="kit.js"></script>
+<script src="login.js"></script>
+<script>(function(){const q=document.querySelector('.q');q.querySelectorAll('[data-user]').forEach(b=>b.addEventListener('click',()=>{q.classList.toggle('other',!b.dataset.user);if(!b.dataset.user)q.querySelector('#u').focus()}))})();</script></body></html>

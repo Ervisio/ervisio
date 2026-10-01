@@ -1,0 +1,29 @@
+{
+  "title": "Base components (OLED)",
+  "question": "Which component style should the whole app use?",
+  "kind": "page",
+  "parent": "022-themes",
+  "head": [],
+  "variants": [
+    {
+      "id": "a",
+      "label": "Soft pills",
+      "notes": "Fully rounded buttons, inputs and toasts, the style used in the mocks so far. Friendly, a bit airy. Sheet: buttons, inputs with error, switches/checkboxes/radios/segmented, status badges, progress and skeleton, toasts, menu, delete confirmation, sudo unlock, empty state, tooltip."
+    },
+    {
+      "id": "b",
+      "label": "Rounded rectangles",
+      "notes": "Same colours, tighter: 12px corners, smaller controls, focus ring on inputs. Fits dense pages like Services and Logs better. Sheet: buttons, inputs with error, switches/checkboxes/radios/segmented, status badges, progress and skeleton, toasts, menu, delete confirmation, sudo unlock, empty state, tooltip."
+    },
+    {
+      "id": "c",
+      "label": "Chunky and tactile",
+      "notes": "Bigger controls, buttons with a pressed edge, toasts in the accent colour. Most playful, easiest on touch screens. Sheet: buttons, inputs with error, switches/checkboxes/radios/segmented, status badges, progress and skeleton, toasts, menu, delete confirmation, sudo unlock, empty state, tooltip."
+    }
+  ],
+  "created": "2026-10-01T17:37:41.695Z",
+  "viewports": [
+    "laptop",
+    "mobile"
+  ]
+}

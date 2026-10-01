@@ -1,0 +1,29 @@
+{
+  "title": "Mobile: navigation and patterns",
+  "question": "Which mobile navigation should we use?",
+  "kind": "page",
+  "parent": "023-components",
+  "head": [],
+  "variants": [
+    {
+      "id": "a",
+      "label": "Dock + More",
+      "notes": "Bottom dock with Home, Terminal, Files, Services and More. More opens a sheet with every section, plugin pages, Settings and the host switcher. Each shows 4 phones: Services list, details as a bottom sheet, the navigation, and the terminal with a row of extra keys (Ctrl, Esc, Tab, arrows)."
+    },
+    {
+      "id": "b",
+      "label": "Dock + search button",
+      "notes": "Dock with a big centre button that opens search: type a service, file or section and jump there. “All” lists every section. Each shows 4 phones: Services list, details as a bottom sheet, the navigation, and the terminal with a row of extra keys (Ctrl, Esc, Tab, arrows)."
+    },
+    {
+      "id": "c",
+      "label": "Menu launcher",
+      "notes": "No dock: a menu button opens a launcher of colourful section tiles with a live summary each (1 failed, 23 updates…). Each shows 4 phones: Services list, details as a bottom sheet, the navigation, and the terminal with a row of extra keys (Ctrl, Esc, Tab, arrows)."
+    }
+  ],
+  "created": "2026-10-01T17:44:24.762Z",
+  "viewports": [
+    "desktop",
+    "laptop"
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "round": "001-shell-panoramica",
+  "action": "revise",
+  "selected": [
+    "c"
+  ],
+  "note": "è molto piu \"giocosa\" degli altri e preferisco questa, ma mi fai 3 varianti basate su questa?",
+  "variants": {},
+  "viewed_at": {
+    "viewport": "laptop",
+    "theme": "light",
+    "layout": "grid"
+  },
+  "id": "9038140e4008",
+  "at": "2026-10-01T14:10:26.356Z",
+  "consumed": false,
+  "files": {
+    "a": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/001-shell-panoramica/a.html",
+    "b": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/001-shell-panoramica/b.html",
+    "c": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/001-shell-panoramica/c.html"
+  },
+  "round_dir": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/001-shell-panoramica"
+}

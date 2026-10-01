@@ -1,0 +1,39 @@
+{
+  "round": "005-login-remix",
+  "action": "revise",
+  "selected": [
+    "a"
+  ],
+  "note": "Non mj piace la parte commentata, e poi vorrei che il logo della distro fosse bello grosso e senza sfondo qui",
+  "variants": {
+    "a": {
+      "label": "Divisa + account",
+      "annotations": [
+        {
+          "selector": "div.q.lb > section.lb-art:nth-of-type(1)",
+          "tag": "section",
+          "text": "archArch Linux Il tuo server, da qui. Terminale, file, servizi, log e utenti …",
+          "note": "Non mi piace questa parte"
+        }
+      ]
+    }
+  },
+  "viewed_at": {
+    "viewport": "laptop",
+    "theme": "dark",
+    "layout": "grid"
+  },
+  "id": "a54f208ec4e8",
+  "at": "2026-10-01T14:35:15.501Z",
+  "consumed": true,
+  "files": {
+    "a": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/005-login-remix/a.html",
+    "b": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/005-login-remix/b.html",
+    "c": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/005-login-remix/c.html",
+    "d": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/005-login-remix/d.html",
+    "e": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/005-login-remix/e.html",
+    "f": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/005-login-remix/f.html"
+  },
+  "round_dir": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/005-login-remix",
+  "consumed_at": "2026-10-01T14:35:15.538Z"
+}

@@ -1,0 +1,147 @@
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+.rail a.it .pi{background:var(--s);color:var(--h)}
+.rail a.it:hover .pi{background:color-mix(in srgb,var(--h) 22%,var(--s))}
+.rail a.it.on{color:var(--h)}
+.rail a.it.on .pi{background:var(--h);color:var(--surface)}
+.rsep{width:36px;height:1px;background:var(--line);margin:6px 0}
+.q{--mono:"JetBrains Mono",ui-monospace,monospace}
+.fm{background:var(--surface);border-radius:22px;flex:1;min-height:0;display:flex;overflow:hidden}
+.ft-ic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;flex:none;background:var(--s);color:var(--h)}
+.ft-ic .i{width:18px;height:18px}
+/* file type colours reuse section hues */
+.t-dir{--h:var(--h-file);--s:var(--h-file-s)}.t-img{--h:var(--h-plg);--s:var(--h-plg-s)}.t-code{--h:var(--h-term);--s:var(--h-term-s)}
+.t-arc{--h:var(--h-log);--s:var(--h-log-s)}.t-doc{--h:var(--h-ov);--s:var(--h-ov-s)}.t-txt{--h:var(--h-sw);--s:var(--h-sw-s)}.t-pdf{--h:var(--h-svc);--s:var(--h-svc-s)}
+.tbtn{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 14px;border-radius:999px;font-weight:700;border:1px solid var(--line)}
+.tbtn:hover{border-color:var(--ink3)}
+.tbtn.p{background:var(--h-file);border-color:var(--h-file);color:var(--surface)}
+.seg{display:inline-flex;background:var(--sunk);border-radius:999px;padding:3px}
+.seg button{width:34px;height:32px;border-radius:999px;display:grid;place-items:center;color:var(--ink3)}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.seg .i{width:17px;height:17px}
+.crumb{display:flex;align-items:center;gap:2px;font-weight:700;font-size:15px;min-width:0;flex-wrap:wrap}
+.crumb a{padding:5px 9px;border-radius:9px;color:var(--ink2);text-decoration:none}
+.crumb a:hover{background:var(--sunk);color:var(--ink)}
+.crumb a:last-child{color:var(--ink)}
+.crumb .i{width:14px;height:14px;color:var(--ink3);transform:rotate(-90deg)}
+.muted{color:var(--ink3)}
+.perm{display:grid;grid-template-columns:auto repeat(3,1fr);gap:6px 8px;align-items:center;font-size:13px}
+.perm .h{color:var(--ink3);font-weight:600;text-align:center;font-size:12px}
+.perm .r{font-weight:600}
+.perm .ck{height:28px;border-radius:9px;display:grid;place-items:center;background:var(--sunk);color:var(--ink3)}
+.perm .ck.on{background:var(--h-file-s);color:var(--h-file)}
+.perm .ck .i{width:15px;height:15px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:8px 14px;font-size:13.5px;margin:0}
+.kv dt{color:var(--ink3)}.kv dd{margin:0;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mono{font-family:var(--mono);font-size:12.5px}
+@media (max-width:860px){ .fm{border-radius:18px} }
+
+.av{width:38px;height:38px;border-radius:13px;display:grid;place-items:center;font-weight:800;background:var(--s);color:var(--h);flex:none}
+.bdg{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:800;padding:2px 8px;border-radius:999px;background:var(--s);color:var(--h);white-space:nowrap}
+.bdg .i{width:12px;height:12px}
+.gch{display:inline-flex;font:12px var(--mono);padding:2px 8px;border-radius:8px;background:var(--sunk);color:var(--ink2);margin:2px 4px 2px 0}
+.gch.w{background:var(--h-log-s);color:var(--h-log)}
+.ubar{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.ubar .sp{flex:1}
+.fsearch{display:flex;align-items:center;gap:10px;height:38px;padding:0 14px;border-radius:999px;background:var(--sunk);color:var(--ink3);min-width:200px}
+.ftabs{display:flex;gap:6px;flex-wrap:wrap}
+.ftab{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 14px;border-radius:999px;font-weight:700;font-size:13.5px;color:var(--ink2)}
+.ftab b{font-size:12px;color:var(--ink3)}
+.ftab:hover{background:var(--sunk)}
+.ftab.on{background:var(--h-usr-s);color:var(--h-usr)}
+.ftab.on b{color:inherit}
+.abtn{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 14px;border-radius:999px;font-weight:700;font-size:13.5px;background:var(--sunk)}
+.abtn:hover{background:var(--line)}
+.abtn.p{background:var(--h-usr);color:var(--surface)}
+.abtn.dng:hover{background:var(--h-svc-s);color:var(--h-svc)}
+.abtn .i{width:16px;height:16px}
+.sw{width:38px;height:22px;border-radius:999px;background:var(--line);position:relative;flex:none;display:inline-block}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--surface)}
+.sw.on{background:var(--h-usr)}.sw.on::after{left:19px}
+.muted{color:var(--ink3)}
+/* detail panel */
+.det{width:400px;flex:none;border-left:1px solid var(--line);padding:18px;display:flex;flex-direction:column;gap:14px;overflow:auto}
+.det .dh{display:flex;align-items:center;gap:14px}
+.det .dh .av{width:56px;height:56px;border-radius:19px;font-size:22px}
+.det h3{margin:0;font-size:20px;font-weight:800}
+.det .dh small{color:var(--ink3)}
+.det .acts{display:flex;gap:6px;flex-wrap:wrap}
+.ptabs{display:flex;border-bottom:1px solid var(--line);gap:4px}
+.ptabs button{padding:9px 10px;font-weight:700;font-size:13px;color:var(--ink3);border-bottom:3px solid transparent;margin-bottom:-1px}
+.ptabs button.on{color:var(--h-usr);border-color:var(--h-usr)}
+.pp{display:none;flex-direction:column;gap:12px}
+.det[data-tab=info] [data-p=info],.det[data-tab=groups] [data-p=groups],.det[data-tab=keys] [data-p=keys],.det[data-tab=sess] [data-p=sess]{display:flex}
+.grow{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;background:var(--sunk)}
+.grow b{display:block;font-weight:700;font-family:var(--mono);font-size:13px}
+.grow small{color:var(--ink3);font-size:12px}
+.grow .sw{margin-left:auto}
+.key{padding:12px;border-radius:14px;background:var(--sunk);display:flex;flex-direction:column;gap:4px}
+.key b{font-weight:700}
+.key code{font:12px var(--mono);color:var(--ink3);word-break:break-all}
+.addline{display:flex;align-items:center;justify-content:center;gap:8px;padding:10px;border-radius:14px;border:2px dashed var(--line);color:var(--ink3);font-weight:700}
+.warn{display:flex;gap:10px;padding:12px;border-radius:14px;background:var(--h-log-s);color:var(--h-log);font-size:13px;font-weight:600}
+.warn .i{flex:none}
+@media (max-width:1240px){ .det{display:none} }
+
+.us{flex:1;display:flex;min-height:calc(100vh - 90px)}
+.usm{flex:1;min-width:0;display:flex;flex-direction:column}
+.tb{flex:1;overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{position:sticky;top:0;background:var(--surface);text-align:left;font-weight:700;color:var(--ink3);font-size:12.5px;padding:10px 14px;border-bottom:1px solid var(--line)}
+td{padding:10px 14px;border-bottom:1px solid var(--line)}
+tr:hover td{background:var(--sunk)}
+tr.sel td{background:var(--h-usr-s)}
+.uc{display:flex;align-items:center;gap:12px;white-space:nowrap}
+.uc b{display:block;font-weight:800}.uc small{color:var(--ink3);font-size:12px}
+@media (max-width:860px){ th:nth-child(3),td:nth-child(3),th:nth-child(5),td:nth-child(5){display:none} }
+</style>
+<div class="q va">
+  <nav class="rail">
+    <a class="distro" href="#"><span class="lg"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.39.605C10.376 3.092 9.764 4.72 8.635 7.132c.693.734 1.543 1.589 2.923 2.554-1.484-.61-2.496-1.224-3.252-1.86C6.86 10.842 4.596 15.138 0 23.395c3.612-2.085 6.412-3.37 9.021-3.862a6.61 6.61 0 0 1-.171-1.547l.003-.115c.058-2.315 1.261-4.095 2.687-3.973 1.426.12 2.534 2.096 2.478 4.409a6.52 6.52 0 0 1-.146 1.243c2.58.505 5.352 1.787 8.914 3.844-.702-1.293-1.33-2.459-1.929-3.57-.943-.73-1.926-1.682-3.933-2.713 1.38.359 2.367.772 3.137 1.234-6.09-11.334-6.582-12.84-8.67-17.74z"/></svg></span><span class="dn">arch</span></a>
+    <a class="it c-ov" href="#"><span class="pi"><svg class="i"><use href="#i-overview"/></svg></span><span class="lb">Overview</span></a><a class="it c-term" href="#"><span class="pi"><svg class="i"><use href="#i-terminal"/></svg></span><span class="lb">Terminal</span></a><a class="it c-file" href="#"><span class="pi"><svg class="i"><use href="#i-files"/></svg></span><span class="lb">Files</span></a><a class="it c-log" href="#"><span class="pi"><svg class="i"><use href="#i-logs"/></svg></span><span class="lb">Logs</span></a><a class="it c-svc" href="#"><span class="pi"><svg class="i"><use href="#i-services"/></svg></span><span class="lb">Services</span><span class="n">1</span></a><a class="it c-sw" href="#"><span class="pi"><svg class="i"><use href="#i-software"/></svg></span><span class="lb">Software</span><span class="n">23</span></a><a class="it c-usr on" href="#"><span class="pi"><svg class="i"><use href="#i-users"/></svg></span><span class="lb">Users</span></a><div class="rsep"></div><a class="it c-plg" href="#"><span class="pi"><svg class="i"><use href="#i-plugins"/></svg></span><span class="lb">Plugins</span></a><div class="sp"></div><div class="me"><div class="av">F</div></div></nav>
+  <main class="main">
+    <div class="top">
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search users and groups</div><div class="sp"></div>
+      <div class="pill"><i></i>arch<svg class="i" style="width:16px;height:16px"><use href="#i-chevron"/></svg></div>
+      <button class="ib" data-toggle-theme title="Theme"><svg class="i"><use href="#i-moon"/></svg></button>
+      <button class="ib" title="Notifications"><svg class="i"><use href="#i-bell"/></svg></button></div>
+    <section class="fm us">
+      <div class="usm"><div class="ubar"><div class="ftabs"><button class="ftab on">People <b>5</b></button><button class="ftab">System accounts <b>38</b></button><button class="ftab">Groups <b>64</b></button></div>
+      <div class="sp"></div><div class="fsearch"><svg class="i"><use href="#i-search"/></svg>Filter users</div><button class="abtn p"><svg class="i"><use href="#i-plus"/></svg>Add user</button></div>
+        <div class="tb"><table><thead><tr><th>User</th><th>Role</th><th>Groups</th><th>Last login</th><th>UID</th></tr></thead><tbody><tr class="sel"><td><div class="uc"><span class="av t-dir">F</span><div><b>fonlogen</b><small>Fonlogen</small></div></div></td><td><span class="bdg t-arc"><svg class="i"><use href="#i-shield"/></svg>Admin</span></td><td class="gcell"><span class="gch w">wheel</span><span class="gch">docker</span><span class="gch">video</span><span class="gch">audio</span></td><td class="muted">Now, this browser</td><td class="mono muted">1000</td></tr><tr class=""><td><div class="uc"><span class="av t-doc">M</span><div><b>mario</b><small>Mario Rossi</small></div></div></td><td></td><td class="gcell"><span class="gch">users</span><span class="gch">audio</span><span class="gch">video</span></td><td class="muted">Yesterday, 21:40 via SSH</td><td class="mono muted">1001</td></tr><tr class=""><td><div class="uc"><span class="av t-arc">B</span><div><b>backup</b><small>Backup job</small></div></div></td><td></td><td class="gcell"><span class="gch">backup</span></td><td class="muted">Today, 03:00 via SSH key</td><td class="mono muted">1002</td></tr><tr class=""><td><div class="uc"><span class="av t-img">G</span><div><b>giulia</b><small>Giulia Bianchi</small></div></div></td><td><span class="bdg t-code">New</span></td><td class="gcell"><span class="gch">users</span><span class="gch">docker</span></td><td class="muted">Never</td><td class="mono muted">1003</td></tr><tr class=""><td><div class="uc"><span class="av t-pdf">R</span><div><b>root</b><small>Super user</small></div></div></td><td><span class="bdg t-pdf"><svg class="i"><use href="#i-lock"/></svg>Locked</span></td><td class="gcell"><span class="gch">root</span></td><td class="muted">Login disabled</td><td class="mono muted">0</td></tr></tbody></table></div>
+      </div>
+      <aside class="det" data-tab="info">
+      <div class="dh"><span class="av t-dir">F</span><div><h3>fonlogen</h3><small>Fonlogen, UID 1000</small></div></div>
+      <div class="acts"><button class="abtn"><svg class="i"><use href="#i-lock"/></svg>Reset password</button><button class="abtn"><svg class="i"><use href="#i-shield"/></svg>Lock</button><button class="abtn dng"><svg class="i"><use href="#i-trash"/></svg>Delete</button></div>
+      <div class="ptabs"><button data-tab="info" class="on">Info</button><button data-tab="groups">Groups</button><button data-tab="keys">SSH keys</button><button data-tab="sess">Sessions</button></div>
+      <div class="pp" data-p="info">
+        <dl class="kv"><dt>Full name</dt><dd>Fonlogen</dd><dt>Home</dt><dd class="mono">/home/fonlogen</dd><dt>Shell</dt><dd class="mono">/usr/bin/bash</dd><dt>Created</dt><dd>12 Mar 2025</dd><dt>Password</dt><dd>Changed 41 days ago</dd><dt>Last login</dt><dd>Now, this browser</dd></dl>
+        <label class="grow"><div><b style="font-family:inherit">Administrator</b><small>Member of wheel, can run sudo</small></div><span class="sw on"></span></label>
+        <div class="warn"><svg class="i"><use href="#i-alert"/></svg><div>You are signed in as this user. Removing admin rights takes effect at your next sign in.</div></div>
+      </div>
+      <div class="pp" data-p="groups"><div class="grow"><div><b>wheel</b><small>Can use sudo</small></div><span class="sw on"></span></div><div class="grow"><div><b>docker</b><small>Manage containers</small></div><span class="sw on"></span></div><div class="grow"><div><b>audio</b><small> </small></div><span class="sw on"></span></div><div class="grow"><div><b>video</b><small> </small></div><span class="sw on"></span></div><div class="grow"><div><b>users</b><small> </small></div><span class="sw"></span></div><div class="grow"><div><b>backup</b><small> </small></div><span class="sw"></span></div><div class="grow"><div><b>storage</b><small> </small></div><span class="sw"></span></div><button class="addline"><svg class="i"><use href="#i-plus"/></svg>New group</button></div>
+      <div class="pp" data-p="keys">
+        <div class="key"><b>laptop-thinkpad</b><code>ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGq…x9 fonlogen@thinkpad</code><small class="muted">Added 3 months ago, last used today</small></div>
+        <div class="key"><b>phone-termux</b><code>ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL4…p2 u0_a312@localhost</code><small class="muted">Added 2 weeks ago, never used</small></div>
+        <button class="addline"><svg class="i"><use href="#i-plus"/></svg>Add key</button>
+      </div>
+      <div class="pp" data-p="sess">
+        <div class="grow"><div><b style="font-family:inherit">Quadro, Firefox</b><small>192.168.1.20, now</small></div></div>
+        <div class="grow"><div><b style="font-family:inherit">SSH, pts/1</b><small>192.168.1.20, 40 min</small></div><button class="abtn" style="margin-left:auto;height:32px">End</button></div>
+        <div class="grow"><div><b style="font-family:inherit">Desktop, tty1</b><small>local, 2 h</small></div></div>
+      </div>
+    </aside>
+    </section>
+  </main>
+  <nav class="dock">
+    <a class="c-ov" href="#"><span class="pi"><svg class="i"><use href="#i-overview"/></svg></span>Home</a>
+    <a class="c-term" href="#"><span class="pi"><svg class="i"><use href="#i-terminal"/></svg></span>Terminal</a>
+    <a class="c-file" href="#"><span class="pi"><svg class="i"><use href="#i-files"/></svg></span>Files</a>
+    <a class="c-svc" href="#"><span class="pi"><svg class="i"><use href="#i-services"/></svg></span>Services</a>
+    <a href="#"><span class="pi"><svg class="i"><use href="#i-more"/></svg></span>More</a>
+  </nav>
+</div>
+<script src="kit.js"></script><script>
+document.querySelectorAll('.ptabs').forEach(t=>t.addEventListener('click',e=>{const b=e.target.closest('[data-tab]');if(!b)return;
+  t.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));t.closest('.det').dataset.tab=b.dataset.tab}));
+</script>

@@ -1,0 +1,29 @@
+{
+  "title": "Logs",
+  "question": "Which logs layout fits best?",
+  "kind": "page",
+  "parent": "003-remix-rail-colori",
+  "head": [],
+  "variants": [
+    {
+      "id": "a",
+      "label": "Sources sidebar",
+      "notes": "Sources on the left grouped as All, System, Services, Files and your Watchers, with counts. Histogram by level, live stream, entry details with surrounding lines. “Watch a file” opens a small form."
+    },
+    {
+      "id": "b",
+      "label": "Source pills",
+      "notes": "Sources as pills on top: All plus one per source, several can be active together. Query search (level:error OR …), histogram, stream and details panel."
+    },
+    {
+      "id": "c",
+      "label": "Source cards",
+      "notes": "A card per source with count, errors and a sparkline: you see at a glance where the trouble is. Clicking cards filters the merged stream, each line marked with its source colour."
+    }
+  ],
+  "created": "2026-10-01T15:02:23.589Z",
+  "viewports": [
+    "laptop",
+    "mobile"
+  ]
+}

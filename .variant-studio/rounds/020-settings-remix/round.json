@@ -1,0 +1,29 @@
+{
+  "title": "Settings: list + one page, no grey lines",
+  "question": "Which way of separating settings feels best without grey lines?",
+  "kind": "page",
+  "parent": "019-settings",
+  "head": [],
+  "variants": [
+    {
+      "id": "a",
+      "label": "Soft rows",
+      "notes": "Every setting sits in its own soft tinted row with small gaps between them. All: left list jumps to and highlights the section you are reading, the search filters live, switches save with a toast. No grey lines."
+    },
+    {
+      "id": "b",
+      "label": "Tinted blocks",
+      "notes": "Each section is one tinted block, settings inside are separated only by space. All: left list jumps to and highlights the section you are reading, the search filters live, switches save with a toast. No grey lines."
+    },
+    {
+      "id": "c",
+      "label": "Open space",
+      "notes": "No backgrounds at all, just whitespace and bigger section titles; a row lights up when you hover it. All: left list jumps to and highlights the section you are reading, the search filters live, switches save with a toast. No grey lines."
+    }
+  ],
+  "created": "2026-10-01T17:29:07.193Z",
+  "viewports": [
+    "laptop",
+    "mobile"
+  ]
+}

@@ -1,0 +1,202 @@
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+.qc{
+  --bg:#ECEEF4; --surface:#FFFFFF; --sunk:#F3F4F8; --line:#E1E4EC; --ink:#1D2030; --ink2:#575C70; --ink3:#8D92A5;
+  --acc:#4651D0; --acc-soft:#E6E8FB; --ok:#1E9E6A; --err:#D6455B; --warn:#D98A1C;
+  --t1:#E6E8FB; --t1i:#3A44B8; --t2:#DDF3EA; --t2i:#16805A; --t3:#FCEBD6; --t3i:#A9620D; --t4:#FBE1E6; --t4i:#B5324A;
+  font-family:"Figtree",system-ui,sans-serif; font-size:14px; color:var(--ink); background:var(--bg); min-height:100vh;
+  display:grid; grid-template-columns:248px 1fr; gap:12px; padding:12px; box-sizing:border-box; font-variant-numeric:tabular-nums;
+}
+html[data-theme=dark] .qc{
+  --bg:#13151E; --surface:#1C1F2B; --sunk:#242836; --line:#2C3040; --ink:#E8EAF2; --ink2:#A6ABBE; --ink3:#6E7389;
+  --acc:#8D96FF; --acc-soft:#2A2E52; --ok:#4FD19A; --err:#FF7C8E; --warn:#F5B254;
+  --t1:#2A2E52; --t1i:#AEB4FF; --t2:#1D3A30; --t2i:#6FDDB0; --t3:#3D2F1C; --t3i:#F5B963; --t4:#43232C; --t4i:#FF97A7;
+}
+.qc .i{width:19px;height:19px;flex:none}
+.qc button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+/* Sidebar */
+.qc-side{background:var(--surface);border-radius:20px;padding:18px 12px;display:flex;flex-direction:column;gap:2px;height:calc(100vh - 24px);position:sticky;top:12px;box-sizing:border-box}
+.qc-brand{display:flex;align-items:center;gap:10px;padding:2px 10px 18px;font-weight:700;font-size:17px}
+.qc-brand span{width:28px;height:28px;border-radius:9px;background:var(--acc);position:relative}
+.qc-brand span::before,.qc-brand span::after{content:"";position:absolute;background:#fff;border-radius:2px}
+.qc-brand span::before{left:7px;top:7px;width:6px;height:14px}
+.qc-brand span::after{left:15px;top:7px;width:6px;height:8px}
+.qc-new{display:flex;align-items:center;gap:10px;margin:0 2px 14px;padding:12px 16px;border-radius:14px;background:var(--acc-soft);color:var(--acc);font-weight:600}
+.qc-nav a{display:flex;align-items:center;gap:13px;padding:10px 14px;border-radius:999px;color:var(--ink2);text-decoration:none;font-weight:500}
+.qc-nav a:hover{background:var(--sunk);color:var(--ink)}
+.qc-nav a.on{background:var(--acc);color:#fff}
+html[data-theme=dark] .qc-nav a.on{color:#13151E}
+.qc-nav a .n{margin-left:auto;font-size:12px;min-width:20px;height:20px;border-radius:10px;display:grid;place-items:center;background:var(--t4);color:var(--t4i);font-weight:600;padding:0 6px;box-sizing:border-box}
+.qc-sep{height:1px;background:var(--line);margin:10px 12px}
+.qc-me{margin-top:auto;display:flex;align-items:center;gap:10px;padding:12px;border-radius:16px;background:var(--sunk)}
+.qc-me .av{width:34px;height:34px;border-radius:12px;background:var(--t2);color:var(--t2i);display:grid;place-items:center;font-weight:700}
+.qc-me b{display:block;font-weight:600}
+.qc-me small{color:var(--ink3)}
+.qc-me button{margin-left:auto;color:var(--ink3)}
+/* Main */
+.qc-main{min-width:0;display:flex;flex-direction:column;gap:12px}
+.qc-top{display:flex;align-items:center;gap:10px}
+.qc-search{flex:1;max-width:620px;display:flex;align-items:center;gap:12px;padding:12px 18px;border-radius:999px;background:var(--surface);color:var(--ink3);font-size:15px}
+.qc-top .sp{flex:1}
+.qc-pill{display:flex;align-items:center;gap:8px;padding:9px 14px;border-radius:999px;background:var(--surface);font-weight:500}
+.qc-pill i{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+.qc-ib{width:42px;height:42px;border-radius:50%;background:var(--surface);display:grid;place-items:center;color:var(--ink2)}
+.qc-ib:hover{color:var(--ink)}
+.qc-canvas{background:var(--surface);border-radius:20px;padding:26px 28px 32px;flex:1}
+.qc-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:22px}
+.qc-head h1{margin:0;font-size:26px;font-weight:700;letter-spacing:-.02em}
+.qc-head p{margin:2px 0 0;color:var(--ink2)}
+.qc-head .r{margin-left:auto;display:flex;gap:8px}
+.qc-btn{display:flex;align-items:center;gap:8px;padding:9px 16px;border-radius:999px;border:1px solid var(--line);font-weight:600}
+.qc-btn.p{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+/* Gauges */
+.qc-rings{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.qc-ring{background:var(--sunk);border-radius:18px;padding:18px;display:flex;align-items:center;gap:16px}
+.qc-ring svg.g{width:76px;height:76px;flex:none;transform:rotate(-90deg)}
+.qc-ring circle{fill:none;stroke-width:9;stroke-linecap:round}
+.qc-ring .bgc{stroke:var(--line)}
+.qc-ring .v{font-size:24px;font-weight:700;letter-spacing:-.02em}
+.qc-ring .l{color:var(--ink2);font-weight:500}
+.qc-ring .s{color:var(--ink3);font-size:12.5px;margin-top:2px}
+.qc-row{display:grid;grid-template-columns:1.6fr 1fr;gap:14px;margin-top:14px}
+.qc-card{background:var(--sunk);border-radius:18px;padding:18px 20px;min-width:0}
+.qc-card h3{margin:0 0 4px;font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+.qc-card h3 .r{margin-left:auto;font-weight:500;color:var(--ink3);font-size:13px}
+.qc-chart{width:100%;height:150px;display:block;margin-top:10px}
+.qc-chart .line{fill:none;stroke:var(--acc);stroke-width:2.2}
+.qc-chart .area{fill:var(--acc);opacity:.14}
+.qc-chart.two .line{stroke:var(--ok)} .qc-chart.two .area{fill:var(--ok)}
+.qc-leg{display:flex;gap:16px;color:var(--ink2);font-size:13px}
+.qc-leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+/* Tiles */
+.qc-tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.qc-tile{display:flex;flex-direction:column;gap:18px;align-items:flex-start;padding:14px;border-radius:14px;font-weight:600;text-align:left}
+.qc-tile .i{width:22px;height:22px}
+.qc-tile.c1{background:var(--t1);color:var(--t1i)}
+.qc-tile.c2{background:var(--t2);color:var(--t2i)}
+.qc-tile.c3{background:var(--t3);color:var(--t3i)}
+.qc-tile.c4{background:var(--t4);color:var(--t4i)}
+.qc-alert{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.qc-alert:first-of-type{border-top:0}
+.qc-alert .ic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;flex:none}
+.qc-alert .ic.e{background:var(--t4);color:var(--t4i)}
+.qc-alert .ic.w{background:var(--t3);color:var(--t3i)}
+.qc-alert .ic.o{background:var(--t2);color:var(--t2i)}
+.qc-alert b{font-weight:600;display:block}
+.qc-alert small{color:var(--ink3)}
+.qc-alert button{margin-left:auto;padding:6px 12px;border-radius:999px;background:var(--surface);font-weight:600;font-size:13px}
+.qc-mob{display:none}
+@media (max-width:1100px){ .qc-rings{grid-template-columns:1fr 1fr} .qc-row{grid-template-columns:1fr} }
+@media (max-width:860px){
+  .qc{grid-template-columns:1fr;padding:8px;gap:8px}
+  .qc-side{display:none}
+  .qc-mob{display:grid}
+  .qc-canvas{padding:20px 16px}
+  .qc-pill{display:none}
+  .qc-head .r{margin-left:0}
+}
+@media (max-width:560px){ .qc-rings{grid-template-columns:1fr} }
+</style>
+
+<div class="qc">
+  <aside class="qc-side">
+    <div class="qc-brand"><span></span>Quadro</div>
+    <button class="qc-new"><svg class="i"><use href="#i-plus"/></svg>Nuovo</button>
+    <nav class="qc-nav">
+      <a class="on" href="#"><svg class="i"><use href="#i-overview"/></svg>Panoramica</a>
+      <a href="#"><svg class="i"><use href="#i-terminal"/></svg>Terminale</a>
+      <a href="#"><svg class="i"><use href="#i-files"/></svg>File</a>
+      <a href="#"><svg class="i"><use href="#i-logs"/></svg>Log</a>
+      <a href="#"><svg class="i"><use href="#i-services"/></svg>Servizi<span class="n">1</span></a>
+      <a href="#"><svg class="i"><use href="#i-software"/></svg>Software</a>
+      <a href="#"><svg class="i"><use href="#i-users"/></svg>Utenti</a>
+      <div class="qc-sep"></div>
+      <a href="#"><svg class="i"><use href="#i-plugins"/></svg>Plugin</a>
+    </nav>
+    <div class="qc-me">
+      <div class="av">F</div>
+      <div><b>fonlogen</b><small>Amministratore</small></div>
+      <button title="Esci"><svg class="i"><use href="#i-logout"/></svg></button>
+    </div>
+  </aside>
+
+  <main class="qc-main">
+    <div class="qc-top">
+      <button class="qc-ib qc-mob"><svg class="i"><use href="#i-menu"/></svg></button>
+      <div class="qc-search"><svg class="i"><use href="#i-search"/></svg>Cerca in arch</div>
+      <div class="sp"></div>
+      <div class="qc-pill"><i></i>arch<svg class="i" style="width:16px;height:16px"><use href="#i-chevron"/></svg></div>
+      <button class="qc-ib" data-toggle-theme title="Tema"><svg class="i"><use href="#i-moon"/></svg></button>
+      <button class="qc-ib" title="Notifiche"><svg class="i"><use href="#i-bell"/></svg></button>
+    </div>
+
+    <section class="qc-canvas">
+      <div class="qc-head">
+        <div>
+          <h1>Ciao, fonlogen</h1>
+          <p>arch funziona bene. Un servizio ha bisogno di attenzione.</p>
+        </div>
+        <div class="r">
+          <button class="qc-btn"><svg class="i"><use href="#i-edit"/></svg>Personalizza</button>
+          <button class="qc-btn p"><svg class="i"><use href="#i-plus"/></svg>Widget</button>
+        </div>
+      </div>
+
+      <div class="qc-rings">
+        <div class="qc-ring">
+          <svg class="g" viewBox="0 0 80 80"><circle class="bgc" cx="40" cy="40" r="32"/><circle cx="40" cy="40" r="32" stroke="var(--acc)" stroke-dasharray="201" stroke-dashoffset="165"/></svg>
+          <div><div class="v">18%</div><div class="l">CPU</div><div class="s">16 thread, 58 °C</div></div>
+        </div>
+        <div class="qc-ring">
+          <svg class="g" viewBox="0 0 80 80"><circle class="bgc" cx="40" cy="40" r="32"/><circle cx="40" cy="40" r="32" stroke="var(--warn)" stroke-dasharray="201" stroke-dashoffset="54"/></svg>
+          <div><div class="v">73%</div><div class="l">Memoria</div><div class="s">11,2 di 15,4 GiB</div></div>
+        </div>
+        <div class="qc-ring">
+          <svg class="g" viewBox="0 0 80 80"><circle class="bgc" cx="40" cy="40" r="32"/><circle cx="40" cy="40" r="32" stroke="var(--ok)" stroke-dasharray="201" stroke-dashoffset="167"/></svg>
+          <div><div class="v">17%</div><div class="l">Disco</div><div class="s">317 GB liberi</div></div>
+        </div>
+        <div class="qc-ring">
+          <svg class="g" viewBox="0 0 80 80"><circle class="bgc" cx="40" cy="40" r="32"/><circle cx="40" cy="40" r="32" stroke="var(--t4i)" stroke-dasharray="201" stroke-dashoffset="119"/></svg>
+          <div><div class="v">41%</div><div class="l">Swap</div><div class="s">3,3 di 8 GiB</div></div>
+        </div>
+      </div>
+
+      <div class="qc-row">
+        <div class="qc-card">
+          <h3>Attività<span class="r">ultima ora</span></h3>
+          <div class="qc-leg"><span><i style="background:var(--acc)"></i>CPU</span><span><i style="background:var(--ok)"></i>Rete</span></div>
+          <div style="position:relative">
+            <svg class="qc-chart" data-chart="7,24,16,1" data-fill="1" data-n="80"></svg>
+            <svg class="qc-chart two" style="position:absolute;inset:0" data-chart="11,14,14,1" data-n="80"></svg>
+          </div>
+        </div>
+        <div class="qc-card">
+          <h3>Le mie azioni</h3>
+          <div class="qc-tiles">
+            <button class="qc-tile c1"><svg class="i"><use href="#i-download"/></svg>Aggiorna sistema</button>
+            <button class="qc-tile c2"><svg class="i"><use href="#i-refresh"/></svg>Riavvia nginx</button>
+            <button class="qc-tile c3"><svg class="i"><use href="#i-broom"/></svg>Pulisci cache</button>
+            <button class="qc-tile c4"><svg class="i"><use href="#i-power"/></svg>Riavvia arch</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="qc-row">
+        <div class="qc-card">
+          <h3>Da sistemare</h3>
+          <div class="qc-alert"><div class="ic e"><svg class="i"><use href="#i-alert"/></svg></div><div><b>systemd-networkd-wait-online non è partito</b><small>Fallito alle 14:35 con codice 1</small></div><button>Apri</button></div>
+          <div class="qc-alert"><div class="ic w"><svg class="i"><use href="#i-software"/></svg></div><div><b>23 aggiornamenti pronti</b><small>Tra questi linux 7.2.7</small></div><button>Installa</button></div>
+          <div class="qc-alert"><div class="ic o"><svg class="i"><use href="#i-shield"/></svg></div><div><b>Nessun accesso SSH fallito oggi</b><small>Ultimo controllo alle 15:54</small></div></div>
+        </div>
+        <div class="qc-card">
+          <h3>Questa macchina</h3>
+          <div class="qc-alert"><div class="ic o"><svg class="i"><use href="#i-server"/></svg></div><div><b>Arch Linux</b><small>Kernel 7.2.6-arch2-1</small></div></div>
+          <div class="qc-alert"><div class="ic o"><svg class="i"><use href="#i-cpu"/></svg></div><div><b>Intel Core i7-12650H</b><small>10 core, 16 thread</small></div></div>
+          <div class="qc-alert"><div class="ic o"><svg class="i"><use href="#i-power"/></svg></div><div><b>Acceso da 1 h 21 min</b><small>Avviato oggi alle 14:34</small></div></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+<script src="kit.js"></script>

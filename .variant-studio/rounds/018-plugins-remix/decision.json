@@ -1,0 +1,24 @@
+{
+  "round": "018-plugins-remix",
+  "action": "choose",
+  "selected": [
+    "a"
+  ],
+  "note": "",
+  "variants": {},
+  "viewed_at": {
+    "viewport": "laptop",
+    "theme": "dark",
+    "layout": "focus"
+  },
+  "id": "77bbe3084523",
+  "at": "2026-10-01T17:24:58.262Z",
+  "consumed": true,
+  "files": {
+    "a": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/018-plugins-remix/a.html",
+    "b": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/018-plugins-remix/b.html",
+    "c": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/018-plugins-remix/c.html"
+  },
+  "round_dir": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/018-plugins-remix",
+  "consumed_at": "2026-10-01T17:24:58.290Z"
+}

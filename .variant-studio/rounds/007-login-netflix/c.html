@@ -1,0 +1,81 @@
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+.ur{display:flex;align-items:center;gap:12px;padding:8px 10px!important;border-radius:16px!important;border:2px solid transparent!important;text-align:left;width:100%}
+.ur:hover{background:var(--sunk)!important}
+.ur .av{width:40px;height:40px;border-radius:14px;display:grid;place-items:center;font-weight:800;font-size:16px;background:var(--s);color:var(--h);flex:none}
+.ur .tx b{display:block;font-weight:800}
+.ur .tx small{color:var(--ink3);font-size:12.5px}
+.ur.on{border-color:var(--h)!important;background:var(--s)!important}
+.ur.on .av{background:var(--h);color:var(--surface)}
+.ur.other .av{background:var(--sunk);color:var(--ink2)}
+.ulist{display:flex;flex-direction:column;gap:4px;margin-bottom:18px}
+.q:not(.other) .ufld{display:none}
+.lb{min-height:100vh;display:grid;grid-template-columns:1.1fr 1fr;gap:12px;padding:12px;box-sizing:border-box}
+.lb-form{background:var(--surface);border-radius:28px;display:grid;place-items:center;padding:32px 24px}
+.lb-in{width:100%;max-width:380px}
+.lb-in h1{margin:0;font-size:28px;font-weight:800;letter-spacing:-.025em}
+.lb-in > p{margin:6px 0 20px;color:var(--ink2)}
+.lf{display:flex;flex-direction:column;gap:16px}
+.lb-foot{display:flex;justify-content:space-between;margin-top:22px;color:var(--ink3);font-size:12.5px}
+.lb-foot button{color:var(--ink2);font-weight:600}
+.art{border-radius:28px;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.art .big{color:var(--distro)}
+@media (max-width:860px){ .lb{grid-template-columns:1fr} .art{min-height:260px} }
+
+.art{background:var(--sunk);padding:36px;justify-content:flex-end}
+.art .big{position:absolute;width:118%;height:auto;right:-30%;top:-12%;z-index:1}
+.art .glow{position:absolute;z-index:0;border-radius:50%;width:110%;aspect-ratio:1;right:-26%;top:-14%;background:radial-gradient(circle,color-mix(in srgb,var(--distro) 30%,transparent),transparent 62%)}
+.art .nm{position:relative;z-index:3}
+.art h2{margin:0;font-size:56px;font-weight:800;letter-spacing:-.045em;line-height:1}
+.art::after{content:"";position:absolute;inset:0;z-index:2;background:linear-gradient(to top,var(--sunk) 18%,transparent 55%)}
+@media (max-width:860px){ .art h2{font-size:38px} .art .big{width:90%;right:-20%;top:-25%} .art .glow{width:90%;right:-16%;top:-26%} }
+
+.ugrid{display:grid;gap:10px;margin-bottom:20px}
+.ut{display:flex;flex-direction:column;align-items:center;gap:2px;padding:0!important;text-align:center;min-width:0}
+.ut .av{width:100%;aspect-ratio:1;border-radius:20px;display:grid;place-items:center;font-weight:800;font-size:34px;background:var(--s);color:var(--h);margin-bottom:8px;transition:transform .15s,box-shadow .15s}
+.ut:hover .av{transform:translateY(-3px)}
+.ut b{font-weight:800;font-size:14px;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.ut small{color:var(--ink3);font-size:12px}
+.ut.on .av{background:var(--h);color:var(--surface);box-shadow:0 0 0 3px var(--surface),0 0 0 6px var(--h)}
+.ut.other .av{background:none;border:2px dashed var(--line);color:var(--ink3);box-sizing:border-box}
+.ut.other .av .i{width:28px;height:28px}
+@media (prefers-reduced-motion:reduce){.ut .av{transition:none}}
+
+.g4{grid-template-columns:repeat(4,1fr)}
+.g4 .ut{position:relative}
+.g4 .ut .av{margin-bottom:0;align-items:start;justify-items:center;padding-top:18%;box-sizing:border-box;font-size:30px}
+.g4 .ut b{position:absolute;left:0;right:0;bottom:12px;color:var(--h);font-size:13px}
+.g4 .ut.on b{color:var(--surface)}
+.g4 .ut small{display:none}
+.g4 .ut.other .av{padding-top:0;align-items:center}
+.g4 .ut.other b{color:var(--ink3)}
+.nm .addr{display:flex;align-items:center;gap:10px;margin-top:12px}
+.nm .addr b{font-size:22px;font-weight:700;letter-spacing:-.01em}
+.nm .addr button{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;color:var(--ink3);background:var(--surface)}
+.nm .os{margin:4px 0 0;color:var(--ink2);font-size:15px}
+</style>
+<div class="q lb">
+  <section class="art"><span class="glow"></span><svg class="big" viewBox="0 0 24 24" fill="currentColor"><path d="M11.39.605C10.376 3.092 9.764 4.72 8.635 7.132c.693.734 1.543 1.589 2.923 2.554-1.484-.61-2.496-1.224-3.252-1.86C6.86 10.842 4.596 15.138 0 23.395c3.612-2.085 6.412-3.37 9.021-3.862a6.61 6.61 0 0 1-.171-1.547l.003-.115c.058-2.315 1.261-4.095 2.687-3.973 1.426.12 2.534 2.096 2.478 4.409a6.52 6.52 0 0 1-.146 1.243c2.58.505 5.352 1.787 8.914 3.844-.702-1.293-1.33-2.459-1.929-3.57-.943-.73-1.926-1.682-3.933-2.713 1.38.359 2.367.772 3.137 1.234-6.09-11.334-6.582-12.84-8.67-17.74z"/></svg><div class="nm"><h2>arch</h2><div class="addr"><b>192.168.1.137</b><button title="Copy address"><svg class="i" style="width:16px;height:16px"><use href="#i-files"/></svg></button></div><p class="os">Arch Linux, wlo1</p></div></section>
+  <section class="lb-form">
+    <div class="lb-in">
+      <h1>Who's signing in?</h1>
+      <p>Pick your Linux account.</p>
+      <div class="ugrid g4"><button type="button" class="ut c-usr on" data-user="fonlogen"><span class="av">F</span><b>fonlogen</b><small>Administrator</small></button><button type="button" class="ut c-file" data-user="mario"><span class="av">M</span><b>mario</b><small>User</small></button><button type="button" class="ut c-log" data-user="backup"><span class="av">B</span><b>backup</b><small>Service</small></button><button type="button" class="ut other" data-user=""><span class="av"><svg class="i"><use href="#i-plus"/></svg></span><b>Other</b><small>Type a username</small></button></div>
+      <form class="lf" novalidate>
+    <div class="fld ufld"><label for="u">Username</label>
+      <div class="inp"><svg class="i"><use href="#i-users"/></svg><input id="u" name="u" autocomplete="username" placeholder="e.g. fonlogen" value="fonlogen"></div></div>
+    <div class="fld"><label for="p">Password</label>
+      <div class="inp pw"><svg class="i"><use href="#i-shield"/></svg><input id="p" name="p" type="password" autocomplete="current-password" placeholder="Your Linux account password"><button type="button" class="eye" title="Show password"><svg class="i"><use href="#i-search"/></svg></button></div></div>
+    <div class="msg m-err c-svc"><svg class="i"><use href="#i-alert"/></svg><div>Wrong username or password. Check Caps Lock and try again.</div></div>
+<div class="msg m-root c-log"><svg class="i"><use href="#i-shield"/></svg><div>Root login is disabled on this server. Sign in with your own user and use sudo, or enable root with <code>allow_root = true</code> in <code>/etc/quadro/quadro.conf</code>.</div></div>
+    <label class="chk"><input type="checkbox" checked> Stay signed in for 12 hours</label>
+    <button class="go" type="submit"><span class="spin"></span>Sign in</button>
+  </form>
+      <p class="hint try">Try: user <b>root</b>, or password <b>wrong</b>.</p>
+      <div class="lb-foot"><span>Accounts recently used in this browser</span><button data-toggle-theme>Theme</button></div>
+    </div>
+  </section>
+</div>
+<script src="kit.js"></script>
+<script src="login.js"></script>
+<script>(function(){const q=document.querySelector('.q');q.querySelectorAll('[data-user]').forEach(b=>b.addEventListener('click',()=>{q.classList.toggle('other',!b.dataset.user);if(!b.dataset.user)q.querySelector('#u').focus()}))})();</script>

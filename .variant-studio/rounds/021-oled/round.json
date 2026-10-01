@@ -1,0 +1,29 @@
+{
+  "title": "Default theme: dark OLED",
+  "question": "Which OLED dark should be the default? (View with the gallery in dark mode)",
+  "kind": "page",
+  "parent": "020-settings-remix",
+  "head": [],
+  "variants": [
+    {
+      "id": "a",
+      "label": "Lifted panels",
+      "notes": "Sidebar and content sit on near-black panels lifted from the black background; cards one step lighter. True black #000 background, brighter section colours tuned for black, no grey lines. These stay OLED even if the gallery is in light mode."
+    },
+    {
+      "id": "b",
+      "label": "All black, colour only",
+      "notes": "Everything is black; only the section colours and very dark fills give structure. Most OLED, most contrast. True black #000 background, brighter section colours tuned for black, no grey lines. These stay OLED even if the gallery is in light mode."
+    },
+    {
+      "id": "c",
+      "label": "Layered greys",
+      "notes": "More visible grey layers on black: easier to tell panels apart, less pure. True black #000 background, brighter section colours tuned for black, no grey lines. These stay OLED even if the gallery is in light mode."
+    }
+  ],
+  "created": "2026-10-01T17:31:22.975Z",
+  "viewports": [
+    "laptop",
+    "mobile"
+  ]
+}

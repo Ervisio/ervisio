@@ -1,0 +1,26 @@
+{
+  "round": "017-plugins",
+  "action": "remix",
+  "selected": [
+    "a",
+    "c",
+    "b"
+  ],
+  "note": "",
+  "variants": {},
+  "viewed_at": {
+    "viewport": "laptop",
+    "theme": "dark",
+    "layout": "side"
+  },
+  "id": "f8d67f37f979",
+  "at": "2026-10-01T17:22:56.702Z",
+  "consumed": true,
+  "files": {
+    "a": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/017-plugins/a.html",
+    "b": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/017-plugins/b.html",
+    "c": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/017-plugins/c.html"
+  },
+  "round_dir": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/017-plugins",
+  "consumed_at": "2026-10-01T17:22:56.968Z"
+}

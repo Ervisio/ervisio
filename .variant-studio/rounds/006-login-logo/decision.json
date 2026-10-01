@@ -1,0 +1,48 @@
+{
+  "round": "006-login-logo",
+  "action": "revise",
+  "selected": [
+    "b"
+  ],
+  "note": "Mi piace molto questa, con le modifiche commentate",
+  "variants": {
+    "b": {
+      "label": "Logo fuori scala",
+      "annotations": [
+        {
+          "selector": "div.q.lb > section.art:nth-of-type(1)",
+          "tag": "section",
+          "text": "archArch Linux",
+          "note": "Metterei un leggero backdrop/alone al logo come nella variante C"
+        },
+        {
+          "selector": "div.q.lb > section.lb-form:nth-of-type(2) > div.lb-in > div.ulist:nth-of-type(1)",
+          "tag": "div",
+          "text": "FfonlogenAmministratoreMmarioUtenteBbackupServizioAltro utenteScrivi il nome",
+          "note": "Magari la lista utenti proviamola alla \"netflix\", ovvero quadrata e non \"lunga orizzontale\""
+        },
+        {
+          "selector": "div.q.lb > section.art:nth-of-type(1) > div.nm > p",
+          "tag": "p",
+          "text": "Arch Linux",
+          "note": "Farei apparire anche l'IP oltre l'host name"
+        }
+      ]
+    }
+  },
+  "viewed_at": {
+    "viewport": "laptop",
+    "theme": "dark",
+    "layout": "grid"
+  },
+  "id": "492ed2e4d15c",
+  "at": "2026-10-01T14:39:54.474Z",
+  "consumed": true,
+  "files": {
+    "a": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/006-login-logo/a.html",
+    "b": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/006-login-logo/b.html",
+    "c": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/006-login-logo/c.html"
+  },
+  "round_dir": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/006-login-logo",
+  "consumed_at": "2026-10-01T14:39:54.802Z"
+}

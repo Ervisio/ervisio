@@ -1,0 +1,162 @@
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+.rail a.it .pi{background:var(--s);color:var(--h)}
+.rail a.it:hover .pi{background:color-mix(in srgb,var(--h) 22%,var(--s))}
+.rail a.it.on{color:var(--h)}
+.rail a.it.on .pi{background:var(--h);color:var(--surface)}
+.rsep{width:36px;height:1px;background:var(--line);margin:6px 0}
+.q{--mono:"JetBrains Mono",ui-monospace,monospace}
+.fm{background:var(--surface);border-radius:22px;flex:1;min-height:0;display:flex;overflow:hidden}
+.ft-ic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;flex:none;background:var(--s);color:var(--h)}
+.ft-ic .i{width:18px;height:18px}
+/* file type colours reuse section hues */
+.t-dir{--h:var(--h-file);--s:var(--h-file-s)}.t-img{--h:var(--h-plg);--s:var(--h-plg-s)}.t-code{--h:var(--h-term);--s:var(--h-term-s)}
+.t-arc{--h:var(--h-log);--s:var(--h-log-s)}.t-doc{--h:var(--h-ov);--s:var(--h-ov-s)}.t-txt{--h:var(--h-sw);--s:var(--h-sw-s)}.t-pdf{--h:var(--h-svc);--s:var(--h-svc-s)}
+.tbtn{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 14px;border-radius:999px;font-weight:700;border:1px solid var(--line)}
+.tbtn:hover{border-color:var(--ink3)}
+.tbtn.p{background:var(--h-file);border-color:var(--h-file);color:var(--surface)}
+.seg{display:inline-flex;background:var(--sunk);border-radius:999px;padding:3px}
+.seg button{width:34px;height:32px;border-radius:999px;display:grid;place-items:center;color:var(--ink3)}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.seg .i{width:17px;height:17px}
+.crumb{display:flex;align-items:center;gap:2px;font-weight:700;font-size:15px;min-width:0;flex-wrap:wrap}
+.crumb a{padding:5px 9px;border-radius:9px;color:var(--ink2);text-decoration:none}
+.crumb a:hover{background:var(--sunk);color:var(--ink)}
+.crumb a:last-child{color:var(--ink)}
+.crumb .i{width:14px;height:14px;color:var(--ink3);transform:rotate(-90deg)}
+.muted{color:var(--ink3)}
+.perm{display:grid;grid-template-columns:auto repeat(3,1fr);gap:6px 8px;align-items:center;font-size:13px}
+.perm .h{color:var(--ink3);font-weight:600;text-align:center;font-size:12px}
+.perm .r{font-weight:600}
+.perm .ck{height:28px;border-radius:9px;display:grid;place-items:center;background:var(--sunk);color:var(--ink3)}
+.perm .ck.on{background:var(--h-file-s);color:var(--h-file)}
+.perm .ck .i{width:15px;height:15px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:8px 14px;font-size:13.5px;margin:0}
+.kv dt{color:var(--ink3)}.kv dd{margin:0;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mono{font-family:var(--mono);font-size:12.5px}
+@media (max-width:860px){ .fm{border-radius:18px} }
+
+.c-set{--h:var(--ink);--s:var(--sunk)}
+.sw{width:42px;height:24px;border-radius:999px;background:var(--line);position:relative;flex:none;display:inline-block;cursor:pointer}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--surface);transition:left .15s}
+.sw.on{background:var(--h-ov)}.sw.on::after{left:21px}
+.seg2{display:inline-flex;background:var(--sunk);border-radius:999px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg2 button{height:32px;padding:0 14px;border-radius:999px;font-weight:700;font-size:13px;color:var(--ink3)}
+.seg2 button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.1)}
+.sel{display:inline-flex;align-items:center;gap:10px;height:38px;padding:0 12px 0 14px;border-radius:12px;background:var(--sunk);font-weight:600;min-width:180px;justify-content:space-between}
+.sel .i{width:16px;height:16px;color:var(--ink3)}
+.inp{display:inline-flex;align-items:center;height:38px;padding:0 14px;border-radius:12px;background:var(--sunk);font:13px var(--mono);min-width:180px}
+.set{display:flex;align-items:center;gap:20px;padding:14px 0;border-top:1px solid var(--line)}
+.set:first-of-type{border-top:0}
+.set .tx{flex:1;min-width:0}
+.set b{display:block;font-weight:700}
+.set small{display:block;color:var(--ink3);font-size:13px;margin-top:2px;max-width:60ch}
+.set .key{display:inline-block;font:11.5px var(--mono);color:var(--ink3);margin-top:4px}
+.grp{background:var(--surface);border-radius:20px;padding:6px 20px;border:1px solid var(--line)}
+.gt{display:flex;align-items:center;gap:10px;margin:22px 0 10px;font-size:17px;font-weight:800}
+.gt:first-child{margin-top:0}
+.gt .ft-ic{width:34px;height:34px;border-radius:11px}
+.lockb{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:800;padding:2px 8px;border-radius:999px;background:var(--h-log-s);color:var(--h-log);margin-left:6px}
+.lockb .i{width:12px;height:12px}
+.themes{display:flex;gap:10px;flex-wrap:wrap}
+.th{width:132px;border-radius:16px;padding:6px;border:2px solid var(--line);cursor:pointer}
+.th.on{border-color:var(--h-ov)}
+.th .pv{height:74px;border-radius:11px;display:grid;grid-template-columns:18px 1fr;gap:5px;padding:6px;box-sizing:border-box}
+.th .pv i{border-radius:5px;display:block}
+.th .pv .c{display:grid;grid-template-rows:12px 1fr;gap:5px}
+.th b{display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:700;padding:8px 4px 2px}
+.th small{font-size:11.5px;color:var(--ink3);font-weight:600}
+.th.dark .pv{background:#13151E}.th.dark .pv i{background:#2A2E40}.th.dark .pv i.a{background:#9BA3FF}
+.th.light .pv{background:#ECEEF4}.th.light .pv i{background:#fff}.th.light .pv i.a{background:#4651D0}
+.th.sys .pv{background:linear-gradient(135deg,#ECEEF4 50%,#13151E 50%)}.th.sys .pv i{background:rgba(127,127,127,.35)}
+.warnl{display:flex;gap:10px;padding:10px 12px;border-radius:12px;background:var(--h-log-s);color:var(--h-log);font-size:13px;font-weight:600;margin:0 0 12px}
+.warnl .i{flex:none}
+.hostr{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.hostr:first-of-type{border-top:0}
+.hostr b{font-weight:700}
+.hostr small{color:var(--ink3);font-size:12.5px;display:block}
+.hostr .st{margin-left:auto;font-size:12px;font-weight:700}
+.dot{width:9px;height:9px;border-radius:50%;flex:none}
+.abtn{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 14px;border-radius:999px;font-weight:700;font-size:13.5px;background:var(--sunk)}
+.abtn:hover{background:var(--line)}
+.abtn.p{background:var(--h-ov);color:var(--surface)}
+.abtn .i{width:16px;height:16px}
+.toast{position:fixed;right:24px;bottom:24px;display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:16px;background:var(--ink);color:var(--surface);font-weight:700;box-shadow:0 12px 30px -10px rgba(0,0,0,.5);z-index:9}
+.toast .i{color:var(--h-term-s)}
+.toast button{margin-left:8px;color:var(--surface);opacity:.75;font-weight:700}
+@media (max-width:860px){ .set{flex-wrap:wrap} }
+
+.st{flex:1;display:flex;min-height:calc(100vh - 90px)}
+.snav{width:260px;flex:none;border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:2px;overflow:auto}
+.snav h2{margin:0 10px 12px;font-size:20px;font-weight:800}
+.snav .gl{font-size:12.5px;color:var(--ink3);font-weight:700;margin:14px 10px 4px}
+.ni{display:flex;align-items:center;gap:10px;padding:6px 10px 6px 6px;border-radius:14px;color:var(--ink);text-decoration:none;font-weight:600}
+.ni:hover{background:var(--sunk)}
+.ni.on{background:var(--h-ov-s)}
+.ni .ft-ic{width:30px;height:30px;border-radius:10px}.ni .ft-ic .i{width:15px;height:15px}
+.ni > .i{width:13px;height:13px;margin-left:auto;color:var(--ink3)}
+.sbody{flex:1;min-width:0;padding:22px 28px;overflow:auto;max-width:860px}
+.pn{display:none}.pn.on{display:block}
+@media (max-width:1000px){ .snav{display:none} .pn{display:block} }
+</style>
+<div class="q va">
+  <nav class="rail">
+    <a class="distro" href="#"><span class="lg"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.39.605C10.376 3.092 9.764 4.72 8.635 7.132c.693.734 1.543 1.589 2.923 2.554-1.484-.61-2.496-1.224-3.252-1.86C6.86 10.842 4.596 15.138 0 23.395c3.612-2.085 6.412-3.37 9.021-3.862a6.61 6.61 0 0 1-.171-1.547l.003-.115c.058-2.315 1.261-4.095 2.687-3.973 1.426.12 2.534 2.096 2.478 4.409a6.52 6.52 0 0 1-.146 1.243c2.58.505 5.352 1.787 8.914 3.844-.702-1.293-1.33-2.459-1.929-3.57-.943-.73-1.926-1.682-3.933-2.713 1.38.359 2.367.772 3.137 1.234-6.09-11.334-6.582-12.84-8.67-17.74z"/></svg></span><span class="dn">arch</span></a>
+    <a class="it c-ov" href="#"><span class="pi"><svg class="i"><use href="#i-overview"/></svg></span><span class="lb">Overview</span></a><a class="it c-term" href="#"><span class="pi"><svg class="i"><use href="#i-terminal"/></svg></span><span class="lb">Terminal</span></a><a class="it c-file" href="#"><span class="pi"><svg class="i"><use href="#i-files"/></svg></span><span class="lb">Files</span></a><a class="it c-log" href="#"><span class="pi"><svg class="i"><use href="#i-logs"/></svg></span><span class="lb">Logs</span></a><a class="it c-svc" href="#"><span class="pi"><svg class="i"><use href="#i-services"/></svg></span><span class="lb">Services</span><span class="n">1</span></a><a class="it c-sw" href="#"><span class="pi"><svg class="i"><use href="#i-software"/></svg></span><span class="lb">Software</span><span class="n">23</span></a><a class="it c-usr" href="#"><span class="pi"><svg class="i"><use href="#i-users"/></svg></span><span class="lb">Users</span></a><div class="rsep"></div><a class="it c-plg" href="#"><span class="pi"><svg class="i"><use href="#i-plugins"/></svg></span><span class="lb">Plugins</span></a><div class="sp"></div><a class="it c-set on" href="#"><span class="pi"><svg class="i"><use href="#i-cog"/></svg></span><span class="lb">Settings</span></a><div class="me"><div class="av">F</div></div></nav>
+  <main class="main">
+    <div class="top">
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search settings</div><div class="sp"></div>
+      <div class="pill"><i></i>arch<svg class="i" style="width:16px;height:16px"><use href="#i-chevron"/></svg></div>
+      <button class="ib" data-toggle-theme title="Theme"><svg class="i"><use href="#i-moon"/></svg></button>
+      <button class="ib" title="Notifications"><svg class="i"><use href="#i-bell"/></svg></button></div>
+    <section class="fm st">
+      <nav class="snav"><h2>Settings</h2>
+        <div class="gl">You</div><a class="ni on" href="#" data-s="appearance"><span class="ft-ic t-img"><svg class="i"><use href="#i-palette"/></svg></span>Appearance</a><a class="ni" href="#" data-s="language"><span class="ft-ic t-doc"><svg class="i"><use href="#i-globe"/></svg></span>Language and region</a><a class="ni" href="#" data-s="terminal"><span class="ft-ic t-code"><svg class="i"><use href="#i-terminal"/></svg></span>Terminal</a><a class="ni" href="#" data-s="notify"><span class="ft-ic t-arc"><svg class="i"><use href="#i-bell"/></svg></span>Notifications</a>
+        <div class="gl">This server</div><a class="ni" href="#" data-s="signin"><span class="ft-ic t-pdf"><svg class="i"><use href="#i-key"/></svg></span>Sign-in and security <svg class="i"><use href="#i-lock"/></svg></a><a class="ni" href="#" data-s="web"><span class="ft-ic t-dir"><svg class="i"><use href="#i-net"/></svg></span>Web server <svg class="i"><use href="#i-lock"/></svg></a><a class="ni" href="#" data-s="plugpol"><span class="ft-ic t-plg" style="--h:var(--h-plg);--s:var(--h-plg-s)"><svg class="i"><use href="#i-plugins"/></svg></span>Plugins <svg class="i"><use href="#i-lock"/></svg></a><a class="ni" href="#" data-s="hosts"><span class="ft-ic t-txt"><svg class="i"><use href="#i-server"/></svg></span>Hosts <svg class="i"><use href="#i-lock"/></svg></a>
+        <div class="gl"></div><a class="ni" href="#" data-s="about"><span class="ft-ic t-txt"><svg class="i"><use href="#i-info"/></svg></span>About</a>
+      </nav>
+      <div class="sbody"><div class="pn on" data-p="appearance"><div class="gt" id="s-appearance"><span class="ft-ic t-img"><svg class="i"><use href="#i-palette"/></svg></span>Appearance</div><div class="grp">
+  <div class="set" style="display:block"><div class="tx" style="margin-bottom:12px"><b>Theme</b><small>Saved to your account, so it follows you to any browser.</small></div><div class="themes">
+  <div class="th dark on"><div class="pv"><i class="a"></i><div class="c"><i></i><i></i></div></div><b>Dark <small>Default</small></b></div>
+  <div class="th light"><div class="pv"><i class="a"></i><div class="c"><i></i><i></i></div></div><b>Light</b></div>
+  <div class="th sys"><div class="pv"><i></i><div class="c"><i></i><i></i></div></div><b>System</b></div></div></div>
+  <div class="set"><div class="tx"><b>Density</b><small>Compact fits more rows in tables and lists.</small></div><span class="seg2"><button class="on">Comfortable</button><button class="">Compact</button></span></div>
+  <div class="set"><div class="tx"><b>Reduce motion</b><small>Turns off widget wiggle, pulses and transitions.</small></div><span class="sw" role="switch" aria-checked="false"></span></div></div></div><div class="pn" data-p="language"><div class="gt" id="s-language"><span class="ft-ic t-doc"><svg class="i"><use href="#i-globe"/></svg></span>Language and region</div><div class="grp">
+  <div class="set"><div class="tx"><b>Language</b></div><span class="sel">English<svg class="i"><use href="#i-chevron"/></svg></span></div>
+  <div class="set"><div class="tx"><b>Time format</b></div><span class="seg2"><button class="on">24-hour</button><button class="">12-hour</button></span></div>
+  <div class="set"><div class="tx"><b>First day of the week</b></div><span class="sel">Monday<svg class="i"><use href="#i-chevron"/></svg></span></div></div></div><div class="pn" data-p="terminal"><div class="gt" id="s-terminal"><span class="ft-ic t-code"><svg class="i"><use href="#i-terminal"/></svg></span>Terminal</div><div class="grp">
+  <div class="set"><div class="tx"><b>Colour theme</b><small>Follow app uses the dark or light palette of Quadro.</small></div><span class="sel">Follow app<svg class="i"><use href="#i-chevron"/></svg></span></div>
+  <div class="set"><div class="tx"><b>Font size</b></div><span class="seg2"><button class="">12</button><button class="">13</button><button class="on">14</button><button class="">16</button></span></div>
+  <div class="set"><div class="tx"><b>Copy on select</b></div><span class="sw on" role="switch" aria-checked="true"></span></div>
+  <div class="set"><div class="tx"><b>Show snippet chips</b><small>The row of saved commands under the terminal.</small></div><span class="sw on" role="switch" aria-checked="true"></span></div></div></div><div class="pn" data-p="notify"><div class="gt" id="s-notify"><span class="ft-ic t-arc"><svg class="i"><use href="#i-bell"/></svg></span>Notifications</div><div class="grp">
+  <div class="set"><div class="tx"><b>A service fails</b></div><span class="sw on" role="switch" aria-checked="true"></span></div>
+  <div class="set"><div class="tx"><b>Updates are ready</b></div><span class="sw on" role="switch" aria-checked="true"></span></div>
+  <div class="set"><div class="tx"><b>Failed SSH logins</b><small>More than 10 in 5 minutes from the same address.</small></div><span class="sw on" role="switch" aria-checked="true"></span></div>
+  <div class="set"><div class="tx"><b>Browser notifications</b><small>Show them even when Quadro is in a background tab.</small></div><span class="sw" role="switch" aria-checked="false"></span></div></div></div><div class="pn" data-p="signin"><div class="gt" id="s-signin"><span class="ft-ic t-pdf"><svg class="i"><use href="#i-key"/></svg></span>Sign-in and security<span class="lockb"><svg class="i"><use href="#i-lock"/></svg>Admins</span></div><div class="grp">
+  <div class="warnl"><svg class="i"><use href="#i-alert"/></svg><div>Changes here apply to every user of this server.</div></div>
+  <div class="set"><div class="tx"><b>Allow root to sign in</b><small>Off is safer. Admins can still use sudo.</small><span class="key">allow_root = false</span></div><span class="sw" role="switch" aria-checked="false"></span></div>
+  <div class="set"><div class="tx"><b>Show IP address on the sign-in page</b><small>Anyone who opens the page sees it.</small><span class="key">login.show_ip = true</span></div><span class="sw on" role="switch" aria-checked="true"></span></div>
+  <div class="set"><div class="tx"><b>Sign out after</b><span class="key">session.timeout = 12h</span></div><span class="sel">12 hours<svg class="i"><use href="#i-chevron"/></svg></span></div>
+  <div class="set"><div class="tx"><b>Two-factor sign-in</b><small>Ask admins for a code from an authenticator app.</small><span class="key">totp = admins</span></div><span class="seg2"><button class="">Off</button><button class="on">Admins</button><button class="">Everyone</button></span></div>
+  <div class="set"><div class="tx"><b>Block after failed attempts</b><small>Per address, for 15 minutes.</small><span class="key">login.max_failures = 5</span></div><span class="sel">5 attempts<svg class="i"><use href="#i-chevron"/></svg></span></div>
+  <div class="set"><div class="tx"><b>Allowed networks</b><small>Leave empty to allow any address.</small><span class="key">listen.allow = ["192.168.1.0/24"]</span></div><span class="inp">192.168.1.0/24</span></div></div></div><div class="pn" data-p="web"><div class="gt" id="s-web"><span class="ft-ic t-dir"><svg class="i"><use href="#i-net"/></svg></span>Web server<span class="lockb"><svg class="i"><use href="#i-lock"/></svg>Admins</span></div><div class="grp">
+  <div class="set"><div class="tx"><b>Address and port</b><span class="key">listen = "0.0.0.0:9090"</span></div><span class="inp">0.0.0.0:9090</span></div>
+  <div class="set"><div class="tx"><b>Certificate</b><small>Let's Encrypt needs a public domain name.</small><span class="key">tls.mode = "self-signed"</span></div><span class="seg2"><button class="on">Self-signed</button><button class="">Let's Encrypt</button><button class="">Custom</button></span></div>
+  <div class="set"><div class="tx"><b>Redirect HTTP to HTTPS</b><span class="key">tls.redirect = true</span></div><span class="sw on" role="switch" aria-checked="true"></span></div></div></div><div class="pn" data-p="plugpol"><div class="gt" id="s-plugpol"><span class="ft-ic t-plg" style="--h:var(--h-plg);--s:var(--h-plg-s)"><svg class="i"><use href="#i-plugins"/></svg></span>Plugins<span class="lockb"><svg class="i"><use href="#i-lock"/></svg>Admins</span></div><div class="grp">
+  <div class="set"><div class="tx"><b>Allow community plugins</b><small>Plugins not signed by the Quadro team.</small><span class="key">plugins.allow_unsigned = true</span></div><span class="sw on" role="switch" aria-checked="true"></span></div>
+  <div class="set"><div class="tx"><b>Developer mode</b><small>Load plugins from a folder and reload them on save.</small><span class="key">plugins.dev = false</span></div><span class="sw" role="switch" aria-checked="false"></span></div></div></div><div class="pn" data-p="hosts"><div class="gt" id="s-hosts"><span class="ft-ic t-txt"><svg class="i"><use href="#i-server"/></svg></span>Hosts<span class="lockb"><svg class="i"><use href="#i-lock"/></svg>Admins</span></div><div class="grp">
+  <div class="hostr"><span class="dot" style="background:var(--h-term)"></span><div><b>arch</b><small>This machine, 192.168.1.137</small></div><span class="st" style="color:var(--h-term)">Online</span></div>
+  <div class="hostr"><span class="dot" style="background:var(--h-term)"></span><div><b>backup-nas</b><small>SSH key, 192.168.1.40</small></div><span class="st" style="color:var(--h-term)">Online</span></div>
+  <div class="hostr"><span class="dot" style="background:var(--ink3)"></span><div><b>web-01</b><small>SSH key, web-01.example.org</small></div><span class="st muted">Last seen 3 days ago</span></div>
+  <div style="padding:12px 0"><button class="abtn"><svg class="i"><use href="#i-plus"/></svg>Add host</button></div></div></div><div class="pn" data-p="about"><div class="gt" id="s-about"><span class="ft-ic t-txt"><svg class="i"><use href="#i-info"/></svg></span>About</div><div class="grp">
+  <div class="set"><div class="tx"><b>Quadro 0.1.0</b><small>Up to date. Checked today at 16:40.</small></div><button class="abtn"><svg class="i"><use href="#i-refresh"/></svg>Check</button></div>
+  <div class="set"><div class="tx"><b>Configuration file</b></div><span class="inp">/etc/quadro/quadro.conf</span></div></div></div></div>
+    </section><div class="toast"><svg class="i"><use href="#i-check"/></svg>Saved<button>Undo</button></div>
+  </main>
+  <nav class="dock"><a class="c-ov" href="#"><span class="pi"><svg class="i"><use href="#i-overview"/></svg></span>Home</a><a class="c-term" href="#"><span class="pi"><svg class="i"><use href="#i-terminal"/></svg></span>Terminal</a><a class="c-file" href="#"><span class="pi"><svg class="i"><use href="#i-files"/></svg></span>Files</a><a class="c-svc" href="#"><span class="pi"><svg class="i"><use href="#i-services"/></svg></span>Services</a><a href="#"><span class="pi"><svg class="i"><use href="#i-more"/></svg></span>More</a></nav>
+</div>
+<script src="kit.js"></script><script>
+document.querySelector('.snav').addEventListener('click',e=>{const a=e.target.closest('[data-s]');if(!a)return;e.preventDefault();
+document.querySelectorAll('.ni').forEach(x=>x.classList.toggle('on',x===a));document.querySelectorAll('.pn').forEach(p=>p.classList.toggle('on',p.dataset.p===a.dataset.s))});
+document.querySelectorAll('.sw').forEach(s=>s.addEventListener('click',()=>s.classList.toggle('on')));
+</script>

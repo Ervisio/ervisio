@@ -1,0 +1,226 @@
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+.rail a.it .pi{background:var(--s);color:var(--h)}
+.rail a.it:hover .pi{background:color-mix(in srgb,var(--h) 22%,var(--s))}
+.rail a.it.on{color:var(--h)}
+.rail a.it.on .pi{background:var(--h);color:var(--surface)}
+.rsep{width:36px;height:1px;background:var(--line);margin:6px 0}
+.q{--mono:"JetBrains Mono",ui-monospace,monospace}
+.fm{background:var(--surface);border-radius:22px;flex:1;min-height:0;display:flex;overflow:hidden}
+.ft-ic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;flex:none;background:var(--s);color:var(--h)}
+.ft-ic .i{width:18px;height:18px}
+/* file type colours reuse section hues */
+.t-dir{--h:var(--h-file);--s:var(--h-file-s)}.t-img{--h:var(--h-plg);--s:var(--h-plg-s)}.t-code{--h:var(--h-term);--s:var(--h-term-s)}
+.t-arc{--h:var(--h-log);--s:var(--h-log-s)}.t-doc{--h:var(--h-ov);--s:var(--h-ov-s)}.t-txt{--h:var(--h-sw);--s:var(--h-sw-s)}.t-pdf{--h:var(--h-svc);--s:var(--h-svc-s)}
+.tbtn{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 14px;border-radius:999px;font-weight:700;border:1px solid var(--line)}
+.tbtn:hover{border-color:var(--ink3)}
+.tbtn.p{background:var(--h-file);border-color:var(--h-file);color:var(--surface)}
+.seg{display:inline-flex;background:var(--sunk);border-radius:999px;padding:3px}
+.seg button{width:34px;height:32px;border-radius:999px;display:grid;place-items:center;color:var(--ink3)}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.seg .i{width:17px;height:17px}
+.crumb{display:flex;align-items:center;gap:2px;font-weight:700;font-size:15px;min-width:0;flex-wrap:wrap}
+.crumb a{padding:5px 9px;border-radius:9px;color:var(--ink2);text-decoration:none}
+.crumb a:hover{background:var(--sunk);color:var(--ink)}
+.crumb a:last-child{color:var(--ink)}
+.crumb .i{width:14px;height:14px;color:var(--ink3);transform:rotate(-90deg)}
+.muted{color:var(--ink3)}
+.perm{display:grid;grid-template-columns:auto repeat(3,1fr);gap:6px 8px;align-items:center;font-size:13px}
+.perm .h{color:var(--ink3);font-weight:600;text-align:center;font-size:12px}
+.perm .r{font-weight:600}
+.perm .ck{height:28px;border-radius:9px;display:grid;place-items:center;background:var(--sunk);color:var(--ink3)}
+.perm .ck.on{background:var(--h-file-s);color:var(--h-file)}
+.perm .ck .i{width:15px;height:15px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:8px 14px;font-size:13.5px;margin:0}
+.kv dt{color:var(--ink3)}.kv dd{margin:0;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mono{font-family:var(--mono);font-size:12.5px}
+@media (max-width:860px){ .fm{border-radius:18px} }
+
+.pi2{width:46px;height:46px;border-radius:15px;display:grid;place-items:center;background:var(--h);color:var(--surface);flex:none}
+.pi2 .i{width:22px;height:22px}
+.bdg{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:800;padding:2px 8px;border-radius:999px;background:var(--s);color:var(--h);white-space:nowrap}
+.bdg .i{width:12px;height:12px}
+.sw{width:38px;height:22px;border-radius:999px;background:var(--line);position:relative;flex:none;display:inline-block}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--surface)}
+.sw.on{background:var(--h-plg)}.sw.on::after{left:19px}
+.abtn{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 14px;border-radius:999px;font-weight:700;font-size:13.5px;background:var(--sunk)}
+.abtn:hover{background:var(--line)}
+.abtn.p{background:var(--h-plg);color:var(--surface)}
+.abtn.dng:hover{background:var(--h-svc-s);color:var(--h-svc)}
+.abtn .i{width:16px;height:16px}
+.ftabs{display:flex;gap:6px;flex-wrap:wrap}
+.ftab{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 14px;border-radius:999px;font-weight:700;font-size:13.5px;color:var(--ink2)}
+.ftab b{font-size:12px;color:var(--ink3)}
+.ftab:hover{background:var(--sunk)}
+.ftab.on{background:var(--h-plg-s);color:var(--h-plg)}
+.ftab.on b{color:inherit}
+.fsearch{display:flex;align-items:center;gap:10px;height:38px;padding:0 14px;border-radius:999px;background:var(--sunk);color:var(--ink3);min-width:220px}
+.pbar{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.pbar .sp{flex:1}
+.perm{display:flex;gap:12px;align-items:flex-start;padding:12px;border-radius:14px;background:var(--sunk)}
+.perm .pic{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:var(--s);color:var(--h);flex:none}
+.perm .pic .i{width:16px;height:16px}
+.perm b{display:block;font-weight:700}
+.perm small{color:var(--ink3);font-size:12.5px}
+.perm code{font:12px var(--mono);color:var(--ink2)}
+.muted{color:var(--ink3)}
+.h4{margin:0;font-size:13px;color:var(--ink3);font-weight:700}
+
+.pgm{flex:1;display:flex;flex-direction:column;min-height:calc(100vh - 90px);position:relative}
+.pane{display:none;flex:1;min-height:0}
+.pane.on{display:flex}
+.va_{ 
+.pg{flex:1;display:flex;min-height:calc(100vh - 90px)}
+.pm{flex:1;min-width:0;display:flex;flex-direction:column}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px;padding:16px;align-content:start}
+.pc{background:var(--sunk);border-radius:20px;padding:14px;display:flex;flex-direction:column;gap:10px;border:2px solid transparent;cursor:pointer}
+.pc.on{border-color:var(--h-plg);background:var(--h-plg-s)}
+.pc.off .pi2{background:var(--line);color:var(--ink3)}
+.pc .t{display:flex;align-items:center;gap:12px}
+.pc .tx{flex:1;min-width:0}
+.pc b{display:block;font-weight:800;font-size:15px}
+.pc small{color:var(--ink3);font-size:12.5px}
+.pc p{margin:0;color:var(--ink2);font-size:13.5px;line-height:1.45}
+.pc .m{display:flex;gap:6px;flex-wrap:wrap}
+.add{border:2px dashed var(--line);border-radius:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--ink3);font-weight:700;min-height:150px}
+.det{width:400px;flex:none;border-left:1px solid var(--line);padding:18px;display:flex;flex-direction:column;gap:14px;overflow:auto}
+.det .dh{display:flex;align-items:center;gap:14px}
+.det .dh .pi2{width:56px;height:56px;border-radius:18px}
+.det h3{margin:0;font-size:20px;font-weight:800}
+.det .acts{display:flex;gap:6px;flex-wrap:wrap}
+.upd{display:flex;align-items:center;gap:12px;padding:12px;border-radius:16px;background:var(--h-plg-s)}
+.upd b{display:block;font-weight:800;color:var(--h-plg)}
+.upd small{color:var(--ink2);font-size:12.5px}
+.upd .abtn{margin-left:auto;height:34px}
+@media (max-width:1240px){ .det{display:none} }
+ }
+.vb_{ 
+.pg{flex:1;min-height:calc(100vh - 90px);display:flex;flex-direction:column;position:relative}
+.feat{margin:16px;padding:24px;border-radius:22px;background:var(--h-plg);color:var(--surface);display:flex;align-items:center;gap:20px;flex-wrap:wrap;position:relative;overflow:hidden}
+.feat .pi2{width:64px;height:64px;border-radius:20px;background:rgba(255,255,255,.2);color:inherit}
+.feat .pi2 .i{width:30px;height:30px}
+.feat h2{margin:0;font-size:26px;font-weight:800;letter-spacing:-.02em}
+.feat p{margin:4px 0 0;opacity:.9;max-width:46ch}
+.feat .abtn{margin-left:auto;background:var(--surface);color:var(--h-plg);height:44px;padding:0 20px}
+.cats{display:flex;gap:8px;padding:0 16px 6px;flex-wrap:wrap}
+.cat{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 14px 0 8px;border-radius:999px;background:var(--s);color:var(--h);font-weight:700}
+.cat .c{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--h);color:var(--surface)}
+.cat .c .i{width:14px;height:14px}
+.sec{margin:16px 16px 10px;font-weight:800;font-size:16px}
+.bgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;padding:0 16px 16px}
+.bc{display:flex;align-items:center;gap:12px;padding:12px;border-radius:18px;background:var(--sunk)}
+.bc .tx{flex:1;min-width:0}
+.bc b{display:block;font-weight:800}
+.bc small{display:block;color:var(--ink3);font-size:12.5px}
+.bc .m{display:flex;gap:8px;align-items:center;margin-top:6px;font-size:12px}
+.bc .ok{font-size:12.5px;font-weight:700;color:var(--ink3)}
+.abtn.sm{height:32px;font-size:12.5px}
+.scrim{position:absolute;inset:0;background:rgba(10,12,20,.45);display:grid;place-items:center;padding:16px;border-radius:22px}
+.dlg{width:min(460px,100%);background:var(--surface);border-radius:24px;padding:22px;display:flex;flex-direction:column;gap:12px;box-shadow:0 30px 80px -20px rgba(0,0,0,.6)}
+.dlg .dh{display:flex;align-items:center;gap:14px}
+.dlg h3{margin:0;font-size:19px;font-weight:800}
+.dlg .lead{margin:0;color:var(--ink2)}
+.dlg .r{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
+ }
+.vc_{ 
+.pg{flex:1;min-height:calc(100vh - 90px);display:flex;flex-direction:column}
+.sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;padding:16px}
+.sm2{border-radius:18px;padding:14px 16px;background:var(--s);color:var(--h)}
+.sm2 .n{font-size:30px;font-weight:800;letter-spacing:-.03em}
+.sm2 small{display:block;color:var(--ink2);font-size:13px}
+.tb{overflow:auto;padding:0 6px}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{text-align:left;font-weight:700;color:var(--ink3);font-size:12.5px;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+th.cc{text-align:center}
+td{padding:9px 12px;border-bottom:1px solid var(--line)}
+td.cc{text-align:center}
+tr.warn td:first-child{box-shadow:inset 3px 0 0 var(--h-log)}
+.nm{display:flex;align-items:center;gap:12px;white-space:nowrap}
+.nm b{display:block;font-weight:800}.nm small{color:var(--ink3);font-size:12px}
+.pi2.sm{width:36px;height:36px;border-radius:12px}.pi2.sm .i{width:18px;height:18px}
+.dot{display:inline-block;width:12px;height:12px;border-radius:50%;border:2px solid var(--line);box-sizing:border-box}
+.dot.on{background:var(--h-plg);border-color:var(--h-plg)}
+.dot.hot{background:var(--h-svc);border-color:var(--h-svc)}
+.dev{margin:16px;padding:16px;border-radius:20px;border:2px dashed var(--line);display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.dev b{display:block;font-weight:800}
+.dev small{color:var(--ink3)}
+.dev code{font:12.5px var(--mono);padding:2px 8px;border-radius:8px;background:var(--sunk)}
+.dev .r{margin-left:auto;display:flex;gap:8px}
+ }
+.vb_ .pg,.va_ .pg,.vc_ .pg{min-height:0}
+.scrim[hidden]{display:none}
+</style>
+<div class="q vb">
+  <nav class="rail">
+    <a class="distro" href="#"><span class="lg"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.39.605C10.376 3.092 9.764 4.72 8.635 7.132c.693.734 1.543 1.589 2.923 2.554-1.484-.61-2.496-1.224-3.252-1.86C6.86 10.842 4.596 15.138 0 23.395c3.612-2.085 6.412-3.37 9.021-3.862a6.61 6.61 0 0 1-.171-1.547l.003-.115c.058-2.315 1.261-4.095 2.687-3.973 1.426.12 2.534 2.096 2.478 4.409a6.52 6.52 0 0 1-.146 1.243c2.58.505 5.352 1.787 8.914 3.844-.702-1.293-1.33-2.459-1.929-3.57-.943-.73-1.926-1.682-3.933-2.713 1.38.359 2.367.772 3.137 1.234-6.09-11.334-6.582-12.84-8.67-17.74z"/></svg></span><span class="dn">arch</span></a>
+    <a class="it c-ov" href="#"><span class="pi"><svg class="i"><use href="#i-overview"/></svg></span><span class="lb">Overview</span></a><a class="it c-term" href="#"><span class="pi"><svg class="i"><use href="#i-terminal"/></svg></span><span class="lb">Terminal</span></a><a class="it c-file" href="#"><span class="pi"><svg class="i"><use href="#i-files"/></svg></span><span class="lb">Files</span></a><a class="it c-log" href="#"><span class="pi"><svg class="i"><use href="#i-logs"/></svg></span><span class="lb">Logs</span></a><a class="it c-svc" href="#"><span class="pi"><svg class="i"><use href="#i-services"/></svg></span><span class="lb">Services</span><span class="n">1</span></a><a class="it c-sw" href="#"><span class="pi"><svg class="i"><use href="#i-software"/></svg></span><span class="lb">Software</span><span class="n">23</span></a><a class="it c-usr" href="#"><span class="pi"><svg class="i"><use href="#i-users"/></svg></span><span class="lb">Users</span></a><div class="rsep"></div><a class="it c-plg on" href="#"><span class="pi"><svg class="i"><use href="#i-plugins"/></svg></span><span class="lb">Plugins</span></a><a class="it c-file" href="#"><span class="pi"><svg class="i"><use href="#i-server"/></svg></span><span class="lb">Docker</span></a><a class="it c-svc" href="#"><span class="pi"><svg class="i"><use href="#i-shield"/></svg></span><span class="lb">Firewall</span></a><div class="sp"></div><div class="me"><div class="av">F</div></div></nav>
+  <main class="main">
+    <div class="top">
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search plugins</div><div class="sp"></div>
+      <div class="pill"><i></i>arch<svg class="i" style="width:16px;height:16px"><use href="#i-chevron"/></svg></div>
+      <button class="ib" data-toggle-theme title="Theme"><svg class="i"><use href="#i-moon"/></svg></button>
+      <button class="ib" title="Notifications"><svg class="i"><use href="#i-bell"/></svg></button></div>
+    <section class="fm pgm">
+      <div class="pbar"><div class="ftabs"><button class="ftab on" data-go="installed">Installed <b>6</b></button><button class="ftab" data-go="updates">Updates <b>1</b></button><button class="ftab" data-go="browse">Browse</button><button class="ftab" data-go="developer">Developer</button></div><div class="sp"></div><div class="fsearch"><svg class="i"><use href="#i-search"/></svg>Search plugins</div><button class="abtn p" data-go="browse"><svg class="i"><use href="#i-plus"/></svg>Get plugins</button></div>
+      <div class="pane va_ on" data-pane="installed"><div class="pg" style="display:flex;;flex:1;min-width:0"><div class="pm"><div class="vc_"><div class="sum">
+        <div class="sm2 t-plg" style="--h:var(--h-plg);--s:var(--h-plg-s)"><span class="n">6</span><small>plugins installed, 5 enabled</small></div>
+        <div class="sm2 t-pdf"><span class="n">6</span><small>can run root commands</small></div>
+        <div class="sm2 t-arc"><span class="n">1</span><small>unsigned, from the community</small></div>
+        <div class="sm2 t-code"><span class="n">1</span><small>update ready</small></div>
+      </div></div><div class="grid"><div class="pc t-dir on"><div class="t"><span class="pi2"><svg class="i"><use href="#i-server"/></svg></span><div class="tx"><b>Docker</b><small>Quadro team, v1.4.0</small></div><span class="sw on"></span></div>
+      <p>Containers, images, volumes and compose stacks.</p><div class="m"><span class="bdg t-code"><svg class="i"><use href="#i-check"/></svg>Verified</span><span class="bdg t-plg" style="--h:var(--h-plg);--s:var(--h-plg-s)">Update 1.5.0</span></div></div><div class="pc t-pdf"><div class="t"><span class="pi2"><svg class="i"><use href="#i-shield"/></svg></span><div class="tx"><b>Firewall</b><small>Quadro team, v0.9.2</small></div><span class="sw on"></span></div>
+      <p>Rules for ufw or nftables, with a simple view and an expert one.</p><div class="m"><span class="bdg t-code"><svg class="i"><use href="#i-check"/></svg>Verified</span></div></div><div class="pc t-arc off"><div class="t"><span class="pi2"><svg class="i"><use href="#i-archive"/></svg></span><div class="tx"><b>Backups</b><small>Quadro team, v1.1.0</small></div><span class="sw"></span></div>
+      <p>Scheduled restic or borg backups to disks, SFTP or S3.</p><div class="m"><span class="bdg t-code"><svg class="i"><use href="#i-check"/></svg>Verified</span></div></div><div class="pc t-code"><div class="t"><span class="pi2"><svg class="i"><use href="#i-net"/></svg></span><div class="tx"><b>Network</b><small>Quadro team, v1.0.3</small></div><span class="sw on"></span></div>
+      <p>Interfaces, Wi-Fi, bridges, VPN and DNS.</p><div class="m"><span class="bdg t-code"><svg class="i"><use href="#i-check"/></svg>Verified</span></div></div><div class="pc t-txt"><div class="t"><span class="pi2"><svg class="i"><use href="#i-disk"/></svg></span><div class="tx"><b>Disks</b><small>Quadro team, v0.8.0</small></div><span class="sw on"></span></div>
+      <p>Partitions, SMART health, mounts and LVM.</p><div class="m"><span class="bdg t-code"><svg class="i"><use href="#i-check"/></svg>Verified</span></div></div><div class="pc t-img"><div class="t"><span class="pi2"><svg class="i"><use href="#i-link"/></svg></span><div class="tx"><b>Tailscale</b><small>community, @nmoretti, v0.3.1</small></div><span class="sw on"></span></div>
+      <p>Join your tailnet and see connected devices.</p><div class="m"><span class="bdg t-arc">Community</span></div></div><div class="add"><svg class="i"><use href="#i-plus"/></svg>Browse plugins</div></div></div><aside class="det">
+        <div class="dh"><span class="pi2 t-dir"><svg class="i"><use href="#i-server"/></svg></span><div><h3>Docker</h3><small class="muted">Quadro team, v1.4.0</small></div></div>
+        <div class="upd"><div><b>Version 1.5.0 available</b><small>Adds compose file editing. Asks for no new permissions.</small></div><button class="abtn p">Update</button></div>
+        <div class="acts"><button class="abtn"><svg class="i"><use href="#i-edit"/></svg>Settings</button><button class="abtn"><svg class="i"><use href="#i-power"/></svg>Disable</button><button class="abtn dng"><svg class="i"><use href="#i-trash"/></svg>Uninstall</button></div>
+        <p class="h4">What it can do</p>
+  <div class="perm t-pdf"><span class="pic"><svg class="i"><use href="#i-lock"/></svg></span><div><b>Run commands as root</b><small>Only <code>docker</code> and <code>systemctl … docker.service</code>, through the Quadro helper.</small></div></div>
+  <div class="perm t-arc"><span class="pic"><svg class="i"><use href="#i-server"/></svg></span><div><b>Docker socket</b><small><code>/var/run/docker.sock</code>, read and write</small></div></div>
+  <div class="perm t-dir"><span class="pic"><svg class="i"><use href="#i-files"/></svg></span><div><b>Read files</b><small><code>/srv</code>, <code>~/projects</code> to find compose files</small></div></div>
+  <div class="perm t-code"><span class="pic"><svg class="i"><use href="#i-overview"/></svg></span><div><b>Adds to the interface</b><small>A Docker page in the sidebar, 2 dashboard widgets, 3 snippets</small></div></div>
+        <p class="h4">Who can use it</p>
+        <div class="perm t-usr" style="--h:var(--h-usr);--s:var(--h-usr-s)"><span class="pic"><svg class="i"><use href="#i-users"/></svg></span><div><b>Admins and the docker group</b><small>Other users don't see the Docker page.</small></div></div>
+      </aside></div></div><div class="pane va_" data-pane="updates"><div class="pg" style="display:flex;;flex:1;min-width:0"><div class="pm"><div class="grid"><div class="pc t-dir on"><div class="t"><span class="pi2"><svg class="i"><use href="#i-server"/></svg></span><div class="tx"><b>Docker</b><small>Quadro team, v1.4.0</small></div><span class="sw on"></span></div>
+      <p>Containers, images, volumes and compose stacks.</p><div class="m"><span class="bdg t-code"><svg class="i"><use href="#i-check"/></svg>Verified</span><span class="bdg t-plg" style="--h:var(--h-plg);--s:var(--h-plg-s)">Update 1.5.0</span></div></div></div></div><aside class="det">
+        <div class="dh"><span class="pi2 t-dir"><svg class="i"><use href="#i-server"/></svg></span><div><h3>Docker</h3><small class="muted">Quadro team, v1.4.0</small></div></div>
+        <div class="upd"><div><b>Version 1.5.0 available</b><small>Adds compose file editing. Asks for no new permissions.</small></div><button class="abtn p">Update</button></div>
+        <div class="acts"><button class="abtn"><svg class="i"><use href="#i-edit"/></svg>Settings</button><button class="abtn"><svg class="i"><use href="#i-power"/></svg>Disable</button><button class="abtn dng"><svg class="i"><use href="#i-trash"/></svg>Uninstall</button></div>
+        <p class="h4">What it can do</p>
+  <div class="perm t-pdf"><span class="pic"><svg class="i"><use href="#i-lock"/></svg></span><div><b>Run commands as root</b><small>Only <code>docker</code> and <code>systemctl … docker.service</code>, through the Quadro helper.</small></div></div>
+  <div class="perm t-arc"><span class="pic"><svg class="i"><use href="#i-server"/></svg></span><div><b>Docker socket</b><small><code>/var/run/docker.sock</code>, read and write</small></div></div>
+  <div class="perm t-dir"><span class="pic"><svg class="i"><use href="#i-files"/></svg></span><div><b>Read files</b><small><code>/srv</code>, <code>~/projects</code> to find compose files</small></div></div>
+  <div class="perm t-code"><span class="pic"><svg class="i"><use href="#i-overview"/></svg></span><div><b>Adds to the interface</b><small>A Docker page in the sidebar, 2 dashboard widgets, 3 snippets</small></div></div>
+        <p class="h4">Who can use it</p>
+        <div class="perm t-usr" style="--h:var(--h-usr);--s:var(--h-usr-s)"><span class="pic"><svg class="i"><use href="#i-users"/></svg></span><div><b>Admins and the docker group</b><small>Other users don't see the Docker page.</small></div></div>
+      </aside></div></div><div class="pane vb_" data-pane="browse"><div class="pg" style="display:flex;flex-direction:column;flex:1;min-width:0">
+            <div class="feat"><span class="pi2"><svg class="i"><use href="#i-cpu"/></svg></span><div><h2>Proxmox</h2><p>Start, stop and snapshot your VMs from the same place as the rest of your servers.</p></div><button class="abtn">Install</button></div>
+      <div class="cats"><span class="cat t-dir"><span class="c"><svg class="i"><use href="#i-server"/></svg></span>Containers</span><span class="cat t-pdf"><span class="c"><svg class="i"><use href="#i-shield"/></svg></span>Security</span><span class="cat t-code"><span class="c"><svg class="i"><use href="#i-net"/></svg></span>Networking</span><span class="cat t-txt"><span class="c"><svg class="i"><use href="#i-disk"/></svg></span>Storage</span><span class="cat t-doc"><span class="c"><svg class="i"><use href="#i-overview"/></svg></span>Monitoring</span><span class="cat t-arc"><span class="c"><svg class="i"><use href="#i-services"/></svg></span>Web servers</span></div>
+      <div class="sec">Popular</div>
+      <div class="bgrid"><div class="bc t-arc"><span class="pi2"><svg class="i"><use href="#i-cpu"/></svg></span><div class="tx"><b>Proxmox</b><small>Manage VMs and containers on a Proxmox node.</small><div class="m"><span class="bdg t-code"><svg class="i"><use href="#i-check"/></svg>Verified</span><span class="muted">12k installs</span></div></div><button class="abtn p sm">Install</button></div><div class="bc t-code"><span class="pi2"><svg class="i"><use href="#i-services"/></svg></span><div class="tx"><b>Nginx sites</b><small>Virtual hosts, certificates and reverse proxies.</small><div class="m"><span class="bdg t-code"><svg class="i"><use href="#i-check"/></svg>Verified</span><span class="muted">31k installs</span></div></div><button class="abtn p sm">Install</button></div><div class="bc t-pdf"><span class="pi2"><svg class="i"><use href="#i-shield"/></svg></span><div class="tx"><b>Fail2ban</b><small>Bans, jails and blocked IPs at a glance.</small><div class="m"><span class="bdg t-arc">Community</span><span class="muted">18k installs</span></div></div><button class="abtn p sm">Install</button></div><div class="bc t-dir"><span class="pi2"><svg class="i"><use href="#i-files"/></svg></span><div class="tx"><b>Samba shares</b><small>Share folders with Windows and Mac.</small><div class="m"><span class="bdg t-code"><svg class="i"><use href="#i-check"/></svg>Verified</span><span class="muted">9k installs</span></div></div><button class="abtn p sm">Install</button></div><div class="bc t-doc"><span class="pi2"><svg class="i"><use href="#i-overview"/></svg></span><div class="tx"><b>Prometheus</b><small>Export metrics and graph any scrape target.</small><div class="m"><span class="bdg t-arc">Community</span><span class="muted">7k installs</span></div></div><button class="abtn p sm">Install</button></div><div class="bc t-dir"><span class="pi2"><svg class="i"><use href="#i-server"/></svg></span><div class="tx"><b>Docker</b><small>Containers, images and compose stacks.</small><div class="m"><span class="bdg t-code"><svg class="i"><use href="#i-check"/></svg>Verified</span><span class="muted">54k installs</span></div></div><span class="ok">Installed</span></div></div>
+      <div class="scrim" hidden><div class="dlg">
+        <div class="dh"><span class="pi2 t-code"><svg class="i"><use href="#i-services"/></svg></span><div><h3>Install Nginx sites?</h3><small class="muted">Quadro team, verified, v2.0.1</small></div></div>
+        <p class="lead">This plugin will be able to:</p>
+        <div class="perm t-pdf"><span class="pic"><svg class="i"><use href="#i-lock"/></svg></span><div><b>Run commands as root</b><small><code>nginx -t</code>, <code>systemctl reload nginx</code>, <code>certbot</code></small></div></div>
+        <div class="perm t-dir"><span class="pic"><svg class="i"><use href="#i-files"/></svg></span><div><b>Edit files</b><small><code>/etc/nginx</code>, <code>/etc/letsencrypt</code></small></div></div>
+        <div class="perm t-code"><span class="pic"><svg class="i"><use href="#i-overview"/></svg></span><div><b>Add a page and 1 widget</b><small>Visible to admins only</small></div></div>
+        <div class="r"><button class="abtn">Cancel</button><button class="abtn p">Install and allow</button></div>
+      </div></div>
+    </div></div><div class="pane vc_" data-pane="developer"><div class="pg" style="display:flex;flex-direction:column;flex:1;min-width:0"><div class="dev"><span class="pi2 t-code"><svg class="i"><use href="#i-code"/></svg></span><div><b>Developer mode</b><small>Load a plugin from a folder and reload it on save, e.g. <code>~/projects/quadro-plugin-zfs</code></small></div><div class="r"><button class="abtn"><svg class="i"><use href="#i-files"/></svg>Load from folder</button><button class="abtn"><svg class="i"><use href="#i-logs"/></svg>Plugin docs</button></div></div></div></div>
+    </section>
+  </main>
+  <nav class="dock"><a class="c-ov" href="#"><span class="pi"><svg class="i"><use href="#i-overview"/></svg></span>Home</a><a class="c-term" href="#"><span class="pi"><svg class="i"><use href="#i-terminal"/></svg></span>Terminal</a><a class="c-file" href="#"><span class="pi"><svg class="i"><use href="#i-files"/></svg></span>Files</a><a class="c-svc" href="#"><span class="pi"><svg class="i"><use href="#i-services"/></svg></span>Services</a><a href="#"><span class="pi"><svg class="i"><use href="#i-more"/></svg></span>More</a></nav>
+</div>
+<script src="kit.js"></script><script>
+(function(){const root=document.querySelector('.pgm');
+function go(k){root.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.dataset.pane===k));
+  root.querySelectorAll('.ftab').forEach(t=>t.classList.toggle('on',t.dataset.go===k))}
+root.addEventListener('click',e=>{const g=e.target.closest('[data-go]');if(g){go(g.dataset.go);return}
+  const b=e.target.closest('button');if(!b)return;const sc=root.querySelector('.scrim');
+  if(/^\s*Install\s*$/.test(b.textContent)&&sc){sc.hidden=false}
+  if(sc&&(b.textContent.trim()==='Cancel'||b.textContent.trim()==='Install and allow'))sc.hidden=true});
+})();
+</script>

@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en" data-theme="dark" class="dark" style="color-scheme:dark">
+<head><meta charset="utf-8"><meta name="viewport" content="width=1280"><title>Quadro, services</title>
+<style>/* Variant Studio — base styles for HTML fragments.
+   Kept intentionally light so variants look like themselves, not like the tool.
+   Optional tokens (--vs-*) are available but never required. */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+html {
+  -webkit-font-smoothing: antialiased;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.5;
+  color: #16161a;
+  --vs-bg: #ffffff;
+  --vs-surface: #ffffff;
+  --vs-muted: #6b6b76;
+  --vs-border: #e6e6ea;
+  --vs-accent: #2f5bff;
+  --vs-radius: 12px;
+}
+html[data-theme="dark"] {
+  color: #ececf1;
+  --vs-bg: #0f0f12;
+  --vs-surface: #1a1a20;
+  --vs-muted: #9a9aa6;
+  --vs-border: #2a2a33;
+}
+img, svg, video { max-width: 100%; display: block; }
+button, input, select, textarea { font: inherit; color: inherit; }
+
+/* ---- canvas behind the variant ---- */
+html[data-vs-canvas="light"] body { background: #f4f4f6; }
+html[data-vs-canvas="dark"] body { background: #0c0c0f; }
+html[data-vs-canvas="white"] body { background: #fff; }
+html[data-vs-canvas="checker"] body {
+  background-color: #fff;
+  background-image: linear-gradient(45deg, #eee 25%, transparent 25%), linear-gradient(-45deg, #eee 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #eee 75%), linear-gradient(-45deg, transparent 75%, #eee 75%);
+  background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+html[data-theme="dark"]:not([data-vs-canvas]) body { background: var(--vs-bg); }
+
+/* ---- layout by kind ---- */
+html[data-vs-kind="component"] #vs-root {
+  padding: 40px 24px;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 24px;
+}
+html[data-vs-kind="section"] #vs-root { width: 100%; }
+html[data-vs-kind="page"] #vs-root { width: 100%; min-height: 100vh; }
+
+/* ---- states strip: show several states of one component side by side ----
+   <div class="vs-states">
+     <figure data-state="Default">…</figure>
+     <figure data-state="Hover">…</figure>
+   </div> */
+.vs-states { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; justify-content: center; }
+.vs-states > figure { margin: 0; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.vs-states > figure::before {
+  content: attr(data-state);
+  font: 600 10.5px/1 ui-sans-serif, system-ui, sans-serif; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--vs-muted);
+}
+
+/* ---- wireframe helpers (for low-fidelity layout rounds) ---- */
+.wf-box { border: 1.5px dashed #b9b9c3; border-radius: 8px; background: repeating-linear-gradient(135deg, transparent 0 8px, rgba(0,0,0,.03) 8px 16px); min-height: 48px; display: grid; place-items: center; color: #8a8a95; font-size: 12px; }
+.wf-line { height: 10px; border-radius: 5px; background: #e4e4ea; margin: 6px 0; }
+.wf-line.short { width: 40%; } .wf-line.mid { width: 70%; }
+.wf-img { aspect-ratio: 4/3; border-radius: 8px; background: linear-gradient(135deg, #e9e9ef, #d9d9e2); }
+</style><style>.q{
+  --bg:#ECEEF4; --surface:#FFFFFF; --sunk:#F3F4F8; --line:#E1E4EC; --ink:#1D2030; --ink2:#575C70; --ink3:#8D92A5;
+  --h-ov:#4651D0;  --h-ov-s:#E6E8FB;
+  --h-term:#16805A;--h-term-s:#DDF3EA;
+  --h-file:#2C73C9;--h-file-s:#DDEBFB;
+  --h-log:#A9620D; --h-log-s:#FCEBD6;
+  --h-svc:#B5324A; --h-svc-s:#FBE1E6;
+  --h-sw:#7A43C2;  --h-sw-s:#EEE3FB;
+  --h-usr:#0E8A8F; --h-usr-s:#D7F2F2;
+  --h-plg:#C04F8E; --h-plg-s:#FADFEE;
+  --distro:#1793D1; --distro-s:#DCEFF9;
+  --rail:88px;
+  font-family:"Figtree",system-ui,sans-serif; font-size:14px; color:var(--ink); background:var(--bg); min-height:100vh;
+  display:grid; grid-template-columns:var(--rail) 1fr; gap:12px; padding:12px; box-sizing:border-box; font-variant-numeric:tabular-nums;
+  transition:grid-template-columns .2s ease;
+}
+html[data-theme=dark] .q{
+  --bg:#13151E; --surface:#1C1F2B; --sunk:#242836; --line:#2C3040; --ink:#E8EAF2; --ink2:#A6ABBE; --ink3:#6E7389;
+  --h-ov:#9BA3FF;  --h-ov-s:#2A2E52;
+  --h-term:#6FDDB0;--h-term-s:#1D3A30;
+  --h-file:#7DB6FF;--h-file-s:#1C3150;
+  --h-log:#F5B963; --h-log-s:#3D2F1C;
+  --h-svc:#FF97A7; --h-svc-s:#43232C;
+  --h-sw:#C6A2FF;  --h-sw-s:#33264D;
+  --h-usr:#6ADCDF; --h-usr-s:#163A3B;
+  --h-plg:#FF9FD2; --h-plg-s:#45233A;
+  --distro:#4FB8EC; --distro-s:#173244;
+}
+.q.editing{grid-template-columns:var(--rail) 1fr 300px}
+.q .i{width:19px;height:19px;flex:none}
+.q button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.c-ov{--h:var(--h-ov);--s:var(--h-ov-s)}.c-term{--h:var(--h-term);--s:var(--h-term-s)}.c-file{--h:var(--h-file);--s:var(--h-file-s)}.c-log{--h:var(--h-log);--s:var(--h-log-s)}
+.c-svc{--h:var(--h-svc);--s:var(--h-svc-s)}.c-sw{--h:var(--h-sw);--s:var(--h-sw-s)}.c-usr{--h:var(--h-usr);--s:var(--h-usr-s)}.c-plg{--h:var(--h-plg);--s:var(--h-plg-s)}
+
+/* ---------- Rail (from B) ---------- */
+.rail{background:var(--surface);border-radius:24px;padding:14px 8px;display:flex;flex-direction:column;align-items:center;gap:4px;height:calc(100vh - 24px);position:sticky;top:12px;box-sizing:border-box;overflow:hidden}
+.distro{display:flex;flex-direction:column;align-items:center;gap:4px;margin-bottom:12px;color:var(--ink2);font-size:11px;font-weight:700;text-decoration:none}
+.distro .lg{width:46px;height:46px;border-radius:16px;background:var(--distro-s);color:var(--distro);display:grid;place-items:center}
+.distro .lg svg{width:26px;height:26px}
+.rail a.it{width:72px;display:flex;flex-direction:column;align-items:center;gap:5px;padding:4px 0 6px;color:var(--ink2);text-decoration:none;font-size:11.5px;font-weight:600;position:relative;border-radius:16px}
+.rail a.it .pi{width:52px;height:32px;border-radius:16px;display:grid;place-items:center;transition:background .15s,color .15s}
+.rail a.it .lb{white-space:nowrap}
+.rail a.it .n{position:absolute;top:0;right:10px;min-width:16px;height:16px;border-radius:8px;background:var(--h-svc);color:var(--surface);font-size:10px;display:grid;place-items:center;font-weight:800;padding:0 4px;box-sizing:border-box}
+.rail .sp{flex:1}
+.rail .av{width:40px;height:40px;border-radius:14px;background:var(--h-usr);color:var(--surface);display:grid;place-items:center;font-weight:800;flex:none}
+.rail .me{display:flex;align-items:center;gap:10px}
+.rail .me .tx{display:none}
+
+/* ---------- Main ---------- */
+.main{min-width:0;display:flex;flex-direction:column;gap:12px}
+.top{display:flex;align-items:center;gap:10px}
+.search{flex:1;max-width:620px;display:flex;align-items:center;gap:12px;padding:12px 18px;border-radius:999px;background:var(--surface);color:var(--ink3);font-size:15px}
+.top .sp{flex:1}
+.pill{display:flex;align-items:center;gap:8px;padding:9px 14px;border-radius:999px;background:var(--surface);font-weight:700}
+.pill i{width:8px;height:8px;border-radius:50%;background:var(--h-term)}
+.ib{width:42px;height:42px;border-radius:50%;background:var(--surface);display:grid;place-items:center;color:var(--ink2)}
+.ib:hover{color:var(--ink)}
+.canvas{background:var(--surface);border-radius:22px;padding:26px 28px 32px;flex:1}
+.head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:22px}
+.head h1{margin:0;font-size:28px;font-weight:800;letter-spacing:-.025em}
+.head p{margin:2px 0 0;color:var(--ink2)}
+.head .r{margin-left:auto;display:flex;gap:8px}
+.btn{display:flex;align-items:center;gap:8px;padding:9px 16px;border-radius:999px;border:1px solid var(--line);font-weight:700}
+.btn:hover{border-color:var(--ink3)}
+
+/* Edit bar (from C) */
+.editbar{display:none;align-items:center;gap:12px;padding:10px 10px 10px 20px;border-radius:999px;background:var(--ink);color:var(--surface);margin-bottom:22px}
+.editbar .i{color:var(--h-log-s)}
+.editbar b{font-weight:800}
+.editbar span{opacity:.7}
+.editbar .r{margin-left:auto;display:flex;gap:6px}
+.editbar .r button{padding:8px 16px;border-radius:999px;font-weight:700}
+.editbar .r .ghost{color:var(--surface);opacity:.8}
+.editbar .r .save{background:var(--surface);color:var(--ink)}
+.editing .editbar{display:flex}
+.editing .head{display:none}
+.editing .canvas{background-image:radial-gradient(var(--line) 1.2px,transparent 1.2px);background-size:22px 22px;background-position:11px 11px}
+
+/* ---------- Dashboard grid (from A) ---------- */
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
+.w{position:relative;min-width:0;border-radius:20px;outline:2px solid transparent;outline-offset:2px;transition:outline-color .15s}
+.w3{grid-column:span 3}.w5{grid-column:span 5}.w7{grid-column:span 7}.w6{grid-column:span 6}
+.tools{display:none;position:absolute;top:10px;right:10px;gap:4px;z-index:1}
+.tools button{width:28px;height:28px;border-radius:9px;background:var(--surface);display:grid;place-items:center;color:var(--ink2);box-shadow:0 1px 3px rgba(29,32,48,.12)}
+.tools .i{width:15px;height:15px}
+.res{display:none;position:absolute;right:7px;bottom:7px;width:14px;height:14px;border-right:3px solid var(--ink3);border-bottom:3px solid var(--ink3);border-radius:0 0 6px 0;opacity:.6}
+.editing .tools{display:flex}
+.editing .res{display:block}
+.editing .w{animation:wig 2.6s ease-in-out infinite;cursor:grab}
+.editing .w:nth-child(2n){animation-delay:-1.3s}
+.editing .w:hover{outline-color:var(--h-ov);animation-play-state:paused}
+@keyframes wig{0%,100%{transform:rotate(-.3deg)}50%{transform:rotate(.3deg)}}
+@media (prefers-reduced-motion:reduce){.editing .w{animation:none}}
+.drop{display:none;grid-column:span 12;min-height:96px;border:2px dashed var(--h-ov);border-radius:20px;place-items:center;color:var(--h-ov);font-weight:700;background:var(--h-ov-s)}
+.drop div{display:flex;align-items:center;gap:8px}
+.editing .drop{display:grid}
+
+.stat{border-radius:20px;padding:18px;background:var(--s);color:var(--h);display:flex;flex-direction:column;gap:10px;min-height:150px;box-sizing:border-box;position:relative;overflow:hidden;height:100%}
+.stat .tp{display:flex;align-items:center;gap:8px;font-weight:700}
+.stat .v{font-size:40px;font-weight:800;letter-spacing:-.04em;line-height:1;margin-top:auto}
+.stat .v small{font-size:16px;font-weight:700;margin-left:2px}
+.stat .s{color:var(--ink2);font-size:13px;font-weight:500}
+.stat .blob{position:absolute;right:-26px;top:-26px;width:96px;height:96px;border-radius:50%;background:var(--h);opacity:.12}
+.stat .bar{height:8px;border-radius:4px;background:color-mix(in srgb,var(--h) 18%,transparent);overflow:hidden}
+.stat .bar i{display:block;height:100%;border-radius:4px;background:var(--h)}
+.card{background:var(--sunk);border-radius:20px;padding:18px 20px;height:100%;box-sizing:border-box}
+.card h3{margin:0 0 4px;font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px}
+.card h3 .r{margin-left:auto;font-weight:500;color:var(--ink3);font-size:13px}
+.editing .card h3 .r{visibility:hidden}
+.chart{width:100%;height:150px;display:block;margin-top:10px}
+.chart .line{fill:none;stroke-width:2.4}
+.chart.k1 .line{stroke:var(--h-ov)}.chart.k1 .area{fill:var(--h-ov);opacity:.15}
+.chart.k2 .line{stroke:var(--h-file)}
+.leg{display:flex;gap:16px;color:var(--ink2);font-size:13px}
+.leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.tile{display:flex;flex-direction:column;gap:18px;align-items:flex-start;padding:14px;border-radius:16px;font-weight:700;text-align:left;background:var(--s);color:var(--h)}
+.tile .i{width:22px;height:22px}
+.al{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.al:first-of-type{border-top:0}
+.al .ic{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;flex:none;background:var(--s);color:var(--h)}
+.al b{font-weight:700;display:block}
+.al small{color:var(--ink3)}
+.al button{margin-left:auto;padding:6px 12px;border-radius:999px;background:var(--surface);font-weight:700;font-size:13px;color:var(--h)}
+
+/* ---------- Widget library (from C) ---------- */
+.lib{display:none;background:var(--surface);border-radius:22px;padding:18px 14px;height:calc(100vh - 24px);position:sticky;top:12px;box-sizing:border-box;overflow:auto}
+.editing .lib{display:block}
+.lib h2{margin:0 6px;font-size:17px;font-weight:800}
+.lib p{margin:4px 6px 14px;color:var(--ink3);font-size:13px}
+.lsearch{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:12px;background:var(--sunk);color:var(--ink3);margin-bottom:6px}
+.cat{font-size:12.5px;color:var(--ink3);font-weight:700;margin:14px 6px 6px}
+.item{display:flex;align-items:center;gap:12px;padding:10px;border-radius:14px;cursor:grab}
+.item:hover{background:var(--sunk)}
+.item .ic{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;flex:none;background:var(--s);color:var(--h)}
+.item b{display:block;font-weight:700}
+.item small{color:var(--ink3);font-size:12.5px}
+.item .tag{margin-left:auto;font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px;background:var(--sunk);color:var(--ink3)}
+
+.dock{display:none}
+.mob{display:none}
+@media (max-width:1100px){ .w3{grid-column:span 6} .w5,.w7{grid-column:span 12} }
+@media (max-width:1240px){ .q.editing{grid-template-columns:var(--rail) 1fr} .editing .lib{display:none} }
+@media (max-width:860px){
+  .q,.q.editing{grid-template-columns:1fr;padding:8px 8px 84px}
+  .rail{display:none}
+  .pill{display:none}
+  .canvas{padding:20px 16px}
+  .head .r{margin-left:0}
+  .editbar span{display:none}
+  .dock{display:flex;position:fixed;left:8px;right:8px;bottom:8px;background:var(--surface);border-radius:22px;padding:8px;justify-content:space-around;box-shadow:0 6px 24px rgba(29,32,48,.14);z-index:3}
+  .dock a{display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--ink2);font-size:11px;font-weight:600;text-decoration:none}
+  .dock a .pi{width:48px;height:30px;border-radius:15px;display:grid;place-items:center}
+  .dock a.on .pi{background:var(--s);color:var(--h)}
+}
+@media (max-width:560px){ .w3{grid-column:span 12} }
+</style><style>html body .q.q{--bg:#000;--surface:#0E0E10;--sunk:#18181B;--line:#26262B;--ink:#F4F4F6;--ink2:#A3A3AD;--ink3:#6C6C76;
+--h-ov:#8B93FF;--h-term:#3DDC97;--h-file:#5AB0FF;--h-log:#FFB547;--h-svc:#FF6B81;--h-sw:#B98CFF;--h-usr:#3FD8DE;--h-plg:#FF7AC6;--distro:#3AB4F2;
+--h-ov-s:color-mix(in srgb,var(--h-ov) 16%,#000);--h-term-s:color-mix(in srgb,var(--h-term) 16%,#000);--h-file-s:color-mix(in srgb,var(--h-file) 16%,#000);--h-log-s:color-mix(in srgb,var(--h-log) 16%,#000);--h-svc-s:color-mix(in srgb,var(--h-svc) 16%,#000);--h-sw-s:color-mix(in srgb,var(--h-sw) 16%,#000);--h-usr-s:color-mix(in srgb,var(--h-usr) 16%,#000);--h-plg-s:color-mix(in srgb,var(--h-plg) 16%,#000);--distro-s:color-mix(in srgb,var(--distro) 16%,#000);}</style></head>
+<body><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+.rail a.it .pi{background:var(--s);color:var(--h)}
+.rail a.it:hover .pi{background:color-mix(in srgb,var(--h) 22%,var(--s))}
+.rail a.it.on{color:var(--h)}
+.rail a.it.on .pi{background:var(--h);color:var(--surface)}
+.rsep{width:36px;height:1px;background:var(--line);margin:6px 0}
+.q{--mono:"JetBrains Mono",ui-monospace,monospace}
+.fm{background:var(--surface);border-radius:22px;flex:1;min-height:0;display:flex;overflow:hidden}
+.ft-ic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;flex:none;background:var(--s);color:var(--h)}
+.ft-ic .i{width:18px;height:18px}
+/* file type colours reuse section hues */
+.t-dir{--h:var(--h-file);--s:var(--h-file-s)}.t-img{--h:var(--h-plg);--s:var(--h-plg-s)}.t-code{--h:var(--h-term);--s:var(--h-term-s)}
+.t-arc{--h:var(--h-log);--s:var(--h-log-s)}.t-doc{--h:var(--h-ov);--s:var(--h-ov-s)}.t-txt{--h:var(--h-sw);--s:var(--h-sw-s)}.t-pdf{--h:var(--h-svc);--s:var(--h-svc-s)}
+.tbtn{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 14px;border-radius:999px;font-weight:700;border:1px solid var(--line)}
+.tbtn:hover{border-color:var(--ink3)}
+.tbtn.p{background:var(--h-file);border-color:var(--h-file);color:var(--surface)}
+.seg{display:inline-flex;background:var(--sunk);border-radius:999px;padding:3px}
+.seg button{width:34px;height:32px;border-radius:999px;display:grid;place-items:center;color:var(--ink3)}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.seg .i{width:17px;height:17px}
+.crumb{display:flex;align-items:center;gap:2px;font-weight:700;font-size:15px;min-width:0;flex-wrap:wrap}
+.crumb a{padding:5px 9px;border-radius:9px;color:var(--ink2);text-decoration:none}
+.crumb a:hover{background:var(--sunk);color:var(--ink)}
+.crumb a:last-child{color:var(--ink)}
+.crumb .i{width:14px;height:14px;color:var(--ink3);transform:rotate(-90deg)}
+.muted{color:var(--ink3)}
+.perm{display:grid;grid-template-columns:auto repeat(3,1fr);gap:6px 8px;align-items:center;font-size:13px}
+.perm .h{color:var(--ink3);font-weight:600;text-align:center;font-size:12px}
+.perm .r{font-weight:600}
+.perm .ck{height:28px;border-radius:9px;display:grid;place-items:center;background:var(--sunk);color:var(--ink3)}
+.perm .ck.on{background:var(--h-file-s);color:var(--h-file)}
+.perm .ck .i{width:15px;height:15px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:8px 14px;font-size:13.5px;margin:0}
+.kv dt{color:var(--ink3)}.kv dd{margin:0;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mono{font-family:var(--mono);font-size:12.5px}
+@media (max-width:860px){ .fm{border-radius:18px} }
+
+.stb{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;padding:3px 9px;border-radius:999px;background:var(--s);color:var(--h);white-space:nowrap}
+.stb i{width:7px;height:7px;border-radius:50%;background:currentColor}
+.t-txt.stb{background:var(--sunk);color:var(--ink3)}
+.sw{width:38px;height:22px;border-radius:999px;background:var(--line);position:relative;flex:none;display:inline-block;vertical-align:middle}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--surface);transition:left .15s}
+.sw.on{background:var(--h-svc)}
+.sw.on::after{left:19px}
+.ftabs{display:flex;gap:6px;flex-wrap:wrap}
+.ftab{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 14px;border-radius:999px;font-weight:700;font-size:13.5px;color:var(--ink2)}
+.ftab b{font-size:12px;color:var(--ink3)}
+.ftab:hover{background:var(--sunk)}
+.ftab.on{background:var(--h-svc-s);color:var(--h-svc)}
+.ftab.on b{color:inherit}
+.ftab.bad b{color:var(--h-svc)}
+.abtn{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 14px;border-radius:999px;font-weight:700;font-size:13.5px;background:var(--sunk)}
+.abtn:hover{background:var(--line)}
+.abtn.p{background:var(--h-svc);color:var(--surface)}
+.abtn .i{width:16px;height:16px}
+.logs{margin:0;background:var(--sunk);border-radius:14px;padding:12px;font:12px/1.7 var(--mono);white-space:pre-wrap;color:var(--ink2)}
+.logs .e{color:var(--h-svc)}
+.mini{width:100%;height:56px;display:block}
+.mini .line{fill:none;stroke:var(--h-svc);stroke-width:1.8}
+.mini .area{fill:var(--h-svc);opacity:.12}
+.dep{display:flex;flex-wrap:wrap;gap:6px}
+.dep span{font:12px var(--mono);padding:3px 8px;border-radius:8px;background:var(--sunk);color:var(--ink2)}
+.h4{margin:0;font-size:13px;color:var(--ink3);font-weight:700}
+
+.sv{flex:1;display:flex;min-height:calc(100vh - 90px)}
+.svm{flex:1;min-width:0;display:flex;flex-direction:column}
+.svbar{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.svbar .sp{flex:1}
+.fsearch{display:flex;align-items:center;gap:10px;height:38px;padding:0 14px;border-radius:999px;background:var(--sunk);color:var(--ink3);min-width:200px}
+.seg button{width:auto;padding:0 12px;gap:6px;display:flex;align-items:center;font-weight:700;font-size:13px}
+.alert{display:flex;align-items:center;gap:12px;margin:14px 16px 0;padding:12px 14px;border-radius:16px;background:var(--h-svc-s);color:var(--h-svc);flex-wrap:wrap}
+.alert b{font-weight:800}.alert span{color:var(--ink2)}
+.alert .r{margin-left:auto;display:flex;gap:6px}
+.alert .abtn{height:34px;background:var(--surface);color:var(--h-svc)}
+.body{flex:1;overflow:auto;padding-bottom:12px}
+table.tv{width:100%;border-collapse:collapse;font-size:13.5px}
+.tv th{position:sticky;top:0;background:var(--surface);text-align:left;font-weight:700;color:var(--ink3);font-size:12.5px;padding:10px 14px;border-bottom:1px solid var(--line);z-index:1}
+.tv td{padding:9px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tv tr:hover td{background:var(--sunk)}
+.tv tr.sel td{background:var(--h-svc-s)}
+.tv tr.bad td:first-child{box-shadow:inset 3px 0 0 var(--h-svc)}
+.tv tr.gh td{background:var(--surface);font-weight:800;font-size:14px;padding-top:16px;color:var(--ink)}
+.tv tr.gh td .muted{font-weight:600;margin-left:8px;font-size:12.5px}
+.tv tr.gh .i{width:15px;height:15px;vertical-align:-3px;margin-left:6px;color:var(--ink3)}
+.gdot{display:inline-block;width:10px;height:10px;border-radius:4px;background:var(--h);margin-right:10px;vertical-align:0}
+.nm b{display:block;font-weight:700}.nm small{color:var(--ink3);font-size:12px}
+.rowact{text-align:right}
+.rowact button{width:30px;height:30px;border-radius:9px;display:inline-grid;place-items:center;color:var(--ink3)}
+.rowact button:hover{background:var(--surface);color:var(--ink)}
+.rowact .i{width:16px;height:16px}
+.cv{display:none;padding:14px 16px}
+.svm.cards-on .cv{display:block}
+.svm.cards-on .tv{display:none}
+.gt{font-weight:800;font-size:15px;margin:6px 0 10px;display:flex;align-items:center;gap:6px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-bottom:20px}
+.sc{background:var(--sunk);border-radius:20px;padding:14px;display:flex;flex-direction:column;gap:12px;border:2px solid transparent}
+.sc.bad{border-color:var(--h-svc);background:var(--h-svc-s)}
+.sc .t{display:flex;align-items:center;gap:10px;min-width:0}.sc .tx{min-width:0}
+.sc b{display:block;font-weight:800}
+.sc small{display:block;color:var(--ink3);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sc .m{display:flex;align-items:center;justify-content:space-between;font-size:12px}
+.sc .f{display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--line);padding-top:10px}
+.sc label{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;color:var(--ink2)}
+.q2{display:flex;gap:2px}
+.q2 button{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;color:var(--ink3)}
+.q2 button:hover{background:var(--surface);color:var(--h-svc)}
+.q2 .i{width:16px;height:16px}
+/* panel */
+.det{width:360px;flex:none;border-left:1px solid var(--line);padding:18px;display:flex;flex-direction:column;gap:14px;overflow:auto}
+.det .dh{display:flex;align-items:center;gap:12px}
+.det .dh .ft-ic{width:44px;height:44px;border-radius:14px}
+.det h3{margin:0;font-size:20px;font-weight:800}
+.det small{color:var(--ink3)}
+.det .row{display:flex;align-items:center;gap:10px}
+.det .acts{display:flex;gap:6px;flex-wrap:wrap}
+.pp{display:none;flex-direction:column;gap:14px}
+.det[data-tab=info] [data-p=info],.det[data-tab=logs] [data-p=logs],.det[data-tab=unit] [data-p=unit],.det[data-tab=deps] [data-p=deps]{display:flex}
+.tg{display:flex;align-items:center;gap:12px;padding:12px;border-radius:16px;background:var(--sunk);cursor:pointer}
+.tg b{display:block;font-weight:700}.tg small{font-size:12px}
+.unit{margin:0;background:var(--sunk);border-radius:14px;padding:12px;font:12px/1.7 var(--mono);color:var(--ink2);white-space:pre-wrap}
+.unit .k{color:var(--h-svc);font-weight:600}
+.unit .add{color:var(--h-term);background:var(--h-term-s);border-radius:4px;padding:0 4px}
+.note{font-size:12.5px;color:var(--ink3)}
+.lnk{display:flex;align-items:center;gap:6px;color:var(--h-svc);font-weight:700;text-decoration:none}
+.lnk .i{width:16px;height:16px}
+.abtn.p{align-self:flex-start}
+.h4{margin:0}
+@media (max-width:1240px){ .det{display:none} }
+@media (max-width:860px){ .tv th:nth-child(4),.tv td:nth-child(4),.tv th:nth-child(5),.tv td:nth-child(5){display:none} }
+
+.gchips{display:flex;gap:6px}
+.gchips button{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:999px;font-weight:700;font-size:13px;background:var(--sunk);color:var(--ink2)}
+.gchips button.on{background:var(--s);color:var(--h);box-shadow:inset 0 0 0 2px var(--h)}
+.gchips .gdot{margin-right:0}
+.det{width:420px}
+.ptabs.line{display:flex;border-bottom:1px solid var(--line);gap:4px}
+.ptabs.line button{padding:9px 10px;font-weight:700;font-size:13px;color:var(--ink3);border-bottom:3px solid transparent;margin-bottom:-1px}
+.ptabs.line button.on{color:var(--h-svc);border-color:var(--h-svc)}
+</style>
+<div class="q vb">
+  <nav class="rail">
+    <a class="distro" href="#"><span class="lg"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.39.605C10.376 3.092 9.764 4.72 8.635 7.132c.693.734 1.543 1.589 2.923 2.554-1.484-.61-2.496-1.224-3.252-1.86C6.86 10.842 4.596 15.138 0 23.395c3.612-2.085 6.412-3.37 9.021-3.862a6.61 6.61 0 0 1-.171-1.547l.003-.115c.058-2.315 1.261-4.095 2.687-3.973 1.426.12 2.534 2.096 2.478 4.409a6.52 6.52 0 0 1-.146 1.243c2.58.505 5.352 1.787 8.914 3.844-.702-1.293-1.33-2.459-1.929-3.57-.943-.73-1.926-1.682-3.933-2.713 1.38.359 2.367.772 3.137 1.234-6.09-11.334-6.582-12.84-8.67-17.74z"/></svg></span><span class="dn">arch</span></a>
+    <a class="it c-ov" href="#"><span class="pi"><svg class="i"><use href="#i-overview"/></svg></span><span class="lb">Overview</span></a><a class="it c-term" href="#"><span class="pi"><svg class="i"><use href="#i-terminal"/></svg></span><span class="lb">Terminal</span></a><a class="it c-file" href="#"><span class="pi"><svg class="i"><use href="#i-files"/></svg></span><span class="lb">Files</span></a><a class="it c-log" href="#"><span class="pi"><svg class="i"><use href="#i-logs"/></svg></span><span class="lb">Logs</span></a><a class="it c-svc on" href="#"><span class="pi"><svg class="i"><use href="#i-services"/></svg></span><span class="lb">Services</span><span class="n">1</span></a><a class="it c-sw" href="#"><span class="pi"><svg class="i"><use href="#i-software"/></svg></span><span class="lb">Software</span><span class="n">23</span></a><a class="it c-usr" href="#"><span class="pi"><svg class="i"><use href="#i-users"/></svg></span><span class="lb">Users</span></a><div class="rsep"></div><a class="it c-plg" href="#"><span class="pi"><svg class="i"><use href="#i-plugins"/></svg></span><span class="lb">Plugins</span></a><div class="sp"></div><div class="me"><div class="av">F</div></div></nav>
+  <main class="main">
+    <div class="top">
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search services</div><div class="sp"></div>
+      <div class="pill"><i></i>arch<svg class="i" style="width:16px;height:16px"><use href="#i-chevron"/></svg></div>
+      <button class="ib" data-toggle-theme title="Theme"><svg class="i"><use href="#i-moon"/></svg></button>
+      <button class="ib" title="Notifications"><svg class="i"><use href="#i-bell"/></svg></button></div>
+    <section class="fm sv">
+      <div class="svm">
+        <div class="svbar"><div class="ftabs"><button class="ftab on">All <b>142</b></button><button class="ftab">Running <b>87</b></button><button class="ftab bad">Failed <b>1</b></button><button class="ftab">Stopped <b>41</b></button><button class="ftab">Timers <b>13</b></button><button class="ftab">Sockets <b>22</b></button></div><div class="sp"></div><div class="gchips"><button class="on t-svc">All purposes</button><button class="t-code"><span class="gdot t-code"></span>Web</button><button class="t-img"><span class="gdot t-img"></span>Containers</button><button class="t-doc"><span class="gdot t-doc"></span>System</button></div><div class="fsearch"><svg class="i"><use href="#i-search"/></svg>Filter by name</div><div class="seg vtog"><button data-v="table" class="on"><svg class="i"><use href="#i-list"/></svg>Table</button><button data-v="cards"><svg class="i"><use href="#i-grid"/></svg>Cards</button></div></div>
+        <div class="alert"><svg class="i"><use href="#i-alert"/></svg><div><b>1 service failed</b> <span>systemd-networkd-wait-online exited with code 1. You use NetworkManager, so you probably don't need it.</span></div><div class="r"><button class="abtn">Log</button><button class="abtn">Disable</button></div></div>
+        <div class="body"><table class="tv"><thead><tr><th>Service</th><th>State</th><th>At boot</th><th>Memory</th><th>CPU</th><th></th></tr></thead><tbody><tr class=" bad"><td><div class="nm"><b>systemd-networkd-wait-online</b><small>Wait for Network to be Configured</small></div></td><td><span class="stb t-pdf"><i></i>Failed</span></td><td><span class="sw on"></span></td><td class="mono">—</td><td class="mono">—</td><td class="rowact"><button title="Restart"><svg class="i"><use href="#i-refresh"/></svg></button><button title="More"><svg class="i"><use href="#i-more"/></svg></button></td></tr><tr class="sel"><td><div class="nm"><b>nginx</b><small>A high performance web server</small></div></td><td><span class="stb t-code"><i></i>Running</span></td><td><span class="sw on"></span></td><td class="mono">14.2 MB</td><td class="mono">0.4%</td><td class="rowact"><button title="Restart"><svg class="i"><use href="#i-refresh"/></svg></button><button title="More"><svg class="i"><use href="#i-more"/></svg></button></td></tr><tr class=""><td><div class="nm"><b>docker</b><small>Docker Application Container Engine</small></div></td><td><span class="stb t-code"><i></i>Running</span></td><td><span class="sw on"></span></td><td class="mono">182 MB</td><td class="mono">1.2%</td><td class="rowact"><button title="Restart"><svg class="i"><use href="#i-refresh"/></svg></button><button title="More"><svg class="i"><use href="#i-more"/></svg></button></td></tr><tr class=""><td><div class="nm"><b>sshd</b><small>OpenSSH Daemon</small></div></td><td><span class="stb t-code"><i></i>Running</span></td><td><span class="sw on"></span></td><td class="mono">6.1 MB</td><td class="mono">0.0%</td><td class="rowact"><button title="Restart"><svg class="i"><use href="#i-refresh"/></svg></button><button title="More"><svg class="i"><use href="#i-more"/></svg></button></td></tr><tr class=""><td><div class="nm"><b>postgresql</b><small>PostgreSQL database server</small></div></td><td><span class="stb t-code"><i></i>Running</span></td><td><span class="sw on"></span></td><td class="mono">96 MB</td><td class="mono">0.8%</td><td class="rowact"><button title="Restart"><svg class="i"><use href="#i-refresh"/></svg></button><button title="More"><svg class="i"><use href="#i-more"/></svg></button></td></tr><tr class=""><td><div class="nm"><b>NetworkManager</b><small>Network Manager</small></div></td><td><span class="stb t-code"><i></i>Running</span></td><td><span class="sw on"></span></td><td class="mono">21 MB</td><td class="mono">0.1%</td><td class="rowact"><button title="Restart"><svg class="i"><use href="#i-refresh"/></svg></button><button title="More"><svg class="i"><use href="#i-more"/></svg></button></td></tr><tr class=""><td><div class="nm"><b>bluetooth</b><small>Bluetooth service</small></div></td><td><span class="stb t-txt"><i></i>Stopped</span></td><td><span class="sw"></span></td><td class="mono">—</td><td class="mono">—</td><td class="rowact"><button title="Restart"><svg class="i"><use href="#i-refresh"/></svg></button><button title="More"><svg class="i"><use href="#i-more"/></svg></button></td></tr><tr class=""><td><div class="nm"><b>cups</b><small>CUPS Scheduler</small></div></td><td><span class="stb t-txt"><i></i>Stopped</span></td><td><span class="sw"></span></td><td class="mono">—</td><td class="mono">—</td><td class="rowact"><button title="Restart"><svg class="i"><use href="#i-refresh"/></svg></button><button title="More"><svg class="i"><use href="#i-more"/></svg></button></td></tr><tr class=""><td><div class="nm"><b>fstrim</b><small>Discard unused blocks on filesystems</small></div></td><td><span class="stb t-dir"><i></i>Finished</span></td><td><span class="sw on"></span></td><td class="mono">—</td><td class="mono">—</td><td class="rowact"><button title="Restart"><svg class="i"><use href="#i-refresh"/></svg></button><button title="More"><svg class="i"><use href="#i-more"/></svg></button></td></tr><tr class=""><td><div class="nm"><b>quadro</b><small>Quadro web console</small></div></td><td><span class="stb t-code"><i></i>Running</span></td><td><span class="sw on"></span></td><td class="mono">38 MB</td><td class="mono">0.3%</td><td class="rowact"><button title="Restart"><svg class="i"><use href="#i-refresh"/></svg></button><button title="More"><svg class="i"><use href="#i-more"/></svg></button></td></tr></tbody></table><div class="cv"><div class="gt"><span class="gdot t-code"></span>Web <span class="muted">3</span></div><div class="cards"><div class="sc"><div class="t"><span class="ft-ic t-code"><svg class="i"><use href="#i-services"/></svg></span><div class="tx"><b>nginx</b><small>A high performance web server</small></div></div>
+      <div class="m"><span class="stb t-code"><i></i>Running</span><span class="muted mono">14.2 MB</span></div>
+      <div class="f"><label><span class="sw on"></span>At boot</label><div class="q2"><button title="Restart"><svg class="i"><use href="#i-refresh"/></svg></button><button title="Stop"><svg class="i"><use href="#i-power"/></svg></button><button title="Logs"><svg class="i"><use href="#i-logs"/></svg></button></div></div></div><div class="sc"><div class="t"><span class="ft-ic t-code"><svg class="i"><use href="#i-services"/></svg></span><div class="tx"><b>postgresql</b><small>PostgreSQL database server</small></div></div>
+      <div class="m"><span class="stb t-code"><i></i>Running</span><span class="muted mono">96 MB</span></div>
+      <div class="f"><label><span class="sw on"></span>At boot</label><div class="q2"><button title="Restart"><svg class="i"><use href="#i-refresh"/></svg></button><button title="Stop"><svg class="i"><use href="#i-power"/></svg></button><button title="Logs"><svg class="i"><use href="#i-logs"/></svg></button></div></div></div><div class="sc"><div class="t"><span class="ft-ic t-code"><svg class="i"><use href="#i-services"/></svg></span><div class="tx"><b>quadro</b><small>Quadro web console</small></div></div>
+      <div class="m"><span class="stb t-code"><i></i>Running</span><span class="muted mono">38 MB</span></div>
+      <div class="f"><label><span class="sw on"></span>At boot</label><div class="q2"><button title="Restart"><svg class="i"><use href="#i-refresh"/></svg></button><button title="Stop"><svg class="i"><use href="#i-power"/></svg></button><button title="Logs"><svg class="i"><use href="#i-logs"/></svg></button></div></div></div></div><div class="gt"><span class="gdot t-img"></span>Containers <span class="muted">1</span></div><div class="cards"><div class="sc"><div class="t"><span class="ft-ic t-code"><svg class="i"><use href="#i-services"/></svg></span><div class="tx"><b>docker</b><small>Docker Application Container Engine</small></div></div>
+      <div class="m"><span class="stb t-code"><i></i>Running</span><span class="muted mono">182 MB</span></div>
+      <div class="f"><label><span class="sw on"></span>At boot</label><div class="q2"><button title="Restart"><svg class="i"><use href="#i-refresh"/></svg></button><button title="Stop"><svg class="i"><use href="#i-power"/></svg></button><button title="Logs"><svg class="i"><use href="#i-logs"/></svg></button></div></div></div></div><div class="gt"><span class="gdot t-doc"></span>System <span class="muted">6</span></div><div class="cards"><div class="sc bad"><div class="t"><span class="ft-ic t-pdf"><svg class="i"><use href="#i-services"/></svg></span><div class="tx"><b>systemd-networkd-wait-online</b><small>Wait for Network to be Configured</small></div></div>
+      <div class="m"><span class="stb t-pdf"><i></i>Failed</span><span class="muted mono"></span></div>
+      <div class="f"><label><span class="sw on"></span>At boot</label><div class="q2"><button title="Restart"><svg class="i"><use href="#i-refresh"/></svg></button><button title="Start"><svg class="i"><use href="#i-play"/></svg></button><button title="Logs"><svg class="i"><use href="#i-logs"/></svg></button></div></div></div><div class="sc"><div class="t"><span class="ft-ic t-code"><svg class="i"><use href="#i-services"/></svg></span><div class="tx"><b>sshd</b><small>OpenSSH Daemon</small></div></div>
+      <div class="m"><span class="stb t-code"><i></i>Running</span><span class="muted mono">6.1 MB</span></div>
+      <div class="f"><label><span class="sw on"></span>At boot</label><div class="q2"><button title="Restart"><svg class="i"><use href="#i-refresh"/></svg></button><button title="Stop"><svg class="i"><use href="#i-power"/></svg></button><button title="Logs"><svg class="i"><use href="#i-logs"/></svg></button></div></div></div><div class="sc"><div class="t"><span class="ft-ic t-code"><svg class="i"><use href="#i-services"/></svg></span><div class="tx"><b>NetworkManager</b><small>Network Manager</small></div></div>
+      <div class="m"><span class="stb t-code"><i></i>Running</span><span class="muted mono">21 MB</span></div>
+      <div class="f"><label><span class="sw on"></span>At boot</label><div class="q2"><button title="Restart"><svg class="i"><use href="#i-refresh"/></svg></button><button title="Stop"><svg class="i"><use href="#i-power"/></svg></button><button title="Logs"><svg class="i"><use href="#i-logs"/></svg></button></div></div></div><div class="sc"><div class="t"><span class="ft-ic t-txt"><svg class="i"><use href="#i-services"/></svg></span><div class="tx"><b>bluetooth</b><small>Bluetooth service</small></div></div>
+      <div class="m"><span class="stb t-txt"><i></i>Stopped</span><span class="muted mono"></span></div>
+      <div class="f"><label><span class="sw"></span>At boot</label><div class="q2"><button title="Restart"><svg class="i"><use href="#i-refresh"/></svg></button><button title="Start"><svg class="i"><use href="#i-play"/></svg></button><button title="Logs"><svg class="i"><use href="#i-logs"/></svg></button></div></div></div><div class="sc"><div class="t"><span class="ft-ic t-txt"><svg class="i"><use href="#i-services"/></svg></span><div class="tx"><b>cups</b><small>CUPS Scheduler</small></div></div>
+      <div class="m"><span class="stb t-txt"><i></i>Stopped</span><span class="muted mono"></span></div>
+      <div class="f"><label><span class="sw"></span>At boot</label><div class="q2"><button title="Restart"><svg class="i"><use href="#i-refresh"/></svg></button><button title="Start"><svg class="i"><use href="#i-play"/></svg></button><button title="Logs"><svg class="i"><use href="#i-logs"/></svg></button></div></div></div><div class="sc"><div class="t"><span class="ft-ic t-dir"><svg class="i"><use href="#i-services"/></svg></span><div class="tx"><b>fstrim</b><small>Discard unused blocks on filesystems</small></div></div>
+      <div class="m"><span class="stb t-dir"><i></i>Finished</span><span class="muted mono"></span></div>
+      <div class="f"><label><span class="sw on"></span>At boot</label><div class="q2"><button title="Restart"><svg class="i"><use href="#i-refresh"/></svg></button><button title="Start"><svg class="i"><use href="#i-play"/></svg></button><button title="Logs"><svg class="i"><use href="#i-logs"/></svg></button></div></div></div></div></div></div>
+      </div>
+      <aside class="det" data-tab="info">
+      <div class="dh"><span class="ft-ic t-code"><svg class="i"><use href="#i-services"/></svg></span><div><h3>nginx</h3><small>A high performance web server</small></div></div>
+      <div class="acts"><button class="abtn"><svg class="i"><use href="#i-refresh"/></svg>Restart</button><button class="abtn"><svg class="i"><use href="#i-play"/></svg>Reload</button><button class="abtn"><svg class="i"><use href="#i-power"/></svg>Stop</button></div>
+      <div class="ptabs line"><button data-tab="info" class="on">Info</button><button data-tab="logs" class="">Logs</button><button data-tab="unit" class="">Unit file</button><button data-tab="deps" class="">Dependencies</button></div>
+      <div class="pp" data-p="info">
+        <div class="row"><span class="stb t-code"><i></i>Running for 6 min</span><span class="muted mono" style="font-size:12px">PID 81244</span></div>
+        <label class="tg"><span class="sw on"></span><div><b>Start at boot</b><small>enabled in multi-user.target</small></div></label>
+        <div><p class="h4">Memory, last hour</p><svg class="mini" data-chart="5,40,10" data-fill="1" data-n="50"></svg><div class="muted" style="font-size:12.5px">14.2 MB now, 0.4% CPU, 17 tasks</div></div>
+        <dl class="kv"><dt>Unit</dt><dd class="mono">nginx.service</dd><dt>Loaded from</dt><dd class="mono">/usr/lib/systemd/system</dd><dt>Group</dt><dd>Web</dd></dl>
+      </div>
+      <div class="pp" data-p="logs"><pre class="logs">Oct 01 16:52:03 Stopping nginx.service...
+Oct 01 16:52:04 Started nginx.service.
+<span class="e">Oct 01 16:58:12 upstream timed out (110)</span>
+Oct 01 16:58:14 192.168.1.20 GET / 200
+Oct 01 16:58:20 192.168.1.20 GET /api/stats 200
+Oct 01 16:58:31 192.168.1.20 GET / 200</pre><a class="lnk" href="#"><svg class="i"><use href="#i-logs"/></svg>Open in Logs</a></div>
+      <div class="pp" data-p="unit"><pre class="unit"><span class="k">[Unit]</span>
+Description=A high performance web server
+After=network-online.target remote-fs.target nss-lookup.target
+Wants=network-online.target
+
+<span class="k">[Service]</span>
+Type=forking
+PIDFile=/run/nginx.pid
+ExecStart=/usr/bin/nginx
+ExecReload=/usr/bin/nginx -s reload
+<span class="add">+ Restart=on-failure</span>
+<span class="add">+ RestartSec=5</span>
+
+<span class="k">[Install]</span>
+WantedBy=multi-user.target</pre><div class="note">Edits go to <span class="mono">nginx.service.d/override.conf</span>. The package file stays untouched.</div><button class="abtn p"><svg class="i"><use href="#i-edit"/></svg>Edit</button></div>
+      <div class="pp" data-p="deps"><p class="h4">Needs</p><div class="dep"><span>network-online.target</span><span>remote-fs.target</span><span>nss-lookup.target</span></div>
+        <p class="h4">Needed by</p><div class="dep"><span>multi-user.target</span><span>quadro.service</span></div>
+        <p class="h4">Conflicts</p><div class="dep"><span>apache.service</span></div></div>
+    </aside>
+    </section>
+  </main>
+  <nav class="dock">
+    <a class="c-ov" href="#"><span class="pi"><svg class="i"><use href="#i-overview"/></svg></span>Home</a>
+    <a class="c-term" href="#"><span class="pi"><svg class="i"><use href="#i-terminal"/></svg></span>Terminal</a>
+    <a class="c-file" href="#"><span class="pi"><svg class="i"><use href="#i-files"/></svg></span>Files</a>
+    <a class="on c-svc" href="#"><span class="pi"><svg class="i"><use href="#i-services"/></svg></span>Services</a>
+    <a href="#"><span class="pi"><svg class="i"><use href="#i-more"/></svg></span>More</a>
+  </nav>
+</div>
+<script src="kit.js"></script><script>
+document.querySelectorAll('.vtog').forEach(s=>s.addEventListener('click',e=>{const b=e.target.closest('[data-v]');if(!b)return;
+  s.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));document.querySelector('.svm').classList.toggle('cards-on',b.dataset.v==='cards')}));
+document.querySelectorAll('.ptabs').forEach(t=>t.addEventListener('click',e=>{const b=e.target.closest('[data-tab]');if(!b)return;
+  t.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));t.closest('.det').dataset.tab=b.dataset.tab}));
+document.querySelectorAll('.gchips').forEach(t=>t.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;t.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b))}));
+</script></body></html>

@@ -1,0 +1,29 @@
+{
+  "title": "Users",
+  "question": "Which users page fits best?",
+  "kind": "page",
+  "parent": "003-remix-rail-colori",
+  "head": [],
+  "variants": [
+    {
+      "id": "a",
+      "label": "Table",
+      "notes": "People / System accounts / Groups tabs, table with role badges (Admin, Locked, New), group chips and last login. Same panel layout as Services. Panel on the right in all: Reset password, Lock, Delete, and tabs Info, Groups (switches), SSH keys, Sessions."
+    },
+    {
+      "id": "b",
+      "label": "People cards",
+      "notes": "Users as big square tiles like the login screen, with role and last login. Cards/Table toggle. Panel on the right in all: Reset password, Lock, Delete, and tabs Info, Groups (switches), SSH keys, Sessions."
+    },
+    {
+      "id": "c",
+      "label": "Group matrix",
+      "notes": "Users × groups grid: click cells to add or remove memberships, changes queue up and apply together. wheel (sudo) highlighted. Panel on the right in all: Reset password, Lock, Delete, and tabs Info, Groups (switches), SSH keys, Sessions."
+    }
+  ],
+  "created": "2026-10-01T15:18:26.976Z",
+  "viewports": [
+    "laptop",
+    "mobile"
+  ]
+}

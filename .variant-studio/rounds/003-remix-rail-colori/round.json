@@ -1,0 +1,29 @@
+{
+  "title": "Remix: dashboard A + barra B + modifica C",
+  "question": "Quale barra laterale preferisci? In tutte prova “Personalizza” e clicca il logo Arch per vedere il fallback.",
+  "kind": "page",
+  "parent": "002-morbida-varianti",
+  "head": [],
+  "variants": [
+    {
+      "id": "a",
+      "label": "Barra a colori",
+      "notes": "Ogni voce della barra ha sempre il suo colore di sezione, quella attiva è piena. Massima coerenza con la dashboard A."
+    },
+    {
+      "id": "b",
+      "label": "Barra neutra",
+      "notes": "Icone grigie a riposo: il colore della sezione compare al passaggio del mouse e sulla voce attiva, con un segno a sinistra. Più calma, i colori restano nella pagina."
+    },
+    {
+      "id": "c",
+      "label": "Barra espandibile",
+      "notes": "Come la barra a colori, ma si allarga con etichette accanto alle icone e utente in basso. Il pulsante freccia la comprime alla versione B."
+    }
+  ],
+  "created": "2026-10-01T14:21:27.985Z",
+  "viewports": [
+    "laptop",
+    "mobile"
+  ]
+}

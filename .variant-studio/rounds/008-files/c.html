@@ -1,0 +1,118 @@
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+.rail a.it .pi{background:var(--s);color:var(--h)}
+.rail a.it:hover .pi{background:color-mix(in srgb,var(--h) 22%,var(--s))}
+.rail a.it.on{color:var(--h)}
+.rail a.it.on .pi{background:var(--h);color:var(--surface)}
+.rsep{width:36px;height:1px;background:var(--line);margin:6px 0}
+.q{--mono:"JetBrains Mono",ui-monospace,monospace}
+.fm{background:var(--surface);border-radius:22px;flex:1;min-height:0;display:flex;overflow:hidden}
+.ft-ic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;flex:none;background:var(--s);color:var(--h)}
+.ft-ic .i{width:18px;height:18px}
+/* file type colours reuse section hues */
+.t-dir{--h:var(--h-file);--s:var(--h-file-s)}.t-img{--h:var(--h-plg);--s:var(--h-plg-s)}.t-code{--h:var(--h-term);--s:var(--h-term-s)}
+.t-arc{--h:var(--h-log);--s:var(--h-log-s)}.t-doc{--h:var(--h-ov);--s:var(--h-ov-s)}.t-txt{--h:var(--h-sw);--s:var(--h-sw-s)}.t-pdf{--h:var(--h-svc);--s:var(--h-svc-s)}
+.tbtn{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 14px;border-radius:999px;font-weight:700;border:1px solid var(--line)}
+.tbtn:hover{border-color:var(--ink3)}
+.tbtn.p{background:var(--h-file);border-color:var(--h-file);color:var(--surface)}
+.seg{display:inline-flex;background:var(--sunk);border-radius:999px;padding:3px}
+.seg button{width:34px;height:32px;border-radius:999px;display:grid;place-items:center;color:var(--ink3)}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.seg .i{width:17px;height:17px}
+.crumb{display:flex;align-items:center;gap:2px;font-weight:700;font-size:15px;min-width:0;flex-wrap:wrap}
+.crumb a{padding:5px 9px;border-radius:9px;color:var(--ink2);text-decoration:none}
+.crumb a:hover{background:var(--sunk);color:var(--ink)}
+.crumb a:last-child{color:var(--ink)}
+.crumb .i{width:14px;height:14px;color:var(--ink3);transform:rotate(-90deg)}
+.muted{color:var(--ink3)}
+.perm{display:grid;grid-template-columns:auto repeat(3,1fr);gap:6px 8px;align-items:center;font-size:13px}
+.perm .h{color:var(--ink3);font-weight:600;text-align:center;font-size:12px}
+.perm .r{font-weight:600}
+.perm .ck{height:28px;border-radius:9px;display:grid;place-items:center;background:var(--sunk);color:var(--ink3)}
+.perm .ck.on{background:var(--h-file-s);color:var(--h-file)}
+.perm .ck .i{width:15px;height:15px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:8px 14px;font-size:13.5px;margin:0}
+.kv dt{color:var(--ink3)}.kv dd{margin:0;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mono{font-family:var(--mono);font-size:12.5px}
+@media (max-width:860px){ .fm{border-radius:18px} }
+
+.fc-body{flex:1;min-width:0;display:flex;flex-direction:column;position:relative}
+.fc-bar{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.fc-bar .sp{flex:1}
+.cols{flex:1;display:flex;overflow-x:auto;min-height:0}
+.col{width:220px;flex:none;border-right:1px solid var(--line);overflow:auto}
+.col ul{list-style:none;margin:0;padding:8px}
+.col li{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:12px;font-weight:600;cursor:pointer}
+.col li .n{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.col li > .i{width:15px;height:15px;color:var(--ink3)}
+.col li:hover{background:var(--sunk)}
+.col li.on{background:var(--h-file-s);color:var(--h-file)}
+.col li.on > .i{color:var(--h-file)}
+.ft-ic.sm{width:26px;height:26px;border-radius:8px}
+.ft-ic.sm .i{width:15px;height:15px}
+.pcol{flex:1;min-width:300px;padding:22px;display:flex;flex-direction:column;gap:16px}
+.pcol .card{background:var(--sunk);border-radius:18px;padding:18px;font-size:14px;line-height:1.6}
+.pcol .card h2{margin:0 0 6px;font-size:20px;font-weight:800}
+.pcol .card p{margin:0 0 8px;color:var(--ink2)}
+.pcol .card code{font-family:var(--mono);font-size:12.5px;background:var(--surface);padding:1px 6px;border-radius:6px}
+.drop{position:absolute;inset:70px 18px 120px auto;width:min(46%,520px);border:2px dashed var(--h-file);border-radius:22px;background:color-mix(in srgb,var(--h-file-s) 85%,transparent);display:grid;place-items:center;text-align:center;color:var(--h-file);font-weight:800;font-size:16px;backdrop-filter:blur(2px)}
+.drop .i{width:34px;height:34px;margin:0 auto 10px;display:block}
+.drop small{display:block;font-weight:600;font-size:13px;font-family:var(--mono);margin-top:4px}
+.xfer{border-top:1px solid var(--line);padding:12px 18px;display:grid;gap:10px}
+.xfer .hd{display:flex;align-items:center;gap:10px;font-weight:800}
+.xfer .hd .muted{font-weight:600;font-size:13px}
+.xfer .hd button{margin-left:auto;color:var(--ink3);font-weight:700;font-size:13px}
+.xr{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:6px 12px}
+.xr b{font-weight:700;font-size:13.5px}
+.xr .bar{grid-column:2;height:6px;border-radius:3px;background:var(--sunk);overflow:hidden}
+.xr .bar i{display:block;height:100%;background:var(--h-file);border-radius:3px}
+.xr .st{grid-row:1/3;grid-column:3;color:var(--ink3);font-size:12.5px;text-align:right}
+.xr .ft-ic{grid-row:1/3}
+.xr.done .bar i{background:var(--h-term)}
+@media (max-width:860px){ .col{width:180px} .drop{display:none} }
+</style>
+<div class="q vc">
+  <nav class="rail">
+    <a class="distro" href="#"><span class="lg"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.39.605C10.376 3.092 9.764 4.72 8.635 7.132c.693.734 1.543 1.589 2.923 2.554-1.484-.61-2.496-1.224-3.252-1.86C6.86 10.842 4.596 15.138 0 23.395c3.612-2.085 6.412-3.37 9.021-3.862a6.61 6.61 0 0 1-.171-1.547l.003-.115c.058-2.315 1.261-4.095 2.687-3.973 1.426.12 2.534 2.096 2.478 4.409a6.52 6.52 0 0 1-.146 1.243c2.58.505 5.352 1.787 8.914 3.844-.702-1.293-1.33-2.459-1.929-3.57-.943-.73-1.926-1.682-3.933-2.713 1.38.359 2.367.772 3.137 1.234-6.09-11.334-6.582-12.84-8.67-17.74z"/></svg></span><span class="dn">arch</span></a>
+    <a class="it c-ov" href="#"><span class="pi"><svg class="i"><use href="#i-overview"/></svg></span><span class="lb">Overview</span></a><a class="it c-term" href="#"><span class="pi"><svg class="i"><use href="#i-terminal"/></svg></span><span class="lb">Terminal</span></a><a class="it c-file on" href="#"><span class="pi"><svg class="i"><use href="#i-files"/></svg></span><span class="lb">Files</span></a><a class="it c-log" href="#"><span class="pi"><svg class="i"><use href="#i-logs"/></svg></span><span class="lb">Logs</span></a><a class="it c-svc" href="#"><span class="pi"><svg class="i"><use href="#i-services"/></svg></span><span class="lb">Services</span><span class="n">1</span></a><a class="it c-sw" href="#"><span class="pi"><svg class="i"><use href="#i-software"/></svg></span><span class="lb">Software</span><span class="n">23</span></a><a class="it c-usr" href="#"><span class="pi"><svg class="i"><use href="#i-users"/></svg></span><span class="lb">Users</span></a><div class="rsep"></div><a class="it c-plg" href="#"><span class="pi"><svg class="i"><use href="#i-plugins"/></svg></span><span class="lb">Plugins</span></a><div class="sp"></div><div class="me"><div class="av">F</div></div></nav>
+  <main class="main">
+    <div class="top">
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search in /home/fonlogen/projects</div><div class="sp"></div>
+      <div class="pill"><i></i>arch<svg class="i" style="width:16px;height:16px"><use href="#i-chevron"/></svg></div>
+      <button class="ib" data-toggle-theme title="Theme"><svg class="i"><use href="#i-moon"/></svg></button>
+      <button class="ib" title="Notifications"><svg class="i"><use href="#i-bell"/></svg></button></div>
+    <section class="fm">
+      <div class="fc-body">
+        <div class="fc-bar">
+          <div class="crumb"><a href="#">/</a><svg class="i"><use href="#i-chevron"/></svg><a href="#">home</a><svg class="i"><use href="#i-chevron"/></svg><a href="#">fonlogen</a><svg class="i"><use href="#i-chevron"/></svg><a href="#">projects</a><svg class="i"><use href="#i-chevron"/></svg><a href="#">quadro</a></div>
+          <div class="sp"></div>
+          <button class="tbtn p"><svg class="i"><use href="#i-plus"/></svg>New</button>
+          <button class="tbtn"><svg class="i"><use href="#i-upload"/></svg>Upload</button>
+          <div class="seg"><button title="Grid"><svg class="i"><use href="#i-grid"/></svg></button><button title="List"><svg class="i"><use href="#i-list"/></svg></button><button class="on" title="Columns"><svg class="i"><use href="#i-columns"/></svg></button></div>
+        </div>
+        <div class="cols"><div class="col"><ul><li class="t-dir"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span><span class="n">boot</span><svg class="i"><use href="#i-right"/></svg></li><li class="t-dir"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span><span class="n">etc</span><svg class="i"><use href="#i-right"/></svg></li><li class="t-dir on"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span><span class="n">home</span><svg class="i"><use href="#i-right"/></svg></li><li class="t-dir"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span><span class="n">opt</span><svg class="i"><use href="#i-right"/></svg></li><li class="t-dir"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span><span class="n">root</span><svg class="i"><use href="#i-right"/></svg></li><li class="t-dir"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span><span class="n">srv</span><svg class="i"><use href="#i-right"/></svg></li><li class="t-dir"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span><span class="n">usr</span><svg class="i"><use href="#i-right"/></svg></li><li class="t-dir"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span><span class="n">var</span><svg class="i"><use href="#i-right"/></svg></li></ul></div><div class="col"><ul><li class="t-dir on"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span><span class="n">fonlogen</span><svg class="i"><use href="#i-right"/></svg></li><li class="t-dir"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span><span class="n">mario</span><svg class="i"><use href="#i-right"/></svg></li><li class="t-dir"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span><span class="n">backup</span><svg class="i"><use href="#i-right"/></svg></li></ul></div><div class="col"><ul><li class="t-dir"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span><span class="n">Desktop</span><svg class="i"><use href="#i-right"/></svg></li><li class="t-dir"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span><span class="n">Documenti</span><svg class="i"><use href="#i-right"/></svg></li><li class="t-dir"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span><span class="n">Immagini</span><svg class="i"><use href="#i-right"/></svg></li><li class="t-dir on"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span><span class="n">projects</span><svg class="i"><use href="#i-right"/></svg></li><li class="t-dir"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span><span class="n">Scaricati</span><svg class="i"><use href="#i-right"/></svg></li><li class="t-code"><span class="ft-ic sm"><svg class="i"><use href="#i-code"/></svg></span><span class="n">deploy.sh</span></li><li class="t-txt"><span class="ft-ic sm"><svg class="i"><use href="#i-file"/></svg></span><span class="n">notes.md</span></li><li class="t-img"><span class="ft-ic sm"><svg class="i"><use href="#i-image"/></svg></span><span class="n">wallpaper-arch.jpg</span></li></ul></div><div class="col"><ul><li class="t-dir on"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span><span class="n">quadro</span><svg class="i"><use href="#i-right"/></svg></li><li class="t-dir"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span><span class="n">homelab</span><svg class="i"><use href="#i-right"/></svg></li><li class="t-dir"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span><span class="n">dotfiles</span><svg class="i"><use href="#i-right"/></svg></li><li class="t-txt"><span class="ft-ic sm"><svg class="i"><use href="#i-file"/></svg></span><span class="n">README.md</span></li></ul></div><div class="col"><ul><li class="t-dir"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span><span class="n">src</span><svg class="i"><use href="#i-right"/></svg></li><li class="t-dir"><span class="ft-ic sm"><svg class="i"><use href="#i-files"/></svg></span><span class="n">web</span><svg class="i"><use href="#i-right"/></svg></li><li class="t-code"><span class="ft-ic sm"><svg class="i"><use href="#i-code"/></svg></span><span class="n">go.mod</span></li><li class="t-code"><span class="ft-ic sm"><svg class="i"><use href="#i-code"/></svg></span><span class="n">Makefile</span></li><li class="t-txt on"><span class="ft-ic sm"><svg class="i"><use href="#i-file"/></svg></span><span class="n">README.md</span></li></ul></div>
+          <div class="pcol">
+            <div style="display:flex;align-items:center;gap:12px"><span class="ft-ic t-txt" style="width:44px;height:44px;border-radius:14px"><svg class="i"><use href="#i-file"/></svg></span><div><b style="font-size:16px;font-weight:800">README.md</b><div class="muted" style="font-size:13px">Markdown, 3.1 KB, edited 2 hours ago</div></div></div>
+            <div class="card"><h2>Quadro</h2><p>Web console for Linux servers.</p><p>Run <code>make dev</code> to start the backend on port 9090.</p></div>
+            <dl class="kv"><dt>Owner</dt><dd>fonlogen : fonlogen</dd><dt>Permissions</dt><dd class="mono">rw-r--r-- (644)</dd><dt>Path</dt><dd class="mono">~/projects/quadro/README.md</dd></dl>
+          </div>
+        </div>
+        <div class="drop"><div><svg class="i"><use href="#i-upload"/></svg>Drop to upload here<small>~/projects/quadro</small></div></div>
+        <div class="xfer">
+          <div class="hd">Transfers <span class="muted">2 running, 1 done</span><button>Clear finished</button></div>
+          <div class="xr"><span class="ft-ic sm t-arc"><svg class="i"><use href="#i-archive"/></svg></span><b>dataset-2026.tar.zst</b><div class="bar"><i style="width:62%"></i></div><span class="st">1.2 of 1.9 GB<br>18 MB/s</span></div>
+          <div class="xr"><span class="ft-ic sm t-img"><svg class="i"><use href="#i-image"/></svg></span><b>logo-final.svg</b><div class="bar"><i style="width:30%"></i></div><span class="st">Waiting</span></div>
+          <div class="xr done"><span class="ft-ic sm t-code"><svg class="i"><use href="#i-code"/></svg></span><b>nginx.conf</b><div class="bar"><i style="width:100%"></i></div><span class="st">Done</span></div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <nav class="dock">
+    <a class="c-ov" href="#"><span class="pi"><svg class="i"><use href="#i-overview"/></svg></span>Home</a>
+    <a class="c-term" href="#"><span class="pi"><svg class="i"><use href="#i-terminal"/></svg></span>Terminal</a>
+    <a class="on c-file" href="#"><span class="pi"><svg class="i"><use href="#i-files"/></svg></span>Files</a>
+    <a class="c-svc" href="#"><span class="pi"><svg class="i"><use href="#i-services"/></svg></span>Services</a>
+    <a href="#"><span class="pi"><svg class="i"><use href="#i-more"/></svg></span>More</a>
+  </nav>
+</div>
+<script src="kit.js"></script>

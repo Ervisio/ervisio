@@ -1,0 +1,109 @@
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+.rail a.it .pi{background:var(--s);color:var(--h)}
+.rail a.it:hover .pi{background:color-mix(in srgb,var(--h) 22%,var(--s))}
+.rail a.it.on{color:var(--h)}
+.rail a.it.on .pi{background:var(--h);color:var(--surface)}
+.rsep{width:36px;height:1px;background:var(--line);margin:6px 0}
+.q{--mono:"JetBrains Mono",ui-monospace,monospace}
+.fm{background:var(--surface);border-radius:22px;flex:1;min-height:0;display:flex;overflow:hidden}
+.ft-ic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;flex:none;background:var(--s);color:var(--h)}
+.ft-ic .i{width:18px;height:18px}
+/* file type colours reuse section hues */
+.t-dir{--h:var(--h-file);--s:var(--h-file-s)}.t-img{--h:var(--h-plg);--s:var(--h-plg-s)}.t-code{--h:var(--h-term);--s:var(--h-term-s)}
+.t-arc{--h:var(--h-log);--s:var(--h-log-s)}.t-doc{--h:var(--h-ov);--s:var(--h-ov-s)}.t-txt{--h:var(--h-sw);--s:var(--h-sw-s)}.t-pdf{--h:var(--h-svc);--s:var(--h-svc-s)}
+.tbtn{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 14px;border-radius:999px;font-weight:700;border:1px solid var(--line)}
+.tbtn:hover{border-color:var(--ink3)}
+.tbtn.p{background:var(--h-file);border-color:var(--h-file);color:var(--surface)}
+.seg{display:inline-flex;background:var(--sunk);border-radius:999px;padding:3px}
+.seg button{width:34px;height:32px;border-radius:999px;display:grid;place-items:center;color:var(--ink3)}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.seg .i{width:17px;height:17px}
+.crumb{display:flex;align-items:center;gap:2px;font-weight:700;font-size:15px;min-width:0;flex-wrap:wrap}
+.crumb a{padding:5px 9px;border-radius:9px;color:var(--ink2);text-decoration:none}
+.crumb a:hover{background:var(--sunk);color:var(--ink)}
+.crumb a:last-child{color:var(--ink)}
+.crumb .i{width:14px;height:14px;color:var(--ink3);transform:rotate(-90deg)}
+.muted{color:var(--ink3)}
+.perm{display:grid;grid-template-columns:auto repeat(3,1fr);gap:6px 8px;align-items:center;font-size:13px}
+.perm .h{color:var(--ink3);font-weight:600;text-align:center;font-size:12px}
+.perm .r{font-weight:600}
+.perm .ck{height:28px;border-radius:9px;display:grid;place-items:center;background:var(--sunk);color:var(--ink3)}
+.perm .ck.on{background:var(--h-file-s);color:var(--h-file)}
+.perm .ck .i{width:15px;height:15px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:8px 14px;font-size:13.5px;margin:0}
+.kv dt{color:var(--ink3)}.kv dd{margin:0;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mono{font-family:var(--mono);font-size:12.5px}
+@media (max-width:860px){ .fm{border-radius:18px} }
+
+.src{display:inline-flex;font-size:11.5px;font-weight:800;padding:2px 8px;border-radius:7px;background:var(--s);color:var(--h);white-space:nowrap}
+.t-txt.src{background:var(--h-sw-s);color:var(--h-sw)}
+.ver{font:12.5px var(--mono);color:var(--ink3);white-space:nowrap}
+.ver b{color:var(--ink);font-weight:600}
+.ver .ar{margin:0 6px;color:var(--ink3)}
+.note{font-size:12px;font-weight:700;padding:2px 8px;border-radius:7px;white-space:nowrap}
+.note.r{background:var(--h-log-s);color:var(--h-log)}
+.note.s{background:var(--h-svc-s);color:var(--h-svc)}
+.note.n{color:var(--ink3);padding:0}
+.abtn{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 14px;border-radius:999px;font-weight:700;font-size:13.5px;background:var(--sunk)}
+.abtn:hover{background:var(--line)}
+.abtn.p{background:var(--h-sw);color:var(--surface)}
+.abtn .i{width:16px;height:16px}
+.ftabs{display:flex;gap:6px;flex-wrap:wrap}
+.ftab{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 14px;border-radius:999px;font-weight:700;font-size:13.5px;color:var(--ink2)}
+.ftab b{font-size:12px;color:var(--ink3)}
+.ftab:hover{background:var(--sunk)}
+.ftab.on{background:var(--h-sw-s);color:var(--h-sw)}
+.ftab.on b{color:inherit}
+.fsearch{display:flex;align-items:center;gap:10px;height:38px;padding:0 14px;border-radius:999px;background:var(--sunk);color:var(--ink3);min-width:220px}
+.sbar{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.sbar .sp{flex:1}
+.ck{width:20px;height:20px;border-radius:7px;display:inline-grid;place-items:center;background:var(--h-sw);color:var(--surface);flex:none}
+.ck .i{width:13px;height:13px}
+.ck.off{background:none;border:2px solid var(--line);box-sizing:border-box}
+
+.sw{flex:1;min-height:calc(100vh - 90px);display:flex;flex-direction:column}
+.hero{display:flex;align-items:center;gap:20px;margin:16px;padding:22px 24px;border-radius:22px;background:var(--h-sw-s);flex-wrap:wrap}
+.hero .n{font-size:56px;font-weight:800;letter-spacing:-.05em;line-height:1;color:var(--h-sw)}
+.hero b{display:block;font-size:18px;font-weight:800}
+.hero small{color:var(--ink2);font-size:13.5px}
+.hero .r{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.hero .abtn{height:44px;padding:0 20px;font-size:14.5px}
+.hero .abtn:not(.p){background:var(--surface)}
+.list{padding:0 16px 20px;overflow:auto}
+.gh{display:flex;align-items:center;gap:10px;margin:14px 4px 8px;font-weight:800}
+.gh .muted{font-weight:600;font-size:13px}
+.gh button{margin-left:auto;font-weight:700;font-size:13px;color:var(--h-sw)}
+.ur{display:grid;grid-template-columns:auto 1fr auto auto 80px;align-items:center;gap:14px;padding:11px 14px;border-radius:14px;background:var(--sunk);margin-bottom:6px}
+.ur .nm{min-width:0}
+.ur .nm b{display:block;font-weight:800}
+.ur .sz{color:var(--ink3);font-size:12.5px;text-align:right}
+.more{display:block;width:100%;padding:10px;border-radius:14px;font-weight:700;color:var(--h-sw);text-align:center}
+.aurw{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:14px;background:var(--h-log-s);color:var(--h-log);font-size:13px;font-weight:600;margin:0 0 8px}
+@media (max-width:860px){ .ur{grid-template-columns:auto 1fr auto} .ur .note,.ur .sz{display:none} }
+</style>
+<div class="q va">
+  <nav class="rail">
+    <a class="distro" href="#"><span class="lg"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.39.605C10.376 3.092 9.764 4.72 8.635 7.132c.693.734 1.543 1.589 2.923 2.554-1.484-.61-2.496-1.224-3.252-1.86C6.86 10.842 4.596 15.138 0 23.395c3.612-2.085 6.412-3.37 9.021-3.862a6.61 6.61 0 0 1-.171-1.547l.003-.115c.058-2.315 1.261-4.095 2.687-3.973 1.426.12 2.534 2.096 2.478 4.409a6.52 6.52 0 0 1-.146 1.243c2.58.505 5.352 1.787 8.914 3.844-.702-1.293-1.33-2.459-1.929-3.57-.943-.73-1.926-1.682-3.933-2.713 1.38.359 2.367.772 3.137 1.234-6.09-11.334-6.582-12.84-8.67-17.74z"/></svg></span><span class="dn">arch</span></a>
+    <a class="it c-ov" href="#"><span class="pi"><svg class="i"><use href="#i-overview"/></svg></span><span class="lb">Overview</span></a><a class="it c-term" href="#"><span class="pi"><svg class="i"><use href="#i-terminal"/></svg></span><span class="lb">Terminal</span></a><a class="it c-file" href="#"><span class="pi"><svg class="i"><use href="#i-files"/></svg></span><span class="lb">Files</span></a><a class="it c-log" href="#"><span class="pi"><svg class="i"><use href="#i-logs"/></svg></span><span class="lb">Logs</span></a><a class="it c-svc" href="#"><span class="pi"><svg class="i"><use href="#i-services"/></svg></span><span class="lb">Services</span><span class="n">1</span></a><a class="it c-sw on" href="#"><span class="pi"><svg class="i"><use href="#i-software"/></svg></span><span class="lb">Software</span><span class="n">23</span></a><a class="it c-usr" href="#"><span class="pi"><svg class="i"><use href="#i-users"/></svg></span><span class="lb">Users</span></a><div class="rsep"></div><a class="it c-plg" href="#"><span class="pi"><svg class="i"><use href="#i-plugins"/></svg></span><span class="lb">Plugins</span></a><div class="sp"></div><div class="me"><div class="av">F</div></div></nav>
+  <main class="main">
+    <div class="top">
+      <div class="search"><svg class="i"><use href="#i-search"/></svg>Search packages</div><div class="sp"></div>
+      <div class="pill"><i></i>arch<svg class="i" style="width:16px;height:16px"><use href="#i-chevron"/></svg></div>
+      <button class="ib" data-toggle-theme title="Theme"><svg class="i"><use href="#i-moon"/></svg></button>
+      <button class="ib" title="Notifications"><svg class="i"><use href="#i-bell"/></svg></button></div>
+    <section class="fm sw">
+      <div class="sbar"><div class="ftabs"><button class="ftab on">Updates <b>23</b></button><button class="ftab">Installed <b>883</b></button><button class="ftab">Find software</button><button class="ftab">History</button></div><div class="sp"></div><span class="muted" style="font-size:13px">Checked 4 min ago</span><button class="abtn"><svg class="i"><use href="#i-refresh"/></svg>Check now</button></div>
+      <div class="hero"><span class="n">23</span><div><b>Updates ready</b><small>412 MB to download. linux 7.2.7 needs a reboot, openssl has a security fix.</small></div>
+        <div class="r"><button class="abtn"><svg class="i"><use href="#i-clock"/></svg>Tonight at 03:00</button><button class="abtn p"><svg class="i"><use href="#i-download"/></svg>Update all</button></div></div>
+      <div class="list">
+        <div class="gh">Official repositories <span class="muted">18</span><button>Select none</button></div><div class="ur"><span class="ck"><svg class="i"><use href="#i-check"/></svg></span><div class="nm"><b>linux</b><span class="ver">7.2.6.arch2-1<span class="ar">→</span><b>7.2.7.arch1-1</b></span></div><span class="src t-txt">core</span><span class="note r">Reboot needed</span><span class="sz">142 MB</span></div><div class="ur"><span class="ck"><svg class="i"><use href="#i-check"/></svg></span><div class="nm"><b>systemd</b><span class="ver">259.2-1<span class="ar">→</span><b>259.3-1</b></span></div><span class="src t-txt">core</span><span class="sz">9.8 MB</span></div><div class="ur"><span class="ck"><svg class="i"><use href="#i-check"/></svg></span><div class="nm"><b>mesa</b><span class="ver">26.2.3-1<span class="ar">→</span><b>26.2.4-1</b></span></div><span class="src t-txt">extra</span><span class="sz">11.4 MB</span></div><div class="ur"><span class="ck"><svg class="i"><use href="#i-check"/></svg></span><div class="nm"><b>firefox</b><span class="ver">143.0.1-1<span class="ar">→</span><b>143.0.2-1</b></span></div><span class="src t-txt">extra</span><span class="note r">Restart Firefox</span><span class="sz">71 MB</span></div><div class="ur"><span class="ck"><svg class="i"><use href="#i-check"/></svg></span><div class="nm"><b>docker</b><span class="ver">1:28.4.0-1<span class="ar">→</span><b>1:28.4.1-1</b></span></div><span class="src t-txt">extra</span><span class="note r">Restarts docker.service</span><span class="sz">29 MB</span></div><div class="ur"><span class="ck"><svg class="i"><use href="#i-check"/></svg></span><div class="nm"><b>openssl</b><span class="ver">3.5.3-1<span class="ar">→</span><b>3.5.4-1</b></span></div><span class="src t-txt">core</span><span class="note s">Security fix</span><span class="sz">6.2 MB</span></div><button class="more">Show 12 more</button>
+        <div class="gh">AUR <span class="muted">1</span></div>
+        <div class="aurw"><svg class="i"><use href="#i-alert"/></svg><div>AUR packages are built from community scripts. Review the PKGBUILD before updating, they are left unselected.</div></div><div class="ur"><span class="ck off"></span><div class="nm"><b>visual-studio-code-bin</b><span class="ver">1.104.2-1<span class="ar">→</span><b>1.105.0-1</b></span></div><span class="src t-arc">AUR</span><span class="note n">Builds from AUR</span><span class="sz">118 MB</span></div>
+        <div class="gh">Flatpak <span class="muted">1</span></div><div class="ur"><span class="ck"><svg class="i"><use href="#i-check"/></svg></span><div class="nm"><b>com.spotify.Client</b><span class="ver">1.2.70<span class="ar">→</span><b>1.2.72</b></span></div><span class="src t-dir">Flatpak</span><span class="sz">182 MB</span></div>
+      </div>
+    </section>
+  </main>
+  <nav class="dock"><a class="c-ov" href="#"><span class="pi"><svg class="i"><use href="#i-overview"/></svg></span>Home</a><a class="c-term" href="#"><span class="pi"><svg class="i"><use href="#i-terminal"/></svg></span>Terminal</a><a class="c-file" href="#"><span class="pi"><svg class="i"><use href="#i-files"/></svg></span>Files</a><a class="c-svc" href="#"><span class="pi"><svg class="i"><use href="#i-services"/></svg></span>Services</a><a href="#"><span class="pi"><svg class="i"><use href="#i-more"/></svg></span>More</a></nav>
+</div>
+<script src="kit.js"></script>

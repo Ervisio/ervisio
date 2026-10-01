@@ -1,0 +1,24 @@
+{
+  "round": "015-users",
+  "action": "choose",
+  "selected": [
+    "b"
+  ],
+  "note": "",
+  "variants": {},
+  "viewed_at": {
+    "viewport": "laptop",
+    "theme": "dark",
+    "layout": "side"
+  },
+  "id": "01e387979b3a",
+  "at": "2026-10-01T15:20:19.592Z",
+  "consumed": true,
+  "files": {
+    "a": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/015-users/a.html",
+    "b": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/015-users/b.html",
+    "c": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/015-users/c.html"
+  },
+  "round_dir": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/015-users",
+  "consumed_at": "2026-10-01T15:20:19.885Z"
+}

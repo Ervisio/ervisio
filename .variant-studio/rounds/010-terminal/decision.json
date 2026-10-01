@@ -1,0 +1,26 @@
+{
+  "round": "010-terminal",
+  "action": "remix",
+  "selected": [
+    "b",
+    "c",
+    "a"
+  ],
+  "note": "Tutto. Mi piace la split view, mi piacciono le sessioni",
+  "variants": {},
+  "viewed_at": {
+    "viewport": "laptop",
+    "theme": "dark",
+    "layout": "side"
+  },
+  "id": "512b510ff77f",
+  "at": "2026-10-01T14:58:25.593Z",
+  "consumed": true,
+  "files": {
+    "a": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/010-terminal/a.html",
+    "b": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/010-terminal/b.html",
+    "c": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/010-terminal/c.html"
+  },
+  "round_dir": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/010-terminal",
+  "consumed_at": "2026-10-01T14:58:26.190Z"
+}
