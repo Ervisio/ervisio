@@ -109,3 +109,41 @@ func TestDiff(t *testing.T) {
 		t.Fatalf("diff %q", d)
 	}
 }
+
+func TestUpdatesKeys(t *testing.T) {
+	cfg := Default()
+	if cfg.Updates.Channel != "stable" || !cfg.Updates.AutoCheck || cfg.Updates.AutoInstall || cfg.Updates.AutoInstallAt != "03:30" {
+		t.Fatalf("bad update defaults: %+v", cfg.Updates)
+	}
+	good := map[string]any{"updates.channel": "prerelease", "updates.auto_check": false, "updates.auto_install": true, "updates.auto_install_at": "23:59"}
+	for k, v := range good {
+		if err := cfg.Set(k, v); err != nil {
+			t.Errorf("%s=%v: %v", k, v, err)
+		}
+	}
+	bad := map[string][]any{
+		"updates.channel":         {"nightly", "", true},
+		"updates.auto_check":      {"yes", 1.0},
+		"updates.auto_install_at": {"24:00", "3:30", "03:60", "03-30", "+3:30", "03:3x", " 3:30", "", 330.0},
+	}
+	for k, vs := range bad {
+		for _, v := range vs {
+			if err := cfg.Set(k, v); err == nil {
+				t.Errorf("%s=%#v accepted", k, v)
+			}
+		}
+	}
+	if m, err := ParseClock("03:30"); err != nil || m != 210 {
+		t.Fatalf("ParseClock = %d, %v", m, err)
+	}
+	p := filepath.Join(t.TempDir(), "c.conf")
+	os.WriteFile(p, []byte("[updates]\nchannel = \"beta\"\n"), 0o644)
+	if _, _, _, err := Load(p); err == nil {
+		t.Fatal("invalid channel in file accepted")
+	}
+	os.WriteFile(p, []byte("[updates]\nauto_install = true\nauto_install_at = \"04:15\"\n"), 0o644)
+	c, _, _, err := Load(p)
+	if err != nil || !c.Updates.AutoInstall || c.Updates.AutoInstallAt != "04:15" || c.Updates.Channel != "stable" || !c.Updates.AutoCheck {
+		t.Fatalf("load updates: %+v %v", c.Updates, err)
+	}
+}

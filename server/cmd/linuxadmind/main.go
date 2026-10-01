@@ -16,6 +16,7 @@ import (
 	"github.com/Fonlogen/LinuxAdmin/server/internal/brand"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/bridge"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/server"
+	"github.com/Fonlogen/LinuxAdmin/server/internal/update"
 )
 
 // hiddenFlags are omitted from -help.
@@ -27,6 +28,12 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == bridge.HelperFlag {
 		os.Exit(bridge.RunSessionHelper(os.Args[2:]))
 	}
+	// Internal mode: switch to another installed version, restart the
+	// service and roll back if it does not answer (started by updates.apply
+	// in a transient systemd unit, never by hand).
+	if len(os.Args) > 1 && os.Args[1] == update.HelperFlag {
+		os.Exit(update.RunHelper(os.Args[2:]))
+	}
 	configPath := flag.String("config", brand.ConfigPath, "configuration file")
 	dev := flag.Bool("dev", false, "development mode: plain HTTP on 127.0.0.1:9090, no root, only your own user")
 	listen := flag.String("listen", "", "listen address (overrides the config; dev default 127.0.0.1:9090)")
@@ -34,6 +41,7 @@ func main() {
 	vite := flag.String("vite", "http://127.0.0.1:5173", "Vite dev server to proxy to in --dev without --web")
 	bridgePath := flag.String("bridge", "", "path of "+brand.BridgeBinary+" (default: next to this binary)")
 	noAuth := flag.Bool("dev-insecure-noauth", false, "dev only: sign every request in as the daemon's user")
+	version := flag.Bool("version", false, "print the version and exit")
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [flags]\n", brand.DaemonBinary)
 		flag.VisitAll(func(f *flag.Flag) {
@@ -44,6 +52,10 @@ func main() {
 		})
 	}
 	flag.Parse()
+	if *version {
+		fmt.Println(brand.Version)
+		return
+	}
 	log.SetFlags(log.LstdFlags)
 	log.SetPrefix(brand.DaemonBinary + ": ")
 
@@ -68,9 +80,20 @@ func main() {
 	if bp, err = filepath.Abs(bp); err != nil {
 		log.Fatal(err)
 	}
+	// Pin the bridge of this version: with the versioned layout the path
+	// may go through the `current` symlink, which an update moves.
+	if r, err := filepath.EvalSymlinks(bp); err == nil {
+		bp = r
+	}
+	// A versioned install (/usr/lib/linuxadmin/versions/<v>/bin) serves the
+	// web app and packaged plugins of its own version.
+	versionDir, versioned := update.RunningVersionDir()
 	webDir := *web
 	if webDir == "" && !*dev {
 		webDir = brand.WebDir
+		if versioned {
+			webDir = filepath.Join(versionDir, "web")
+		}
 	}
 	if webDir != "" {
 		if webDir, err = filepath.Abs(webDir); err != nil {
@@ -78,6 +101,9 @@ func main() {
 		}
 	}
 	pluginDirs := []string{brand.PackagedPluginsDir, brand.InstalledPluginsDir}
+	if versioned {
+		pluginDirs[0] = filepath.Join(versionDir, "plugins")
+	}
 	devPlugins := ""
 	if *dev {
 		if wd, err := os.Getwd(); err == nil {
@@ -117,6 +143,20 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	signal.Ignore(syscall.SIGPIPE)
+	if !*dev {
+		// Automatic update checks and installs ([updates] in the config).
+		u := update.New(update.NewChecker())
+		exe, _ := os.Executable()
+		if r, err := filepath.EvalSymlinks(exe); err == nil {
+			exe = r
+		}
+		if ok, why := u.Supported(exe, false); ok {
+			auto := &update.Auto{Updater: u, Config: srv.Config, Logf: log.Printf}
+			go auto.Run(ctx)
+		} else {
+			log.Printf("self-update disabled: %s", why)
+		}
+	}
 	if err := srv.Run(ctx); err != nil {
 		log.Fatal(err)
 	}

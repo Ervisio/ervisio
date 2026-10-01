@@ -20,8 +20,10 @@ import (
 	"github.com/Fonlogen/LinuxAdmin/server/internal/modules"
 	configmod "github.com/Fonlogen/LinuxAdmin/server/internal/modules/config"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/plugins"
+	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/updates"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/sys"
+	"github.com/Fonlogen/LinuxAdmin/server/internal/update"
 )
 
 func main() {
@@ -29,7 +31,12 @@ func main() {
 	configPath := flag.String("config", brand.ConfigPath, "daemon configuration file")
 	dev := flag.Bool("dev", false, "the daemon runs in --dev (passed by linuxadmind)")
 	devPlugins := flag.String("dev-plugins", "", "with --dev: the daemon's ./plugins folder")
+	version := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
+	if *version {
+		fmt.Println(brand.Version)
+		return
+	}
 
 	log.SetFlags(0)
 	log.SetPrefix(brand.BridgeBinary + ": ")
@@ -44,8 +51,13 @@ func main() {
 		log.Fatal("--config must be an absolute path")
 	}
 	configmod.Path = filepath.Clean(*configPath)
+	// A versioned install lists the plugins shipped with its own version.
+	if vdir, ok := update.RunningVersionDir(); ok {
+		plugins.SystemDir = filepath.Join(vdir, "plugins")
+	}
 	if *dev {
 		plugins.DaemonDev = true
+		updates.DaemonDev = true
 		if *devPlugins != "" {
 			if !filepath.IsAbs(*devPlugins) {
 				log.Fatal("--dev-plugins must be an absolute path")

@@ -12,8 +12,8 @@ LinuxAdmin is early software. It runs and I use it on my own machine, but it has
 - Admin actions (package transactions, user and group changes, file operations as root, config changes) are covered mostly by unit tests, with limited manual testing.
 - The package manager backends for apt, dnf, zypper and Flatpak exist and have unit tests. I have not run them on real Debian, Fedora or openSUSE machines.
 - The PAM file in `packaging/` is written for Arch. Other distributions need small changes.
-- There are no releases and no distribution packages yet.
-- Self-update from GitHub releases is in progress.
+- There are no distribution packages yet. Releases are published on GitHub with signed archives.
+- Self-update from GitHub releases is implemented (Settings > About) but has not yet been exercised on a live install.
 - A security review of the code is in [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md). It lists each finding and how it was fixed. It is a self review, not an external audit.
 
 ## Features
@@ -189,7 +189,7 @@ auto_install = false
 auto_install_at = "03:30"
 ```
 
-The `updates` keys belong to the self-update feature, which is in progress.
+The `updates` keys control self-update: the release channel, automatic checks, and an optional nightly install. See [docs/RELEASING.md](docs/RELEASING.md) for how releases are built and signed.
 
 Per-user preferences (theme, language, dashboard layout) live in `~/.config/linuxadmin/`.
 
@@ -256,7 +256,6 @@ docs/              architecture, API notes, design rules, security review
 
 ## Roadmap
 
-- Self-update from GitHub releases (in progress)
 - Test and fix on Debian, Fedora and openSUSE
 - Distribution packages, starting with a PKGBUILD
 - Desktop app wrapper

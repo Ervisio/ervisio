@@ -4,19 +4,19 @@
 //	plugin-sign -key key.pem <folder>      hash every file into manifest.json "files" and write manifest.sig
 //	plugin-sign -verify [-pub BASE64] <folder>   check a signed folder
 //
-// The key file holds the base64 of the 64-byte ed25519 private key.
+// The key file holds the base64 of the 64-byte ed25519 private key (package
+// signkey, shared with release-sign).
 package main
 
 import (
 	"crypto/ed25519"
-	"crypto/rand"
 	"encoding/base64"
 	"flag"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/plugins"
+	"github.com/Fonlogen/LinuxAdmin/server/internal/signkey"
 )
 
 func main() {
@@ -28,9 +28,8 @@ func main() {
 
 	switch {
 	case *genkey != "":
-		pk, sk, err := ed25519.GenerateKey(rand.Reader)
+		pk, err := signkey.GenerateFile(*genkey)
 		check(err)
-		check(os.WriteFile(*genkey, []byte(base64.StdEncoding.EncodeToString(sk)+"\n"), 0o600))
 		fmt.Println("public key:", base64.StdEncoding.EncodeToString(pk))
 	case *verify:
 		if flag.NArg() != 1 {
@@ -38,9 +37,9 @@ func main() {
 		}
 		keys := plugins.TrustedKeys
 		if *pub != "" {
-			b, err := base64.StdEncoding.DecodeString(*pub)
-			if err != nil || len(b) != ed25519.PublicKeySize {
-				check(fmt.Errorf("-pub is not a base64 ed25519 public key"))
+			b, err := signkey.ParsePublic(*pub)
+			if err != nil {
+				check(fmt.Errorf("-pub: %v", err))
 			}
 			keys = []ed25519.PublicKey{b}
 		}
@@ -55,13 +54,9 @@ func main() {
 		}
 		fmt.Println("signature ok")
 	case *key != "" && flag.NArg() == 1:
-		b, err := os.ReadFile(*key)
+		sk, err := signkey.Load(*key)
 		check(err)
-		sk, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(b)))
-		if err != nil || len(sk) != ed25519.PrivateKeySize {
-			check(fmt.Errorf("%s is not a plugin-sign key file", *key))
-		}
-		check(plugins.SignFolder(flag.Arg(0), ed25519.PrivateKey(sk)))
+		check(plugins.SignFolder(flag.Arg(0), sk))
 		fmt.Println("signed", flag.Arg(0))
 	default:
 		usage()

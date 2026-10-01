@@ -140,6 +140,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/public/host", s.handlePublicHost)
 	mux.HandleFunc("GET /api/public/logo", s.handlePublicLogo)
+	mux.HandleFunc("GET /api/health", s.handleHealth)
 	mux.HandleFunc("POST /api/auth/login", s.csrf(s.handleLogin))
 	mux.HandleFunc("POST /api/auth/logout", s.csrf(s.handleLogout))
 	mux.HandleFunc("GET /api/auth/session", s.authed(s.handleSession))

@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Fonlogen/LinuxAdmin/server/internal/brand"
 	"github.com/coder/websocket"
 )
 
@@ -285,6 +286,14 @@ func TestUnauthenticated(t *testing.T) {
 		t.Fatal("login without csrf header", code)
 	}
 	if code, body := do(t, "POST", ts.URL+"/api/auth/login", `{"user":"root","password":"y"}`, true); code != 403 || !strings.Contains(body, "root_disabled") {
+		t.Fatal(code, body)
+	}
+}
+
+func TestHealth(t *testing.T) {
+	ts, _ := newTestServer(t, false)
+	code, body := do(t, "GET", ts.URL+"/api/health", "", false)
+	if code != 200 || !strings.Contains(body, `"version":"`+brand.Version+`"`) || !strings.Contains(body, `"startedAt":`) {
 		t.Fatal(code, body)
 	}
 }

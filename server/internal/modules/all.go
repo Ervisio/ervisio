@@ -12,6 +12,7 @@ import (
 	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/software"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/system"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/terminal"
+	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/updates"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/users"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
 )
@@ -29,4 +30,5 @@ func RegisterAll(r *rpc.Registry) {
 	software.Register(r)
 	users.Register(r)
 	plugins.Register(r)
+	updates.Register(r)
 }

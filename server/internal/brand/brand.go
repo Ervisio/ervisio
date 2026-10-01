@@ -28,9 +28,26 @@ const (
 	// PrefsFile is the per-user preferences file name inside UserDataDir.
 	PrefsFile = "prefs.json"
 
-	// WebDir is where the packaged web app is installed.
+	// LibDir holds the installed versions (LibDir/versions/<v>/{bin,web,plugins})
+	// and the `current` / `previous` symlinks used by self-update. See
+	// internal/update and docs/RELEASING.md.
+	LibDir = "/usr/lib/" + Slug
+	// BinLink is the command on PATH; with the versioned layout it is a
+	// symlink to LibDir/current/bin/linuxadmind.
+	BinLink = "/usr/bin/" + DaemonBinary
+	// ServiceUnit is the systemd unit of the daemon.
+	ServiceUnit = Slug + ".service"
+	// UpdatesDir keeps self-update state (last.json) and the root-only
+	// download staging folder.
+	UpdatesDir = "/var/lib/" + Slug + "/updates"
+	// GitHubRepo is where releases are published.
+	GitHubRepo = "Fonlogen/LinuxAdmin"
+
+	// WebDir is where the web app of a flat (pre-versioned) install lives.
+	// A versioned install serves LibDir/versions/<v>/web instead.
 	WebDir = "/usr/share/" + Slug + "/web"
-	// PackagedPluginsDir and InstalledPluginsDir are the plugin roots.
+	// PackagedPluginsDir and InstalledPluginsDir are the plugin roots. A
+	// versioned install uses LibDir/versions/<v>/plugins as packaged root.
 	PackagedPluginsDir  = "/usr/share/" + Slug + "/plugins"
 	InstalledPluginsDir = "/var/lib/" + Slug + "/plugins"
 

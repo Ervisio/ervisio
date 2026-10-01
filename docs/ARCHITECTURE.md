@@ -49,6 +49,7 @@ prints a one-time sign-in URL instead of asking for a password.
 
 | What | How |
 |---|---|
+| Health (no auth) | `GET /api/health` → `{status:"ok",version,startedAt}`; polled while the daemon restarts after an update (`docs/api/updates.md`) |
 | Public host info for the sign-in page | `GET /api/public/host` → `{hostname, ip?, distro:{id,name,color,logo?,logoUrl?}}`; `GET /api/public/logo` serves the distro logo |
 | Sign in / out | `POST /api/auth/login {user,password,remember?}` → same object as session; `POST /api/auth/logout` |
 | Current session | `GET /api/auth/session` → `{user,name,uid,home,groups,isRoot,isAdmin,canSudo,unlockedUntil?}` or 401 (times in unix ms) |
@@ -160,6 +161,11 @@ key = ""
 [plugins]
 allow_unsigned = false
 dev = false
+[updates]
+channel = "stable"     # stable | prerelease
+auto_check = true
+auto_install = false
+auto_install_at = "03:30"
 ```
 Key table, types and the `config.*` methods: `docs/api/config.md`.
 
@@ -189,6 +195,15 @@ runs in an `<iframe sandbox="allow-scripts">` (opaque origin, strict CSP) and ta
 `postMessage` broker that allows the declared commands and folders (`web/PLUGIN-SDK.md`). Signed plugins
 carry `manifest.sig` (ed25519, team key: `docs/PLUGIN-SIGNING.md`); unsigned ones are blocked by default.
 
+## Releases and self-update
+
+Tags `vX.Y.Z` build signed release archives on GitHub (`.github/workflows/release.yml`). Installed consoles live in
+`/usr/lib/linuxadmin/versions/<v>` with a `current` symlink; `updates.apply` downloads and verifies a release
+(ed25519 over `SHA256SUMS`, key in `server/internal/update/sign.go`), installs it next to the running one and hands
+off to `linuxadmind --apply-update` in a transient systemd unit, which switches `current`, restarts the service and
+rolls back if `/api/health` does not report the new version within 30 s. Details: `docs/RELEASING.md`,
+`docs/api/updates.md`.
+
 ## Repository layout
 
 ```
@@ -196,7 +211,8 @@ server/            Go: cmd/linuxadmind, cmd/linuxadmin-bridge, internal/…
 web/               React app
 plugins/           first-party example plugins
 docs/              ARCHITECTURE.md, DESIGN-RULES.md, api/<module>.md, design/
-packaging/         systemd unit, PAM file, PKGBUILD (later)
+packaging/         systemd unit, PAM file, install.sh (versioned layout), build-release.sh, PKGBUILD (later)
+.github/workflows/ ci.yml (vet/test/lint/build), release.yml (tag → signed GitHub release)
 ```
 
 ## Ownership while building in parallel

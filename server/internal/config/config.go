@@ -57,6 +57,7 @@ type Config struct {
 	Session   Session `toml:"session"`
 	TLS       TLS     `toml:"tls"`
 	Plugins   Plugins `toml:"plugins"`
+	Updates   Updates `toml:"updates"`
 }
 
 // Login holds sign-in page and brute-force settings.
@@ -85,6 +86,20 @@ type Plugins struct {
 	Dev           bool `toml:"dev"`
 }
 
+// Updates holds the self-update settings (internal/update).
+type Updates struct {
+	// Channel is "stable" (releases without a pre-release suffix) or
+	// "prerelease" (also -rc / -beta releases).
+	Channel string `toml:"channel"`
+	// AutoCheck: the daemon checks GitHub every few hours and admins see a
+	// notification when a newer version exists.
+	AutoCheck bool `toml:"auto_check"`
+	// AutoInstall: the daemon installs a newer version by itself every day
+	// at AutoInstallAt (local time, "HH:MM").
+	AutoInstall   bool   `toml:"auto_install"`
+	AutoInstallAt string `toml:"auto_install_at"`
+}
+
 // Default returns the built-in configuration used when no file exists.
 func Default() *Config {
 	return &Config{
@@ -95,6 +110,7 @@ func Default() *Config {
 		// Only signed plugins by default (security review H2); dev
 		// folders are still loaded in developer mode, marked unsigned.
 		Plugins: Plugins{AllowUnsigned: false},
+		Updates: Updates{Channel: "stable", AutoCheck: true, AutoInstall: false, AutoInstallAt: "03:30"},
 	}
 }
 

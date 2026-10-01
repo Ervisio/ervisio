@@ -6,7 +6,10 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/linuxadmind --bridge /usr/lib/linuxadmin/linuxadmin-bridge
+# /usr/bin/linuxadmind -> /usr/lib/linuxadmin/current/bin/linuxadmind: the
+# bridge, web app and packaged plugins are taken from the same version folder
+# (self-update moves `current`, see docs/RELEASING.md).
+ExecStart=/usr/bin/linuxadmind
 Restart=on-failure
 RestartSec=2
 # The daemon closes its bridges itself on SIGTERM; anything left is killed

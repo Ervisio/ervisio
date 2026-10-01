@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Fonlogen/LinuxAdmin/server/internal/brand"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/sys"
 )
 
@@ -82,4 +83,16 @@ func (s *Server) handlePublicLogo(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'; style-src 'unsafe-inline'")
 	w.Header().Set("Cache-Control", "public, max-age=3600")
 	http.ServeContent(w, r, fi.Name(), fi.ModTime(), f)
+}
+
+// startedAt is when this daemon process started (unix ms), reported by
+// /api/health so a client can tell a restarted daemon from the old one.
+var startedAt = time.Now().UnixMilli()
+
+// handleHealth answers GET /api/health without authentication: the web
+// app polls it while the daemon restarts after an update, and the update
+// helper uses it to decide whether to roll back.
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "version": brand.Version, "startedAt": startedAt})
 }

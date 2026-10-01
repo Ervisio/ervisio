@@ -1,6 +1,7 @@
 # Plugin signing key
 
-LinuxAdmin trusts plugins signed with one ed25519 key, the **team key**. Since `plugins.allow_unsigned = false` is
+LinuxAdmin trusts plugins signed with one ed25519 key, the **team key**. (Releases of LinuxAdmin itself are signed
+with a different key, the release key: `docs/RELEASING.md`.) Since `plugins.allow_unsigned = false` is
 the default, a plugin that is not signed with it does not run (except dev folders in developer mode, marked
 "Unsigned, dev"). The signature format is in `docs/api/plugins.md`, "Signing".
 

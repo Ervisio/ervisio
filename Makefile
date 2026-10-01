@@ -4,7 +4,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -X github.com/Fonlogen/LinuxAdmin/server/internal/brand.Version=$(VERSION)
 DEV_LISTEN ?= 127.0.0.1:9090
 
-.PHONY: build build-server test-server dev dev-noauth dev-dist build-web dev-web clean
+.PHONY: build build-server test-server dev dev-noauth dev-dist build-web dev-web dist clean
 
 build: build-web build-server
 
@@ -32,5 +32,10 @@ build-web:
 dev-web:
 	npm --prefix web run dev
 
+# Release archive for this machine's architecture, as the release workflow
+# builds it: make dist VERSION=1.2.3  ->  dist/linuxadmin-1.2.3-linux-<arch>.tar.gz
+dist: build
+	./packaging/build-release.sh $(VERSION) $(shell cd server && $(GO) env GOARCH) dist
+
 clean:
-	rm -rf server/bin
+	rm -rf server/bin dist

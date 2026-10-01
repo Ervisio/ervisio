@@ -95,7 +95,45 @@ var keys = []Key{
 		get: func(c *Config) any { return c.Plugins.AllowUnsigned }, set: func(c *Config, v any) { c.Plugins.AllowUnsigned = v.(bool) }, validate: noCheck},
 	{Name: "plugins.dev", Type: Bool,
 		get: func(c *Config) any { return c.Plugins.Dev }, set: func(c *Config, v any) { c.Plugins.Dev = v.(bool) }, validate: noCheck},
+	{Name: "updates.channel", Type: Enum, Values: []string{"stable", "prerelease"},
+		get: func(c *Config) any { return c.Updates.Channel }, set: func(c *Config, v any) { c.Updates.Channel = v.(string) },
+		validate: func(v any) error {
+			if !slices.Contains([]string{"stable", "prerelease"}, v.(string)) {
+				return errors.New("must be stable or prerelease")
+			}
+			return nil
+		}},
+	{Name: "updates.auto_check", Type: Bool,
+		get: func(c *Config) any { return c.Updates.AutoCheck }, set: func(c *Config, v any) { c.Updates.AutoCheck = v.(bool) }, validate: noCheck},
+	{Name: "updates.auto_install", Type: Bool,
+		get: func(c *Config) any { return c.Updates.AutoInstall }, set: func(c *Config, v any) { c.Updates.AutoInstall = v.(bool) }, validate: noCheck},
+	{Name: "updates.auto_install_at", Type: String,
+		get: func(c *Config) any { return c.Updates.AutoInstallAt }, set: func(c *Config, v any) { c.Updates.AutoInstallAt = v.(string) },
+		validate: func(v any) error {
+			_, err := ParseClock(v.(string))
+			return err
+		}},
 }
+
+// ParseClock parses a 24-hour "HH:MM" time of day into minutes after midnight.
+func ParseClock(s string) (int, error) {
+	if len(s) != 5 || s[2] != ':' {
+		return 0, errClock
+	}
+	for _, i := range []int{0, 1, 3, 4} {
+		if s[i] < '0' || s[i] > '9' {
+			return 0, errClock
+		}
+	}
+	h, _ := strconv.Atoi(s[:2])
+	m, _ := strconv.Atoi(s[3:])
+	if h > 23 || m > 59 {
+		return 0, errClock
+	}
+	return h*60 + m, nil
+}
+
+var errClock = errors.New(`must be a time of day "HH:MM" (00:00 to 23:59)`)
 
 // Keys returns the description of every configuration key, in file order.
 func Keys() []Key { return keys }

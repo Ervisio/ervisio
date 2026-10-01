@@ -74,6 +74,10 @@ const cfg: Record<string, unknown> = rd('config', {
   'plugins.dev': false,
   'tls.cert': '',
   'tls.key': '',
+  'updates.channel': 'stable',
+  'updates.auto_check': true,
+  'updates.auto_install': false,
+  'updates.auto_install_at': '03:30',
 });
 
 const MOCK_KEYS = [
@@ -82,6 +86,8 @@ const MOCK_KEYS = [
   { key: 'tls.mode', type: 'enum', values: ['self-signed', 'letsencrypt', 'custom'], restart: true }, { key: 'tls.redirect', type: 'bool', restart: true },
   { key: 'tls.cert', type: 'path', restart: true }, { key: 'tls.key', type: 'path', restart: true },
   { key: 'plugins.allow_unsigned', type: 'bool' }, { key: 'plugins.dev', type: 'bool' },
+  { key: 'updates.channel', type: 'enum', values: ['stable', 'prerelease'] }, { key: 'updates.auto_check', type: 'bool' },
+  { key: 'updates.auto_install', type: 'bool' }, { key: 'updates.auto_install_at', type: 'string' },
 ];
 const mockState = () => ({ path: '/etc/linuxadmin/linuxadmin.conf', exists: true, values: { ...cfg }, defaults: {}, keys: MOCK_KEYS, warnings: [] });
 
@@ -123,6 +129,22 @@ export async function mockCall(method: string, params: any, _admin?: boolean): P
       return mockState();
     case 'plugins.list':
       return delay([]);
+    case 'updates.status':
+      return delay({
+        current: '1.0.0', install: 'versioned', canUpdate: true, previous: '0.9.2', installed: ['0.9.2', '1.0.0'],
+        last: { state: 'ok', kind: 'update', from: '0.9.2', to: '1.0.0', startedAt: Date.now() - 86400e3 * 6, finishedAt: Date.now() - 86400e3 * 6 + 21e3 },
+        running: false, packageBusy: false, arch: 'amd64',
+        settings: { channel: cfg['updates.channel'], autoCheck: cfg['updates.auto_check'], autoInstall: cfg['updates.auto_install'], autoInstallAt: cfg['updates.auto_install_at'] },
+      });
+    case 'updates.check':
+      return delay({
+        current: '1.0.0', channel: cfg['updates.channel'], autoCheck: cfg['updates.auto_check'], checkedAt: Date.now(), newer: true, arch: 'amd64',
+        latest: {
+          version: '1.1.0', tag: 'v1.1.0', name: 'LinuxAdmin 1.1.0', publishedAt: Date.now() - 86400e3 * 2, prerelease: false,
+          asset: 'linuxadmin-1.1.0-linux-amd64.tar.gz', size: 16_432_392, url: 'https://github.com/Fonlogen/LinuxAdmin/releases/tag/v1.1.0',
+          notes: '## Highlights\n- **Self-update** from Settings › About\n- Faster file manager thumbnails\n\n## Fixes\n- Terminal no longer loses the cursor after a resize (`#42`)\n- Logs: watcher retention is applied',
+        },
+      }, 400);
   }
   throw new ApiError('not_found', `Mock has no method ${method}`);
 }

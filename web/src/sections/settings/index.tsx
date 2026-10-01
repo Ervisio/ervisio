@@ -8,6 +8,7 @@ import { Button, Icon, Input, Segmented, Select, Switch, toast, type HueId, type
 import { ColourBlock, ThemeGrid } from './Appearance';
 import { HostsBlock, type HostEntry } from './Hosts';
 import { usePrefSave, useServerConfig } from './save';
+import { UpdatesBlock } from './Updates';
 import './settings.css';
 
 interface RowDef {
@@ -204,7 +205,31 @@ export default function SettingsPage() {
   groups.push({
     id: 'about', part: 'about', icon: 'info', hue: 'sw', title: t('groups.about'),
     rows: [
-      { id: 'version', title: `${Name} 0.1.0`, desc: t('about.versionDesc') },
+      { id: 'version', title: t('updates.title'), words: 'version update upgrade release rollback github', block: <UpdatesBlock isAdmin={isAdmin} /> },
+      ...(isAdmin
+        ? [
+            {
+              id: 'uchannel', title: t('updates.channel.title'), desc: t('updates.channel.desc'), words: 'beta rc prerelease stable update',
+              cfgKey: `updates.channel = "${server.get('updates.channel', 'stable')}"`,
+              control: <Segmented aria-label={t('updates.channel.title')} value={server.get('updates.channel', 'stable')} onChange={(v) => (srvDisabled ? undefined : void sv('updates.channel', v, t('updates.channel.title')))} options={[{ value: 'stable', label: t('updates.channel.stable') }, { value: 'prerelease', label: t('updates.channel.prerelease') }]} />,
+            },
+            {
+              id: 'uautocheck', title: t('updates.autoCheck.title'), desc: t('updates.autoCheck.desc'), words: 'update notification bell',
+              cfgKey: 'updates.auto_check = ' + String(server.get('updates.auto_check', true)),
+              control: <Switch aria-label={t('updates.autoCheck.title')} disabled={srvDisabled} checked={server.get('updates.auto_check', true)} onChange={(v) => void sv('updates.auto_check', v, t('updates.autoCheck.title'))} />,
+            },
+            {
+              id: 'uautoinstall', title: t('updates.autoInstall.title'), desc: t('updates.autoInstall.desc', { name: Name }), words: 'update automatic night schedule time',
+              cfgKey: `updates.auto_install = ${String(server.get('updates.auto_install', false))} · updates.auto_install_at = "${server.get('updates.auto_install_at', '03:30')}"`,
+              control: (
+                <>
+                  <TimeInput label={t('updates.autoInstall.at')} disabled={srvDisabled || !server.get('updates.auto_install', false)} value={server.get('updates.auto_install_at', '03:30')} onCommit={(v) => void sv('updates.auto_install_at', v, t('updates.autoInstall.at'))} />
+                  <Switch aria-label={t('updates.autoInstall.title')} disabled={srvDisabled} checked={server.get('updates.auto_install', false)} onChange={(v) => void sv('updates.auto_install', v, t('updates.autoInstall.title'))} />
+                </>
+              ),
+            },
+          ]
+        : []),
       { id: 'host', title: t('about.host'), control: <span className="ui-in ui-in--mono" style={{ minWidth: 180 }}>{host?.hostname}{host?.ip ? ` (${host.ip})` : ''}</span> },
       { id: 'user', title: t('about.user'), control: <span className="ui-in ui-in--mono" style={{ minWidth: 180 }}>{session?.user}</span> },
       { id: 'conf', title: t('about.config'), control: <span className="ui-in ui-in--mono" style={{ minWidth: 180 }}>{server.path}</span> },
@@ -317,6 +342,17 @@ export default function SettingsPage() {
 const normDur = (v: string) => v;
 function withCurrent(opts: { value: string; label: string }[], cur: string) {
   return opts.some((o) => o.value === cur) ? opts : [...opts, { value: cur, label: cur }];
+}
+
+/** 24-hour HH:MM picker committed on blur / Enter. */
+function TimeInput({ value, onCommit, disabled, label }: { value: string; onCommit(v: string): void; disabled?: boolean; label: string }) {
+  const [v, setV] = useState(value);
+  useEffect(() => setV(value), [value]);
+  const commit = () => {
+    if (/^([01]\d|2[0-3]):[0-5]\d$/.test(v) && v !== value) onCommit(v);
+    else setV(value);
+  };
+  return <Input compact mono fieldClassName="st-time" type="time" step={60} aria-label={label} disabled={disabled} value={v} onChange={(e) => setV(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === 'Enter' && commit()} />;
 }
 
 function CommitInput({ value, onCommit, disabled, label, allowEmpty }: { value: string; onCommit(v: string): void; disabled?: boolean; label: string; allowEmpty?: boolean }) {

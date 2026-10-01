@@ -208,5 +208,83 @@
       "title": "Remember accounts on the sign-in page",
       "desc": "Show the accounts used in this browser as tiles on the sign-in page. The names are stored in this browser only. Leave this off on shared computers; turning it off forgets them."
     }
+  },
+  "updates": {
+    "title": "Version and updates",
+    "check": "Check for updates",
+    "checked": "checked {when}",
+    "checkFailed": "Could not check for updates: {error}",
+    "noRelease": "No release has been published yet.",
+    "upToDate": "{name} {version} is the latest version.",
+    "available": "Version {version} is available",
+    "published": "Published {date}",
+    "prerelease": "Pre-release",
+    "updateNow": "Update now",
+    "noNotes": "This release has no notes.",
+    "noBuild": "This release has no build for this machine ({arch}).",
+    "cannot": "This server cannot update itself: {reason}",
+    "packageBusy": "Software is being installed or removed. The update can start when that has finished.",
+    "adminOnly": "An administrator can install it from here.",
+    "confirm": {
+      "title": "Update to {version}?",
+      "text": "{name} will download version {version} ({size}), check its signature, install it and restart. This page reloads by itself when the new version answers.",
+      "signin": "Everyone signed in to {name} on this server has to sign in again: sessions are kept in the server's memory and end with the restart.",
+      "interrupt": "Open terminals, file transfers and other running tasks in the console are interrupted. The system itself keeps running.",
+      "rollback": "If the new version does not answer within 30 seconds, the current version is restored automatically.",
+      "action": "Update and restart"
+    },
+    "rollback": {
+      "title": "Previous version",
+      "desc": "Version {version} is kept on this server so you can go back to it.",
+      "action": "Go back to {version}",
+      "confirmTitle": "Go back to {version}?",
+      "confirmText": "{name} will switch from {current} to {version} and restart. This page reloads by itself when it answers.",
+      "confirmAction": "Go back and restart"
+    },
+    "last": {
+      "update": "Update from {from} to {to}",
+      "rollback": "Rollback from {from} to {to}",
+      "auto": "automatic",
+      "state": {
+        "running": "Update in progress",
+        "ok": "Last update succeeded",
+        "failed": "Last update failed",
+        "rolled-back": "Last update failed and was undone"
+      }
+    },
+    "run": {
+      "title": "Updating to {version}",
+      "rollbackTitle": "Going back to {version}",
+      "download": "Download",
+      "verify": "Check signature and checksum",
+      "install": "Install",
+      "restart": "Restart",
+      "waiting": "Wait for version {version} to answer",
+      "done": "Version {version} is running. Reloading…",
+      "rolledBack": "Version {version} did not start, so the server went back to {from}. Nothing else changed. Reload the page and sign in again.",
+      "timeout": "The server did not answer within 3 minutes. Reload the page in a moment; if it still does not answer, check `journalctl -u linuxadmin` on the server.",
+      "error": "The update did not start: {error}",
+      "reload": "Reload",
+      "close": "Close"
+    },
+    "notice": {
+      "title": "{name} {version} is available",
+      "detail": "You are running {current}. Open Settings › About to update."
+    },
+    "channel": {
+      "title": "Update channel",
+      "desc": "Pre-releases (release candidates, betas) arrive earlier and may have rough edges.",
+      "stable": "Stable",
+      "prerelease": "Pre-releases"
+    },
+    "autoCheck": {
+      "title": "Check for updates automatically",
+      "desc": "Administrators get a notification when a new version is out."
+    },
+    "autoInstall": {
+      "title": "Install updates automatically",
+      "desc": "{name} installs new versions by itself every day at this time, and restarts. Skipped while software is being installed.",
+      "at": "Time"
+    }
   }
 }

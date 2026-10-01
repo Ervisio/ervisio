@@ -1,0 +1,183 @@
+# Builds, signs and publishes a release when a version tag is pushed:
+#
+#   git tag -a v1.2.0 -m "LinuxAdmin 1.2.0" && git push origin v1.2.0
+#
+# vX.Y.Z      -> stable release ("latest"): offered to every machine on the stable channel
+# vX.Y.Z-rc.1 -> pre-release: offered only to machines on the prerelease channel
+#
+# Assets: linuxadmin-<version>-linux-{amd64,arm64}.tar.gz, SHA256SUMS and
+# SHA256SUMS.sig (ed25519, secret RELEASE_SIGNING_KEY). Installed consoles
+# refuse anything that does not verify against the release key embedded in
+# server/internal/update/sign.go. See docs/RELEASING.md.
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  meta:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
+    steps:
+      - id: v
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::tag '$TAG' is not vX.Y.Z or vX.Y.Z-pre"; exit 1
+          fi
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          if [[ "$TAG" == *-* ]]; then echo "prerelease=true"; else echo "prerelease=false"; fi >> "$GITHUB_OUTPUT"
+
+  web:
+    needs: meta
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build web app
+        working-directory: web
+        run: |
+          npm ci
+          npm run i18n:check
+          npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+          if-no-files-found: error
+          retention-days: 3
+
+  build:
+    needs: [meta, web]
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - name: Install libpam headers (cgo)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libpam0g-dev
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+      - name: Test
+        working-directory: server
+        run: go vet ./... && go test ./...
+      - name: Build binaries (brand.Version = ${{ env.VERSION }})
+        env:
+          CGO_ENABLED: '1'
+        run: |
+          make build-server VERSION="$VERSION"
+          test "$(server/bin/linuxadmind --version)" = "$VERSION"
+          test "$(server/bin/linuxadmin-bridge --version)" = "$VERSION"
+      - name: Package
+        run: ./packaging/build-release.sh "$VERSION" "${{ matrix.arch }}" dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.arch }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 3
+
+  release:
+    needs: [meta, build]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.ref_name }}
+      VERSION: ${{ needs.meta.outputs.version }}
+      PRERELEASE: ${{ needs.meta.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          merge-multiple: true
+          path: dist
+      - name: Checksums and signature
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          if [ -z "$RELEASE_SIGNING_KEY" ]; then
+            echo "::error::The RELEASE_SIGNING_KEY secret is not set (docs/RELEASING.md)"; exit 1
+          fi
+          (cd server && CGO_ENABLED=0 go build -o "$RUNNER_TEMP/release-sign" ./tools/release-sign)
+          umask 077
+          KEY="$RUNNER_TEMP/release.key"
+          trap 'rm -f "$KEY"' EXIT
+          printf '%s\n' "$RELEASE_SIGNING_KEY" > "$KEY"
+          cd dist
+          ls linuxadmin-"$VERSION"-linux-amd64.tar.gz linuxadmin-"$VERSION"-linux-arm64.tar.gz
+          sha256sum linuxadmin-"$VERSION"-linux-*.tar.gz > SHA256SUMS
+          "$RUNNER_TEMP/release-sign" -key "$KEY" SHA256SUMS
+          rm -f "$KEY"
+          # Against the key embedded in the code: fails if the secret is not
+          # the release key the consoles trust.
+          "$RUNNER_TEMP/release-sign" -verify -dir . SHA256SUMS
+          cat SHA256SUMS
+      - name: Release notes
+        run: |
+          git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+          notes="$RUNNER_TEMP/notes.md"
+          : > "$notes"
+          # 1. The CHANGELOG.md section "## [X.Y.Z]" or "## X.Y.Z" (until the next "## ").
+          if [ -f CHANGELOG.md ]; then
+            awk -v v="$VERSION" '
+              /^## / { if (p) exit; h=$0; sub(/^## +\[?v?/, "", h); gsub(/\]/, " ", h); split(h, a, /[ \t(]+/); if (a[1] == v) { p=1; next } }
+              p { print }' CHANGELOG.md > "$notes"
+          fi
+          # 2. Otherwise the message of the annotated tag.
+          if ! grep -q '[^[:space:]]' "$notes" && [ "$(git cat-file -t "$TAG")" = tag ]; then
+            git tag -l --format='%(contents:subject)%0a%0a%(contents:body)' "$TAG" > "$notes"
+          fi
+          if ! grep -q '[^[:space:]]' "$notes"; then
+            echo "LinuxAdmin $VERSION." > "$notes"
+          fi
+          cat >> "$notes" <<'EOF'
+
+          ---
+          Update from **Settings › About › Check for updates**, or install with `sudo ./packaging/install.sh` from the extracted archive.
+          `SHA256SUMS` is signed with the LinuxAdmin release key (`SHA256SUMS.sig`, ed25519); consoles verify it before installing.
+          EOF
+          cat "$notes"
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          flags=(--verify-tag --title "LinuxAdmin $VERSION" --notes-file "$RUNNER_TEMP/notes.md")
+          if [ "$PRERELEASE" = true ]; then flags+=(--prerelease --latest=false); else flags+=(--latest); fi
+          gh release create "$TAG" "${flags[@]}" dist/linuxadmin-"$VERSION"-linux-*.tar.gz dist/SHA256SUMS dist/SHA256SUMS.sig

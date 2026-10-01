@@ -10,6 +10,7 @@ import { Rail } from './Rail';
 import { TopBar } from './TopBar';
 import { useFocusActive } from './focus';
 import { usePlugins } from '../plugins';
+import { UpdateNotifier } from '../sections/settings/UpdateNotifier';
 import './shell.css';
 
 export function AppShell() {
@@ -51,6 +52,7 @@ export function AppShell() {
       </div>
       {!focus && <Dock />}
       <CommandPalette open={palette} onClose={() => setPalette(false)} />
+      <UpdateNotifier />
     </div>
   );
 }

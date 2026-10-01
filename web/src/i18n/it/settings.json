@@ -208,5 +208,83 @@
       "title": "Ricorda gli account nella pagina di accesso",
       "desc": "Mostra gli account usati in questo browser come riquadri nella pagina di accesso. I nomi restano salvati solo in questo browser. Lascia disattivato sui computer condivisi; disattivandolo vengono dimenticati."
     }
+  },
+  "updates": {
+    "title": "Versione e aggiornamenti",
+    "check": "Cerca aggiornamenti",
+    "checked": "controllato {when}",
+    "checkFailed": "Impossibile cercare aggiornamenti: {error}",
+    "noRelease": "Non è ancora stata pubblicata nessuna versione.",
+    "upToDate": "{name} {version} è la versione più recente.",
+    "available": "È disponibile la versione {version}",
+    "published": "Pubblicata il {date}",
+    "prerelease": "Pre-release",
+    "updateNow": "Aggiorna ora",
+    "noNotes": "Questa versione non ha note.",
+    "noBuild": "Questa versione non ha una build per questa macchina ({arch}).",
+    "cannot": "Questo server non può aggiornarsi da solo: {reason}",
+    "packageBusy": "È in corso un'installazione o rimozione di software. L'aggiornamento potrà partire quando sarà finita.",
+    "adminOnly": "Un amministratore può installarla da qui.",
+    "confirm": {
+      "title": "Aggiornare a {version}?",
+      "text": "{name} scaricherà la versione {version} ({size}), ne verificherà la firma, la installerà e si riavvierà. Questa pagina si ricarica da sola quando la nuova versione risponde.",
+      "signin": "Chiunque abbia effettuato l'accesso a {name} su questo server dovrà accedere di nuovo: le sessioni sono tenute nella memoria del server e terminano con il riavvio.",
+      "interrupt": "Terminali aperti, trasferimenti di file e altre attività in corso nella console vengono interrotti. Il sistema invece continua a funzionare.",
+      "rollback": "Se la nuova versione non risponde entro 30 secondi, viene ripristinata automaticamente quella attuale.",
+      "action": "Aggiorna e riavvia"
+    },
+    "rollback": {
+      "title": "Versione precedente",
+      "desc": "La versione {version} è conservata su questo server per poterci tornare.",
+      "action": "Torna alla {version}",
+      "confirmTitle": "Tornare alla {version}?",
+      "confirmText": "{name} passerà dalla {current} alla {version} e si riavvierà. Questa pagina si ricarica da sola quando risponde.",
+      "confirmAction": "Torna indietro e riavvia"
+    },
+    "last": {
+      "update": "Aggiornamento da {from} a {to}",
+      "rollback": "Ritorno da {from} a {to}",
+      "auto": "automatico",
+      "state": {
+        "running": "Aggiornamento in corso",
+        "ok": "Ultimo aggiornamento riuscito",
+        "failed": "Ultimo aggiornamento non riuscito",
+        "rolled-back": "Ultimo aggiornamento non riuscito e annullato"
+      }
+    },
+    "run": {
+      "title": "Aggiornamento alla {version}",
+      "rollbackTitle": "Ritorno alla {version}",
+      "download": "Download",
+      "verify": "Verifica di firma e checksum",
+      "install": "Installazione",
+      "restart": "Riavvio",
+      "waiting": "Attesa della risposta della versione {version}",
+      "done": "La versione {version} è in esecuzione. Ricarico…",
+      "rolledBack": "La versione {version} non si è avviata, quindi il server è tornato alla {from}. Nient'altro è cambiato. Ricarica la pagina e accedi di nuovo.",
+      "timeout": "Il server non ha risposto entro 3 minuti. Ricarica la pagina tra poco; se ancora non risponde, controlla `journalctl -u linuxadmin` sul server.",
+      "error": "L'aggiornamento non è partito: {error}",
+      "reload": "Ricarica",
+      "close": "Chiudi"
+    },
+    "notice": {
+      "title": "È disponibile {name} {version}",
+      "detail": "Stai usando la {current}. Apri Impostazioni › Informazioni per aggiornare."
+    },
+    "channel": {
+      "title": "Canale di aggiornamento",
+      "desc": "Le pre-release (release candidate, beta) arrivano prima e possono avere qualche difetto.",
+      "stable": "Stabile",
+      "prerelease": "Pre-release"
+    },
+    "autoCheck": {
+      "title": "Cerca aggiornamenti automaticamente",
+      "desc": "Gli amministratori ricevono una notifica quando esce una nuova versione."
+    },
+    "autoInstall": {
+      "title": "Installa aggiornamenti automaticamente",
+      "desc": "{name} installa da solo le nuove versioni ogni giorno a quest'ora, e si riavvia. Saltato mentre si installa software.",
+      "at": "Ora"
+    }
   }
 }

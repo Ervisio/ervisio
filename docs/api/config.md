@@ -19,6 +19,10 @@ after a change; keys marked `restart` need a daemon restart.
 | `tls.cert`, `tls.key` | absolute path | `""` | for `custom`; restart |
 | `plugins.allow_unsigned` | bool | `false` | unsigned plugins are blocked (dev folders still run in developer mode, marked "Unsigned, dev") |
 | `plugins.dev` | bool | `false` | |
+| `updates.channel` | enum `stable`/`prerelease` | `stable` | which GitHub releases are offered (`docs/RELEASING.md`) |
+| `updates.auto_check` | bool | `true` | the daemon checks every 6 h; admins get a bell notice |
+| `updates.auto_install` | bool | `false` | the daemon installs a newer version every day at `auto_install_at` |
+| `updates.auto_install_at` | string `"HH:MM"` (00:00–23:59, 24-hour) | `"03:30"` | local time of the automatic install |
 
 Durations are Go duration strings (`"90s"`, `"5m"`, `"12h"`).
 
@@ -28,7 +32,8 @@ Durations are Go duration strings (`"90s"`, `"5m"`, `"12h"`).
 {"path":"/etc/linuxadmin/linuxadmin.conf","exists":false,
  "values":{"listen":"0.0.0.0:9090","allow_root":false,"login.show_ip":true,"login.max_failures":5,
            "session.timeout":"12h","session.admin_unlock":"5m","tls.mode":"self-signed","tls.redirect":true,
-           "tls.cert":"","tls.key":"","plugins.allow_unsigned":false,"plugins.dev":false},
+           "tls.cert":"","tls.key":"","plugins.allow_unsigned":false,"plugins.dev":false,
+           "updates.channel":"stable","updates.auto_check":true,"updates.auto_install":false,"updates.auto_install_at":"03:30"},
  "defaults":{…same shape…},
  "keys":[{"key":"listen","type":"string","restart":true},{"key":"tls.mode","type":"enum","values":["self-signed","letsencrypt","custom"],"restart":true},…],
  "warnings":[]}
