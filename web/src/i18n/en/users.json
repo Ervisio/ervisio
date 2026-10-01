@@ -1,1 +1,228 @@
-{}
+{
+  "title": "Users",
+  "cancel": "Cancel",
+  "retry": "Try again",
+  "filter": "Filter users",
+  "filterGroups": "Filter groups",
+  "emptyFilter": "Nothing matches your filter",
+  "tabs": {
+    "label": "Users and groups",
+    "people": "People",
+    "system": "System accounts",
+    "groups": "Groups",
+    "info": "Info",
+    "keys": "SSH keys",
+    "sessions": "Sessions"
+  },
+  "view": {
+    "label": "View",
+    "cards": "Cards",
+    "table": "Table"
+  },
+  "add": {
+    "title": "Add user",
+    "text": "Create an account"
+  },
+  "role": {
+    "admin": "Admin",
+    "user": "User",
+    "new": "New",
+    "disabled": "Login disabled"
+  },
+  "lastLogin": {
+    "never": "Never",
+    "unknown": "Last login unknown",
+    "via": "{when}, {via}"
+  },
+  "notes": {
+    "shadow": "Unlock administrator rights to see which accounts are locked and when passwords were changed."
+  },
+  "table": {
+    "user": "User",
+    "fullName": "Full name",
+    "role": "Role",
+    "groups": "Groups",
+    "lastLogin": "Last login",
+    "shell": "Shell",
+    "home": "Home folder"
+  },
+  "system": {
+    "text": "Accounts used by the system and its services. They are shown for reference and cannot be changed here."
+  },
+  "errors": {
+    "failed": "That did not work"
+  },
+  "palette": {
+    "add": "Add user",
+    "addKeywords": "new account create",
+    "addGroup": "New group"
+  },
+  "panel": {
+    "subtitle": "{name}, UID {uid}",
+    "noFullName": "No full name",
+    "tabs": "User details"
+  },
+  "actions": {
+    "reset": "Reset password",
+    "lock": "Lock",
+    "unlock": "Unlock",
+    "delete": "Delete",
+    "locked": "{name} is locked",
+    "unlocked": "{name} is unlocked"
+  },
+  "info": {
+    "fullName": "Full name",
+    "shell": "Shell",
+    "home": "Home",
+    "primaryGroup": "Primary group",
+    "password": "Password",
+    "lastLogin": "Last login",
+    "save": "Save changes",
+    "saved": "{name} updated",
+    "pwMustChange": "Must be changed at next sign in",
+    "pwUnknown": "Unlock administrator rights to see",
+    "pwNone": "No password set, cannot sign in with one",
+    "pwEmpty": "No password required",
+    "pwToday": "Changed today",
+    "pwChanged_one": "Changed {count} day ago",
+    "pwChanged_other": "Changed {count} days ago",
+    "locked": "Locked",
+    "expired": "Account expired",
+    "admin": "Administrator",
+    "adminHint": "Member of {group}, can run sudo",
+    "adminOn": "{name} is now an administrator",
+    "adminOff": "{name} is no longer an administrator",
+    "selfWarning": "You are signed in as this user. Removing admin rights takes effect at your next sign in."
+  },
+  "groups": {
+    "primary": "Primary group",
+    "showAll": "Show all groups",
+    "new": "New group",
+    "newTitle": "New group",
+    "newDescription": "Creates the group and adds {name} to it.",
+    "name": "Group name",
+    "create": "Create group",
+    "created": "Group {group} created",
+    "added": "{name} added to {group}",
+    "removed": "{name} removed from {group}",
+    "show": "Groups to show",
+    "inUse": "In use",
+    "all": "All groups",
+    "system": "System",
+    "noMembers": "No members",
+    "delete": "Delete group",
+    "deleteTitle": "Delete group {group}",
+    "deleteText": "Members stay on the system, they just lose the access this group gives.",
+    "deleteConfirm": "Delete group",
+    "deleted": "Group {group} deleted",
+    "primaryOf": "{name} has this as primary group",
+    "removeMember": "Remove {name} from {group}",
+    "addMember": "Add a member to {group}",
+    "addMemberPlaceholder": "Add member…",
+    "emptyTitle": "No groups to show",
+    "emptyText": "Switch to All groups or create a new one."
+  },
+  "keys": {
+    "emptyTitle": "No SSH keys",
+    "emptyText": "Add a public key so this user can sign in over SSH without a password.",
+    "addKey": "Add key",
+    "paste": "Paste a public key",
+    "add": "Add key",
+    "added": "Key added",
+    "remove": "Remove key",
+    "removeTitle": "Remove this key?",
+    "removeText": "{name} will no longer be able to sign in to {user} with it.",
+    "removed": "Key removed",
+    "options": "Options"
+  },
+  "sessions": {
+    "emptyTitle": "Not signed in",
+    "emptyText": "{name} has no open sessions.",
+    "end": "End",
+    "ended": "Session ended",
+    "ssh": "SSH",
+    "console": "Console",
+    "desktop": "Desktop",
+    "local": "local"
+  },
+  "reset": {
+    "title": "Reset password for {name}",
+    "submit": "Set password",
+    "mustChange": "Ask for a new password at next sign in",
+    "done": "Password changed for {name}"
+  },
+  "delete": {
+    "title": "Delete user {name}",
+    "text": "This removes the account and ends its sessions. This cannot be undone.",
+    "confirm": "Delete user",
+    "keepHome": "Keep the home folder",
+    "done": "{name} deleted"
+  },
+  "create": {
+    "title": "Add user",
+    "description": "Creates a new account on this computer.",
+    "name": "User name",
+    "nameHint": "Lower-case letters, digits, '_' and '-', up to 32 characters.",
+    "nameInvalid": "Use lower-case letters, digits, '_' and '-', starting with a letter.",
+    "nameTaken": "That name is already taken.",
+    "fullName": "Full name",
+    "fullNameInvalid": "Remove ':' ',' '=' and backslashes.",
+    "password": "Password",
+    "passwordConfirm": "Repeat password",
+    "passwordRequired": "Enter a password.",
+    "passwordMismatch": "The passwords do not match.",
+    "admin": "Administrator (member of {group})",
+    "groups": "Groups",
+    "shell": "Shell",
+    "home": "Create a home folder",
+    "submit": "Add user",
+    "done": "{name} added"
+  },
+  "password": {
+    "hint": "Use at least 12 characters, mixing letters, digits and symbols.",
+    "strength1": "Weak",
+    "strength2": "Fair",
+    "strength3": "Good",
+    "strength4": "Strong"
+  },
+  "groupDesc": {
+    "wheel": "Can use sudo",
+    "sudo": "Can use sudo",
+    "admin": "Can use sudo",
+    "docker": "Manage containers",
+    "podman": "Manage containers",
+    "libvirt": "Manage virtual machines",
+    "kvm": "Run virtual machines",
+    "audio": "Play and record sound",
+    "video": "Use cameras and graphics",
+    "input": "Read input devices",
+    "storage": "Mount removable drives",
+    "network": "Manage network connections",
+    "networkmanager": "Manage network connections",
+    "lp": "Use printers",
+    "scanner": "Use scanners",
+    "render": "Use the GPU",
+    "optical": "Use CD and DVD drives",
+    "disk": "Raw access to disks",
+    "adm": "Read system logs",
+    "systemd-journal": "Read the system journal",
+    "uucp": "Use serial ports",
+    "dialout": "Use serial ports",
+    "tty": "Access terminals",
+    "users": "Regular users",
+    "power": "Power management",
+    "bluetooth": "Use Bluetooth",
+    "plugdev": "Use removable devices",
+    "cdrom": "Use CD drives",
+    "wireshark": "Capture network traffic",
+    "sambashare": "Share folders over the network",
+    "vboxusers": "Use VirtualBox",
+    "root": "Super user",
+    "nobody": "Unprivileged",
+    "nogroup": "Unprivileged",
+    "floppy": "Use floppy drives",
+    "games": "Game scores",
+    "http": "Web server files",
+    "ftp": "FTP server files"
+  }
+}

@@ -1,1 +1,228 @@
-{}
+{
+  "title": "Utenti",
+  "cancel": "Annulla",
+  "retry": "Riprova",
+  "filter": "Filtra utenti",
+  "filterGroups": "Filtra gruppi",
+  "emptyFilter": "Nessun risultato per il filtro",
+  "tabs": {
+    "label": "Utenti e gruppi",
+    "people": "Persone",
+    "system": "Account di sistema",
+    "groups": "Gruppi",
+    "info": "Info",
+    "keys": "Chiavi SSH",
+    "sessions": "Sessioni"
+  },
+  "view": {
+    "label": "Vista",
+    "cards": "Schede",
+    "table": "Tabella"
+  },
+  "add": {
+    "title": "Aggiungi utente",
+    "text": "Crea un account"
+  },
+  "role": {
+    "admin": "Admin",
+    "user": "Utente",
+    "new": "Nuovo",
+    "disabled": "Accesso disattivato"
+  },
+  "lastLogin": {
+    "never": "Mai",
+    "unknown": "Ultimo accesso sconosciuto",
+    "via": "{when}, {via}"
+  },
+  "notes": {
+    "shadow": "Sblocca i diritti di amministratore per vedere quali account sono bloccati e quando sono state cambiate le password."
+  },
+  "table": {
+    "user": "Utente",
+    "fullName": "Nome completo",
+    "role": "Ruolo",
+    "groups": "Gruppi",
+    "lastLogin": "Ultimo accesso",
+    "shell": "Shell",
+    "home": "Cartella home"
+  },
+  "system": {
+    "text": "Account usati dal sistema e dai suoi servizi. Sono mostrati solo per consultazione e non si modificano da qui."
+  },
+  "errors": {
+    "failed": "Operazione non riuscita"
+  },
+  "palette": {
+    "add": "Aggiungi utente",
+    "addKeywords": "nuovo account crea",
+    "addGroup": "Nuovo gruppo"
+  },
+  "panel": {
+    "subtitle": "{name}, UID {uid}",
+    "noFullName": "Nessun nome completo",
+    "tabs": "Dettagli utente"
+  },
+  "actions": {
+    "reset": "Reimposta password",
+    "lock": "Blocca",
+    "unlock": "Sblocca",
+    "delete": "Elimina",
+    "locked": "{name} è bloccato",
+    "unlocked": "{name} è sbloccato"
+  },
+  "info": {
+    "fullName": "Nome completo",
+    "shell": "Shell",
+    "home": "Home",
+    "primaryGroup": "Gruppo principale",
+    "password": "Password",
+    "lastLogin": "Ultimo accesso",
+    "save": "Salva modifiche",
+    "saved": "{name} aggiornato",
+    "pwMustChange": "Da cambiare al prossimo accesso",
+    "pwUnknown": "Sblocca i diritti di amministratore per vederla",
+    "pwNone": "Nessuna password impostata, non può accedere con una",
+    "pwEmpty": "Nessuna password richiesta",
+    "pwToday": "Cambiata oggi",
+    "pwChanged_one": "Cambiata {count} giorno fa",
+    "pwChanged_other": "Cambiata {count} giorni fa",
+    "locked": "Bloccato",
+    "expired": "Account scaduto",
+    "admin": "Amministratore",
+    "adminHint": "Membro di {group}, può usare sudo",
+    "adminOn": "{name} ora è amministratore",
+    "adminOff": "{name} non è più amministratore",
+    "selfWarning": "Hai effettuato l'accesso con questo utente. Togliere i diritti di amministratore vale dal prossimo accesso."
+  },
+  "groups": {
+    "primary": "Gruppo principale",
+    "showAll": "Mostra tutti i gruppi",
+    "new": "Nuovo gruppo",
+    "newTitle": "Nuovo gruppo",
+    "newDescription": "Crea il gruppo e vi aggiunge {name}.",
+    "name": "Nome del gruppo",
+    "create": "Crea gruppo",
+    "created": "Gruppo {group} creato",
+    "added": "{name} aggiunto a {group}",
+    "removed": "{name} rimosso da {group}",
+    "show": "Gruppi da mostrare",
+    "inUse": "In uso",
+    "all": "Tutti i gruppi",
+    "system": "Sistema",
+    "noMembers": "Nessun membro",
+    "delete": "Elimina gruppo",
+    "deleteTitle": "Elimina il gruppo {group}",
+    "deleteText": "I membri restano nel sistema, perdono solo l'accesso che questo gruppo dà.",
+    "deleteConfirm": "Elimina gruppo",
+    "deleted": "Gruppo {group} eliminato",
+    "primaryOf": "{name} ha questo come gruppo principale",
+    "removeMember": "Rimuovi {name} da {group}",
+    "addMember": "Aggiungi un membro a {group}",
+    "addMemberPlaceholder": "Aggiungi membro…",
+    "emptyTitle": "Nessun gruppo da mostrare",
+    "emptyText": "Passa a Tutti i gruppi o creane uno nuovo."
+  },
+  "keys": {
+    "emptyTitle": "Nessuna chiave SSH",
+    "emptyText": "Aggiungi una chiave pubblica per far accedere questo utente via SSH senza password.",
+    "addKey": "Aggiungi chiave",
+    "paste": "Incolla una chiave pubblica",
+    "add": "Aggiungi chiave",
+    "added": "Chiave aggiunta",
+    "remove": "Rimuovi chiave",
+    "removeTitle": "Rimuovere questa chiave?",
+    "removeText": "Con {name} non sarà più possibile accedere come {user}.",
+    "removed": "Chiave rimossa",
+    "options": "Opzioni"
+  },
+  "sessions": {
+    "emptyTitle": "Nessun accesso",
+    "emptyText": "{name} non ha sessioni aperte.",
+    "end": "Termina",
+    "ended": "Sessione terminata",
+    "ssh": "SSH",
+    "console": "Console",
+    "desktop": "Desktop",
+    "local": "locale"
+  },
+  "reset": {
+    "title": "Reimposta la password di {name}",
+    "submit": "Imposta password",
+    "mustChange": "Chiedi una nuova password al prossimo accesso",
+    "done": "Password cambiata per {name}"
+  },
+  "delete": {
+    "title": "Elimina l'utente {name}",
+    "text": "Rimuove l'account e termina le sue sessioni. Non si può annullare.",
+    "confirm": "Elimina utente",
+    "keepHome": "Conserva la cartella home",
+    "done": "{name} eliminato"
+  },
+  "create": {
+    "title": "Aggiungi utente",
+    "description": "Crea un nuovo account su questo computer.",
+    "name": "Nome utente",
+    "nameHint": "Lettere minuscole, cifre, '_' e '-', fino a 32 caratteri.",
+    "nameInvalid": "Usa lettere minuscole, cifre, '_' e '-', iniziando con una lettera.",
+    "nameTaken": "Questo nome è già in uso.",
+    "fullName": "Nome completo",
+    "fullNameInvalid": "Togli ':' ',' '=' e le barre rovesciate.",
+    "password": "Password",
+    "passwordConfirm": "Ripeti la password",
+    "passwordRequired": "Inserisci una password.",
+    "passwordMismatch": "Le password non coincidono.",
+    "admin": "Amministratore (membro di {group})",
+    "groups": "Gruppi",
+    "shell": "Shell",
+    "home": "Crea una cartella home",
+    "submit": "Aggiungi utente",
+    "done": "{name} aggiunto"
+  },
+  "password": {
+    "hint": "Usa almeno 12 caratteri tra lettere, cifre e simboli.",
+    "strength1": "Debole",
+    "strength2": "Discreta",
+    "strength3": "Buona",
+    "strength4": "Forte"
+  },
+  "groupDesc": {
+    "wheel": "Può usare sudo",
+    "sudo": "Può usare sudo",
+    "admin": "Può usare sudo",
+    "docker": "Gestisce i container",
+    "podman": "Gestisce i container",
+    "libvirt": "Gestisce le macchine virtuali",
+    "kvm": "Avvia macchine virtuali",
+    "audio": "Riproduce e registra audio",
+    "video": "Usa fotocamere e grafica",
+    "input": "Legge i dispositivi di input",
+    "storage": "Monta le unità rimovibili",
+    "network": "Gestisce le connessioni di rete",
+    "networkmanager": "Gestisce le connessioni di rete",
+    "lp": "Usa le stampanti",
+    "scanner": "Usa gli scanner",
+    "render": "Usa la GPU",
+    "optical": "Usa lettori CD e DVD",
+    "disk": "Accesso diretto ai dischi",
+    "adm": "Legge i log di sistema",
+    "systemd-journal": "Legge il journal di sistema",
+    "uucp": "Usa le porte seriali",
+    "dialout": "Usa le porte seriali",
+    "tty": "Accede ai terminali",
+    "users": "Utenti normali",
+    "power": "Gestione dell'alimentazione",
+    "bluetooth": "Usa il Bluetooth",
+    "plugdev": "Usa i dispositivi rimovibili",
+    "cdrom": "Usa i lettori CD",
+    "wireshark": "Cattura il traffico di rete",
+    "sambashare": "Condivide cartelle in rete",
+    "vboxusers": "Usa VirtualBox",
+    "root": "Super utente",
+    "nobody": "Senza privilegi",
+    "nogroup": "Senza privilegi",
+    "floppy": "Usa i floppy",
+    "games": "Punteggi dei giochi",
+    "http": "File del server web",
+    "ftp": "File del server FTP"
+  }
+}
