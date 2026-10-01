@@ -1,0 +1,48 @@
+# Maintainer: Fonlogen <info.fonlogen@gmail.com>
+#
+# LinuxAdmin from the signed release archives on GitHub. The checksums come
+# from the release's SHA256SUMS, whose ed25519 signature is checked by
+# packaging/arch/update-pkgbuild.sh in the LinuxAdmin repository before they
+# are written here. Source build: the "linuxadmin" package.
+
+pkgname=linuxadmin-bin
+_pkgname=linuxadmin
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Web console for managing a Linux server from the browser (prebuilt)'
+arch=('x86_64' 'aarch64')
+url='https://github.com/Fonlogen/LinuxAdmin'
+license=('LicenseRef-Unlicensed')
+depends=('glibc' 'pam' 'sudo' 'systemd')
+provides=("linuxadmin=$pkgver")
+conflicts=('linuxadmin')
+backup=('etc/pam.d/linuxadmin')
+install=linuxadmin.install
+options=('!strip' '!debug')
+source=('linuxadmin.pam' 'package-service.sh')
+source_x86_64=("https://github.com/Fonlogen/LinuxAdmin/releases/download/v$pkgver/linuxadmin-$pkgver-linux-amd64.tar.gz")
+source_aarch64=("https://github.com/Fonlogen/LinuxAdmin/releases/download/v$pkgver/linuxadmin-$pkgver-linux-arm64.tar.gz")
+sha256sums=('e23b5824cb2069f655bc3644bc54236e149f21a9e7e12c9f4c2d72d40e66a2e3' '31c139d1a22e23a9f64cb0ba92d669f2d31a1e67ca52c923a504fe5ea1f8b9fb')
+sha256sums_x86_64=('8b0cd9a002cf2bfb2b3db5738c0eeca662e813fef35f8044cd69aa6596450cb7')
+sha256sums_aarch64=('f9f59009e9e39656f99f9636fff4e14c9e6726a69deb24889547f10679e8c1a7')
+
+package() {
+	local _arch=amd64
+	[[ $CARCH == aarch64 ]] && _arch=arm64
+	cd "$_pkgname-$pkgver-linux-$_arch"
+
+	install -Dm755 bin/linuxadmind "$pkgdir/usr/bin/linuxadmind"
+	install -Dm755 bin/linuxadmin-bridge "$pkgdir/usr/lib/linuxadmin/linuxadmin-bridge"
+	install -Dm755 "$srcdir/package-service.sh" "$pkgdir/usr/lib/linuxadmin/package-service"
+	# Self-update stays off: pacman installs new versions.
+	printf 'pacman\n' | install -Dm644 /dev/stdin "$pkgdir/usr/lib/linuxadmin/managed"
+
+	install -d "$pkgdir/usr/share/linuxadmin"
+	cp -r --no-preserve=ownership web "$pkgdir/usr/share/linuxadmin/web"
+	cp -r --no-preserve=ownership plugins "$pkgdir/usr/share/linuxadmin/plugins"
+	chmod -R u+rwX,go+rX,go-w "$pkgdir/usr/share/linuxadmin"
+
+	install -Dm644 packaging/linuxadmin.service "$pkgdir/usr/lib/systemd/system/linuxadmin.service"
+	install -Dm644 "$srcdir/linuxadmin.pam" "$pkgdir/etc/pam.d/linuxadmin"
+	install -dm755 "$pkgdir/etc/linuxadmin" "$pkgdir/var/lib/linuxadmin"
+}

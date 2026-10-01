@@ -1,0 +1,25 @@
+pkgbase = linuxadmin
+	pkgdesc = Web console for managing a Linux server from the browser
+	pkgver = 0.1.0
+	pkgrel = 1
+	url = https://github.com/Fonlogen/LinuxAdmin
+	install = linuxadmin.install
+	arch = x86_64
+	arch = aarch64
+	license = LicenseRef-Unlicensed
+	makedepends = go
+	makedepends = npm
+	depends = glibc
+	depends = pam
+	depends = sudo
+	depends = systemd
+	conflicts = linuxadmin-bin
+	backup = etc/pam.d/linuxadmin
+	source = linuxadmin-0.1.0.tar.gz::https://github.com/Fonlogen/LinuxAdmin/archive/refs/tags/v0.1.0.tar.gz
+	source = linuxadmin.pam
+	source = package-service.sh
+	sha256sums = 30c5f887674c682b3c2b481b555e33284d4d5f29631ef590aff2771907a7ecdb
+	sha256sums = e23b5824cb2069f655bc3644bc54236e149f21a9e7e12c9f4c2d72d40e66a2e3
+	sha256sums = 31c139d1a22e23a9f64cb0ba92d669f2d31a1e67ca52c923a504fe5ea1f8b9fb
+
+pkgname = linuxadmin
