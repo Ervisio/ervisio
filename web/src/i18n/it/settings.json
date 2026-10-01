@@ -23,7 +23,8 @@
     "web": "Server web",
     "plugpol": "Plugin",
     "hosts": "Host",
-    "about": "Informazioni"
+    "about": "Informazioni",
+    "browser": "Questo browser"
   },
   "note": {
     "default": "Predefinito",
@@ -200,5 +201,11 @@
     "5m": "5 minuti",
     "15m": "15 minuti",
     "30m": "30 minuti"
+  },
+  "browser": {
+    "recent": {
+      "title": "Ricorda gli account nella pagina di accesso",
+      "desc": "Mostra gli account usati in questo browser come riquadri nella pagina di accesso. I nomi restano salvati solo in questo browser. Lascia disattivato sui computer condivisi; disattivandolo vengono dimenticati."
+    }
   }
 }

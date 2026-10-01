@@ -345,8 +345,8 @@ func (c *Capabilities) validate() error {
 		return fmt.Errorf("capabilities.network has too many entries")
 	}
 	for _, h := range c.Network {
-		if h == "" || len(h) > 253 || strings.ContainsAny(h, " \t\n/\\") {
-			return fmt.Errorf("capabilities.network: %q is not a host name", h)
+		if len(h) > 253 || !NetworkHostRe.MatchString(h) {
+			return fmt.Errorf("capabilities.network: %q is not a host name (like api.example.org, *.example.org or host:8443)", h)
 		}
 	}
 	return nil

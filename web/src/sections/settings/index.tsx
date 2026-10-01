@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
-import { useSession, usePrefs } from '../../api';
+import { recentUsersEnabled, setRecentUsersEnabled, useSession, usePrefs } from '../../api';
 import { Name } from '../../brand';
 import { LANGUAGES, useI18n, useT, type Lang } from '../../i18n';
 import { useTheme } from '../../theme';
@@ -51,6 +51,12 @@ export default function SettingsPage() {
   const server = useServerConfig(isAdmin);
   const [q, setQ] = useState('');
   const [active, setActive] = useState('appearance');
+  const [recentOn, setRecentOn] = useState(recentUsersEnabled);
+  const setRecent = (on: boolean) => {
+    setRecentUsersEnabled(on);
+    setRecentOn(on);
+    toast.info(t('saved', { name: t('browser.recent.title') }));
+  };
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const region = { timeFormat: '24', weekStart: 'mon', ...(prefs.region ?? {}) } as { timeFormat: '24' | '12'; weekStart: string };
@@ -132,6 +138,12 @@ export default function SettingsPage() {
         { id: 'nbrowser', title: t('notify.browser'), desc: t('notify.browserDesc', { name: Name }), control: <Switch aria-label={t('notify.browser')} checked={notify.browser} onChange={(v) => setNotify('browser', v, t('notify.browser'))} /> },
       ],
     },
+    {
+      id: 'browser', part: 'you', icon: 'shield', hue: 'usr', title: t('groups.browser'),
+      rows: [
+        { id: 'recentusers', title: t('browser.recent.title'), desc: t('browser.recent.desc'), words: 'sign-in login accounts names privacy shared', control: <Switch aria-label={t('browser.recent.title')} checked={recentOn} onChange={setRecent} /> },
+      ],
+    },
   ];
 
   const serverTop = (
@@ -177,7 +189,7 @@ export default function SettingsPage() {
       {
         id: 'plugpol', part: 'server', icon: 'plugins', hue: 'plg', title: t('groups.plugpol'), admin: true,
         rows: [
-          { id: 'unsigned', title: t('plugpol.unsigned'), desc: t('plugpol.unsignedDesc', { name: Name }), cfgKey: 'plugins.allow_unsigned = ' + String(server.get('plugins.allow_unsigned', true)), control: <Switch aria-label={t('plugpol.unsigned')} disabled={srvDisabled} checked={server.get('plugins.allow_unsigned', true)} onChange={(v) => void sv('plugins.allow_unsigned', v, t('plugpol.unsigned'))} /> },
+          { id: 'unsigned', title: t('plugpol.unsigned'), desc: t('plugpol.unsignedDesc', { name: Name }), cfgKey: 'plugins.allow_unsigned = ' + String(server.get('plugins.allow_unsigned', false)), control: <Switch aria-label={t('plugpol.unsigned')} disabled={srvDisabled} checked={server.get('plugins.allow_unsigned', false)} onChange={(v) => void sv('plugins.allow_unsigned', v, t('plugpol.unsigned'))} /> },
           { id: 'dev', title: t('plugpol.dev'), desc: t('plugpol.devDesc'), cfgKey: 'plugins.dev = ' + String(server.get('plugins.dev', false)), control: <Switch aria-label={t('plugpol.dev')} disabled={srvDisabled} checked={server.get('plugins.dev', false)} onChange={(v) => void sv('plugins.dev', v, t('plugpol.dev'))} /> },
         ],
       },

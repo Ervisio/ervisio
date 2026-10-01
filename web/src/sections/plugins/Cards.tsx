@@ -35,7 +35,7 @@ export function PluginCard({ p, active, onOpen, onToggle, busy }: { p: PluginInf
         {p.error ? <Badge tone="err">{t('broken')}</Badge> : <TrustBadge p={p} />}
         {p.updateAvailable && <Badge tone="info" className="plugins-badge">{t('updateBadge', { version: p.updateAvailable.version })}</Badge>}
         {p.blocked && <Badge tone="warn">{t('blocked')}</Badge>}
-        {p.location === 'dev' && <Badge tone="neutral">{t('devBadge')}</Badge>}
+        {p.devUnsigned ? <Badge tone="warn">{t('devUnsignedBadge')}</Badge> : p.location === 'dev' && <Badge tone="neutral">{t('devBadge')}</Badge>}
       </div>
     </div>
   );

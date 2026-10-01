@@ -1,71 +1,153 @@
 {
-  "id": "docker",
-  "name": "Docker",
-  "version": "1.4.0",
   "author": "LinuxAdmin team",
-  "description": "Containers, images and logs. Start, stop and restart from the browser.",
-  "icon": "server",
-  "color": "file",
-  "entry": "index.js",
   "capabilities": {
     "commands": [
       {
-        "name": "ps",
-        "description": "List containers",
-        "argv": ["docker", "ps", "-a", "--no-trunc", "--format", "{{json .}}"],
-        "admin": true,
-        "adminUnlessGroup": "docker"
-      },
-      {
-        "name": "images",
-        "description": "List images",
-        "argv": ["docker", "images", "--format", "{{json .}}"],
-        "admin": true,
-        "adminUnlessGroup": "docker"
-      },
-      {
-        "name": "start",
-        "description": "Start a container",
-        "argv": ["docker", "start", "{0}"],
-        "args": [{ "pattern": "[a-zA-Z0-9][a-zA-Z0-9_.-]*", "maxLen": 128 }],
-        "admin": true,
-        "adminUnlessGroup": "docker"
-      },
-      {
-        "name": "stop",
-        "description": "Stop a container",
-        "argv": ["docker", "stop", "{0}"],
-        "args": [{ "pattern": "[a-zA-Z0-9][a-zA-Z0-9_.-]*", "maxLen": 128 }],
         "admin": true,
         "adminUnlessGroup": "docker",
+        "argv": [
+          "docker",
+          "ps",
+          "-a",
+          "--no-trunc",
+          "--format",
+          "{{json .}}"
+        ],
+        "description": "List containers",
+        "name": "ps"
+      },
+      {
+        "admin": true,
+        "adminUnlessGroup": "docker",
+        "argv": [
+          "docker",
+          "images",
+          "--format",
+          "{{json .}}"
+        ],
+        "description": "List images",
+        "name": "images"
+      },
+      {
+        "admin": true,
+        "adminUnlessGroup": "docker",
+        "args": [
+          {
+            "maxLen": 128,
+            "pattern": "[a-zA-Z0-9][a-zA-Z0-9_.-]*"
+          }
+        ],
+        "argv": [
+          "docker",
+          "start",
+          "{0}"
+        ],
+        "description": "Start a container",
+        "name": "start"
+      },
+      {
+        "admin": true,
+        "adminUnlessGroup": "docker",
+        "args": [
+          {
+            "maxLen": 128,
+            "pattern": "[a-zA-Z0-9][a-zA-Z0-9_.-]*"
+          }
+        ],
+        "argv": [
+          "docker",
+          "stop",
+          "{0}"
+        ],
+        "description": "Stop a container",
+        "name": "stop",
         "timeoutSec": 60
       },
       {
-        "name": "restart",
-        "description": "Restart a container",
-        "argv": ["docker", "restart", "{0}"],
-        "args": [{ "pattern": "[a-zA-Z0-9][a-zA-Z0-9_.-]*", "maxLen": 128 }],
         "admin": true,
         "adminUnlessGroup": "docker",
+        "args": [
+          {
+            "maxLen": 128,
+            "pattern": "[a-zA-Z0-9][a-zA-Z0-9_.-]*"
+          }
+        ],
+        "argv": [
+          "docker",
+          "restart",
+          "{0}"
+        ],
+        "description": "Restart a container",
+        "name": "restart",
         "timeoutSec": 90
       },
       {
-        "name": "logs",
-        "description": "Show the last 200 log lines of a container",
-        "argv": ["docker", "logs", "--tail", "200", "--timestamps", "{0}"],
-        "args": [{ "pattern": "[a-zA-Z0-9][a-zA-Z0-9_.-]*", "maxLen": 128 }],
         "admin": true,
-        "adminUnlessGroup": "docker"
+        "adminUnlessGroup": "docker",
+        "args": [
+          {
+            "maxLen": 128,
+            "pattern": "[a-zA-Z0-9][a-zA-Z0-9_.-]*"
+          }
+        ],
+        "argv": [
+          "docker",
+          "logs",
+          "--tail",
+          "200",
+          "--timestamps",
+          "{0}"
+        ],
+        "description": "Show the last 200 log lines of a container",
+        "name": "logs"
       }
     ],
-    "files": { "read": [], "write": [] },
-    "sockets": ["/var/run/docker.sock"],
-    "network": []
+    "files": {
+      "read": [],
+      "write": []
+    },
+    "network": [],
+    "sockets": [
+      "/var/run/docker.sock"
+    ]
   },
+  "color": "file",
   "contributes": {
-    "pages": [{ "id": "docker", "title": "Docker", "icon": "server" }],
-    "widgets": [{ "id": "containers", "title": "Containers", "icon": "server" }],
-    "snippets": [{ "name": "docker ps", "command": "docker ps" }]
+    "pages": [
+      {
+        "icon": "server",
+        "id": "docker",
+        "title": "Docker"
+      }
+    ],
+    "snippets": [
+      {
+        "command": "docker ps",
+        "name": "docker ps"
+      }
+    ],
+    "widgets": [
+      {
+        "icon": "server",
+        "id": "containers",
+        "title": "Containers"
+      }
+    ]
   },
-  "visibleTo": { "groups": ["docker", "wheel", "sudo"] }
+  "description": "Containers, images and logs. Start, stop and restart from the browser.",
+  "entry": "index.js",
+  "files": {
+    "index.js": "b3a5f380c6a696a488ccc166e412b4089fc47c4c93a619c5110a9428b410f8d7"
+  },
+  "icon": "server",
+  "id": "docker",
+  "name": "Docker",
+  "version": "1.4.1",
+  "visibleTo": {
+    "groups": [
+      "docker",
+      "wheel",
+      "sudo"
+    ]
+  }
 }

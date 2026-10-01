@@ -20,9 +20,11 @@ import (
 )
 
 // appCSP is the Content-Security-Policy of the built web app. Everything is
-// same-origin: plugins are ES modules under /plugins/, fonts are bundled.
+// same-origin and fonts are bundled. Plugin code never runs here: it runs in
+// the sandboxed /plugin-frame/<id> (pluginframe.go). frame-src 'self' lets
+// the app embed that frame.
 const appCSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
-	"img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; " +
+	"img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-src 'self'; " +
 	"frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
 
 // webHandler serves the built app with SPA fallback, or proxies to Vite.
@@ -93,11 +95,17 @@ func newViteProxy(target *url.URL, lg *log.Logger) http.Handler {
 var pluginIDRe = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
 
 // handlePlugin serves /plugins/<id>/<file> from the plugin directories,
-// confined to the plugin's folder (symlinks cannot escape it).
+// confined to the plugin's folder (symlinks cannot escape it). Only plugins
+// the session may use are served (enabled, signature policy, visibleTo):
+// see pluginAccess in pluginframe.go.
 func (s *Server) handlePlugin(w http.ResponseWriter, r *http.Request, sess *Session) {
 	id := r.PathValue("id")
 	file := r.PathValue("file")
 	if !pluginIDRe.MatchString(id) || file == "" || !fs.ValidPath(file) || strings.Contains(file, "\\") {
+		writeError(w, errNotFound)
+		return
+	}
+	if _, ok := s.pluginAccess(r.Context(), sess, id); !ok {
 		writeError(w, errNotFound)
 		return
 	}
@@ -121,8 +129,7 @@ func (s *Server) handlePlugin(w http.ResponseWriter, r *http.Request, sess *Sess
 			root.Close()
 			continue
 		}
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Content-Security-Policy", appCSP)
+		setPluginAssetHeaders(w.Header())
 		http.ServeContent(w, r, fi.Name(), fi.ModTime(), f)
 		f.Close()
 		root.Close()
@@ -188,9 +195,7 @@ func (s *Server) serveDevPlugin(w http.ResponseWriter, r *http.Request, sess *Se
 	if meta.Mime != "" {
 		w.Header().Set("Content-Type", meta.Mime)
 	}
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Content-Security-Policy", appCSP)
+	setPluginAssetHeaders(w.Header())
 	http.ServeContent(w, r, path.Base(file), time.Time{}, bytes.NewReader(buf.Bytes()))
 }
 

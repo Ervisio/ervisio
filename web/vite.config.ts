@@ -11,6 +11,8 @@ export default defineConfig({
     proxy: {
       '/api': { target, ws: true, changeOrigin: false },
       '/plugins/': { target, changeOrigin: false },
+      // sandboxed plugin frames are served by the daemon (web/src/plugins/PluginFrame.tsx)
+      '/plugin-frame/': { target, changeOrigin: false },
     },
   },
   // assetsInlineLimit 0: never inline fonts/images as data: URIs (strict CSP served by linuxadmind)

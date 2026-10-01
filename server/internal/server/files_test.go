@@ -31,6 +31,7 @@ func TestFileTransfer(t *testing.T) {
 		}
 	}()
 
+	cl := noAuthClient(t, srv, ts)
 	dir := t.TempDir()
 	payload := make([]byte, 1<<20+12345) // several chunks, more than the window
 	rand.Read(payload)
@@ -39,7 +40,7 @@ func TestFileTransfer(t *testing.T) {
 	upload := func(overwrite string) (int, string) {
 		req, _ := http.NewRequest("POST", ts.URL+"/api/files/upload?path="+url.QueryEscape(dst)+"&overwrite="+overwrite, bytes.NewReader(payload))
 		req.Header.Set("X-Requested-With", "linuxadmin")
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := cl.Do(req)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -58,7 +59,7 @@ func TestFileTransfer(t *testing.T) {
 		t.Fatal("expected conflict", code, body)
 	}
 
-	resp, err := http.Get(ts.URL + "/api/files/download?path=" + url.QueryEscape(dst))
+	resp, err := cl.Get(ts.URL + "/api/files/download?path=" + url.QueryEscape(dst))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +71,7 @@ func TestFileTransfer(t *testing.T) {
 	if cd := resp.Header.Get("Content-Disposition"); cd != "attachment; filename*=UTF-8''up.bin" {
 		t.Fatalf("disposition %q", cd)
 	}
-	resp, _ = http.Get(ts.URL + "/api/files/download?path=" + url.QueryEscape(filepath.Join(dir, "missing")))
+	resp, _ = cl.Get(ts.URL + "/api/files/download?path=" + url.QueryEscape(filepath.Join(dir, "missing")))
 	resp.Body.Close()
 	if resp.StatusCode != 404 {
 		t.Fatalf("missing file: %d", resp.StatusCode)

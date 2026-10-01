@@ -1,0 +1,15 @@
+/* Plugin frame base styles: the app's tokens and kit are injected next to this; the frame is transparent so the
+   app's panel shows through, and a page fills the frame like a native section page. */
+@font-face { font-family: 'Figtree'; font-style: normal; font-display: swap; font-weight: 400; src: url('../../../node_modules/@fontsource/figtree/files/figtree-latin-400-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Figtree'; font-style: normal; font-display: swap; font-weight: 500; src: url('../../../node_modules/@fontsource/figtree/files/figtree-latin-500-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Figtree'; font-style: normal; font-display: swap; font-weight: 600; src: url('../../../node_modules/@fontsource/figtree/files/figtree-latin-600-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Figtree'; font-style: normal; font-display: swap; font-weight: 700; src: url('../../../node_modules/@fontsource/figtree/files/figtree-latin-700-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Figtree'; font-style: normal; font-display: swap; font-weight: 800; src: url('../../../node_modules/@fontsource/figtree/files/figtree-latin-800-normal.woff2') format('woff2'); }
+@font-face { font-family: 'JetBrains Mono'; font-style: normal; font-display: swap; font-weight: 400; src: url('../../../node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff2') format('woff2'); }
+
+html, body { background: transparent; }
+html[data-view='page'], html[data-view='page'] body, html[data-view='page'] #root { height: 100%; }
+html[data-view='page'] #root { display: flex; flex-direction: column; overflow: auto; }
+html[data-view='widget'] body { overflow: hidden; }
+html[data-view='widget'] #root { display: flow-root; }
+.la-frame-error { padding: 20px; color: var(--err); font-family: var(--mono); font-size: 12.5px; white-space: pre-wrap; }

@@ -1,8 +1,11 @@
 // Command devclient is a tiny development client for linuxadmind: it makes
 // /api/rpc calls and opens WebSocket streams, printing the JSON it gets.
-// Use it against `linuxadmind --dev --dev-insecure-noauth` (no cookie
-// needed) or pass -cookie with a la_session token.
+// Against `linuxadmind --dev --dev-insecure-noauth`, redeem the one-time
+// URL the daemon prints once with `login`, then pass the printed token with
+// -cookie (or in $LA_SESSION):
 //
+//	go run ./tools/devclient login 'http://127.0.0.1:9090/api/dev/noauth?token=…'
+//	export LA_SESSION=<printed token>
 //	go run ./tools/devclient rpc system.host
 //	go run ./tools/devclient rpc prefs.set '{"key":"theme","value":"oled"}'
 //	go run ./tools/devclient -n 3 stream system.metricsStream '{"interval":500}'
@@ -27,12 +30,12 @@ import (
 
 func main() {
 	base := flag.String("url", "http://127.0.0.1:9090", "daemon base URL")
-	cookie := flag.String("cookie", "", "la_session token (not needed with --dev-insecure-noauth)")
+	cookie := flag.String("cookie", os.Getenv("LA_SESSION"), "la_session token (default $LA_SESSION; get one with `login <noauth-url>`)")
 	admin := flag.Bool("admin", false, "send admin:true")
 	n := flag.Int("n", 0, "stream: stop after n data frames (0 = until end / Ctrl+C)")
 	timeout := flag.Duration("timeout", 30*time.Second, "overall timeout")
 	flag.Usage = func() {
-		fmt.Fprintln(os.Stderr, "usage: devclient [flags] rpc|stream <method> [params-json]")
+		fmt.Fprintln(os.Stderr, "usage: devclient [flags] rpc|stream <method> [params-json]\n       devclient login <one-time noauth URL>")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -41,6 +44,10 @@ func main() {
 		os.Exit(2)
 	}
 	mode, method := flag.Arg(0), flag.Arg(1)
+	if mode == "login" {
+		login(method)
+		return
+	}
 	params := json.RawMessage("{}")
 	if flag.NArg() > 2 {
 		params = json.RawMessage(flag.Arg(2))
@@ -104,6 +111,24 @@ func main() {
 		flag.Usage()
 		os.Exit(2)
 	}
+}
+
+// login redeems a --dev-insecure-noauth one-time URL and prints the
+// session token.
+func login(u string) {
+	c := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := c.Get(u)
+	if err != nil {
+		fail(err.Error())
+	}
+	resp.Body.Close()
+	for _, ck := range resp.Cookies() {
+		if ck.Name == "la_session" && ck.Value != "" {
+			fmt.Println(ck.Value)
+			return
+		}
+	}
+	fail(fmt.Sprintf("no session cookie (HTTP %d): the token is wrong or was already used", resp.StatusCode))
 }
 
 func fail(msg string) {

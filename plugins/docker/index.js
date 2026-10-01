@@ -1,5 +1,8 @@
-// Docker plugin for LinuxAdmin. Plain ES module, no build step: it uses the SDK's React and ui kit.
+// Docker plugin for LinuxAdmin (plugin SDK v2, see web/PLUGIN-SDK.md). Plain ES module, no build step: it uses
+// the SDK's React and UI kit. It runs in a sandboxed frame; the only thing it can do on the machine is run the
+// commands declared in manifest.json, through sdk.api.exec.
 export default function activate(sdk) {
+  if (sdk.version < 2) throw new Error('This plugin needs plugin SDK v2 (LinuxAdmin with sandboxed plugins).');
   const React = sdk.react;
   const h = React.createElement;
   const { useState, useEffect, useCallback, useRef } = React;
@@ -39,6 +42,7 @@ export default function activate(sdk) {
       total: '{count} in total',
       empty: 'Nothing was logged.',
       widgetRunning: 'running',
+      open: 'Open Docker',
     },
     it: {
       title: 'Docker',
@@ -73,6 +77,7 @@ export default function activate(sdk) {
       total: '{count} in totale',
       empty: 'Nessun log.',
       widgetRunning: 'attivi',
+      open: 'Apri Docker',
     },
   });
 
@@ -254,10 +259,11 @@ export default function activate(sdk) {
       value: error ? '–' : running === null ? '…' : running,
       unit: error ? '' : ' ' + t('widgetRunning'),
       sub: error ? t('failed') : rows ? t('total', { count: rows.length }) : '',
+      onClick: () => sdk.open('docker'),
     });
   }
 
   sdk.registerPage('docker', DockerPage);
-  sdk.registerWidget({ id: 'containers', title: t('containers'), icon: 'server', cols: 3, render: ContainersWidget });
-  sdk.registerSnippet({ name: 'docker ps', command: 'docker ps' });
+  sdk.registerWidget({ id: 'containers', render: ContainersWidget });
+  // The "docker ps" terminal snippet is declared in manifest.json (contributes.snippets).
 }

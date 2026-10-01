@@ -1,14 +1,10 @@
 import { formatTime } from '../../lib/format';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ApiError, call, stream, useSession } from '../../api';
+import { ApiError, call, useSession } from '../../api';
 import { useI18n, useT, type TFn } from '../../i18n';
-import { useTheme } from '../../theme';
-import * as ui from '../../ui';
 import { Badge, Button, Card, EmptyState, Icon, Skeleton, StatCard, hueClass, type HueId, type IconName } from '../../ui';
-import { PluginMount, usePlugins, type PluginSDK } from '../../plugins';
-import { apiUrl } from '../../api/base';
-import * as React from 'react';
+import { PluginFrame, usePlugins } from '../../plugins';
 import { useRunning, type ActionResult } from './actions';
 import { physicalNet, useAlerts, useHost, useMetrics, type AlertItem } from './data';
 import { bytes, bytesStr, duration, num, rate } from './fmt';
@@ -449,35 +445,15 @@ function Folder({ w, ctx }: { w: Widget; ctx: WidgetCtx }) {
 }
 
 /* ---------- plugin widgets ---------- */
+/** Plugin widgets run in a small sandboxed frame (web/src/plugins/PluginFrame), never in the app itself. */
 function PluginWidget({ w }: { w: Widget; ctx: WidgetCtx }) {
   const t = useT('overview');
-  const { widgets, pages, plugins, loading } = usePlugins();
-  const theme = useTheme();
-  const themeRef = useRef(theme);
-  themeRef.current = theme;
+  const { widgets, plugins, loading } = usePlugins();
   const pid = String(w.settings?.plugin ?? '');
   const wid = String(w.settings?.widget ?? '');
   const def = widgets.find((x) => x.plugin === pid && x.id === wid);
   const manifest = plugins.find((p) => p.id === pid);
-  const sdk = useMemo<PluginSDK | null>(() => {
-    const fromPage = pages.find((p) => p.plugin === pid)?.sdk;
-    if (fromPage) return fromPage;
-    if (!manifest) return null;
-    return {
-      version: 1,
-      plugin: { id: manifest.id, name: manifest.name, version: manifest.version, baseUrl: apiUrl(`/plugins/${manifest.id}/`) },
-      api: { call, stream, exec: (command, args = [], opts) => call('plugins.exec', { plugin: manifest.id, command, args }, opts) },
-      ui,
-      react: React,
-      registerPage: () => undefined,
-      registerWidget: () => undefined,
-      registerSnippet: () => undefined,
-      registerStrings: () => undefined,
-      t: (k) => k,
-      theme: { get: () => ({ id: themeRef.current.theme.id, name: themeRef.current.theme.name, kind: themeRef.current.theme.kind, vars: {} }), onChange: () => () => undefined },
-    } as PluginSDK;
-  }, [pages, manifest, pid]);
-  if (!def || !sdk) {
+  if (!def || !manifest) {
     return (
       <Card title={widgetTitle(w, t)} hue="plg">
         {loading ? <Skeleton lines={2} /> : <EmptyState icon="plugins" hue="plg" title={t('plugin.missing')} text={t('plugin.missingText', { plugin: pid || '?' })} />}
@@ -486,7 +462,7 @@ function PluginWidget({ w }: { w: Widget; ctx: WidgetCtx }) {
   }
   return (
     <Card title={w.settings?.title?.trim() || def.title} hue="plg">
-      <PluginMount def={def.render} sdk={sdk} />
+      <PluginFrame plugin={manifest} view={{ kind: 'widget', id: def.id }} title={`${manifest.name}: ${def.title}`} />
     </Card>
   );
 }

@@ -44,7 +44,18 @@ type Spec struct {
 	Dev        bool
 	DevPlugins string
 	// Sudo overrides the sudo binary (tests); "" = sudo from the safe PATH.
-	Sudo   string
+	Sudo string
+	// SessionHelper, when set (and SwitchUser), is the daemon binary: the
+	// user bridge is then started through `<SessionHelper> --pam-session-helper`,
+	// a root process that opens a PAM session for the account (limits,
+	// loginuid, pam_systemd) and runs the bridge as the user inside it. See
+	// RunSessionHelper. In --dev (no root) it is empty and no PAM session is
+	// opened.
+	SessionHelper string
+	// PAMService is the PAM service for the session ("" = pam.Service()).
+	PAMService string
+	// RHost is the client address that signed in (PAM_RHOST).
+	RHost  string
 	Logger *log.Logger
 }
 
@@ -89,8 +100,10 @@ func (s *Spec) env() []string {
 		"HOME=" + a.Home,
 		"USER=" + a.Name,
 		"LOGNAME=" + a.Name,
-		"SHELL=" + a.Shell,
 		"LANG=C.UTF-8",
+	}
+	if a.Shell != "" {
+		env = append(env, "SHELL="+a.Shell)
 	}
 	rt := "/run/user/" + strconv.FormatUint(uint64(a.UID), 10)
 	if fi, err := os.Stat(rt); err == nil && fi.IsDir() {
@@ -204,7 +217,12 @@ func (p *Proc) Stop() {
 
 // StartUser starts the user bridge and waits for its hello.
 func StartUser(ctx context.Context, s *Spec) (*Proc, error) {
-	cmd := s.command(s.Bridge, s.bridgeArgs(false)...)
+	var cmd *exec.Cmd
+	if s.SessionHelper != "" && s.SwitchUser {
+		cmd = s.helperCommand()
+	} else {
+		cmd = s.command(s.Bridge, s.bridgeArgs(false)...)
+	}
 	p, _, err := s.start(cmd, "bridge "+s.Account.Name, nil)
 	if err != nil {
 		return nil, err
@@ -261,6 +279,9 @@ func StartAdmin(ctx context.Context, s *Spec, password string) (*Proc, error) {
 	}
 	args := append([]string{"-S", "-p", "", "-k", "--", s.Bridge}, s.bridgeArgs(true)...)
 	cmd := s.command(sudo, args...)
+	// The root bridge must not start in the user's home (it also does
+	// chdir("/") itself, see linuxadmin-bridge --admin).
+	cmd.Dir = "/"
 	// English messages so failures can be classified.
 	cmd.Env = append(cmd.Env, "LC_ALL=C")
 

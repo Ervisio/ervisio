@@ -13,10 +13,28 @@ import (
 	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
 )
 
+// WebSocket limits. Everything a client sends is buffered by the root
+// daemon until the bridge takes it, so every buffer is bounded: frame size,
+// frames queued per channel, bytes queued per session, channels per
+// connection and per session, connections per session.
 const (
-	maxChannels   = 64
-	wsReadLimit   = 2 << 20
-	inputQueueLen = 256
+	// maxChannels bounds open channels per connection.
+	maxChannels = 64
+	// maxSessionChannels bounds open channels over all of a session's
+	// connections.
+	maxSessionChannels = 128
+	// maxSessionConns bounds concurrent WebSockets per session (one per
+	// browser tab is normal).
+	maxSessionConns = 8
+	// wsReadLimit bounds one client frame. Stream inputs are terminal keys,
+	// pastes and resizes; uploads go through HTTP.
+	wsReadLimit = 512 << 10
+	// inputQueueLen bounds input frames queued per channel (the bridge
+	// window is rpc.Window frames on top of it).
+	inputQueueLen = rpc.Window
+	// sessionInputBudget bounds input bytes queued (not yet taken by a
+	// bridge) per session; a channel that exceeds it is closed.
+	sessionInputBudget = 8 << 20
 )
 
 // wsFrame is a WebSocket message in either direction.
@@ -35,6 +53,8 @@ type wsChannel struct {
 	stream *rpc.ClientStream
 	admin  bool
 	inputs chan json.RawMessage
+	// queued is the input bytes in inputs, charged to the session budget.
+	queued int64
 	failed *rpc.Error // set under wsConn.mu when the daemon ends the channel
 }
 
@@ -49,10 +69,17 @@ type wsConn struct {
 }
 
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request, sess *Session) {
+	// The origin must be the request's own host (checked by Accept); in dev
+	// also the Vite dev server, and no other local port.
 	opts := &websocket.AcceptOptions{}
-	if s.opts.Dev {
-		opts.OriginPatterns = []string{"localhost:*", "127.0.0.1:*", "[::1]:*"}
+	if s.opts.Dev && s.viteHost != "" {
+		opts.OriginPatterns = []string{s.viteHost}
 	}
+	if !sess.reserveConn() {
+		writeError(w, rpc.Errorf(rpc.Unavailable, "too many open connections for this session"))
+		return
+	}
+	defer sess.releaseConn()
 	c, err := websocket.Accept(w, r, opts)
 	if err != nil {
 		return // Accept already wrote the response
@@ -151,16 +178,21 @@ func (wc *wsConn) open(f *wsFrame) {
 		wc.sendError(f.Ch, rpc.Errorf(rpc.Conflict, "channel %d already open", f.Ch))
 		return
 	}
-	if n >= maxChannels {
+	if n >= maxChannels || !wc.sess.reserveChannel() {
 		wc.sendError(f.Ch, rpc.Errorf(rpc.Unavailable, "too many open channels"))
 		return
 	}
 	p, isAdmin, e := wc.s.route(wc.ctx, wc.sess, f.Method, f.Admin)
 	if e != nil {
+		wc.sess.releaseChannel()
 		wc.sendError(f.Ch, e)
 		return
 	}
-	release := wc.sess.hold(p, isAdmin)
+	hold := wc.sess.hold(p, isAdmin)
+	release := func() {
+		hold()
+		wc.sess.releaseChannel()
+	}
 	st, err := p.Stream(wc.ctx, f.Method, f.Params)
 	if err != nil {
 		release()
@@ -176,8 +208,16 @@ func (wc *wsConn) open(f *wsFrame) {
 	// Inputs are forwarded by their own goroutine so a full bridge window
 	// never blocks the WebSocket reader.
 	go func() {
+		defer func() {
+			// Give back the budget of inputs that will never be sent.
+			for in := range ch.inputs {
+				wc.uncharge(ch, in)
+			}
+		}()
 		for in := range ch.inputs {
-			if err := st.Send(wc.ctx, in); err != nil {
+			err := st.Send(wc.ctx, in)
+			wc.uncharge(ch, in)
+			if err != nil {
 				return
 			}
 		}
@@ -216,10 +256,19 @@ func (wc *wsConn) input(f *wsFrame) {
 	if len(data) == 0 {
 		data = json.RawMessage("null")
 	}
+	n := int64(len(data))
+	if !wc.sess.chargeInput(n) {
+		ch.failed = rpc.Errorf(rpc.Unavailable, "too much input queued for this session, channel closed")
+		wc.mu.Unlock()
+		ch.stream.Close()
+		return
+	}
 	select {
 	case ch.inputs <- data:
+		ch.queued += n
 		wc.mu.Unlock()
 	default:
+		wc.sess.chargeInput(-n)
 		ch.failed = rpc.Errorf(rpc.Unavailable, "input queue full, channel closed")
 		wc.mu.Unlock()
 		ch.stream.Close()
@@ -249,4 +298,59 @@ func (wc *wsConn) closeAll() {
 	for _, ch := range chans {
 		ch.stream.Close()
 	}
+}
+
+// uncharge gives back the session budget of one input taken off ch.
+func (wc *wsConn) uncharge(ch *wsChannel, in json.RawMessage) {
+	n := int64(len(in))
+	wc.mu.Lock()
+	ch.queued -= n
+	wc.mu.Unlock()
+	wc.sess.chargeInput(-n)
+}
+
+// reserveConn takes one of the session's WebSocket slots.
+func (s *Session) reserveConn() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed || s.wsConns >= maxSessionConns {
+		return false
+	}
+	s.wsConns++
+	return true
+}
+
+func (s *Session) releaseConn() {
+	s.mu.Lock()
+	s.wsConns--
+	s.mu.Unlock()
+}
+
+// reserveChannel takes one of the session's channel slots.
+func (s *Session) reserveChannel() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.wsChannels >= maxSessionChannels {
+		return false
+	}
+	s.wsChannels++
+	return true
+}
+
+func (s *Session) releaseChannel() {
+	s.mu.Lock()
+	s.wsChannels--
+	s.mu.Unlock()
+}
+
+// chargeInput adds n bytes (negative to give back) to the session's queued
+// input; it refuses a positive charge that would exceed the budget.
+func (s *Session) chargeInput(n int64) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if n > 0 && s.inputBytes+n > sessionInputBudget {
+		return false
+	}
+	s.inputBytes += n
+	return true
 }

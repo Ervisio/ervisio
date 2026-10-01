@@ -52,6 +52,8 @@ export interface PluginInfo {
   dir?: string;
   updateAvailable?: UpdateInfo;
   blocked?: boolean;
+  /** Unsigned dev-folder plugin running only because developer mode is on. */
+  devUnsigned?: boolean;
   error?: string;
 }
 export interface CatalogEntry {

@@ -110,7 +110,8 @@
     "lead": "This plugin will be able to:",
     "leadCommunity": "This plugin is not signed by the LinuxAdmin team. Only continue if you trust its author. It will be able to:",
     "allow": "Install and allow",
-    "allowUpdate": "Update and allow"
+    "allowUpdate": "Update and allow",
+    "sandbox": "Plugins run isolated from the console: they can only use the permissions listed here, with your rights, and ask before using administrator rights."
   },
   "installed": "Installed",
   "install": "Install",
@@ -154,5 +155,12 @@
     "browse": "Browse plugins",
     "security": "Plugin permissions and signatures",
     "updates": "Plugin updates"
+  },
+  "devUnsignedBadge": "Unsigned, dev",
+  "devUnsignedText": "This plugin is not signed. It runs only because developer mode is on; with developer mode off it would be blocked.",
+  "frame": {
+    "failed": "{name} could not be loaded",
+    "navigated": "The plugin tried to leave its frame, so it was stopped.",
+    "loading": "Loading the plugin"
   }
 }

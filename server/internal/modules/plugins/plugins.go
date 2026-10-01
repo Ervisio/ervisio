@@ -79,6 +79,15 @@ func Register(r *rpc.Registry) {
 		return runStream(ctx, c, s, p)
 	})
 
+	// Plugin-scoped file access: only inside capabilities.files, with the
+	// user's own rights (see files.go).
+	r.Handle("plugins.readFile", rpc.User, readPluginFile)
+	r.Handle("plugins.writeFile", rpc.User, writePluginFile)
+	r.Handle("plugins.listDir", rpc.User, listPluginDir)
+
+	// Used by the daemon before serving plugin assets or the plugin frame.
+	r.Handle("plugins.access", rpc.User, access)
+
 	r.Handle("plugins.loadDev", rpc.User, func(ctx context.Context, c *rpc.Call) (any, error) {
 		var p struct {
 			Path string `json:"path"`

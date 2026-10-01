@@ -1,4 +1,5 @@
 export { PluginsProvider, usePlugins } from './PluginsProvider';
 export type { RegisteredPage, RailPluginPage } from './PluginsProvider';
-export { default as PluginPage, Mount as PluginMount } from './PluginPage';
-export type { PluginSDK, PluginManifest, PluginPageDef, PluginWidgetDef, PluginSnippet } from './types';
+export { default as PluginPage } from './PluginPage';
+export { PluginFrame } from './PluginFrame';
+export type { PluginSDK, PluginManifest, PluginPageInfo, PluginWidgetInfo, PluginSnippet, PluginViewDef } from './types';

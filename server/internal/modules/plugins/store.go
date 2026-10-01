@@ -288,6 +288,9 @@ type Info struct {
 	UpdateAvailable *UpdateInfo `json:"updateAvailable,omitempty"`
 	// Blocked: unsigned or invalid plugin while plugins.allow_unsigned is off.
 	Blocked bool `json:"blocked,omitempty"`
+	// DevUnsigned: a dev-folder plugin without a valid signature that runs
+	// only because developer mode is on (shown with an "Unsigned, dev" badge).
+	DevUnsigned bool `json:"devUnsigned,omitempty"`
 	// Error: the folder holds a plugin that could not be loaded.
 	Error string `json:"error,omitempty"`
 }
@@ -331,9 +334,12 @@ func list(adminBridge bool) []Info {
 		if in.Color == "" {
 			in.Color = "plg"
 		}
-		if !p.AllowUnsigned && !f.Sig.Verified {
+		switch trust(p, f) {
+		case trustBlocked:
 			in.Blocked = true
 			in.Enabled = false
+		case trustDevUnsigned:
+			in.DevUnsigned = true
 		}
 		if e := cat.find(m.ID); e != nil && compareSemver(e.Version, m.Version) > 0 && f.Location != LocDev {
 			in.UpdateAvailable = &UpdateInfo{Version: e.Version, Notes: e.Notes, NewPermissions: !sameJSON(e.Capabilities, m.Capabilities), Source: e.Source, SHA256: e.SHA256}

@@ -31,6 +31,7 @@ export function ConsentDialog({ entry, mode, busy, onCancel, onConfirm }: { entr
       <p className="plugins-lead">{entry.verified ? t('consent.lead') : t('consent.leadCommunity')}</p>
       <CapList item={entry} />
       <p className="plugins-muted">{who.title}. {who.text}</p>
+      <p className="plugins-muted">{t('consent.sandbox')}</p>
     </Dialog>
   );
 }

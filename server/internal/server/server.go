@@ -41,6 +41,10 @@ type Options struct {
 	// DevPluginsDir (dev only) is the repository's ./plugins folder, passed
 	// to the bridges so they list its plugins.
 	DevPluginsDir string
+	// SessionHelper is the daemon's own binary, started as
+	// `--pam-session-helper` to open a PAM session around each user bridge
+	// (not used in --dev). "" = no PAM session.
+	SessionHelper string
 	Logger        *log.Logger
 }
 
@@ -54,8 +58,12 @@ type Server struct {
 	pamSem   chan struct{}
 	devUser  *account.Account // dev mode: the only account allowed
 
-	noAuthMu   sync.Mutex
-	noAuthSess *Session
+	noAuthMu    sync.Mutex
+	noAuthToken string // --dev-insecure-noauth one-time sign-in token
+
+	viteHost string // dev: host:port of the Vite dev server (allowed origin)
+	checker  *accountChecker
+	checking sync.Mutex // one revalidation pass at a time
 
 	baseCtx context.Context
 	cancel  context.CancelFunc
@@ -69,6 +77,9 @@ func New(opts Options) (*Server, error) {
 	}
 	if opts.NoAuth && !opts.Dev {
 		return nil, errors.New("--dev-insecure-noauth requires --dev")
+	}
+	if opts.NoAuth && os.Geteuid() == 0 {
+		return nil, errors.New("--dev-insecure-noauth refuses to run as root")
 	}
 	if !opts.Dev && os.Geteuid() != 0 {
 		return nil, errors.New("linuxadmind must run as root (use --dev for development)")
@@ -88,6 +99,7 @@ func New(opts Options) (*Server, error) {
 		sessions: newStore(),
 		limiter:  newLimiter(),
 		pamSem:   make(chan struct{}, 8),
+		checker:  newAccountChecker(),
 		baseCtx:  ctx,
 		cancel:   cancel,
 	}
@@ -103,6 +115,7 @@ func New(opts Options) (*Server, error) {
 				return nil, fmt.Errorf("invalid Vite URL %q", opts.ViteURL)
 			}
 			s.vite = newViteProxy(u, s.log)
+			s.viteHost = u.Host
 		}
 	}
 	return s, nil
@@ -139,9 +152,17 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errNotFound)
 	})
+	if s.opts.NoAuth {
+		mux.HandleFunc("GET /api/dev/noauth", s.handleNoAuth)
+	}
 	mux.HandleFunc("GET /plugins/{id}/{file...}", s.authed(s.handlePlugin))
+	mux.HandleFunc("GET /plugin-frame/{id}", s.authed(s.handlePluginFrame))
 	mux.Handle("/", s.webHandler())
-	return securityHeaders(mux)
+	var h http.Handler = mux
+	if s.opts.Dev {
+		h = s.devHostCheck(h)
+	}
+	return securityHeaders(h)
 }
 
 // Run serves until ctx is cancelled, then shuts down gracefully and stops
@@ -158,11 +179,12 @@ func (s *Server) Run(ctx context.Context) error {
 			ln.Close()
 			return errors.New("--dev-insecure-noauth only listens on a loopback address")
 		}
-		if _, err := s.noAuthSession(); err != nil {
+		u, err := s.newNoAuthToken("http://" + ln.Addr().String())
+		if err != nil {
 			ln.Close()
 			return err
 		}
-		s.log.Printf("WARNING: --dev-insecure-noauth: every request is signed in as %q", s.devUser.Name)
+		s.log.Printf("WARNING: --dev-insecure-noauth: open this one-time URL to sign in as %q without a password: %s", s.devUser.Name, u)
 	}
 
 	handler := s.Handler()
@@ -231,7 +253,12 @@ func (s *Server) shutdown(srv, redirect *http.Server) {
 	wg.Wait()
 }
 
-// janitor expires idle sessions and admin unlocks, and prunes the limiter.
+// revalidateEvery is how often live sessions are checked against the
+// account database (see revalidate).
+const revalidateEvery = 60 * time.Second
+
+// janitor expires idle sessions and admin unlocks, prunes the limiter and
+// re-checks the accounts of live sessions.
 func (s *Server) janitor(ctx context.Context) {
 	t := time.NewTicker(15 * time.Second)
 	defer t.Stop()
@@ -243,6 +270,7 @@ func (s *Server) janitor(ctx context.Context) {
 			cfg := s.Config()
 			s.sessions.expire(time.Now(), cfg.Session.Timeout.Duration, cfg.Session.AdminUnlock.Duration)
 			s.limiter.gc()
+			go s.revalidateAll(time.Now(), revalidateEvery)
 		}
 	}
 }

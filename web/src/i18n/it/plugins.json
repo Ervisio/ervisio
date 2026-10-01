@@ -110,7 +110,8 @@
     "lead": "Questo plugin potrà:",
     "leadCommunity": "Questo plugin non è firmato dal team LinuxAdmin. Continua solo se ti fidi dell'autore. Potrà:",
     "allow": "Installa e consenti",
-    "allowUpdate": "Aggiorna e consenti"
+    "allowUpdate": "Aggiorna e consenti",
+    "sandbox": "I plugin girano isolati dalla console: possono usare solo i permessi elencati qui, con i tuoi diritti, e chiedono prima di usare i diritti di amministratore."
   },
   "installed": "Installato",
   "install": "Installa",
@@ -154,5 +155,12 @@
     "browse": "Sfoglia i plugin",
     "security": "Permessi e firme dei plugin",
     "updates": "Aggiornamenti dei plugin"
+  },
+  "devUnsignedBadge": "Non firmato, dev",
+  "devUnsignedText": "Questo plugin non è firmato. Funziona solo perché la modalità sviluppatore è attiva; senza, verrebbe bloccato.",
+  "frame": {
+    "failed": "Impossibile caricare {name}",
+    "navigated": "Il plugin ha provato a uscire dal suo riquadro ed è stato fermato.",
+    "loading": "Caricamento del plugin"
   }
 }

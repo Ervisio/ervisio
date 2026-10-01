@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/user"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -110,16 +111,47 @@ func (a *Account) CanSudo() bool {
 	return false
 }
 
-// loginShell reads the shell from /etc/passwd (os/user does not expose it).
-func loginShell(name string) string {
-	data, err := os.ReadFile("/etc/passwd")
-	if err == nil {
-		for _, line := range strings.Split(string(data), "\n") {
-			f := strings.Split(line, ":")
-			if len(f) == 7 && f[0] == name && f[6] != "" {
-				return f[6]
-			}
+// loginShell returns the account's login shell as NSS reports it
+// (/etc/passwd, LDAP/sssd, systemd-homed…), or "" when it is unknown. There
+// is deliberately no fallback: an account without a known shell cannot sign
+// in (see ShellAllowed).
+func loginShell(name string) string { return nssShell(name) }
+
+// ShellsFile is the list of valid login shells (variable for tests).
+var ShellsFile = "/etc/shells"
+
+// restrictedShells are listed in /etc/shells on some systems but mean "no
+// interactive login": a web console with file access and a terminal would
+// bypass the restriction they impose.
+var restrictedShells = map[string]bool{
+	"nologin": true, "false": true, "true": true, "git-shell": true, "rbash": true, "rksh": true,
+	"rssh": true, "scponly": true, "sftp-server": true, "internal-sftp": true,
+}
+
+// ShellAllowed reports whether an account with this login shell may sign
+// in: the shell must be an absolute path listed in /etc/shells and must not
+// be a "no login" or restricted shell (nologin, false, git-shell, rbash…).
+// When /etc/shells is missing, /bin/sh and /bin/bash style defaults apply as
+// in getusershell(3).
+func ShellAllowed(shell string) bool {
+	if shell == "" || !strings.HasPrefix(shell, "/") || strings.ContainsAny(shell, "\x00\n") {
+		return false
+	}
+	if restrictedShells[filepath.Base(shell)] {
+		return false
+	}
+	data, err := os.ReadFile(ShellsFile)
+	if err != nil {
+		return shell == "/bin/sh" || shell == "/bin/csh"
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if line == shell {
+			return true
 		}
 	}
-	return "/bin/sh"
+	return false
 }

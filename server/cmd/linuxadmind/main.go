@@ -14,6 +14,7 @@ import (
 	"syscall"
 
 	"github.com/Fonlogen/LinuxAdmin/server/internal/brand"
+	"github.com/Fonlogen/LinuxAdmin/server/internal/bridge"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/server"
 )
 
@@ -21,6 +22,11 @@ import (
 var hiddenFlags = map[string]bool{"dev-insecure-noauth": true}
 
 func main() {
+	// Internal mode: the root helper that opens a PAM session around a user
+	// bridge (started by the daemon itself, never by hand).
+	if len(os.Args) > 1 && os.Args[1] == bridge.HelperFlag {
+		os.Exit(bridge.RunSessionHelper(os.Args[2:]))
+	}
 	configPath := flag.String("config", brand.ConfigPath, "configuration file")
 	dev := flag.Bool("dev", false, "development mode: plain HTTP on 127.0.0.1:9090, no root, only your own user")
 	listen := flag.String("listen", "", "listen address (overrides the config; dev default 127.0.0.1:9090)")
@@ -43,6 +49,9 @@ func main() {
 
 	if *noAuth && !*dev {
 		log.Fatal("--dev-insecure-noauth requires --dev")
+	}
+	if *noAuth && os.Geteuid() == 0 {
+		log.Fatal("--dev-insecure-noauth refuses to run as root")
 	}
 	cfgAbs, err := filepath.Abs(*configPath)
 	if err != nil {
@@ -77,6 +86,18 @@ func main() {
 		}
 	}
 
+	helper := ""
+	if !*dev {
+		// The daemon's own binary serves as the PAM session helper.
+		exe, err := os.Executable()
+		if err != nil {
+			log.Fatal(err)
+		}
+		if helper, err = filepath.EvalSymlinks(exe); err != nil {
+			log.Fatal(err)
+		}
+	}
+
 	srv, err := server.New(server.Options{
 		ConfigPath:    cfgAbs,
 		Dev:           *dev,
@@ -87,6 +108,7 @@ func main() {
 		Bridge:        bp,
 		PluginDirs:    pluginDirs,
 		DevPluginsDir: devPlugins,
+		SessionHelper: helper,
 		Logger:        log.Default(),
 	})
 	if err != nil {

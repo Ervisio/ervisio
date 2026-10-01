@@ -11,8 +11,10 @@ All responses are JSON. Errors always look like
 | `not_found` | 404 | | `internal` | 500 |
 
 **Every POST** must send `X-Requested-With: linuxadmin` and `Content-Type: application/json`
-(uploads: any content type). A present `Origin` header must match the host (in `--dev` any
-loopback origin is accepted). Missing header → 403 `forbidden`.
+(uploads: any content type). A present `Origin` header must match the host (in `--dev` the
+Vite dev server given with `--vite` is accepted too; other local ports are not). Missing header → 403 `forbidden`.
+In `--dev` every request whose `Host` is not `localhost`, `127.x.x.x` or `[::1]` (any port) gets 421
+(DNS-rebinding protection).
 On session routes the session is checked first, so a signed-out POST gets 401.
 
 The session cookie is `la_session` (HttpOnly, SameSite=Strict, Secure except in `--dev`).
@@ -41,15 +43,40 @@ cookie gets `Max-Age = session.timeout`, otherwise it is a browser-session cooki
 Failures:
 | status | body |
 |---|---|
-| 401 | `{"error":{"code":"unauthenticated","message":"wrong user name or password"}}` |
-| 403 | `code:"forbidden"`, `data.reason:"root_disabled"` — root sign-in disabled (`allow_root=false`) |
-| 403 | `code:"forbidden"`, `data.reason:"account"` — PAM account check refused (expired/locked) |
+| 401 | `{"error":{"code":"unauthenticated","message":"wrong user name or password"}}` — also when the password is right but the account may not sign in: PAM account check refused (locked, expired, password change required), login shell `nologin`/`false`/restricted or not in `/etc/shells`, or a uid-0 alias with `allow_root = false`. The precise reason is only in the server log, so the answer is no password oracle. |
+| 403 | `code:"forbidden"`, `data.reason:"root_disabled"` — the user name is `root` and `allow_root=false` (checked before any password check) |
 | 403 | `code:"forbidden"`, `data.reason:"dev_mode_user"` — `--dev` only allows the daemon's user |
 | 429 | `code:"forbidden"`, `data:{"reason":"rate_limited","retryAfter":<seconds>}` + `Retry-After` header |
+| 429 | `code:"forbidden"`, `data:{"reason":"busy","retryAfter":1}` — two attempts from this client are already being checked |
+| 503 | `code:"unavailable"`, `data.reason:"busy"` — every PAM slot (8) stayed busy for 5 s |
 | 503 | `code:"unavailable"` — the bridge could not be started |
 
-Rate limit: `login.max_failures` failed attempts per client IP within 15 minutes (wrong unlock
-passwords count too).
+Rate limit: `login.max_failures` failed attempts per client within 15 minutes (wrong unlock
+passwords count too). The client key is the IPv4 address or the IPv6 /64 prefix. An attempt is
+counted **before** PAM runs and taken back only when it succeeds, so parallel attempts cannot
+exceed the limit; at most 2 attempts per client run at once, and 8 in total. With `pam_faillock`
+in the stack, failures also count toward faillock's per-account lock (`deny=`): a client that
+knows a user name can lock that account for faillock's `unlock_time`, within the limits above.
+
+Sessions: each session has an idle timeout (`session.timeout`) and an absolute lifetime of 24 h
+(or `session.timeout` when longer and "stay signed in" was chosen). Outside `--dev`, the user
+bridge runs inside a PAM session (`pam_setcred` + `pam_open_session` of the `linuxadmin`
+service, falling back to `login`), opened by a root helper (`linuxadmind --pam-session-helper`)
+and closed when the bridge exits, so `pam_limits`, `pam_loginuid` and `pam_systemd` apply. In
+`--dev` (no root) no PAM session is opened. Every 60 s, on unlock and before a bridge restart the
+daemon checks the account again and ends the session (bridges stopped, WebSockets closed with
+1008) when the account was removed, its uid changed, its shell became `nologin`/not allowed, it
+left a group it had at sign-in, its password was locked or changed or the account expired
+(read from `/etc/shadow` when running as root), or PAM account management refuses it (used when
+the shadow file is not readable or has no entry, and always on unlock and restart). Groups added
+after sign-in apply at the next sign-in.
+
+### Dev without password (`--dev --dev-insecure-noauth`)
+
+Only with `--dev`, on a loopback listen address, and never as root. At start the daemon prints a
+one-time URL `http://127.0.0.1:<port>/api/dev/noauth?token=…`: opening it signs that browser in
+as the daemon's user (session cookie) and redirects to `/`. Each token works once; the daemon then
+prints the next one. `server/tools/devclient login <url>` prints the session token for scripts.
 
 ## `POST /api/auth/logout`
 
@@ -94,11 +121,13 @@ admin-level; if not unlocked → 403 `needs_admin` with `data.method`. Unknown m
 ## `GET /api/ws`
 
 WebSocket, frames as in ARCHITECTURE.md. Notes:
-- Up to 64 open channels per connection; frames ≤ 2 MiB; `ch` must be a positive integer.
+- Limits: frames ≤ 512 KiB (a bigger frame closes the socket with 1009); up to 64 open channels
+  per connection and 128 per session; up to 8 WebSockets per session (more → 503 before the
+  upgrade); `ch` must be a positive integer.
 - Errors not tied to a channel (bad JSON) are sent with `"ch":0`.
 - `{"op":"close"}` from the client is answered with `{"op":"end"}`.
 - `input` frames: `data` is forwarded verbatim to the bridge stream (the `b64` flag is not
-  interpreted on input). If a channel's input queue (256 frames) overflows it ends with
-  `unavailable`.
-- The socket is closed with status 1008 when the session ends (logout, expiry).
-- In production the `Origin` must match the host; in `--dev` loopback origins are accepted.
+  interpreted on input). If a channel's input queue (64 frames) overflows, or the session has
+  more than 8 MiB of input queued, the channel ends with `unavailable`.
+- The socket is closed with status 1008 when the session ends (logout, expiry, account check).
+- The `Origin` must match the host; in `--dev` the Vite dev server (`--vite`) is accepted too.

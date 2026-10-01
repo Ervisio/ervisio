@@ -318,6 +318,8 @@ func setup(t *testing.T) (system, installed string) {
 	configmod.Path = filepath.Join(root, "linuxadmin.conf")
 	os.MkdirAll(SystemDir, 0o755)
 	os.MkdirAll(InstalledDir, 0o755)
+	// Most tests use unsigned fixtures; the default (signed only) is tested in TestTrustPolicy.
+	os.WriteFile(configmod.Path, []byte("[plugins]\nallow_unsigned = true\n"), 0o644)
 	t.Cleanup(func() { DevDirs = nil })
 	return SystemDir, InstalledDir
 }
@@ -459,7 +461,7 @@ func TestInstallUninstall(t *testing.T) {
 	if _, err := install(context.Background(), installRequest{Source: arch}); !rpc.IsCode(err, rpc.Forbidden) {
 		t.Fatalf("unsigned install must be refused: %v", err)
 	}
-	os.Remove(configmod.Path)
+	os.WriteFile(configmod.Path, []byte("[plugins]\nallow_unsigned = true\n"), 0o644)
 	// bad checksum
 	if _, err := install(context.Background(), installRequest{Source: arch, SHA256: strings.Repeat("0", 64)}); !rpc.IsCode(err, rpc.Invalid) {
 		t.Fatalf("checksum: %v", err)
@@ -549,7 +551,7 @@ func TestLoadDevNeedsDevMode(t *testing.T) {
 	if _, err := loadDev(dir); !rpc.IsCode(err, rpc.Forbidden) {
 		t.Fatalf("dev off: %v", err)
 	}
-	os.WriteFile(configmod.Path, []byte("[plugins]\ndev = true\n"), 0o644)
+	os.WriteFile(configmod.Path, []byte("[plugins]\nallow_unsigned = true\ndev = true\n"), 0o644)
 	info, err := loadDev(dir)
 	if err != nil || info.ID != "demo" {
 		t.Fatalf("%+v %v", info, err)

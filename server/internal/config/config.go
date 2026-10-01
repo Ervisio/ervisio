@@ -92,7 +92,9 @@ func Default() *Config {
 		Login:   Login{ShowIP: true, MaxFailures: 5},
 		Session: Session{Timeout: Duration{12 * time.Hour}, AdminUnlock: Duration{5 * time.Minute}},
 		TLS:     TLS{Mode: "self-signed", Redirect: true},
-		Plugins: Plugins{AllowUnsigned: true},
+		// Only signed plugins by default (security review H2); dev
+		// folders are still loaded in developer mode, marked unsigned.
+		Plugins: Plugins{AllowUnsigned: false},
 	}
 }
 

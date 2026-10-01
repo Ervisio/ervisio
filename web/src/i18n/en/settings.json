@@ -23,7 +23,8 @@
     "web": "Web server",
     "plugpol": "Plugins",
     "hosts": "Hosts",
-    "about": "About"
+    "about": "About",
+    "browser": "This browser"
   },
   "note": {
     "default": "Default",
@@ -200,5 +201,11 @@
     "5m": "5 minutes",
     "15m": "15 minutes",
     "30m": "30 minutes"
+  },
+  "browser": {
+    "recent": {
+      "title": "Remember accounts on the sign-in page",
+      "desc": "Show the accounts used in this browser as tiles on the sign-in page. The names are stored in this browser only. Leave this off on shared computers; turning it off forgets them."
+    }
   }
 }

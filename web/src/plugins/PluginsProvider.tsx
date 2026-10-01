@@ -1,18 +1,8 @@
-import * as React from 'react';
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { call, stream, useSession } from '../api';
-import { apiUrl } from '../api/base';
-import { useI18n } from '../i18n';
-import { themeVars, useTheme } from '../theme';
-import * as ui from '../ui';
-import type { PluginManifest, PluginModule, PluginPageDef, PluginSDK, PluginSnippet, PluginWidgetDef } from './types';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { call, useSession } from '../api';
+import type { PluginManifest, PluginPageInfo, PluginSnippet, PluginWidgetInfo } from './types';
 
-export interface RegisteredPage {
-  plugin: string;
-  id: string;
-  def: PluginPageDef;
-  sdk: PluginSDK;
-}
+export type RegisteredPage = PluginPageInfo;
 export interface RailPluginPage {
   plugin: string;
   page: string;
@@ -22,37 +12,47 @@ export interface RailPluginPage {
 }
 
 interface PluginsValue {
+  /** Enabled plugins the user may use (plugins.list without disabled/blocked entries). */
   plugins: PluginManifest[];
   loading: boolean;
+  /** Frames that failed to start, by plugin id. */
   errors: Record<string, string>;
-  /** Pages declared by manifests: used for the rail and More sheet even before the module has loaded. */
+  /** Pages declared by manifests: used for the rail and More sheet. */
   railPages: RailPluginPage[];
-  pages: RegisteredPage[];
-  widgets: (PluginWidgetDef & { plugin: string })[];
+  pages: PluginPageInfo[];
+  widgets: PluginWidgetInfo[];
+  /** Terminal snippets declared in manifests (plain data, no plugin code runs). */
   snippets: (PluginSnippet & { plugin: string })[];
+  /** Changes on every reload, so open plugin frames restart with the new code. */
+  generation: number;
   reload(): void;
+  reportError(plugin: string, message: string | null): void;
 }
 const Ctx = createContext<PluginsValue | null>(null);
 
+/**
+ * Lists the plugins and exposes what their manifests contribute. Plugin code never runs in the app:
+ * pages and widgets render in sandboxed frames (PluginFrame), which talk to the app only through the broker.
+ */
 export function PluginsProvider({ children }: { children: ReactNode }) {
   const { status } = useSession();
-  const { lang } = useI18n();
-  const theme = useTheme();
   const [plugins, setPlugins] = useState<PluginManifest[]>([]);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [pages, setPages] = useState<RegisteredPage[]>([]);
-  const [widgets, setWidgets] = useState<PluginsValue['widgets']>([]);
-  const [snippets, setSnippets] = useState<PluginsValue['snippets']>([]);
-  const [nonce, setNonce] = useState(0);
-  const langRef = useRef(lang);
-  langRef.current = lang;
-  const themeRef = useRef(theme);
-  themeRef.current = theme;
-  const listeners = useRef(new Set<() => void>());
-  useEffect(() => listeners.current.forEach((l) => l()), [theme.theme, theme.colourMode, theme.distroColour]);
+  const [generation, setGeneration] = useState(0);
 
-  const reload = useCallback(() => setNonce((n) => n + 1), []);
+  const reload = useCallback(() => setGeneration((n) => n + 1), []);
+  const reportError = useCallback((plugin: string, message: string | null) => {
+    setErrors((e) => {
+      if (message === null) {
+        if (!(plugin in e)) return e;
+        const next = { ...e };
+        delete next[plugin];
+        return next;
+      }
+      return e[plugin] === message ? e : { ...e, [plugin]: message };
+    });
+  }, []);
 
   useEffect(() => {
     if (status !== 'authed') {
@@ -61,79 +61,29 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
     }
     let live = true;
     setLoading(true);
-    setPages([]);
-    setWidgets([]);
-    setSnippets([]);
     setErrors({});
-    (async () => {
-      let list: PluginManifest[];
-      try {
-        const r = await call<PluginManifest[] | { plugins: PluginManifest[] } | null>('plugins.list', {});
-        list = (Array.isArray(r) ? r : r?.plugins ?? []).filter((p) => p.enabled !== false);
-      } catch {
-        list = []; // module not built yet or no plugins: not an error
-      }
-      if (!live) return;
-      setPlugins(list);
-      await Promise.all(
-        list.map(async (m) => {
-          const strings: Record<string, Record<string, string>> = {};
-          const sdk: PluginSDK = {
-            version: 1,
-            plugin: { id: m.id, name: m.name, version: m.version, baseUrl: apiUrl(`/plugins/${m.id}/`) },
-            api: {
-              call,
-              stream,
-              exec: (command, args = [], opts) => call('plugins.exec', { plugin: m.id, command, args }, opts),
-            },
-            ui,
-            react: React,
-            registerPage: (id, def) => live && setPages((p) => [...p.filter((x) => !(x.plugin === m.id && x.id === id)), { plugin: m.id, id, def, sdk }]),
-            registerWidget: (def) => live && setWidgets((w) => [...w.filter((x) => !(x.plugin === m.id && x.id === def.id)), { ...def, plugin: m.id }]),
-            registerSnippet: (s) => live && setSnippets((x) => [...x, { ...s, plugin: m.id }]),
-            registerStrings: (d) => Object.assign(strings, d),
-            t: (key, vars) => {
-              const s = strings[langRef.current]?.[key] ?? strings.en?.[key] ?? key;
-              return vars ? s.replace(/\{(\w+)\}/g, (x, k) => (k in vars ? String(vars[k]) : x)) : s;
-            },
-            theme: {
-              get: () => {
-                const t = themeRef.current;
-                return { id: t.theme.id, name: t.theme.name, kind: t.theme.kind, vars: themeVars(t.theme, t.colourMode, t.distroColour) };
-              },
-              onChange: (cb) => {
-                listeners.current.add(cb);
-                return () => void listeners.current.delete(cb);
-              },
-            },
-          };
-          try {
-            const mod = (await import(/* @vite-ignore */ apiUrl(`/plugins/${m.id}/${m.entry}`))) as { default?: PluginModule; activate?: (sdk: PluginSDK) => void };
-            const fn = mod.default ?? mod.activate;
-            if (typeof fn === 'function') await fn(sdk);
-            else if (fn && typeof (fn as { activate?: unknown }).activate === 'function') await (fn as { activate(s: PluginSDK): void }).activate(sdk);
-          } catch (e) {
-            console.warn(`plugin ${m.id} failed to load`, e);
-            if (live) setErrors((x) => ({ ...x, [m.id]: e instanceof Error ? e.message : String(e) }));
-          }
-        }),
-      );
-      if (live) setLoading(false);
-    })();
+    call<PluginManifest[] | { plugins: PluginManifest[] } | null>('plugins.list', {})
+      .then((r) => (Array.isArray(r) ? r : r?.plugins ?? []).filter((p) => p.enabled !== false && !p.blocked))
+      .catch(() => [] as PluginManifest[]) // module not built yet or no plugins: not an error
+      .then((list) => {
+        if (!live) return;
+        setPlugins(list);
+        setLoading(false);
+      });
     return () => {
       live = false;
     };
-  }, [status, nonce]);
+  }, [status, generation]);
 
-  const railPages = useMemo<RailPluginPage[]>(
-    () =>
-      plugins.flatMap((p) =>
-        (p.contributes?.pages ?? []).map((g) => ({ plugin: p.id, page: g.id, title: g.title, icon: g.icon ?? p.icon ?? 'plugins', color: p.color })),
-      ),
-    [plugins],
-  );
-
-  const value = useMemo(() => ({ plugins, loading, errors, railPages, pages, widgets, snippets, reload }), [plugins, loading, errors, railPages, pages, widgets, snippets, reload]);
+  const value = useMemo<PluginsValue>(() => {
+    const railPages = plugins.flatMap((p) =>
+      (p.contributes?.pages ?? []).map((g) => ({ plugin: p.id, page: g.id, title: g.title, icon: g.icon ?? p.icon ?? 'plugins', color: p.color })),
+    );
+    const pages = plugins.flatMap((p) => (p.contributes?.pages ?? []).map((g) => ({ plugin: p.id, id: g.id, title: g.title, icon: g.icon })));
+    const widgets = plugins.flatMap((p) => (p.contributes?.widgets ?? []).map((w) => ({ plugin: p.id, id: w.id, title: w.title, icon: w.icon })));
+    const snippets = plugins.flatMap((p) => (p.contributes?.snippets ?? []).map((s) => ({ ...s, plugin: p.id })));
+    return { plugins, loading, errors, railPages, pages, widgets, snippets, generation, reload, reportError };
+  }, [plugins, loading, errors, generation, reload, reportError]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

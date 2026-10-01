@@ -65,6 +65,7 @@ export function DetailPanel({ p, onClose, onToggle, onUpdate, refresh, busy }: P
     >
       {p.error && <div className="plugins-note is-err">{p.error}</div>}
       {p.blocked && <div className="plugins-note is-warn">{t('blockedText')}</div>}
+      {p.devUnsigned && <div className="plugins-note is-warn">{t('devUnsignedText')}</div>}
       {p.updateAvailable && (
         <div className="plugins-upd">
           <div>

@@ -91,22 +91,11 @@ func resolve(c *rpc.Call, p ExecParams) (*resolved, error) {
 	if !idRe.MatchString(p.Plugin) || !cmdNameRe.MatchString(p.Command) {
 		return nil, rpc.Errorf(rpc.Invalid, "Give a plugin id and the name of one of its commands.")
 	}
-	pol := readPolicy()
-	f := find(pol, p.Plugin)
-	if f == nil {
-		return nil, rpc.Errorf(rpc.NotFound, "There is no plugin %q.", p.Plugin)
+	f, who, err := authorize(c, p.Plugin)
+	if err != nil {
+		return nil, err
 	}
 	m := f.M
-	if !readState().isEnabled(m.ID) {
-		return nil, rpc.Errorf(rpc.Forbidden, "%s is turned off. Enable it in Plugins first.", m.Name)
-	}
-	if !pol.AllowUnsigned && !f.Sig.Verified {
-		return nil, rpc.Errorf(rpc.Forbidden, "%s is not signed and this server only runs signed plugins.", m.Name)
-	}
-	who := currentCaller(c.Admin)
-	if !who.canSee(m) {
-		return nil, rpc.Errorf(rpc.Forbidden, "%s is not available to your account.", m.Name)
-	}
 	var cmd *Command
 	for i := range m.Capabilities.Commands {
 		if m.Capabilities.Commands[i].Name == p.Command {
@@ -115,6 +104,11 @@ func resolve(c *rpc.Call, p ExecParams) (*resolved, error) {
 	}
 	if cmd == nil {
 		return nil, rpc.Errorf(rpc.NotFound, "%s does not declare a command %q.", m.Name, p.Command)
+	}
+	// A command declared as user-level never runs on the root bridge: the
+	// plugin cannot raise its own rights by asking for admin.
+	if c.Admin && !cmd.Admin {
+		return nil, rpc.Errorf(rpc.Forbidden, "%s declares %q as a user command; it does not run with administrator rights.", m.Name, p.Command)
 	}
 	root := c.Admin || os.Geteuid() == 0
 	if cmd.Admin && !root && !(cmd.AdminUnlessGroup != "" && who.Groups[cmd.AdminUnlessGroup]) {

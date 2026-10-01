@@ -22,6 +22,15 @@ type Session struct {
 	Account  *account.Account
 	Created  time.Time
 	Remember bool
+	// RHost is the client address that signed in.
+	RHost string
+
+	// expires is the absolute end of the session (see sessionLifetime).
+	expires time.Time
+	// shadowFP is the account's shadow fingerprint at sign-in ("" when
+	// unreadable, e.g. in --dev); checked is the last revalidation.
+	shadowFP string
+	checked  time.Time
 
 	spawnMu   sync.Mutex // serialises user bridge restarts
 	mu        sync.Mutex
@@ -31,7 +40,11 @@ type Session struct {
 	rootUsed  time.Time
 	unlocking bool
 	closed    bool
-	done      chan struct{}
+	// WebSocket accounting (see ws.go limits).
+	wsConns    int
+	wsChannels int
+	inputBytes int64
+	done       chan struct{}
 }
 
 // Done is closed when the session ends (logout, expiry, shutdown).
@@ -170,17 +183,18 @@ func (st *store) remove(s *Session) {
 	s.close()
 }
 
-// expire closes sessions idle for longer than timeout and locks root
-// bridges idle for longer than adminIdle.
+// expire closes sessions idle for longer than timeout or past their
+// absolute lifetime, and locks root bridges idle for longer than adminIdle.
 func (st *store) expire(now time.Time, timeout, adminIdle time.Duration) {
 	var dead, lockable []*Session
 	st.mu.Lock()
 	for k, s := range st.sessions {
 		s.mu.Lock()
 		idle := now.Sub(s.lastSeen)
+		over := !s.expires.IsZero() && now.After(s.expires)
 		rootIdle := s.root != nil && ((!s.root.Busy() && now.Sub(s.rootUsed) > adminIdle) || !s.root.Alive())
 		s.mu.Unlock()
-		if idle > timeout {
+		if idle > timeout || over {
 			delete(st.sessions, k)
 			dead = append(dead, s)
 		} else if rootIdle {

@@ -11,7 +11,9 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"syscall"
 
 	"github.com/Fonlogen/LinuxAdmin/server/internal/brand"
@@ -34,6 +36,9 @@ func main() {
 
 	if *admin && os.Geteuid() != 0 {
 		log.Fatal("--admin requires root")
+	}
+	if *admin {
+		rootEnv()
 	}
 	if !filepath.IsAbs(*configPath) {
 		log.Fatal("--config must be an absolute path")
@@ -73,6 +78,26 @@ func main() {
 	if err != nil && err != context.Canceled {
 		log.Fatal(err)
 	}
+}
+
+// rootEnv makes the root bridge independent of where and how sudo started
+// it: the working directory is "/" (not the user's home, which the user
+// controls) and HOME/USER/LOGNAME are root's own, whatever sudoers keeps.
+func rootEnv() {
+	if err := os.Chdir("/"); err != nil {
+		log.Fatalf("chdir /: %v", err)
+	}
+	home, name := "/root", "root"
+	if u, err := user.LookupId(strconv.Itoa(os.Geteuid())); err == nil {
+		if u.HomeDir != "" {
+			home = u.HomeDir
+		}
+		name = u.Username
+	}
+	os.Setenv("HOME", home)
+	os.Setenv("USER", name)
+	os.Setenv("LOGNAME", name)
+	os.Unsetenv("XDG_RUNTIME_DIR") // the user's runtime dir, if sudo kept it
 }
 
 // protocolStdout moves the protocol to a private duplicate of stdout and

@@ -1,40 +1,24 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { ApiError, useSession } from '../api';
+import { ApiError, readRecentUsers, rememberRecentUser, useSession } from '../api';
 import { useT } from '../i18n';
 import { useTheme } from '../theme';
 import { Button, Checkbox, Icon, IconButton, Input } from '../ui';
 import { DistroLogo } from '../shell/DistroLogo';
 import './login.css';
 
-const KEY = 'la.recentUsers';
-interface Recent {
-  user: string;
-  isAdmin?: boolean;
-}
-const readRecent = (): Recent[] => {
-  try {
-    const v = JSON.parse(localStorage.getItem(KEY) || '[]');
-    return Array.isArray(v) ? v.filter((x) => x && typeof x.user === 'string').slice(0, 3) : [];
-  } catch {
-    return [];
-  }
-};
-const remember = (r: Recent) => {
-  try {
-    localStorage.setItem(KEY, JSON.stringify([r, ...readRecent().filter((x) => x.user !== r.user)].slice(0, 3)));
-  } catch {
-    /* ignore */
-  }
-};
+// Recent accounts are stored only when the user opted in (see api/recentUsers).
+const readRecent = readRecentUsers;
+const remember = rememberRecentUser;
 const TILE_HUES = ['usr', 'file', 'log'];
 
-type Problem = null | { kind: 'wrong' | 'root' | 'rate' | 'forbidden' | 'network' | 'other'; text?: string; minutes?: number };
+type Problem = null | { kind: 'wrong' | 'root' | 'rate' | 'busy' | 'forbidden' | 'network' | 'other'; text?: string; minutes?: number };
 
 function classify(e: unknown): Problem {
   if (!(e instanceof ApiError)) return { kind: 'other', text: String(e) };
   const d = (e.data ?? {}) as { reason?: string; retryAfter?: number };
   if (d.reason === 'root_disabled' || (e.code === 'forbidden' && /root/i.test(e.message))) return { kind: 'root' };
+  if (d.reason === 'busy') return { kind: 'busy' };
   if (e.status === 429 || d.reason === 'rate_limited' || /too many|rate/i.test(e.message)) return { kind: 'rate', minutes: d.retryAfter ? Math.max(1, Math.ceil(d.retryAfter / 60)) : undefined };
   if (e.code === 'forbidden') return { kind: 'forbidden', text: e.message };
   if (e.code === 'unauthenticated' || e.code === 'invalid') return { kind: 'wrong' };
@@ -93,6 +77,7 @@ export default function LoginPage() {
     switch (problem.kind) {
       case 'wrong': return { icon: 'alert', hue: 'hue-svc', body: t('err.wrong') };
       case 'root': return { icon: 'shield', hue: 'hue-log', body: <>{t('err.root.before')} <code>allow_root = true</code> {t('err.root.after')}</> };
+      case 'busy': return { icon: 'clock', hue: 'hue-log', body: t('err.busy') };
       case 'rate': return { icon: 'clock', hue: 'hue-log', body: problem.minutes ? t('err.rateMinutes', { minutes: problem.minutes }) : t('err.rate') };
       case 'forbidden': return { icon: 'lock', hue: 'hue-svc', body: problem.text || t('err.forbidden') };
       case 'network': return { icon: 'alert', hue: 'hue-svc', body: t('err.network') };

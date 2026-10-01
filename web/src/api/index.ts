@@ -8,3 +8,5 @@ export type { SessionValue } from './session';
 export { PrefsProvider, usePrefs } from './prefs';
 export { MOCK } from './http';
 export { API_BASE, apiUrl, wsUrl } from './base';
+export { recentUsersEnabled, setRecentUsersEnabled, readRecentUsers, rememberRecentUser } from './recentUsers';
+export type { RecentUser } from './recentUsers';

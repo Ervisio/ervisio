@@ -33,7 +33,13 @@ func (s *Server) userBridge(ctx context.Context, sess *Session) (*bridge.Proc, *
 	if p != nil {
 		s.log.Printf("user bridge for %q exited (%v), restarting", sess.Account.Name, p.Err())
 	}
-	np, err := bridge.StartUser(ctx, s.spec(sess.Account))
+	// The account may have changed since sign-in: check it again (with
+	// PAM) before giving it a new bridge.
+	if reason := s.revalidate(sess, true); reason != "" {
+		s.endSession(sess, reason)
+		return nil, errUnauthenticated
+	}
+	np, err := bridge.StartUser(ctx, s.spec(sess.Account, sess.RHost))
 	if err != nil {
 		s.log.Printf("restart bridge for %q: %v", sess.Account.Name, err)
 		return nil, rpc.Errorf(rpc.Unavailable, "the session's bridge is not running")

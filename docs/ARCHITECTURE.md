@@ -38,6 +38,10 @@ browser ──HTTPS/WS──▶ linuxadmind (root, one per machine)
 user running the daemon sign in (PAM still checks the password), spawns the bridge without
 changing uid, and proxies the web app to Vite (`http://127.0.0.1:5173`) unless `--web dist/`.
 It passes `--dev --dev-plugins <cwd>/plugins` to the bridges, so they know about dev mode explicitly.
+It answers only requests whose `Host` is a loopback name or address, and opens no PAM session
+around the bridge (that needs root; outside dev the daemon opens one through
+`linuxadmind --pam-session-helper`, see `docs/api/auth.md`). `--dev-insecure-noauth` (never as root)
+prints a one-time sign-in URL instead of asking for a password.
 
 ## Wire protocols
 
@@ -53,7 +57,8 @@ It passes `--dev --dev-plugins <cwd>/plugins` to the bridges, so they know about
 | Streams | `GET /api/ws` (WebSocket), multiplexed channels, see below |
 | Downloads | `GET /api/files/download?path=…&admin=0|1` (streamed) |
 | Uploads | `POST /api/files/upload?path=…&admin=0|1` raw body (streamed) |
-| Plugin assets | `GET /plugins/<id>/<file>` |
+| Plugin assets | `GET /plugins/<id>/<file>` (only plugins the user may use) |
+| Plugin frame | `GET /plugin-frame/<id>`: host page of a plugin's sandboxed iframe (`docs/api/plugins.md`, "Isolation") |
 
 Every POST must carry `X-Requested-With: linuxadmin` (CSRF) and JSON bodies `Content-Type: application/json`.
 Exact shapes, HTTP statuses and failure reasons: `docs/api/auth.md`.
@@ -153,7 +158,7 @@ redirect = true       # plain HTTP on the same port is redirected to HTTPS
 cert = ""              # tls.mode = custom
 key = ""
 [plugins]
-allow_unsigned = true
+allow_unsigned = false
 dev = false
 ```
 Key table, types and the `config.*` methods: `docs/api/config.md`.
@@ -179,7 +184,10 @@ A plugin is a folder with `manifest.json`, a frontend ES module and optional ass
 
 Plugins never run arbitrary code on the server: they call `plugins.exec {plugin, command, args}`,
 which runs only the `argv` declared in the manifest (with `{0}`-style argument slots validated by
-pattern), as user or admin as declared. Signed plugins carry `manifest.sig` (ed25519).
+pattern), as user or admin as declared. Their frontend never runs in the app either: each page or widget
+runs in an `<iframe sandbox="allow-scripts">` (opaque origin, strict CSP) and talks to the app only through a
+`postMessage` broker that allows the declared commands and folders (`web/PLUGIN-SDK.md`). Signed plugins
+carry `manifest.sig` (ed25519, team key: `docs/PLUGIN-SIGNING.md`); unsigned ones are blocked by default.
 
 ## Repository layout
 

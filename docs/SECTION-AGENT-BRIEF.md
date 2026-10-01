@@ -37,7 +37,9 @@ Do not commit or push; the coordinator does.
 - Your test ports: daemon 127.0.0.1:<port>, Vite 5<port-last-3> (given below).
 - `server/bin`-free run: build both binaries into your scratch dir, then
   `<scratch>/bin/linuxadmind --dev --dev-insecure-noauth --listen 127.0.0.1:<port> --bridge <scratch>/bin/linuxadmin-bridge`
-  (from the repo root). Use `go run ./server/tools/devclient` or curl to call your methods.
+  (from the repo root). The daemon prints a one-time sign-in URL: open it in the browser, or run
+  `go run ./server/tools/devclient login '<url>'` and pass the printed token with `-cookie` (or
+  `LA_SESSION=`) to `go run ./server/tools/devclient`, or as `Cookie: la_session=<token>` with curl.
 - You cannot sudo (no password): admin methods can be tested only for the needs_admin path;
   test their logic with unit tests and by reading command output.
 - Web: `cd web && LINUXADMIN_API=http://127.0.0.1:<port> npx vite --port <vite-port>`; take

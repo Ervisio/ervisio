@@ -17,10 +17,11 @@ import (
 	"strings"
 )
 
-// TeamPublicKey is the ed25519 public key (base64) that signs first-party
-// plugins. PLACEHOLDER: the matching private key was thrown away. Replace it
-// with the real team key before release (see docs/api/plugins.md, "Signing").
-const TeamPublicKey = "HUgBA1QrleG8TQMdrzMoTXcBoRIKPzvPtmZUDNp4HUY="
+// TeamPublicKey is the ed25519 public key (base64) of the LinuxAdmin team key
+// that signs first-party plugins. The private key never lives in the
+// repository; see docs/PLUGIN-SIGNING.md for where it is kept and how to
+// rotate it.
+const TeamPublicKey = "reTBt4sr4E7AYindYYzscF4oUSPzf1hSQ7d8f/R2BfU="
 
 // signaturePrefix is prepended to the canonical manifest before signing, so
 // a signature cannot be replayed for another purpose.

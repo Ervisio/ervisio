@@ -17,7 +17,7 @@ after a change; keys marked `restart` need a daemon restart.
 | `tls.mode` | enum `self-signed`/`letsencrypt`/`custom` | `self-signed` | restart; letsencrypt not implemented yet (falls back to self-signed) |
 | `tls.redirect` | bool | `true` | plain HTTP on the same port → redirect to HTTPS; restart |
 | `tls.cert`, `tls.key` | absolute path | `""` | for `custom`; restart |
-| `plugins.allow_unsigned` | bool | `true` | |
+| `plugins.allow_unsigned` | bool | `false` | unsigned plugins are blocked (dev folders still run in developer mode, marked "Unsigned, dev") |
 | `plugins.dev` | bool | `false` | |
 
 Durations are Go duration strings (`"90s"`, `"5m"`, `"12h"`).
@@ -28,7 +28,7 @@ Durations are Go duration strings (`"90s"`, `"5m"`, `"12h"`).
 {"path":"/etc/linuxadmin/linuxadmin.conf","exists":false,
  "values":{"listen":"0.0.0.0:9090","allow_root":false,"login.show_ip":true,"login.max_failures":5,
            "session.timeout":"12h","session.admin_unlock":"5m","tls.mode":"self-signed","tls.redirect":true,
-           "tls.cert":"","tls.key":"","plugins.allow_unsigned":true,"plugins.dev":false},
+           "tls.cert":"","tls.key":"","plugins.allow_unsigned":false,"plugins.dev":false},
  "defaults":{…same shape…},
  "keys":[{"key":"listen","type":"string","restart":true},{"key":"tls.mode","type":"enum","values":["self-signed","letsencrypt","custom"],"restart":true},…],
  "warnings":[]}
