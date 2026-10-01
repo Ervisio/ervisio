@@ -1,21 +1,16 @@
 #!/bin/bash
-# Installs a locally built LinuxAdmin for testing on this machine, in the same
-# versioned layout as a release (see packaging/install.sh, docs/RELEASING.md).
+# Installs a locally built LinuxAdmin for testing on this machine, with the
+# same installer and layout as a release (install.sh, docs/RELEASING.md).
 # Build first as your user:  make build            (VERSION=1.2.3 to stamp a version)
 # Then:                      sudo ./packaging/install-dev.sh          (install or update)
 #                            sudo ./packaging/install-dev.sh --remove (uninstall, keeps /etc/linuxadmin)
+# Other options are passed to install.sh (--dry-run, --yes, --open-firewall).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-[ "$(id -u)" -eq 0 ] || { echo "Run with sudo."; exit 1; }
-
 if [ "${1:-}" = "--remove" ]; then
-  systemctl disable --now linuxadmin.service 2>/dev/null || true
-  rm -f /usr/bin/linuxadmind /etc/systemd/system/linuxadmin.service /etc/pam.d/linuxadmin
-  rm -rf /usr/lib/linuxadmin /usr/share/linuxadmin /var/lib/linuxadmin/updates
-  systemctl daemon-reload
-  echo "Removed. Configuration kept in /etc/linuxadmin, installed plugins in /var/lib/linuxadmin."
-  exit 0
+  shift
+  exec sh ./install.sh --uninstall --yes "$@"
 fi
 
 for f in server/bin/linuxadmind server/bin/linuxadmin-bridge web/dist/index.html; do
@@ -36,7 +31,8 @@ mkdir -p "$STAGE/bin" "$STAGE/plugins" "$STAGE/packaging"
 install -m755 server/bin/linuxadmind server/bin/linuxadmin-bridge "$STAGE/bin/"
 cp -r web/dist "$STAGE/web"
 cp -r plugins/docker "$STAGE/plugins/docker"
-cp -r packaging/linuxadmin.service packaging/pam.d packaging/install.sh "$STAGE/packaging/"
+cp -r packaging/linuxadmin.service packaging/pam.d "$STAGE/packaging/"
 printf '%s\n' "$VER" > "$STAGE/VERSION"
 
-./packaging/install.sh "$STAGE"
+# install.sh picks packaging/pam.d/linuxadmin.<family> for this distribution.
+sh ./install.sh --from "$STAGE" "$@"

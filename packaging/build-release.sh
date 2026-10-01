@@ -7,7 +7,7 @@
 # Expects server/bin/{linuxadmind,linuxadmin-bridge} built for ARCH with
 # brand.Version = VERSION (make build-server VERSION=...) and web/dist built.
 # The archive holds one folder, linuxadmin-VERSION-linux-ARCH/, with
-# bin/, web/, plugins/, packaging/ and VERSION; only regular files and
+# bin/, web/, plugins/, packaging/, install.sh and VERSION; only regular files and
 # folders (the updater refuses anything else). Used by
 # .github/workflows/release.yml; see docs/RELEASING.md.
 set -euo pipefail
@@ -39,6 +39,8 @@ install -m755 server/bin/linuxadmind server/bin/linuxadmin-bridge "$D/bin/"
 cp -r web/dist "$D/web"
 cp -r plugins/docker "$D/plugins/docker"
 cp -r packaging/linuxadmin.service packaging/pam.d packaging/install.sh packaging/README.md "$D/packaging/"
+# The installer; packaging/install.sh runs it with --from this folder.
+install -m755 install.sh "$D/install.sh"
 printf '%s\n' "$VERSION" > "$D/VERSION"
 chmod -R u+rwX,go+rX,go-w "$D"
 

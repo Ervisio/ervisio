@@ -1,0 +1,11 @@
+#%PAM-1.0
+# PAM service for LinuxAdmin sign-in (/etc/pam.d/linuxadmin): Debian, Ubuntu
+# and derivatives. The session stack runs around every user bridge, opened by
+# linuxadmind's root session helper.
+auth      requisite pam_nologin.so
+@include common-auth
+@include common-account
+session   optional  pam_loginuid.so
+session   optional  pam_keyinit.so force revoke
+session   required  pam_limits.so
+@include common-session
