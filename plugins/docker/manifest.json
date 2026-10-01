@@ -1,0 +1,71 @@
+{
+  "id": "docker",
+  "name": "Docker",
+  "version": "1.4.0",
+  "author": "LinuxAdmin team",
+  "description": "Containers, images and logs. Start, stop and restart from the browser.",
+  "icon": "server",
+  "color": "file",
+  "entry": "index.js",
+  "capabilities": {
+    "commands": [
+      {
+        "name": "ps",
+        "description": "List containers",
+        "argv": ["docker", "ps", "-a", "--no-trunc", "--format", "{{json .}}"],
+        "admin": true,
+        "adminUnlessGroup": "docker"
+      },
+      {
+        "name": "images",
+        "description": "List images",
+        "argv": ["docker", "images", "--format", "{{json .}}"],
+        "admin": true,
+        "adminUnlessGroup": "docker"
+      },
+      {
+        "name": "start",
+        "description": "Start a container",
+        "argv": ["docker", "start", "{0}"],
+        "args": [{ "pattern": "[a-zA-Z0-9][a-zA-Z0-9_.-]*", "maxLen": 128 }],
+        "admin": true,
+        "adminUnlessGroup": "docker"
+      },
+      {
+        "name": "stop",
+        "description": "Stop a container",
+        "argv": ["docker", "stop", "{0}"],
+        "args": [{ "pattern": "[a-zA-Z0-9][a-zA-Z0-9_.-]*", "maxLen": 128 }],
+        "admin": true,
+        "adminUnlessGroup": "docker",
+        "timeoutSec": 60
+      },
+      {
+        "name": "restart",
+        "description": "Restart a container",
+        "argv": ["docker", "restart", "{0}"],
+        "args": [{ "pattern": "[a-zA-Z0-9][a-zA-Z0-9_.-]*", "maxLen": 128 }],
+        "admin": true,
+        "adminUnlessGroup": "docker",
+        "timeoutSec": 90
+      },
+      {
+        "name": "logs",
+        "description": "Show the last 200 log lines of a container",
+        "argv": ["docker", "logs", "--tail", "200", "--timestamps", "{0}"],
+        "args": [{ "pattern": "[a-zA-Z0-9][a-zA-Z0-9_.-]*", "maxLen": 128 }],
+        "admin": true,
+        "adminUnlessGroup": "docker"
+      }
+    ],
+    "files": { "read": [], "write": [] },
+    "sockets": ["/var/run/docker.sock"],
+    "network": []
+  },
+  "contributes": {
+    "pages": [{ "id": "docker", "title": "Docker", "icon": "server" }],
+    "widgets": [{ "id": "containers", "title": "Containers", "icon": "server" }],
+    "snippets": [{ "name": "docker ps", "command": "docker ps" }]
+  },
+  "visibleTo": { "groups": ["docker", "wheel", "sudo"] }
+}
