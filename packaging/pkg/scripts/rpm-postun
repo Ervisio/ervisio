@@ -1,0 +1,7 @@
+#!/bin/sh
+# %postun of the linuxadmin .rpm (nfpm). $1: 0 = removal, 1+ = upgrade.
+# The configuration (/etc/linuxadmin) and installed plugins stay on removal.
+if [ -d /run/systemd/system ]; then
+	systemctl daemon-reload >/dev/null 2>&1 || true
+fi
+exit 0

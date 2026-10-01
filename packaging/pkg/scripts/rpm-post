@@ -1,0 +1,55 @@
+#!/bin/sh
+# %post of the linuxadmin .rpm (nfpm). $1: 1 = first install, 2+ = upgrade.
+unit=linuxadmin.service
+
+# The PAM service for this family (Fedora/RHEL: password-auth;
+# openSUSE/SLES: common-*), kept when it exists (the admin may have changed it).
+if [ ! -e /etc/pam.d/linuxadmin ]; then
+	fam=fedora
+	if grep -Eqs '^(ID|ID_LIKE)=.*(suse|sles)' /etc/os-release || { [ ! -e /etc/pam.d/password-auth ] && [ -e /etc/pam.d/common-auth ]; }; then
+		fam=suse
+	fi
+	install -m 644 /usr/share/linuxadmin/pam.d/linuxadmin.$fam /etc/pam.d/linuxadmin
+fi
+
+# The managed marker: self-update stays off, this package manager installs updates.
+if command -v zypper >/dev/null 2>&1; then
+	pm=zypper
+elif command -v dnf >/dev/null 2>&1 || command -v dnf5 >/dev/null 2>&1; then
+	pm=dnf
+elif command -v yum >/dev/null 2>&1; then
+	pm=yum
+else
+	pm=rpm
+fi
+printf '%s\n' "$pm" >/usr/lib/linuxadmin/managed
+chmod 644 /usr/lib/linuxadmin/managed
+
+# A previous install made by install.sh (versioned layout) is replaced.
+# The daemon still running is that install's: it is restarted below.
+replaced=0
+if [ -L /usr/lib/linuxadmin/current ]; then
+	rm -rf /usr/lib/linuxadmin/versions /usr/lib/linuxadmin/current /usr/lib/linuxadmin/previous /var/lib/linuxadmin/updates
+	replaced=1
+fi
+if [ -f /etc/systemd/system/$unit ] && head -n 1 /etc/systemd/system/$unit | grep -q '^# Installed by the LinuxAdmin installer'; then
+	rm -f /etc/systemd/system/$unit
+fi
+
+if [ -d /run/systemd/system ]; then
+	systemctl daemon-reload >/dev/null 2>&1 || true
+	if [ "$1" -eq 1 ]; then
+		systemctl enable --now $unit >/dev/null 2>&1 || true
+		[ "$replaced" = 1 ] && /usr/lib/linuxadmin/package-service restart
+		if systemctl is-active --quiet $unit; then
+			echo "LinuxAdmin is running on https://$(uname -n):9090 (self-signed certificate)."
+		else
+			echo "LinuxAdmin did not start: journalctl -u $unit"
+		fi
+		echo "Sign in with a Linux account; members of the 'wheel' group get administrator rights."
+		echo "If firewalld is active, open the port: firewall-cmd --permanent --add-port=9090/tcp && firewall-cmd --reload"
+	else
+		/usr/lib/linuxadmin/package-service restart || true
+	fi
+fi
+exit 0

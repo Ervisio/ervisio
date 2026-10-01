@@ -5,10 +5,16 @@
 # vX.Y.Z      -> stable release ("latest"): offered to every machine on the stable channel
 # vX.Y.Z-rc.1 -> pre-release: offered only to machines on the prerelease channel
 #
-# Assets: linuxadmin-<version>-linux-{amd64,arm64}.tar.gz, SHA256SUMS and
-# SHA256SUMS.sig (ed25519, secret RELEASE_SIGNING_KEY). Installed consoles
-# refuse anything that does not verify against the release key embedded in
-# server/internal/update/sign.go. See docs/RELEASING.md.
+# Assets: linuxadmin-<version>-linux-{amd64,arm64}.tar.gz, the packages
+# linuxadmin_<version>_{amd64,arm64}.deb and linuxadmin-<version>-1.{x86_64,aarch64}.rpm
+# (nfpm), SHA256SUMS over all of them and SHA256SUMS.sig (ed25519, secret
+# RELEASE_SIGNING_KEY). Installed consoles and install.sh refuse anything
+# that does not verify against the release key embedded in
+# server/internal/update/sign.go. See docs/RELEASING.md and docs/PACKAGING.md.
+#
+# Optional: with the AUR_SSH_KEY secret set, stable releases are also pushed
+# to the AUR packages linuxadmin-bin and linuxadmin (job "aur"; off while the
+# secret does not exist).
 name: Release
 
 on:
@@ -21,6 +27,12 @@ permissions:
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
+
+env:
+  # nfpm builds the .deb and .rpm; pinned, checked against its release checksums.txt.
+  NFPM_VERSION: 2.47.0
+  NFPM_SHA256_AMD64: 0660ca602b2d2d2ae4781a06c692b3eeb9d437ffea05b831d76e41f4a3188783
+  NFPM_SHA256_ARM64: 1c0f5f2999b9a974bfb04fdb0cc3306096de530ac5dbb25d739cc5f5219c919c
 
 jobs:
   meta:
@@ -99,10 +111,34 @@ jobs:
           test "$(server/bin/linuxadmin-bridge --version)" = "$VERSION"
       - name: Package
         run: ./packaging/build-release.sh "$VERSION" "${{ matrix.arch }}" dist
+      - name: Install nfpm ${{ env.NFPM_VERSION }}
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          case "$ARCH" in
+            amd64) f="nfpm_${NFPM_VERSION}_Linux_x86_64.tar.gz"; sum="$NFPM_SHA256_AMD64" ;;
+            arm64) f="nfpm_${NFPM_VERSION}_Linux_arm64.tar.gz"; sum="$NFPM_SHA256_ARM64" ;;
+          esac
+          curl -fsSL --proto '=https' --tlsv1.2 -o "$RUNNER_TEMP/$f" "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/$f"
+          echo "$sum  $RUNNER_TEMP/$f" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$f" -C "$RUNNER_TEMP" nfpm
+          "$RUNNER_TEMP/nfpm" --version | tail -n 3
+      - name: Packages (.deb, .rpm)
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          # Built from the release archive itself, so archive and packages hold the same files.
+          mkdir -p "$RUNNER_TEMP/rel"
+          tar -xzf "dist/linuxadmin-$VERSION-linux-$ARCH.tar.gz" -C "$RUNNER_TEMP/rel"
+          NFPM="$RUNNER_TEMP/nfpm" ./packaging/build-packages.sh "$RUNNER_TEMP/rel/linuxadmin-$VERSION-linux-$ARCH" "$ARCH" dist
+          ls -l dist
       - uses: actions/upload-artifact@v4
         with:
           name: dist-${{ matrix.arch }}
-          path: dist/*.tar.gz
+          path: |
+            dist/*.tar.gz
+            dist/*.deb
+            dist/*.rpm
           if-no-files-found: error
           retention-days: 3
 
@@ -141,8 +177,12 @@ jobs:
           trap 'rm -f "$KEY"' EXIT
           printf '%s\n' "$RELEASE_SIGNING_KEY" > "$KEY"
           cd dist
-          ls linuxadmin-"$VERSION"-linux-amd64.tar.gz linuxadmin-"$VERSION"-linux-arm64.tar.gz
-          sha256sum linuxadmin-"$VERSION"-linux-*.tar.gz > SHA256SUMS
+          assets=("linuxadmin-$VERSION-linux-amd64.tar.gz" "linuxadmin-$VERSION-linux-arm64.tar.gz"
+                  "linuxadmin_${VERSION}_amd64.deb" "linuxadmin_${VERSION}_arm64.deb"
+                  "linuxadmin-$VERSION-1.x86_64.rpm" "linuxadmin-$VERSION-1.aarch64.rpm")
+          ls -l "${assets[@]}"
+          # Every asset is listed, so the packages are covered by the signature too.
+          sha256sum "${assets[@]}" > SHA256SUMS
           "$RUNNER_TEMP/release-sign" -key "$KEY" SHA256SUMS
           rm -f "$KEY"
           # Against the key embedded in the code: fails if the secret is not
@@ -170,8 +210,10 @@ jobs:
           cat >> "$notes" <<'EOF'
 
           ---
-          Update from **Settings › About › Check for updates**, or install with `sudo ./packaging/install.sh` from the extracted archive.
-          `SHA256SUMS` is signed with the LinuxAdmin release key (`SHA256SUMS.sig`, ed25519); consoles verify it before installing.
+          Install: `curl -fsSL https://raw.githubusercontent.com/Fonlogen/LinuxAdmin/main/install.sh | sudo sh` (or download `install.sh`, read it, then `sudo sh install.sh`).
+          Packages: the `.deb` (Debian 12+, Ubuntu 22.04+) and `.rpm` (Fedora, RHEL 9+, openSUSE) below; a packaged install is updated by its package manager.
+          Consoles installed with `install.sh` update from **Settings › About › Check for updates**.
+          `SHA256SUMS` lists every file of the release and is signed with the LinuxAdmin release key (`SHA256SUMS.sig`, ed25519); consoles and `install.sh` verify it before installing.
           EOF
           cat "$notes"
       - name: Publish
@@ -180,4 +222,67 @@ jobs:
         run: |
           flags=(--verify-tag --title "LinuxAdmin $VERSION" --notes-file "$RUNNER_TEMP/notes.md")
           if [ "$PRERELEASE" = true ]; then flags+=(--prerelease --latest=false); else flags+=(--latest); fi
-          gh release create "$TAG" "${flags[@]}" dist/linuxadmin-"$VERSION"-linux-*.tar.gz dist/SHA256SUMS dist/SHA256SUMS.sig
+          gh release create "$TAG" "${flags[@]}" \
+            dist/linuxadmin-"$VERSION"-linux-*.tar.gz dist/linuxadmin_"$VERSION"_*.deb dist/linuxadmin-"$VERSION"-1.*.rpm \
+            dist/SHA256SUMS dist/SHA256SUMS.sig
+
+  # AUR: off unless the AUR_SSH_KEY secret exists (docs/PACKAGING.md). Stable
+  # releases only. Pushes PKGBUILD/.SRCINFO for linuxadmin-bin and linuxadmin,
+  # regenerated by packaging/arch/update-pkgbuild.sh for this version. The
+  # copies in this repository are not changed: commit them by hand.
+  aur-enabled:
+    needs: [meta, release]
+    if: needs.meta.outputs.prerelease == 'false'
+    runs-on: ubuntu-24.04
+    outputs:
+      enabled: ${{ steps.c.outputs.enabled }}
+    steps:
+      - id: c
+        env:
+          AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
+        run: |
+          if [ -n "$AUR_SSH_KEY" ]; then echo "enabled=true"; else echo "enabled=false"; echo "AUR_SSH_KEY is not set: AUR publishing skipped."; fi >> "$GITHUB_OUTPUT"
+
+  aur:
+    needs: [meta, aur-enabled]
+    if: needs.aur-enabled.outputs.enabled == 'true'
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+    steps:
+      - name: Tools
+        run: pacman -Syu --noconfirm --needed git openssh go
+      - uses: actions/checkout@v4
+      - name: Update the PKGBUILDs (verifies the release signature)
+        run: |
+          useradd -m builder
+          chown -R builder: "$GITHUB_WORKSPACE"
+          su builder -c "cd '$GITHUB_WORKSPACE' && ./packaging/arch/update-pkgbuild.sh '$VERSION'"
+      - name: Push to the AUR
+        env:
+          AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$AUR_SSH_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan -t ed25519 aur.archlinux.org >> ~/.ssh/known_hosts
+          ssh-keygen -lf ~/.ssh/known_hosts
+          export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/aur -o IdentitiesOnly=yes"
+          git config --global user.name "Fonlogen"
+          git config --global user.email "info.fonlogen@gmail.com"
+          for pkg in linuxadmin-bin linuxadmin; do
+            rm -rf "/tmp/aur-$pkg"
+            git clone "ssh://aur@aur.archlinux.org/$pkg.git" "/tmp/aur-$pkg"
+            cp packaging/arch/$pkg/{PKGBUILD,.SRCINFO,linuxadmin.install,linuxadmin.pam,package-service.sh} "/tmp/aur-$pkg/"
+            cd "/tmp/aur-$pkg"
+            git add PKGBUILD .SRCINFO linuxadmin.install linuxadmin.pam package-service.sh
+            if git diff --cached --quiet; then echo "$pkg: no change"; else git commit -q -m "Update to $VERSION" && git push origin HEAD:master; fi
+            cd "$GITHUB_WORKSPACE"
+          done
+          rm -f ~/.ssh/aur
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aur-${{ needs.meta.outputs.version }}
+          path: packaging/arch
+          retention-days: 30

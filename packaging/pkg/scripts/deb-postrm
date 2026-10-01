@@ -1,0 +1,19 @@
+#!/bin/sh
+# postrm of the linuxadmin .deb (nfpm), as dh_installsystemd generates it.
+# Purge also removes the configuration, the TLS certificate and installed plugins.
+set -e
+unit=linuxadmin.service
+if [ -d /run/systemd/system ]; then
+	systemctl --system daemon-reload >/dev/null || true
+fi
+if [ "$1" = remove ] && [ -x /usr/bin/deb-systemd-helper ]; then
+	deb-systemd-helper mask $unit >/dev/null || true
+fi
+if [ "$1" = purge ]; then
+	if [ -x /usr/bin/deb-systemd-helper ]; then
+		deb-systemd-helper purge $unit >/dev/null || true
+		deb-systemd-helper unmask $unit >/dev/null || true
+	fi
+	rm -rf /etc/linuxadmin /var/lib/linuxadmin
+fi
+exit 0

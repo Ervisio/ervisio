@@ -1,0 +1,129 @@
+# nfpm (https://nfpm.goreleaser.com) configuration for the .deb and .rpm
+# packages. Do not run nfpm on it directly: packaging/build-packages.sh
+# stages a release folder and this file together and runs nfpm there, so
+# every src below is relative to that staging folder.
+#
+# Packages use the flat layout and mark the install as managed:
+#   /usr/bin/linuxadmind                     daemon
+#   /usr/lib/linuxadmin/linuxadmin-bridge    bridge
+#   /usr/share/linuxadmin/{web,plugins}      web app, first-party plugins
+#   /usr/lib/linuxadmin/managed              "apt" / "dnf" / "zypper": self-update is off
+name: linuxadmin
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+version_schema: semver
+release: 1
+section: admin
+priority: optional
+maintainer: Fonlogen <info.fonlogen@gmail.com>
+vendor: Fonlogen
+homepage: https://github.com/Fonlogen/LinuxAdmin
+license: LicenseRef-Unlicensed
+description: |-
+  Web console for managing a Linux server from the browser
+  Sign in with a Linux account (PAM) and get an overview, a terminal, a file
+  manager, logs, systemd services, software updates, user management and
+  plugins. Administrator rights use sudo. The console listens on port 9090
+  (HTTPS, self-signed certificate on first start).
+
+contents:
+  - src: ./bin/linuxadmind
+    dst: /usr/bin/linuxadmind
+    file_info:
+      mode: 0755
+  - src: ./bin/linuxadmin-bridge
+    dst: /usr/lib/linuxadmin/linuxadmin-bridge
+    file_info:
+      mode: 0755
+  - src: ./package-service.sh
+    dst: /usr/lib/linuxadmin/package-service
+    file_info:
+      mode: 0755
+  - src: ./web
+    dst: /usr/share/linuxadmin/web
+    type: tree
+  - src: ./plugins
+    dst: /usr/share/linuxadmin/plugins
+    type: tree
+  - src: ./linuxadmin.service
+    dst: /usr/lib/systemd/system/linuxadmin.service
+    file_info:
+      mode: 0644
+  - dst: /usr/lib/linuxadmin
+    type: dir
+    file_info:
+      mode: 0755
+  - dst: /usr/share/linuxadmin
+    type: dir
+    file_info:
+      mode: 0755
+  - dst: /etc/linuxadmin
+    type: dir
+    file_info:
+      mode: 0755
+  - dst: /var/lib/linuxadmin
+    type: dir
+    file_info:
+      mode: 0755
+
+  # Debian / Ubuntu: one PAM file, a conffile.
+  - src: ./pam.d/linuxadmin.debian
+    dst: /etc/pam.d/linuxadmin
+    type: config|noreplace
+    packager: deb
+    file_info:
+      mode: 0644
+  - src: ./managed.apt
+    dst: /usr/lib/linuxadmin/managed
+    packager: deb
+    file_info:
+      mode: 0644
+
+  # One .rpm for Fedora/RHEL and openSUSE: the post-install script writes
+  # /etc/pam.d/linuxadmin for the family it runs on, and the marker with the
+  # package manager there (dnf or zypper).
+  - src: ./pam.d/linuxadmin.fedora
+    dst: /usr/share/linuxadmin/pam.d/linuxadmin.fedora
+    packager: rpm
+    file_info:
+      mode: 0644
+  - src: ./pam.d/linuxadmin.suse
+    dst: /usr/share/linuxadmin/pam.d/linuxadmin.suse
+    packager: rpm
+    file_info:
+      mode: 0644
+  - dst: /etc/pam.d/linuxadmin
+    type: ghost
+    packager: rpm
+  - dst: /usr/lib/linuxadmin/managed
+    type: ghost
+    packager: rpm
+
+overrides:
+  deb:
+    depends:
+      - sudo
+      - libpam0g
+      - libpam-runtime
+      - systemd
+    scripts:
+      postinstall: ./scripts/deb-postinst
+      preremove: ./scripts/deb-prerm
+      postremove: ./scripts/deb-postrm
+  rpm:
+    depends:
+      - sudo
+      - pam
+      - systemd
+    scripts:
+      postinstall: ./scripts/rpm-post
+      preremove: ./scripts/rpm-preun
+      postremove: ./scripts/rpm-postun
+
+deb:
+  fields:
+    Bugs: https://github.com/Fonlogen/LinuxAdmin/issues
+rpm:
+  group: System Environment/Daemons
+  summary: Web console for managing a Linux server from the browser
