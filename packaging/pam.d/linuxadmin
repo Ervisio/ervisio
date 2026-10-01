@@ -1,0 +1,6 @@
+#%PAM-1.0
+# PAM service for LinuxAdmin sign-in (installed as /etc/pam.d/linuxadmin).
+# Arch Linux / Fedora-style stacks; on Debian/Ubuntu use @include common-auth
+# and @include common-account instead.
+auth      include   system-login
+account   include   system-login

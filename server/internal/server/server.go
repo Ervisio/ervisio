@@ -1,0 +1,304 @@
+// Package server is linuxadmind's HTTP side: sign-in with PAM, sessions,
+// routing of API calls and streams to per-user bridges, file transfer,
+// plugin assets and the web app.
+package server
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log"
+	"net"
+	"net/http"
+	"net/url"
+	"os"
+	"sync"
+	"time"
+
+	"github.com/Fonlogen/LinuxAdmin/server/internal/account"
+	"github.com/Fonlogen/LinuxAdmin/server/internal/config"
+)
+
+// Options configure the daemon.
+type Options struct {
+	ConfigPath string
+	// Dev: no TLS, no root needed, only the daemon's own user may sign in,
+	// bridges run without changing uid, web proxied to Vite unless WebDir.
+	Dev bool
+	// NoAuth (dev only) signs every request in as the daemon's user.
+	NoAuth bool
+	// Listen overrides the configured listen address.
+	Listen string
+	// WebDir is the built web app ("" in dev = proxy to ViteURL).
+	WebDir string
+	// ViteURL is the Vite dev server.
+	ViteURL string
+	// Bridge is the absolute path of linuxadmin-bridge.
+	Bridge string
+	// PluginDirs are searched in order for /plugins/<id>/<file>.
+	PluginDirs []string
+	Logger     *log.Logger
+}
+
+// Server is the daemon.
+type Server struct {
+	opts     Options
+	log      *log.Logger
+	cfg      *configHolder
+	sessions *store
+	limiter  *limiter
+	pamSem   chan struct{}
+	devUser  *account.Account // dev mode: the only account allowed
+
+	noAuthMu   sync.Mutex
+	noAuthSess *Session
+
+	baseCtx context.Context
+	cancel  context.CancelFunc
+	vite    http.Handler
+}
+
+// New validates options and loads the configuration.
+func New(opts Options) (*Server, error) {
+	if opts.Logger == nil {
+		opts.Logger = log.Default()
+	}
+	if opts.NoAuth && !opts.Dev {
+		return nil, errors.New("--dev-insecure-noauth requires --dev")
+	}
+	if !opts.Dev && os.Geteuid() != 0 {
+		return nil, errors.New("linuxadmind must run as root (use --dev for development)")
+	}
+	if fi, err := os.Stat(opts.Bridge); err != nil || !fi.Mode().IsRegular() {
+		return nil, fmt.Errorf("bridge binary %q not found (use --bridge)", opts.Bridge)
+	}
+	holder, err := newConfigHolder(opts.ConfigPath, opts.Logger)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	s := &Server{
+		opts:     opts,
+		log:      opts.Logger,
+		cfg:      holder,
+		sessions: newStore(),
+		limiter:  newLimiter(),
+		pamSem:   make(chan struct{}, 8),
+		baseCtx:  ctx,
+		cancel:   cancel,
+	}
+	if opts.Dev {
+		if s.devUser, err = account.Current(); err != nil {
+			cancel()
+			return nil, fmt.Errorf("resolve current user: %w", err)
+		}
+		if opts.WebDir == "" {
+			u, err := url.Parse(opts.ViteURL)
+			if err != nil || u.Host == "" {
+				cancel()
+				return nil, fmt.Errorf("invalid Vite URL %q", opts.ViteURL)
+			}
+			s.vite = newViteProxy(u, s.log)
+		}
+	}
+	return s, nil
+}
+
+// Config returns the current configuration.
+func (s *Server) Config() *config.Config { return s.cfg.get() }
+
+// ListenAddr is the effective listen address.
+func (s *Server) ListenAddr() string {
+	if s.opts.Listen != "" {
+		return s.opts.Listen
+	}
+	if s.opts.Dev {
+		return "127.0.0.1:9090"
+	}
+	return s.Config().Listen
+}
+
+// Handler returns the HTTP handler with every route.
+func (s *Server) Handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/public/host", s.handlePublicHost)
+	mux.HandleFunc("GET /api/public/logo", s.handlePublicLogo)
+	mux.HandleFunc("POST /api/auth/login", s.csrf(s.handleLogin))
+	mux.HandleFunc("POST /api/auth/logout", s.csrf(s.handleLogout))
+	mux.HandleFunc("GET /api/auth/session", s.authed(s.handleSession))
+	mux.HandleFunc("POST /api/auth/unlock", s.authed(s.csrfS(s.handleUnlock)))
+	mux.HandleFunc("POST /api/auth/lock", s.authed(s.csrfS(s.handleLock)))
+	mux.HandleFunc("POST /api/rpc", s.authed(s.csrfS(s.handleRPC)))
+	mux.HandleFunc("GET /api/ws", s.authed(s.handleWS))
+	mux.HandleFunc("GET /api/files/download", s.authed(s.handleDownload))
+	mux.HandleFunc("POST /api/files/upload", s.authed(s.csrfS(s.handleUpload)))
+	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
+		writeError(w, errNotFound)
+	})
+	mux.HandleFunc("GET /plugins/{id}/{file...}", s.authed(s.handlePlugin))
+	mux.Handle("/", s.webHandler())
+	return securityHeaders(mux)
+}
+
+// Run serves until ctx is cancelled, then shuts down gracefully and stops
+// every bridge.
+func (s *Server) Run(ctx context.Context) error {
+	addr := s.ListenAddr()
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
+	if s.opts.NoAuth {
+		host, _, _ := net.SplitHostPort(ln.Addr().String())
+		if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
+			ln.Close()
+			return errors.New("--dev-insecure-noauth only listens on a loopback address")
+		}
+		if _, err := s.noAuthSession(); err != nil {
+			ln.Close()
+			return err
+		}
+		s.log.Printf("WARNING: --dev-insecure-noauth: every request is signed in as %q", s.devUser.Name)
+	}
+
+	handler := s.Handler()
+	newSrv := func(h http.Handler) *http.Server {
+		return &http.Server{
+			Handler:           h,
+			ReadHeaderTimeout: 10 * time.Second,
+			IdleTimeout:       120 * time.Second,
+			MaxHeaderBytes:    64 << 10,
+			BaseContext:       func(net.Listener) context.Context { return s.baseCtx },
+			ErrorLog:          s.log,
+		}
+	}
+	srv := newSrv(handler)
+	var redirect *http.Server
+
+	go s.janitor(ctx)
+
+	errCh := make(chan error, 2)
+	if s.opts.Dev {
+		s.log.Printf("listening on http://%s (dev mode)", ln.Addr())
+		go func() { errCh <- srv.Serve(ln) }()
+	} else {
+		tlsCfg, err := s.tlsConfig()
+		if err != nil {
+			ln.Close()
+			return err
+		}
+		srv.TLSConfig = tlsCfg
+		tlsLn, plainLn := splitTLS(ln, s.log)
+		go func() { errCh <- srv.ServeTLS(tlsLn, "", "") }()
+		redirect = newSrv(redirectHandler(s.Config().TLS.Redirect))
+		go func() { errCh <- redirect.Serve(plainLn) }()
+		s.log.Printf("listening on https://%s", ln.Addr())
+	}
+
+	select {
+	case <-ctx.Done():
+	case err := <-errCh:
+		if !errors.Is(err, http.ErrServerClosed) {
+			s.shutdown(srv, redirect)
+			return err
+		}
+	}
+	s.shutdown(srv, redirect)
+	return nil
+}
+
+func (s *Server) shutdown(srv, redirect *http.Server) {
+	s.log.Printf("shutting down")
+	sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	s.cancel() // ends websocket handlers and in-flight calls
+	_ = srv.Shutdown(sctx)
+	if redirect != nil {
+		_ = redirect.Shutdown(sctx)
+	}
+	var wg sync.WaitGroup
+	for _, sess := range s.sessions.all() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s.sessions.remove(sess)
+		}()
+	}
+	wg.Wait()
+}
+
+// janitor expires idle sessions and admin unlocks, and prunes the limiter.
+func (s *Server) janitor(ctx context.Context) {
+	t := time.NewTicker(15 * time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			cfg := s.Config()
+			s.sessions.expire(time.Now(), cfg.Session.Timeout.Duration, cfg.Session.AdminUnlock.Duration)
+			s.limiter.gc()
+		}
+	}
+}
+
+// configHolder reloads the configuration file when it changes, so settings
+// saved by the root bridge (config.set) apply without a restart.
+type configHolder struct {
+	path string
+	log  *log.Logger
+
+	mu      sync.Mutex
+	cfg     *config.Config
+	mtime   time.Time
+	size    int64
+	checked time.Time
+}
+
+func newConfigHolder(path string, lg *log.Logger) (*configHolder, error) {
+	h := &configHolder{path: path, log: lg}
+	cfg, exists, warn, err := config.Load(path)
+	if err != nil {
+		return nil, err
+	}
+	for _, w := range warn {
+		lg.Printf("config: %s", w)
+	}
+	if !exists {
+		lg.Printf("config: %s not found, using defaults", path)
+	}
+	h.cfg = cfg
+	h.stamp()
+	return h, nil
+}
+
+func (h *configHolder) stamp() {
+	if fi, err := os.Stat(h.path); err == nil {
+		h.mtime, h.size = fi.ModTime(), fi.Size()
+	} else {
+		h.mtime, h.size = time.Time{}, -1
+	}
+	h.checked = time.Now()
+}
+
+func (h *configHolder) get() *config.Config {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if time.Since(h.checked) < 2*time.Second {
+		return h.cfg
+	}
+	oldM, oldS := h.mtime, h.size
+	h.stamp()
+	if h.mtime.Equal(oldM) && h.size == oldS {
+		return h.cfg
+	}
+	cfg, _, _, err := config.Load(h.path)
+	if err != nil {
+		h.log.Printf("config: reload failed, keeping previous settings: %v", err)
+		return h.cfg
+	}
+	h.log.Printf("config: reloaded %s", h.path)
+	h.cfg = cfg
+	return h.cfg
+}

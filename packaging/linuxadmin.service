@@ -1,0 +1,21 @@
+[Unit]
+Description=LinuxAdmin web console
+Documentation=https://github.com/Fonlogen/LinuxAdmin
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/linuxadmind --bridge /usr/lib/linuxadmin/linuxadmin-bridge
+Restart=on-failure
+RestartSec=2
+# The daemon closes its bridges itself on SIGTERM; anything left is killed
+# when the stop timeout expires.
+KillMode=mixed
+TimeoutStopSec=15
+# Bridges run commands as users and as root via sudo, so the usual
+# sandboxing options (NoNewPrivileges, ProtectSystem…) cannot be used.
+UMask=0022
+
+[Install]
+WantedBy=multi-user.target

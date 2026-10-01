@@ -42,15 +42,18 @@ changing uid, and proxies the web app to Vite (`http://127.0.0.1:5173`) unless `
 
 | What | How |
 |---|---|
-| Public host info for the sign-in page | `GET /api/public/host` → `{hostname, ip?, distro:{id,name,color,logo?}}` |
-| Sign in / out | `POST /api/auth/login {user,password}` → `{user,isAdmin,isRoot}`; `POST /api/auth/logout` |
-| Current session | `GET /api/auth/session` → `{user,uid,isAdmin,canSudo,unlockedUntil?}` or 401 |
+| Public host info for the sign-in page | `GET /api/public/host` → `{hostname, ip?, distro:{id,name,color,logo?,logoUrl?}}`; `GET /api/public/logo` serves the distro logo |
+| Sign in / out | `POST /api/auth/login {user,password,remember?}` → same object as session; `POST /api/auth/logout` |
+| Current session | `GET /api/auth/session` → `{user,name,uid,home,groups,isRoot,isAdmin,canSudo,unlockedUntil?}` or 401 (times in unix ms) |
 | Unlock admin | `POST /api/auth/unlock {password}` → `{unlockedUntil}`; `POST /api/auth/lock` |
 | Calls | `POST /api/rpc {method, params, admin?:bool}` → `{result}` or `{error:{code,message,data?}}` |
 | Streams | `GET /api/ws` (WebSocket), multiplexed channels, see below |
 | Downloads | `GET /api/files/download?path=…&admin=0|1` (streamed) |
 | Uploads | `POST /api/files/upload?path=…&admin=0|1` raw body (streamed) |
 | Plugin assets | `GET /plugins/<id>/<file>` |
+
+Every POST must carry `X-Requested-With: linuxadmin` (CSRF) and JSON bodies `Content-Type: application/json`.
+Exact shapes, HTTP statuses and failure reasons: `docs/api/auth.md`.
 
 Error codes (string): `needs_admin`, `forbidden`, `not_found`, `invalid`, `conflict`, `unavailable`,
 `internal`, `unauthenticated`. The web client reacts to `needs_admin` by showing the
@@ -74,8 +77,14 @@ Binary-ish payloads (terminal output, file chunks) are base64 strings in `data` 
 → {"id":2,"method":"logs.follow","params":{…},"stream":true}
 ← {"id":2,"event":"data","data":…}  …  {"id":2,"event":"end"}
 → {"id":2,"input":…}      → {"id":2,"cancel":true}
-← {"hello":{"version":"…","uid":1000,"admin":false,"methods":{"services.list":"user","services.restart":"admin",…}}}   // first line
+← {"hello":{"version":"…","uid":1000,"admin":false,"methods":{"services.list":"user","services.restart":"admin",…},"streams":["logs.follow",…]}}   // first line
+← {"id":2,"event":"data","data":"<base64>","b64":true}   // binary chunk (Stream.SendBytes)
+↔ {"id":2,"ack":n}                                       // flow control
 ```
+A stream ends with `event:"end"` or with `{"id":2,"error":{…}}`; a cancelled stream ends with `end`.
+Flow control: at most 64 unacknowledged stream messages per direction (events from the bridge,
+inputs from the daemon); the receiver acks as its consumer takes them, and `Stream.Send` blocks
+meanwhile, so a slow browser never stalls other calls on the same bridge.
 
 ## Bridge module API (Go)
 
@@ -137,11 +146,14 @@ timeout = "12h"
 admin_unlock = "5m"
 [tls]
 mode = "self-signed"   # self-signed | letsencrypt | custom
-redirect = true
+redirect = true       # plain HTTP on the same port is redirected to HTTPS
+cert = ""              # tls.mode = custom
+key = ""
 [plugins]
 allow_unsigned = true
 dev = false
 ```
+Key table, types and the `config.*` methods: `docs/api/config.md`.
 
 ## Plugins
 
