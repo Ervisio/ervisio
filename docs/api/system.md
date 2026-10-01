@@ -41,7 +41,7 @@ percentages 0–100 with one decimal.
 
 ## `system.metricsStream` (user, stream)
 
-Params `{"interval": 2000}` (ms, default 2000, clamped 250…60000). Emits one Metrics object per
+Params `{"interval": 2000}` (ms, default 2000, clamped 250…600000). Emits one Metrics object per
 interval as `data` (first one immediately). Never ends by itself; close the channel to stop.
 
 ```

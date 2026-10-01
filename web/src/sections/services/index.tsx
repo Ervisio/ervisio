@@ -11,6 +11,7 @@ import type { Action, FailedUnit, PanelTab, Summary, Unit, UnitKind } from './ty
 import { PURPOSES } from './types';
 import { useActions } from './useActions';
 import { formatBytes, relativeTime } from '../../lib/format';
+import { usePolling, useRefreshInterval } from '../../lib/refresh';
 import './services.css';
 
 type Tab = 'all' | 'running' | 'failed' | 'stopped' | 'timers' | 'sockets';
@@ -85,13 +86,13 @@ export default function ServicesPage() {
   useEffect(() => {
     void loadSummary();
     void loadList(kind);
-    const id = window.setInterval(() => {
-      if (document.hidden) return;
-      void loadList(kind);
-      void loadSummary();
-    }, 5000);
-    return () => window.clearInterval(id);
   }, [kind, loadList, loadSummary]);
+  // Live refresh at the user's rate (the list is a heavier call, so never faster than 2 s).
+  const refresh = Math.max(useRefreshInterval(), 2000);
+  usePolling(() => {
+    void loadList(kind);
+    void loadSummary();
+  }, refresh);
 
   // Live state changes pushed by the daemon.
   useEffect(() => {

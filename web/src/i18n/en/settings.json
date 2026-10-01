@@ -98,6 +98,10 @@
     "motion": {
       "title": "Reduce motion",
       "desc": "Turns off widget wiggle, pulses and transitions."
+    },
+    "refresh": {
+      "title": "Refresh live data",
+      "desc": "How often live data such as the Overview charts and service lists updates. Faster uses more CPU."
     }
   },
   "language": {

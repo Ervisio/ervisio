@@ -8,6 +8,8 @@ import { requestConfirm, runAction, useConfirmRequest } from './actions';
 import { OutputDialog } from './OutputDialog';
 import { Library, type LibItem } from './Library';
 import { SettingsDialog } from './SettingsDialog';
+import { RefreshSelect } from '../../lib/RefreshSelect';
+import { refreshNow, useSetRefreshInterval } from '../../lib/refresh';
 import { useAlerts, useHost } from './data';
 import { defaultLayout, normalizeLayout, snapCols, stepCols, uid, type DashAction, type Widget } from './model';
 import { WidgetBody, widgetTitle, type WidgetCtx } from './widgets';
@@ -48,6 +50,8 @@ interface DragRun {
 
 export default function OverviewPage() {
   const t = useT('overview');
+  const tc = useT('common');
+  const setRefresh = useSetRefreshInterval();
   const { prefs, set } = usePrefs();
   const { session } = useSession();
   const host = useHost();
@@ -362,7 +366,15 @@ export default function OverviewPage() {
       hue="ov"
       title={editing ? undefined : t('greeting', { name })}
       subtitle={editing ? undefined : summary}
-      actions={editing ? undefined : <Button icon="edit" onClick={startEdit}>{t('personalize')}</Button>}
+      actions={editing ? undefined : (
+        <>
+          <span className="ov-refresh">
+            <RefreshSelect label={tc('refreshRate.label')} onPick={(ms) => void setRefresh(ms)} />
+            <Button iconOnly icon="refresh" variant="ghost" aria-label={tc('refreshRate.now')} title={tc('refreshRate.now')} onClick={refreshNow} />
+          </span>
+          <Button icon="edit" onClick={startEdit}>{t('personalize')}</Button>
+        </>
+      )}
     >
       <div className={`ov${editing ? ' ov--editing' : ''}${editing && wide ? ' ov--lib' : ''}`}>
         <div className="ov-main">

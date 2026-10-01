@@ -5,6 +5,8 @@ import { Name } from '../../brand';
 import { LANGUAGES, useI18n, useT, type Lang } from '../../i18n';
 import { useTheme } from '../../theme';
 import { Button, Icon, Input, Segmented, Select, Switch, toast, type HueId, type IconName } from '../../ui';
+import { RefreshSelect } from '../../lib/RefreshSelect';
+import { REFRESH_KEY } from '../../lib/refresh';
 import { ColourBlock, ThemeGrid } from './Appearance';
 import { HostsBlock, type HostEntry } from './Hosts';
 import { usePrefSave, useServerConfig } from './save';
@@ -110,6 +112,10 @@ export default function SettingsPage() {
         {
           id: 'motion', title: t('appearance.motion.title'), desc: t('appearance.motion.desc'),
           control: <Switch aria-label={t('appearance.motion.title')} checked={th.reduceMotion} onChange={(on) => { th.setReduceMotion(on); toast.undo(t('saved', { name: t('appearance.motion.title') }), t('undo'), () => th.setReduceMotion(!on)); }} />,
+        },
+        {
+          id: 'refresh', title: t('appearance.refresh.title'), desc: t('appearance.refresh.desc'), words: 'refresh interval update polling live seconds rate aggiorna frequenza',
+          control: <RefreshSelect label={t('appearance.refresh.title')} onPick={(ms) => save(REFRESH_KEY, ms, t('appearance.refresh.title'))} />,
         },
       ],
     },

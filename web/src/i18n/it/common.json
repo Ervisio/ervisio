@@ -24,5 +24,18 @@
   "disabled": "Disattivato",
   "on": "Attivo",
   "off": "Disattivo",
-  "admin": "Amministratore"
+  "admin": "Amministratore",
+  "refreshRate": {
+    "customValue": "Personalizzato ({value})",
+    "custom": "Personalizzato…",
+    "customTitle": "Frequenza di aggiornamento personalizzata",
+    "customDesc": "Ogni quanto si aggiornano i dati in tempo reale, da 1 secondo a 10 minuti.",
+    "every": "Ogni",
+    "unit": "Unità",
+    "seconds": "secondi",
+    "minutes": "minuti",
+    "invalid": "Inserisci da 1 a 600 secondi, o fino a 10 minuti.",
+    "now": "Aggiorna ora",
+    "label": "Aggiorna dati in tempo reale"
+  }
 }

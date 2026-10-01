@@ -98,6 +98,10 @@
     "motion": {
       "title": "Riduci i movimenti",
       "desc": "Disattiva l’oscillazione dei widget, le pulsazioni e le transizioni."
+    },
+    "refresh": {
+      "title": "Aggiorna dati in tempo reale",
+      "desc": "Ogni quanto si aggiornano i dati in tempo reale, come i grafici della Panoramica e l'elenco dei servizi. Più veloce usa più CPU."
     }
   },
   "language": {

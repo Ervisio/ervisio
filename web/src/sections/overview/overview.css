@@ -144,3 +144,6 @@ body.ov-dragging * { cursor: grabbing !important; }
 .ov-icbtn:hover { color: var(--ink); }
 .ov-icbtn[aria-checked='true'] { background: var(--s); color: var(--h); box-shadow: inset 0 0 0 2px var(--h); }
 .ov-icbtn .ui-icon { width: 18px; height: 18px; }
+
+/* refresh-rate control in the header */
+.ov-refresh { display: inline-flex; align-items: center; gap: 4px; }

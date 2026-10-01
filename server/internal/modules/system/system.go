@@ -24,7 +24,7 @@ func Register(r *rpc.Registry) {
 }
 
 // metricsStream sends a Metrics object every `interval` ms (default 2000,
-// clamped to 250…60000). The first event is sent immediately.
+// clamped to 250…600000). The first event is sent immediately.
 func metricsStream(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
 	var p struct {
 		Interval int `json:"interval"`
@@ -38,8 +38,8 @@ func metricsStream(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
 		iv = 2 * time.Second
 	case iv < 250*time.Millisecond:
 		iv = 250 * time.Millisecond
-	case iv > time.Minute:
-		iv = time.Minute
+	case iv > 10*time.Minute:
+		iv = 10 * time.Minute
 	}
 	smp := newSampler()
 	t := time.NewTicker(iv)

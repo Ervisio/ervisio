@@ -6,6 +6,7 @@ import { useI18n, useT, type TFn } from '../../i18n';
 import { Badge, Button, Card, EmptyState, Icon, Skeleton, StatCard, hueClass, type HueId, type IconName } from '../../ui';
 import { PluginFrame, usePlugins } from '../../plugins';
 import { useRunning, type ActionResult } from './actions';
+import { usePolling, useRefreshInterval } from '../../lib/refresh';
 import { physicalNet, useAlerts, useHost, useMetrics, type AlertItem } from './data';
 import { bytes, bytesStr, duration, num, rate } from './fmt';
 import { asMetric, asRange, isAction, METRIC_META, RANGES, type DashAction, type Widget } from './model';
@@ -78,11 +79,8 @@ function usePoll<T>(method: string, params: unknown, every: number, admin = fals
   useEffect(() => {
     if (!enabled) return;
     void load();
-    const id = window.setInterval(() => {
-      if (!document.hidden) void load();
-    }, every);
-    return () => window.clearInterval(id);
-  }, [load, every, key, enabled]);
+  }, [load, key, enabled]);
+  usePolling(() => void load(), every, enabled);
   return { data, err, reload: () => load(true) };
 }
 
@@ -318,8 +316,9 @@ interface UnitStatus { unit: string; description: string; active: string; sub: s
 function Service({ w, ctx }: { w: Widget; ctx: WidgetCtx }) {
   const t = useT('overview');
   const go = useGo();
+  const refresh = useRefreshInterval();
   const units: string[] = Array.isArray(w.settings?.units) ? w.settings!.units : [];
-  const { data, err, reload } = usePoll<UnitStatus[]>('overview.unitStatus', { units }, 10_000, false, units.length > 0);
+  const { data, err, reload } = usePoll<UnitStatus[]>('overview.unitStatus', { units }, Math.max(refresh, 5000), false, units.length > 0);
   return (
     <Card title={widgetTitle(w, t)}>
       {units.length === 0 ? (
@@ -349,11 +348,12 @@ function Service({ w, ctx }: { w: Widget; ctx: WidgetCtx }) {
 /* ---------- live log ---------- */
 function Log({ w, ctx }: { w: Widget; ctx: WidgetCtx }) {
   const t = useT('overview');
+  const refresh = useRefreshInterval();
   const s = w.settings ?? {};
   const lines = Math.max(4, Math.min(100, Number(s.lines) || 12));
   const params = s.source === 'file' ? { file: s.file ?? '', lines } : { unit: s.source === 'unit' ? s.unit ?? '' : '', lines };
   const ready = s.source === 'file' ? !!s.file : s.source === 'unit' ? !!s.unit : true;
-  const { data, err, reload } = usePoll<{ lines: string[] }>('overview.logTail', params, 3000, false, ready);
+  const { data, err, reload } = usePoll<{ lines: string[] }>('overview.logTail', params, Math.max(refresh, 2000), false, ready);
   const box = useRef<HTMLPreElement>(null);
   useEffect(() => {
     if (box.current) box.current.scrollTop = box.current.scrollHeight;

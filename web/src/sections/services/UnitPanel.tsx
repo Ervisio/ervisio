@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ApiError, call } from '../../api';
 import { useT } from '../../i18n';
 import { formatBytes, formatDuration } from '../../lib/format';
+import { usePolling, useRefreshInterval } from '../../lib/refresh';
 import { Badge, Button, ConfirmDialog, EmptyState, Icon, Panel, Skeleton, Sparkline, Switch, Tabs, Textarea, toast } from '../../ui';
 import { bootMode, formatClockTime, short, stateKey, stateTone } from './helpers';
 import type { Action, Detail, LogLine, PanelTab, Unit, UnitFile } from './types';
@@ -44,9 +45,8 @@ export function UnitPanel({ name, tab, onTab, onClose, inline, rev, row, run, bu
   // Poll while the panel is open: this is also what feeds the memory sparkline.
   useEffect(() => {
     void load();
-    const id = window.setInterval(() => !document.hidden && void load(), 2000);
-    return () => window.clearInterval(id);
   }, [load]);
+  usePolling(() => void load(), Math.max(useRefreshInterval(), 1000));
   useEffect(() => {
     if (rev > 0) void load();
   }, [rev, load]);

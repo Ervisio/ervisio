@@ -24,5 +24,18 @@
   "disabled": "Disabled",
   "on": "On",
   "off": "Off",
-  "admin": "Administrator"
+  "admin": "Administrator",
+  "refreshRate": {
+    "customValue": "Custom ({value})",
+    "custom": "Custom…",
+    "customTitle": "Custom refresh rate",
+    "customDesc": "How often live data updates, from 1 second to 10 minutes.",
+    "every": "Every",
+    "unit": "Unit",
+    "seconds": "seconds",
+    "minutes": "minutes",
+    "invalid": "Enter 1 to 600 seconds, or up to 10 minutes.",
+    "now": "Refresh now",
+    "label": "Refresh live data"
+  }
 }
