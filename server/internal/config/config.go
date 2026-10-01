@@ -58,6 +58,7 @@ type Config struct {
 	TLS       TLS     `toml:"tls"`
 	Plugins   Plugins `toml:"plugins"`
 	Updates   Updates `toml:"updates"`
+	Web       Web     `toml:"web"`
 }
 
 // Login holds sign-in page and brute-force settings.
@@ -100,6 +101,19 @@ type Updates struct {
 	AutoInstallAt string `toml:"auto_install_at"`
 }
 
+// Web holds settings for reaching the console under other names or through
+// a reverse proxy.
+type Web struct {
+	// AllowedOrigins are extra browser origins accepted for sign-in, API
+	// calls and WebSockets, e.g. "https://admin.example.com". The address
+	// the browser used is always accepted when it matches the Host header.
+	AllowedOrigins []string `toml:"allowed_origins"`
+	// TrustedProxies are addresses or CIDRs of reverse proxies whose
+	// X-Forwarded-Host, X-Forwarded-Proto and X-Forwarded-For headers are
+	// believed. Loopback is trusted by default (a proxy on the same machine).
+	TrustedProxies []string `toml:"trusted_proxies"`
+}
+
 // Default returns the built-in configuration used when no file exists.
 func Default() *Config {
 	return &Config{
@@ -111,12 +125,15 @@ func Default() *Config {
 		// folders are still loaded in developer mode, marked unsigned.
 		Plugins: Plugins{AllowUnsigned: false},
 		Updates: Updates{Channel: "stable", AutoCheck: true, AutoInstall: false, AutoInstallAt: "03:30"},
+		Web:     Web{TrustedProxies: []string{"127.0.0.0/8", "::1/128"}},
 	}
 }
 
 // Clone returns a deep copy.
 func (c *Config) Clone() *Config {
 	cp := *c
+	cp.Web.AllowedOrigins = append([]string(nil), c.Web.AllowedOrigins...)
+	cp.Web.TrustedProxies = append([]string(nil), c.Web.TrustedProxies...)
 	return &cp
 }
 
@@ -126,6 +143,16 @@ func (c *Config) Validate() error {
 	for _, k := range Keys() {
 		if err := k.validate(k.get(c)); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", k.Name, err))
+		}
+	}
+	for _, o := range c.Web.AllowedOrigins {
+		if _, err := ParseOrigin(o); err != nil {
+			errs = append(errs, fmt.Errorf("web.allowed_origins: %q: %w", o, err))
+		}
+	}
+	for _, p := range c.Web.TrustedProxies {
+		if _, err := ParsePrefix(p); err != nil {
+			errs = append(errs, fmt.Errorf("web.trusted_proxies: %q: %w", p, err))
 		}
 	}
 	return errors.Join(errs...)

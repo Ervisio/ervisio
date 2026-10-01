@@ -69,12 +69,17 @@ type wsConn struct {
 }
 
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request, sess *Session) {
-	// The origin must be the request's own host (checked by Accept); in dev
-	// also the Vite dev server, and no other local port.
-	opts := &websocket.AcceptOptions{}
-	if s.opts.Dev && s.viteHost != "" {
-		opts.OriginPatterns = []string{s.viteHost}
+	// The origin must be the host the browser used (or one listed in
+	// web.allowed_origins, or the Vite dev server in dev): checked here with
+	// the same rules as API calls, so Accept's own check is skipped.
+	// Browsers always send Origin on WebSocket requests; a request without
+	// one comes from a non-browser client (devclient, scripts), which cannot
+	// be driven by another site.
+	if o := r.Header.Get("Origin"); o != "" && !s.originAllowed(o, r) {
+		writeError(w, rpc.Errorf(rpc.Forbidden, "cross-origin request refused"))
+		return
 	}
+	opts := &websocket.AcceptOptions{InsecureSkipVerify: true}
 	if !sess.reserveConn() {
 		writeError(w, rpc.Errorf(rpc.Unavailable, "too many open connections for this session"))
 		return

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/Fonlogen/LinuxAdmin/server/internal/brand"
+	"github.com/Fonlogen/LinuxAdmin/server/internal/config"
 	"github.com/coder/websocket"
 )
 
@@ -138,18 +139,60 @@ func TestLimiterKey(t *testing.T) {
 	}
 }
 
+func originServer(dev bool, mut func(*config.Config)) *Server {
+	cfg := config.Default()
+	if mut != nil {
+		mut(cfg)
+	}
+	return &Server{opts: Options{Dev: dev}, cfg: &configHolder{path: "/nonexistent", cfg: cfg, checked: time.Now().Add(time.Hour)}}
+}
+
+func originReq(host, remote string, hdr map[string]string) *http.Request {
+	r := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
+	r.Host, r.RemoteAddr = host, remote
+	for k, v := range hdr {
+		r.Header.Set(k, v)
+	}
+	return r
+}
+
 func TestOriginAllowed(t *testing.T) {
-	s := &Server{opts: Options{Dev: false}}
-	if !s.originAllowed("https://host:9090", "host:9090") || s.originAllowed("https://evil", "host:9090") || s.originAllowed("http://localhost:5173", "host:9090") {
+	s := originServer(false, nil)
+	direct := originReq("host:9090", "203.0.113.5:4000", nil)
+	if !s.originAllowed("https://host:9090", direct) || s.originAllowed("https://evil", direct) || s.originAllowed("http://localhost:5173", direct) {
 		t.Fatal("prod origin rules")
 	}
-	s.opts.Dev = true
-	s.viteHost = "127.0.0.1:5173"
-	if !s.originAllowed("http://127.0.0.1:5173", "127.0.0.1:9090") || !s.originAllowed("http://127.0.0.1:9090", "127.0.0.1:9090") {
+	// Default ports are equivalent.
+	if !s.originAllowed("https://admin.example.com", originReq("admin.example.com:443", "203.0.113.5:4000", nil)) {
+		t.Fatal("https default port must match")
+	}
+	// Reverse proxy on the same machine forwarding to 127.0.0.1:9090.
+	proxied := originReq("127.0.0.1:9090", "127.0.0.1:5000", map[string]string{"X-Forwarded-Host": "admin.example.com", "X-Forwarded-For": "198.51.100.7"})
+	if !s.originAllowed("https://admin.example.com", proxied) {
+		t.Fatal("origin from a trusted proxy's X-Forwarded-Host must be accepted")
+	}
+	if got := s.realClientIP(proxied); got != "198.51.100.7" {
+		t.Fatalf("realClientIP = %q", got)
+	}
+	// The same headers from an untrusted peer are ignored.
+	spoof := originReq("host:9090", "203.0.113.9:5000", map[string]string{"X-Forwarded-Host": "evil.example", "X-Forwarded-For": "10.0.0.1"})
+	if s.originAllowed("https://evil.example", spoof) || s.realClientIP(spoof) != "203.0.113.9" {
+		t.Fatal("untrusted proxy headers must be ignored")
+	}
+	// Explicit allowed origins.
+	s2 := originServer(false, func(c *config.Config) { c.Web.AllowedOrigins = []string{"https://Panel.Example.com:443"} })
+	if !s2.originAllowed("https://panel.example.com", direct) || s2.originAllowed("http://panel.example.com", direct) {
+		t.Fatal("allowed_origins must match scheme and host")
+	}
+
+	d := originServer(true, nil)
+	d.viteHost = "127.0.0.1:5173"
+	loop := originReq("127.0.0.1:9090", "127.0.0.1:4000", nil)
+	if !d.originAllowed("http://127.0.0.1:5173", loop) || !d.originAllowed("http://127.0.0.1:9090", loop) {
 		t.Fatal("dev: own host and Vite must be accepted")
 	}
 	// Other local ports share the cookie but are not the app.
-	if s.originAllowed("http://localhost:3000", "127.0.0.1:9090") || s.originAllowed("http://127.0.0.1:8080", "127.0.0.1:9090") || s.originAllowed("http://10.0.0.1", "x") {
+	if d.originAllowed("http://localhost:3000", loop) || d.originAllowed("http://127.0.0.1:8080", loop) || d.originAllowed("http://10.0.0.1", originReq("x", "127.0.0.1:1", nil)) {
 		t.Fatal("dev: other origins must be refused")
 	}
 }

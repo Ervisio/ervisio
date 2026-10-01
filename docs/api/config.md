@@ -52,3 +52,10 @@ Comments in the file are not preserved (the backup keeps them).
 Params `{"changes":{"login.show_ip":false,"session.timeout":"1h"}}` →
 `{"current":"<toml>","proposed":"<toml>","diff":"<lines prefixed with ' ', '-', '+'>"}`.
 Nothing is written. Invalid changes → `invalid`.
+
+## [web]
+
+| key | type | default | meaning |
+|---|---|---|---|
+| `web.allowed_origins` | list of origins | `[]` | extra browser origins (`https://host[:port]`) accepted for API calls and WebSockets; file only, not editable from Settings |
+| `web.trusted_proxies` | list of IPs/CIDRs | `["127.0.0.0/8","::1/128"]` | peers whose `X-Forwarded-Host`, `X-Forwarded-Proto` and `X-Forwarded-For` are believed (origin check, client address for rate limits and logs) |

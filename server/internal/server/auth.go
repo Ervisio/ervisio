@@ -14,6 +14,7 @@ import (
 	"github.com/Fonlogen/LinuxAdmin/server/internal/account"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/brand"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/bridge"
+	"github.com/Fonlogen/LinuxAdmin/server/internal/config"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/pam"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
 )
@@ -53,24 +54,48 @@ func (s *Server) checkCSRF(r *http.Request) *rpc.Error {
 	if r.Header.Get(brand.CSRFHeader) != brand.CSRFValue {
 		return rpc.Errorf(rpc.Forbidden, "missing %s: %s header", brand.CSRFHeader, brand.CSRFValue)
 	}
-	if o := r.Header.Get("Origin"); o != "" && !s.originAllowed(o, r.Host) {
-		return rpc.Errorf(rpc.Forbidden, "cross-origin request refused")
+	if o := r.Header.Get("Origin"); o != "" && !s.originAllowed(o, r) {
+		s.log.Printf("refused request from origin %q to host %q (peer %s): add the origin to web.allowed_origins or set web.trusted_proxies for a reverse proxy", o, r.Host, clientIP(r))
+		return rpc.Errorf(rpc.Forbidden, "cross-origin request refused: this page was opened as %s, which the server does not recognise. See web.allowed_origins in the configuration.", o)
 	}
 	return nil
 }
 
-// originAllowed accepts the request's own host and, in dev mode, the
-// configured Vite dev server (--vite). Other local ports are refused: the
-// session cookie is shared by every port of the host.
-func (s *Server) originAllowed(origin, host string) bool {
+// originAllowed accepts the host the browser used (the Host header, or
+// X-Forwarded-Host from a trusted reverse proxy), the origins listed in
+// web.allowed_origins and, in dev mode, the configured Vite dev server
+// (--vite). Other local ports are refused: the session cookie is shared by
+// every port of the host.
+func (s *Server) originAllowed(origin string, r *http.Request) bool {
 	u, err := url.Parse(origin)
-	if err != nil || u.Host == "" {
+	if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") {
 		return false
 	}
-	if strings.EqualFold(u.Host, host) {
-		return true
+	oh := config.NormalizeHost(u.Host, u.Scheme)
+	for _, h := range s.requestHosts(r) {
+		if oh == config.NormalizeHost(h, u.Scheme) {
+			return true
+		}
+	}
+	norm := u.Scheme + "://" + oh
+	for _, a := range s.Config().Web.AllowedOrigins {
+		if n, err := config.ParseOrigin(a); err == nil && n == norm {
+			return true
+		}
 	}
 	return s.opts.Dev && s.viteHost != "" && strings.EqualFold(u.Host, s.viteHost)
+}
+
+// requestHosts are the host names this request was addressed to: the Host
+// header and, when the peer is a trusted proxy, X-Forwarded-Host.
+func (s *Server) requestHosts(r *http.Request) []string {
+	hosts := []string{r.Host}
+	if s.fromTrustedProxy(r) {
+		if fh := firstHeaderValue(r.Header.Get("X-Forwarded-Host")); fh != "" {
+			hosts = append(hosts, fh)
+		}
+	}
+	return hosts
 }
 
 // loopbackHost reports whether a Host header names this machine's loopback
@@ -317,7 +342,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cfg := s.Config()
-	ip := clientIP(r)
+	ip := s.realClientIP(r)
 	// Refused before any password check, so this reveals only the
 	// configuration (the name "root" is public).
 	if req.User == "root" && !cfg.AllowRoot {
@@ -431,7 +456,7 @@ func (s *Server) handleUnlock(w http.ResponseWriter, r *http.Request, sess *Sess
 		writeJSON(w, http.StatusOK, struct{}{}) // root needs no unlock
 		return
 	}
-	ip := clientIP(r)
+	ip := s.realClientIP(r)
 	cfg := s.Config()
 	att, rej := s.limiter.begin(limiterKey(ip), cfg.Login.MaxFailures)
 	if rej != nil {

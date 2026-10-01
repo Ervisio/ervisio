@@ -241,7 +241,7 @@ jobs:
         env:
           AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
         run: |
-          if [ -n "$AUR_SSH_KEY" ]; then echo "enabled=true"; else echo "enabled=false"; echo "AUR_SSH_KEY is not set: AUR publishing skipped."; fi >> "$GITHUB_OUTPUT"
+          if [ -n "$AUR_SSH_KEY" ]; then echo "enabled=true"; else echo "enabled=false"; echo "AUR_SSH_KEY is not set: AUR publishing skipped." >&2; fi >> "$GITHUB_OUTPUT"
 
   aur:
     needs: [meta, aur-enabled]

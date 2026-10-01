@@ -229,7 +229,15 @@ channel = "stable"
 auto_check = true
 auto_install = false
 auto_install_at = "03:30"
+
+[web]
+# Extra addresses the console is opened at, e.g. behind a domain name.
+allowed_origins = []      # e.g. ["https://admin.example.com"]
+# Reverse proxies whose X-Forwarded-Host/-Proto/-For headers are trusted.
+trusted_proxies = ["127.0.0.0/8", "::1/128"]
 ```
+
+If you open the console through a reverse proxy (nginx, Caddy) or a domain name and sign-in fails with "cross-origin request refused", either let the proxy pass the original host (`proxy_set_header Host $host;` or `X-Forwarded-Host`) from a trusted address, or add the address you type in the browser to `web.allowed_origins`. The daemon logs the refused origin with `journalctl -u linuxadmin`. Changes to the file apply without a restart.
 
 The `updates` keys control self-update: the release channel, automatic checks, and an optional nightly install. See [docs/RELEASING.md](docs/RELEASING.md) for how releases are built and signed.
 

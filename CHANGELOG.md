@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.2] - 2026-10-01
+
+### Fixed
+- Sign-in failed with "cross-origin request refused" when the console was opened through a reverse proxy or under a different host name than the one the daemon saw. The origin check now accepts the host forwarded by a trusted proxy (loopback by default) and treats default ports as equivalent.
+
+### Added
+- `web.allowed_origins` and `web.trusted_proxies` configuration keys. Refused origins are logged with a hint.
+- Rate limits and logs use the browser's address from `X-Forwarded-For` when the request comes from a trusted proxy.
+
 ## [0.1.1] - 2026-10-01
 
 ### Added
