@@ -1,0 +1,204 @@
+{
+  "title": "Settings",
+  "cancel": "Cancel",
+  "undo": "Undo",
+  "saved": "{name} saved",
+  "saveFailed": "Couldn't save {name}",
+  "adminOnly": "Admins",
+  "search": {
+    "placeholder": "Search settings, e.g. root, port, theme",
+    "empty": "No setting matches. Try another word."
+  },
+  "parts": {
+    "you": "You",
+    "server": "This server",
+    "serverAdmins": "This server, admins only"
+  },
+  "groups": {
+    "appearance": "Appearance",
+    "language": "Language and region",
+    "terminal": "Terminal",
+    "notifications": "Notifications",
+    "signin": "Sign-in and security",
+    "web": "Web server",
+    "plugpol": "Plugins",
+    "hosts": "Hosts",
+    "about": "About"
+  },
+  "note": {
+    "default": "Default",
+    "accessibility": "Accessibility"
+  },
+  "appearance": {
+    "theme": {
+      "title": "Theme",
+      "desc": "Saved to your account, so it follows you to any browser. Plugins can add more themes."
+    },
+    "dark": "Dark",
+    "light": "Light",
+    "ownColours": "own colours",
+    "custom": "Custom",
+    "edit": "Edit theme",
+    "delete": "Delete theme",
+    "deleted": "{name} deleted",
+    "create": "Create your own",
+    "import": "Import",
+    "export": "Export JSON",
+    "imported": "{name} imported",
+    "importFailed": "Couldn't import that theme",
+    "importFailedHint": "Pick a JSON file exported from LinuxAdmin.",
+    "createTitle": "Create a theme",
+    "editTitle": "Edit theme",
+    "createHint": "Starts from the current theme. Changes show live.",
+    "myTheme": "My theme",
+    "name": "Name",
+    "saveAs": "Save as “{name}”",
+    "savedTheme": "Theme “{name}” saved and applied",
+    "invalid": "Some colours are not valid.",
+    "base": "Base",
+    "c": {
+      "bg": "Background",
+      "surface": "Panels",
+      "sunk": "Cards",
+      "ink": "Text"
+    },
+    "sectionColours": "Section colours",
+    "h": {
+      "overview": "Overview",
+      "terminal": "Terminal",
+      "files": "Files",
+      "logs": "Logs",
+      "services": "Services",
+      "software": "Software",
+      "users": "Users",
+      "plugins": "Plugins"
+    },
+    "colours": {
+      "title": "Colours",
+      "desc": "Per section gives every area its own colour. Distro colour uses the colour of your distribution everywhere. Themes marked “own colours” keep theirs.",
+      "sections": "Per section",
+      "distro": "Distro colour",
+      "mono": "Monochrome",
+      "detected": "Detected:",
+      "preview": "Preview another:",
+      "reset": "Back to detected"
+    },
+    "follow": {
+      "title": "Follow the device",
+      "desc": "Switch between a dark and a light theme with your system setting.",
+      "pair": "Dark and light theme to use"
+    },
+    "density": {
+      "title": "Density",
+      "desc": "Compact fits more rows in tables and lists.",
+      "comfortable": "Comfortable",
+      "compact": "Compact"
+    },
+    "motion": {
+      "title": "Reduce motion",
+      "desc": "Turns off widget wiggle, pulses and transitions."
+    }
+  },
+  "language": {
+    "title": "Language",
+    "desc": "Saved to your account.",
+    "time": "Time format",
+    "h24": "24-hour",
+    "h12": "12-hour",
+    "week": "First day of the week",
+    "mon": "Monday",
+    "sun": "Sunday",
+    "sat": "Saturday"
+  },
+  "terminal": {
+    "colour": "Colour theme",
+    "colourDesc": "Follow app uses the dark or light palette of the current theme.",
+    "followApp": "Follow app",
+    "font": "Font size",
+    "copy": "Copy on select",
+    "snippets": "Show snippet chips",
+    "snippetsDesc": "The row of saved commands under the terminal."
+  },
+  "notify": {
+    "service": "A service fails",
+    "updates": "Updates are ready",
+    "ssh": "Failed SSH logins",
+    "sshDesc": "More than 10 in 5 minutes from the same address.",
+    "browser": "Browser notifications",
+    "browserDesc": "Show them even when {name} is in a background tab.",
+    "browserDenied": "The browser blocked notifications. Allow them in the site settings."
+  },
+  "server": {
+    "askPassword": "You'll be asked for your password the first time you change something.",
+    "unknownKeys": "Unknown keys in the configuration file: {keys}.",
+    "restart": "needs a restart",
+    "warn": "Changes here apply to every user of this server.",
+    "failed": {
+      "title": "Couldn't read the server configuration",
+      "text": "The daemon did not answer. Check that it is running and try again.",
+      "action": "Try again"
+    }
+  },
+  "web": {
+    "cert": "Certificate file",
+    "certDesc": "Absolute path to a PEM certificate.",
+    "key": "Private key file",
+    "listen": "Address and port",
+    "tls": "Certificate",
+    "tlsDesc": "Let's Encrypt needs a public domain name.",
+    "selfSigned": "Self-signed",
+    "letsencrypt": "Let's Encrypt",
+    "custom": "Custom",
+    "redirect": "Redirect HTTP to HTTPS"
+  },
+  "hosts": {
+    "later": "Managing other machines will arrive in a later version.",
+    "title": "Machines you manage",
+    "thisMachine": "This machine",
+    "online": "Online",
+    "add": "Add host",
+    "addTitle": "Add a host",
+    "addText": "Another Linux machine reachable over SSH.",
+    "name": "Name",
+    "address": "Address",
+    "user": "SSH user",
+    "userHint": "Leave empty to use the same user name.",
+    "remove": "Remove {name}"
+  },
+  "signin": {
+    "root": "Allow root to sign in",
+    "rootDesc": "Off is safer. Admins can still use sudo.",
+    "showIp": "Show IP address on the sign-in page",
+    "showIpDesc": "Anyone who opens the page sees it.",
+    "timeout": "Sign out after",
+    "unlock": "Keep administrator rights unlocked for",
+    "unlockDesc": "After this time without admin actions, sudo locks again.",
+    "failures": "Block after failed attempts",
+    "failuresDesc": "Per address, for a few minutes.",
+    "attempts_one": "{count} attempt",
+    "attempts_other": "{count} attempts"
+  },
+  "plugpol": {
+    "unsigned": "Allow community plugins",
+    "unsignedDesc": "Plugins not signed by the {name} team.",
+    "dev": "Developer mode",
+    "devDesc": "Load plugins from a folder and reload them on save."
+  },
+  "about": {
+    "versionDesc": "A web console for Linux servers.",
+    "host": "This server",
+    "user": "Signed in as",
+    "config": "Configuration file"
+  },
+  "dur": {
+    "1h": "1 hour",
+    "4h": "4 hours",
+    "12h": "12 hours",
+    "24h": "24 hours",
+    "168h": "7 days",
+    "1m": "1 minute",
+    "5m": "5 minutes",
+    "15m": "15 minutes",
+    "30m": "30 minutes"
+  }
+}

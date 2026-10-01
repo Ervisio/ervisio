@@ -1,0 +1,61 @@
+{
+  "nav": {
+    "main": "Main navigation",
+    "more": "More",
+    "overview": "Overview",
+    "terminal": "Terminal",
+    "files": "Files",
+    "logs": "Logs",
+    "services": "Services",
+    "software": "Software",
+    "users": "Users",
+    "plugins": "Plugins",
+    "settings": "Settings"
+  },
+  "search": {
+    "label": "Search and commands",
+    "placeholder": "Search or jump to…"
+  },
+  "palette": {
+    "title": "Command palette",
+    "placeholder": "Type a section or an action",
+    "sections": "Go to",
+    "actions": "Actions",
+    "goTo": "Go to {name}",
+    "empty": "Nothing matches. Try another word."
+  },
+  "host": {
+    "title": "Hosts",
+    "thisMachine": "This machine",
+    "manage": "Manage hosts"
+  },
+  "theme": {
+    "toLight": "Switch to a light theme",
+    "toDark": "Switch to a dark theme"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "You're all caught up.",
+    "clear": "Clear all"
+  },
+  "sudo": {
+    "chip": "sudo, {time} left",
+    "chipTip": "Administrator rights are unlocked. Click to lock them now.",
+    "lockNow": "Lock administrator rights ({time} left)",
+    "unlock": "Unlock administrator rights"
+  },
+  "user": {
+    "menu": "Account menu",
+    "signedInAs": "Signed in as {user}",
+    "signOut": "Sign out"
+  },
+  "placeholder": {
+    "title": "This section is being built",
+    "text": "It will appear here soon."
+  },
+  "plugin": {
+    "failed": "{name} could not be loaded",
+    "notFound": "Page not found",
+    "notFoundText": "This plugin page is not installed or has been disabled."
+  }
+}

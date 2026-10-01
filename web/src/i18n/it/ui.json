@@ -1,0 +1,21 @@
+{
+  "cancel": "Annulla",
+  "close": "Chiudi",
+  "dismiss": "Nascondi",
+  "notifications": "Notifiche",
+  "selectAll": "Seleziona tutte le righe",
+  "selectRow": "Seleziona riga",
+  "typeToConfirm": {
+    "before": "Scrivi",
+    "after": "per confermare"
+  },
+  "unlock": {
+    "title": "Servono i diritti di amministratore",
+    "body": "Serve sudo. Inserisci la tua password, {user}. Resta sbloccato per {minutes} minuti.",
+    "bodyFor": "{reason} richiede sudo. Inserisci la tua password, {user}. Resta sbloccato per {minutes} minuti.",
+    "password": "La tua password",
+    "submit": "Sblocca",
+    "wrong": "Password errata. Riprova.",
+    "forbidden": "Il tuo account non può usare sudo su questo server. Chiedi a un amministratore di aggiungerti ai sudoers."
+  }
+}

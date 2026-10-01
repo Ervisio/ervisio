@@ -1,0 +1,21 @@
+{
+  "cancel": "Cancel",
+  "close": "Close",
+  "dismiss": "Dismiss",
+  "notifications": "Notifications",
+  "selectAll": "Select all rows",
+  "selectRow": "Select row",
+  "typeToConfirm": {
+    "before": "Type",
+    "after": "to confirm"
+  },
+  "unlock": {
+    "title": "Administrator rights needed",
+    "body": "This needs sudo. Enter your password, {user}. It stays unlocked for {minutes} minutes.",
+    "bodyFor": "{reason} needs sudo. Enter your password, {user}. It stays unlocked for {minutes} minutes.",
+    "password": "Your password",
+    "submit": "Unlock",
+    "wrong": "Wrong password. Try again.",
+    "forbidden": "Your account isn't allowed to use sudo on this server. Ask an administrator to add you to the sudoers."
+  }
+}

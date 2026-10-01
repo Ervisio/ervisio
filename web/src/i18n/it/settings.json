@@ -1,0 +1,204 @@
+{
+  "title": "Impostazioni",
+  "cancel": "Annulla",
+  "undo": "Annulla",
+  "saved": "{name} salvato",
+  "saveFailed": "Impossibile salvare {name}",
+  "adminOnly": "Admin",
+  "search": {
+    "placeholder": "Cerca nelle impostazioni, es. root, porta, tema",
+    "empty": "Nessuna impostazione corrisponde. Prova un’altra parola."
+  },
+  "parts": {
+    "you": "Tu",
+    "server": "Questo server",
+    "serverAdmins": "Questo server, solo amministratori"
+  },
+  "groups": {
+    "appearance": "Aspetto",
+    "language": "Lingua e regione",
+    "terminal": "Terminale",
+    "notifications": "Notifiche",
+    "signin": "Accesso e sicurezza",
+    "web": "Server web",
+    "plugpol": "Plugin",
+    "hosts": "Host",
+    "about": "Informazioni"
+  },
+  "note": {
+    "default": "Predefinito",
+    "accessibility": "Accessibilità"
+  },
+  "appearance": {
+    "theme": {
+      "title": "Tema",
+      "desc": "Salvato nel tuo account, ti segue su qualsiasi browser. I plugin possono aggiungere altri temi."
+    },
+    "dark": "Scuri",
+    "light": "Chiari",
+    "ownColours": "colori propri",
+    "custom": "Personale",
+    "edit": "Modifica tema",
+    "delete": "Elimina tema",
+    "deleted": "{name} eliminato",
+    "create": "Crea il tuo",
+    "import": "Importa",
+    "export": "Esporta JSON",
+    "imported": "{name} importato",
+    "importFailed": "Impossibile importare quel tema",
+    "importFailedHint": "Scegli un file JSON esportato da LinuxAdmin.",
+    "createTitle": "Crea un tema",
+    "editTitle": "Modifica tema",
+    "createHint": "Parte dal tema attuale. Le modifiche si vedono subito.",
+    "myTheme": "Il mio tema",
+    "name": "Nome",
+    "saveAs": "Salva come “{name}”",
+    "savedTheme": "Tema “{name}” salvato e applicato",
+    "invalid": "Alcuni colori non sono validi.",
+    "base": "Base",
+    "c": {
+      "bg": "Sfondo",
+      "surface": "Pannelli",
+      "sunk": "Schede",
+      "ink": "Testo"
+    },
+    "sectionColours": "Colori delle sezioni",
+    "h": {
+      "overview": "Panoramica",
+      "terminal": "Terminale",
+      "files": "File",
+      "logs": "Log",
+      "services": "Servizi",
+      "software": "Software",
+      "users": "Utenti",
+      "plugins": "Plugin"
+    },
+    "colours": {
+      "title": "Colori",
+      "desc": "Per sezione dà a ogni area il suo colore. Colore della distro usa ovunque il colore della tua distribuzione. I temi con “colori propri” mantengono i loro.",
+      "sections": "Per sezione",
+      "distro": "Colore della distro",
+      "mono": "Monocromatico",
+      "detected": "Rilevata:",
+      "preview": "Anteprima di un’altra:",
+      "reset": "Torna alla rilevata"
+    },
+    "follow": {
+      "title": "Segui il dispositivo",
+      "desc": "Passa da un tema scuro a uno chiaro seguendo l’impostazione del sistema.",
+      "pair": "Tema scuro e chiaro da usare"
+    },
+    "density": {
+      "title": "Densità",
+      "desc": "Compatta mostra più righe in tabelle ed elenchi.",
+      "comfortable": "Comoda",
+      "compact": "Compatta"
+    },
+    "motion": {
+      "title": "Riduci i movimenti",
+      "desc": "Disattiva l’oscillazione dei widget, le pulsazioni e le transizioni."
+    }
+  },
+  "language": {
+    "title": "Lingua",
+    "desc": "Salvata nel tuo account.",
+    "time": "Formato dell’ora",
+    "h24": "24 ore",
+    "h12": "12 ore",
+    "week": "Primo giorno della settimana",
+    "mon": "Lunedì",
+    "sun": "Domenica",
+    "sat": "Sabato"
+  },
+  "terminal": {
+    "colour": "Tema colori",
+    "colourDesc": "Segui app usa la palette scura o chiara del tema attuale.",
+    "followApp": "Segui app",
+    "font": "Dimensione del carattere",
+    "copy": "Copia alla selezione",
+    "snippets": "Mostra i frammenti",
+    "snippetsDesc": "La riga di comandi salvati sotto il terminale."
+  },
+  "notify": {
+    "service": "Un servizio si ferma con errore",
+    "updates": "Ci sono aggiornamenti",
+    "ssh": "Accessi SSH falliti",
+    "sshDesc": "Più di 10 in 5 minuti dallo stesso indirizzo.",
+    "browser": "Notifiche del browser",
+    "browserDesc": "Mostrale anche quando {name} è in una scheda in secondo piano.",
+    "browserDenied": "Il browser ha bloccato le notifiche. Consentile nelle impostazioni del sito."
+  },
+  "server": {
+    "askPassword": "Ti verrà chiesta la password la prima volta che cambi qualcosa.",
+    "unknownKeys": "Chiavi sconosciute nel file di configurazione: {keys}.",
+    "restart": "richiede un riavvio",
+    "warn": "Le modifiche qui valgono per tutti gli utenti di questo server.",
+    "failed": {
+      "title": "Impossibile leggere la configurazione del server",
+      "text": "Il demone non ha risposto. Controlla che sia in esecuzione e riprova.",
+      "action": "Riprova"
+    }
+  },
+  "web": {
+    "cert": "File del certificato",
+    "certDesc": "Percorso assoluto di un certificato PEM.",
+    "key": "File della chiave privata",
+    "listen": "Indirizzo e porta",
+    "tls": "Certificato",
+    "tlsDesc": "Let’s Encrypt richiede un nome di dominio pubblico.",
+    "selfSigned": "Autofirmato",
+    "letsencrypt": "Let’s Encrypt",
+    "custom": "Personalizzato",
+    "redirect": "Reindirizza HTTP a HTTPS"
+  },
+  "hosts": {
+    "later": "La gestione di altre macchine arriverà in una versione futura.",
+    "title": "Macchine che gestisci",
+    "thisMachine": "Questa macchina",
+    "online": "Online",
+    "add": "Aggiungi host",
+    "addTitle": "Aggiungi un host",
+    "addText": "Un’altra macchina Linux raggiungibile via SSH.",
+    "name": "Nome",
+    "address": "Indirizzo",
+    "user": "Utente SSH",
+    "userHint": "Lascia vuoto per usare lo stesso nome utente.",
+    "remove": "Rimuovi {name}"
+  },
+  "signin": {
+    "root": "Consenti l’accesso a root",
+    "rootDesc": "Disattivato è più sicuro. Gli amministratori possono comunque usare sudo.",
+    "showIp": "Mostra l’indirizzo IP nella pagina di accesso",
+    "showIpDesc": "Lo vede chiunque apra la pagina.",
+    "timeout": "Disconnetti dopo",
+    "unlock": "Mantieni sbloccati i diritti di amministratore per",
+    "unlockDesc": "Dopo questo tempo senza azioni da amministratore, sudo si blocca di nuovo.",
+    "failures": "Blocca dopo i tentativi falliti",
+    "failuresDesc": "Per indirizzo, per alcuni minuti.",
+    "attempts_one": "{count} tentativo",
+    "attempts_other": "{count} tentativi"
+  },
+  "plugpol": {
+    "unsigned": "Consenti i plugin della community",
+    "unsignedDesc": "Plugin non firmati dal team di {name}.",
+    "dev": "Modalità sviluppatore",
+    "devDesc": "Carica i plugin da una cartella e ricaricali al salvataggio."
+  },
+  "about": {
+    "versionDesc": "Una console web per server Linux.",
+    "host": "Questo server",
+    "user": "Accesso come",
+    "config": "File di configurazione"
+  },
+  "dur": {
+    "1h": "1 ora",
+    "4h": "4 ore",
+    "12h": "12 ore",
+    "24h": "24 ore",
+    "168h": "7 giorni",
+    "1m": "1 minuto",
+    "5m": "5 minuti",
+    "15m": "15 minuti",
+    "30m": "30 minuti"
+  }
+}

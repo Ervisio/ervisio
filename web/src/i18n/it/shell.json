@@ -1,0 +1,61 @@
+{
+  "nav": {
+    "main": "Navigazione principale",
+    "more": "Altro",
+    "overview": "Panoramica",
+    "terminal": "Terminale",
+    "files": "File",
+    "logs": "Log",
+    "services": "Servizi",
+    "software": "Software",
+    "users": "Utenti",
+    "plugins": "Plugin",
+    "settings": "Impostazioni"
+  },
+  "search": {
+    "label": "Cerca e comandi",
+    "placeholder": "Cerca o vai a…"
+  },
+  "palette": {
+    "title": "Tavolozza comandi",
+    "placeholder": "Scrivi una sezione o un’azione",
+    "sections": "Vai a",
+    "actions": "Azioni",
+    "goTo": "Vai a {name}",
+    "empty": "Nessun risultato. Prova un’altra parola."
+  },
+  "host": {
+    "title": "Host",
+    "thisMachine": "Questa macchina",
+    "manage": "Gestisci host"
+  },
+  "theme": {
+    "toLight": "Passa a un tema chiaro",
+    "toDark": "Passa a un tema scuro"
+  },
+  "notifications": {
+    "title": "Notifiche",
+    "empty": "Non ci sono novità.",
+    "clear": "Cancella tutto"
+  },
+  "sudo": {
+    "chip": "sudo, {time} rimasti",
+    "chipTip": "I diritti di amministratore sono sbloccati. Clicca per bloccarli ora.",
+    "lockNow": "Blocca i diritti di amministratore ({time} rimasti)",
+    "unlock": "Sblocca i diritti di amministratore"
+  },
+  "user": {
+    "menu": "Menu account",
+    "signedInAs": "Accesso come {user}",
+    "signOut": "Esci"
+  },
+  "placeholder": {
+    "title": "Questa sezione è in costruzione",
+    "text": "Comparirà qui a breve."
+  },
+  "plugin": {
+    "failed": "Impossibile caricare {name}",
+    "notFound": "Pagina non trovata",
+    "notFoundText": "Questa pagina del plugin non è installata o è stata disattivata."
+  }
+}

@@ -1,0 +1,77 @@
+/* Global tokens and reset. Theme colours are overwritten at runtime on :root by src/theme (these are the OLED defaults). */
+:root {
+  --bg: #000000; --surface: #0e0e10; --sunk: #18181b; --line: #26262b;
+  --ink: #f4f4f6; --ink2: #a3a3ad; --ink3: #6c6c76;
+  --h-ov: #8b93ff; --h-term: #3ddc97; --h-file: #5ab0ff; --h-log: #ffb547;
+  --h-svc: #ff6b81; --h-sw: #b98cff; --h-usr: #3fd8de; --h-plg: #ff7ac6;
+  --h-ov-s: color-mix(in srgb, var(--h-ov) 16%, var(--bg));
+  --h-term-s: color-mix(in srgb, var(--h-term) 16%, var(--bg));
+  --h-file-s: color-mix(in srgb, var(--h-file) 16%, var(--bg));
+  --h-log-s: color-mix(in srgb, var(--h-log) 16%, var(--bg));
+  --h-svc-s: color-mix(in srgb, var(--h-svc) 16%, var(--bg));
+  --h-sw-s: color-mix(in srgb, var(--h-sw) 16%, var(--bg));
+  --h-usr-s: color-mix(in srgb, var(--h-usr) 16%, var(--bg));
+  --h-plg-s: color-mix(in srgb, var(--h-plg) 16%, var(--bg));
+  --distro: #3ab4f2; --distro-s: color-mix(in srgb, var(--distro) 16%, var(--bg));
+  --acc: var(--h-ov); --acc-s: color-mix(in srgb, var(--acc) 18%, var(--bg)); --on-acc: #000000;
+  --ok: #3ddc97; --warn: #ffb547; --err: #ff6b81; --info: #5ab0ff;
+  --ok-s: color-mix(in srgb, var(--ok) 16%, var(--bg)); --warn-s: color-mix(in srgb, var(--warn) 16%, var(--bg));
+  --err-s: color-mix(in srgb, var(--err) 16%, var(--bg)); --info-s: color-mix(in srgb, var(--info) 16%, var(--bg));
+  --scrim: rgba(0, 0, 0, 0.62);
+  --shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.9);
+
+  /* shape */
+  --r-card: 18px; --r-btn: 12px; --r-in: 12px; --r-cb: 6px; --r-badge: 8px; --r-toast: 14px;
+  --r-menu: 14px; --r-dlg: 20px; --r-icon: 14px; --r-tip: 8px; --r-sheet: 26px; --r-panel: 22px;
+  --h-ctl: 36px; --h-in: 40px; --px-btn: 14px; --fs-btn: 13.5px;
+  --rail: 88px; --gap: 12px;
+  --dlg-bg: color-mix(in srgb, var(--surface) 94%, var(--ink));
+  --menu-bg: color-mix(in srgb, var(--surface) 95%, var(--ink));
+  --toast-bg: color-mix(in srgb, var(--sunk) 88%, var(--ink));
+  --cell-py: 11px;
+
+  --font: 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  color-scheme: dark;
+}
+:root[data-density='compact'] { --cell-py: 6px; --h-ctl: 32px; --h-in: 36px; }
+
+/* section colour scopes: <div className="hue-svc"> sets --h / --s for children */
+.hue-ov { --h: var(--h-ov); --s: var(--h-ov-s); }
+.hue-term { --h: var(--h-term); --s: var(--h-term-s); }
+.hue-file { --h: var(--h-file); --s: var(--h-file-s); }
+.hue-log { --h: var(--h-log); --s: var(--h-log-s); }
+.hue-svc { --h: var(--h-svc); --s: var(--h-svc-s); }
+.hue-sw { --h: var(--h-sw); --s: var(--h-sw-s); }
+.hue-usr { --h: var(--h-usr); --s: var(--h-usr-s); }
+.hue-plg { --h: var(--h-plg); --s: var(--h-plg-s); }
+.hue-set { --h: var(--ink); --s: var(--sunk); }
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #root { min-height: 100%; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 14px; font-weight: 500;
+  line-height: 1.45; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { background: none; border: 0; padding: 0; cursor: pointer; }
+a { color: inherit; }
+h1, h2, h3, h4, p { margin: 0; }
+code, kbd, pre, .mono { font-family: var(--mono); }
+:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+::selection { background: color-mix(in srgb, var(--acc) 40%, transparent); }
+* { scrollbar-width: thin; scrollbar-color: var(--sunk) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--sunk); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.muted { color: var(--ink3); }
+.title { font-size: 26px; font-weight: 800; letter-spacing: -0.025em; }
+.heading { font-size: 16px; font-weight: 800; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
+}
+:root[data-reduce-motion='1'] *, :root[data-reduce-motion='1'] *::before, :root[data-reduce-motion='1'] *::after {
+  animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important;
+}
