@@ -7,7 +7,7 @@
     "dev": "npm run build:runtime && vite",
     "build": "tsc --noEmit && npm run build:runtime && vite build",
     "build:runtime": "vite build -c vite.runtime.config.ts --logLevel warn",
-    "test": "node --test tests/",
+    "test": "node --test \"tests/**/*.test.ts\"",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",

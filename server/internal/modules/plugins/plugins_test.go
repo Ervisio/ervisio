@@ -325,10 +325,12 @@ func setup(t *testing.T) (system, installed string) {
 }
 
 func TestListAndEnable(t *testing.T) {
+	// list(true) = admin caller: broken plugins are only listed to admins, and the
+	// test user's own groups (wheel/sudo locally, not on CI runners) must not matter.
 	system, _ := setup(t)
 	writePlugin(t, filepath.Join(system, "demo"), strings.Replace(goodManifest, `"visibleTo": {"groups": ["docker"]}`, `"visibleTo": {"groups": []}`, 1), map[string]string{"index.js": "x"})
 	writePlugin(t, filepath.Join(system, "broken"), `{"id": "broken"}`, nil)
-	l := list(false)
+	l := list(true)
 	if len(l) != 2 {
 		t.Fatalf("%+v", l)
 	}
@@ -346,14 +348,14 @@ func TestListAndEnable(t *testing.T) {
 	if err := writeState(st); err != nil {
 		t.Fatal(err)
 	}
-	for _, in := range list(false) {
+	for _, in := range list(true) {
 		if in.ID == "demo" && in.Enabled {
 			t.Fatal("still enabled after disabling")
 		}
 	}
 	// unsigned not allowed
 	os.WriteFile(configmod.Path, []byte("[plugins]\nallow_unsigned = false\n"), 0o644)
-	for _, in := range list(false) {
+	for _, in := range list(true) {
 		if in.ID == "demo" && (!in.Blocked || in.Enabled) {
 			t.Fatalf("unsigned plugin should be blocked: %+v", in)
 		}
