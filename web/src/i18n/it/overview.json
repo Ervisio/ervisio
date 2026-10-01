@@ -1,1 +1,325 @@
-{}
+{
+  "title": "Panoramica",
+  "greeting": "Ciao, {name}",
+  "summary": {
+    "checking": "Controllo {host}…",
+    "ok": "{host} funziona bene.",
+    "issues_one": "{host} è acceso. Una cosa ha bisogno di attenzione.",
+    "issues_other": "{host} è acceso. {count} cose hanno bisogno di attenzione."
+  },
+  "personalize": "Personalizza",
+  "cancel": "Annulla",
+  "close": "Chiudi",
+  "refresh": "Aggiorna",
+  "loading": "Caricamento…",
+  "saved": "Layout della dashboard salvato",
+  "saveFailed": "Non sono riuscito a salvare il layout",
+  "setUp": "Configura",
+  "unlock": "Sblocca",
+  "needsAdmin": "Servono i diritti di amministratore.",
+  "edit": {
+    "title": "Modifica dashboard",
+    "hint": "Trascina per spostare, tira l'angolo per ridimensionare",
+    "save": "Salva layout",
+    "addWidget": "Aggiungi widget",
+    "drop": "Trascina qui un widget dalla libreria",
+    "drag": "Trascina per spostare",
+    "settingsShort": "Impostazioni widget",
+    "removeShort": "Rimuovi widget",
+    "settings": "Impostazioni di {name}",
+    "remove": "Rimuovi {name}",
+    "roleDesc": "widget spostabile",
+    "widgetLabel": "{name}, posizione {pos} di {total}. Le frecce lo spostano, Maiusc con freccia destra o sinistra lo ridimensiona, Invio apre le impostazioni, Canc lo rimuove.",
+    "moved": "{name} spostato in posizione {pos} di {total}",
+    "resized": "{name} ora è largo {cols} colonne",
+    "removed": "{name} rimosso",
+    "added": "{name} aggiunto",
+    "reset": "Layout predefinito ripristinato. Salva per mantenerlo.",
+    "discardTitle": "Scartare le modifiche?",
+    "discardText": "Il layout che stai modificando non è stato salvato.",
+    "discard": "Scarta le modifiche",
+    "keepEditing": "Continua a modificare"
+  },
+  "library": {
+    "title": "Aggiungi widget",
+    "hint": "Trascinali nella dashboard, oppure fai clic per aggiungerli.",
+    "search": "Cerca widget",
+    "noMatch": "Nessun widget corrisponde alla ricerca.",
+    "reset": "Ripristina il layout predefinito",
+    "pluginTag": "plugin",
+    "pluginDesc": "Plugin {plugin}",
+    "cat": {
+      "basics": "Dashboard",
+      "system": "Sistema",
+      "personal": "Personali",
+      "plugins": "Dai plugin"
+    },
+    "stat": {
+      "title": "Scheda numerica",
+      "desc": "CPU, memoria, disco o rete adesso"
+    },
+    "activity": {
+      "title": "Attività",
+      "desc": "CPU e rete nel tempo"
+    },
+    "actions": {
+      "title": "Le mie azioni",
+      "desc": "Un gruppo di tessere azione"
+    },
+    "alerts": {
+      "title": "Da sistemare",
+      "desc": "Servizi falliti, aggiornamenti, dischi"
+    },
+    "machine": {
+      "title": "Questa macchina",
+      "desc": "Sistema, CPU e tempo di accensione"
+    },
+    "chart": {
+      "title": "Grafico",
+      "desc": "CPU, memoria, rete o disco"
+    },
+    "service": {
+      "title": "Stato servizio",
+      "desc": "Uno o più servizi systemd"
+    },
+    "log": {
+      "title": "Log live",
+      "desc": "Journal o un file a scelta"
+    },
+    "action": {
+      "title": "Pulsante azione",
+      "desc": "Esegue un comando"
+    },
+    "output": {
+      "title": "Output comando",
+      "desc": "Aggiornato ogni N secondi"
+    },
+    "folder": {
+      "title": "Cartella preferita",
+      "desc": "Scorciatoia al file manager"
+    }
+  },
+  "widgets": {
+    "stat": {
+      "title": "Scheda numerica",
+      "desc": "Un numero in tempo reale per una risorsa."
+    },
+    "activity": {
+      "title": "Attività",
+      "desc": "CPU e traffico di rete nel tempo."
+    },
+    "chart": {
+      "title": "Grafico",
+      "desc": "Un grafico in tempo reale di una risorsa."
+    },
+    "actions": {
+      "title": "Le mie azioni",
+      "desc": "Tessere che eseguono comandi. Ognuna può girare come amministratore."
+    },
+    "action": {
+      "title": "Pulsante azione",
+      "desc": "Un pulsante che esegue un comando."
+    },
+    "alerts": {
+      "title": "Da sistemare",
+      "desc": "Cose da controllare, con un collegamento per risolverle."
+    },
+    "machine": {
+      "title": "Questa macchina",
+      "desc": "Cos'è questo computer e da quanto è acceso."
+    },
+    "service": {
+      "title": "Stato servizio",
+      "desc": "Tieni d'occhio lo stato dei servizi systemd."
+    },
+    "log": {
+      "title": "Log live",
+      "desc": "Le ultime righe del journal o di un file di log."
+    },
+    "output": {
+      "title": "Output comando",
+      "desc": "Esegue un comando ripetutamente e mostra cosa stampa."
+    },
+    "folder": {
+      "title": "Cartella preferita",
+      "desc": "Apre una cartella in File."
+    },
+    "plugin": {
+      "title": "Widget del plugin",
+      "desc": "Fornito da un plugin."
+    }
+  },
+  "metrics": {
+    "cpu": "CPU",
+    "memory": "Memoria",
+    "disk": "Disco",
+    "network": "Rete"
+  },
+  "range": {
+    "5m": "ultimi 5 minuti",
+    "15m": "ultimi 15 minuti",
+    "1h": "ultima ora"
+  },
+  "stat": {
+    "threads_one": "{count} thread",
+    "threads_other": "{count} thread",
+    "load": "Carico {v}",
+    "ofTotal": "di {total}",
+    "free": "{unit} liberi",
+    "usedOf": "{used} usati di {total} su {mount}",
+    "netSub": "{iface}, {rx} in ingresso e {tx} in uscita",
+    "noDisk": "Nessun disco trovato",
+    "noNet": "Nessuna interfaccia di rete"
+  },
+  "activity": {
+    "label": "CPU e rete nel tempo",
+    "collecting": "Raccolgo i dati. Il grafico si riempie mentre la dashboard resta aperta."
+  },
+  "actions": {
+    "empty": "Ancora nessuna azione. Aggiungine una che esegue un comando per te."
+  },
+  "action": {
+    "empty": "Questo pulsante non ha ancora un comando.",
+    "run": "Esegui",
+    "asAdmin": "come amministratore",
+    "showOutput": "Mostra output",
+    "done": "{name} completata",
+    "took": "Ha impiegato {time}",
+    "failed": "{name} non è riuscita",
+    "exit": "Codice di uscita {code}",
+    "timedOut": "{name} ha impiegato troppo ed è stata fermata",
+    "timedOutShort": "Tempo scaduto",
+    "couldNotRun": "Non sono riuscito a eseguire {name}",
+    "confirmTitle": "Eseguire {name}?"
+  },
+  "alerts": {
+    "none": "Niente richiede la tua attenzione",
+    "failedUnit": "{unit} è fallito",
+    "moreFailed_one": "Un altro servizio è fallito",
+    "moreFailed_other": "Altri {count} servizi sono falliti",
+    "updates_one": "Un aggiornamento pronto",
+    "updates_other": "{count} aggiornamenti pronti",
+    "upToDate": "Il sistema è aggiornato",
+    "noSSH": "Nessun accesso SSH fallito nelle ultime 24 ore",
+    "sshFailed_one": "Un accesso SSH fallito nelle ultime 24 ore",
+    "sshFailed_other": "{count} accessi SSH falliti nelle ultime 24 ore",
+    "diskFull": "{mount} è pieno al {percent}%",
+    "swapHigh": "Lo swap è usato al {percent}%",
+    "open": {
+      "services": "Apri",
+      "software": "Controlla",
+      "logs": "Vedi i log",
+      "files": "Apri cartella",
+      "terminal": "Apri terminale",
+      "default": "Apri"
+    }
+  },
+  "machine": {
+    "kernel": "Kernel {kernel} ({arch})",
+    "cpu": "Processore",
+    "cores": "{cores} core, {threads} thread, {mem} di memoria",
+    "uptime": "Acceso da {dur}",
+    "bootToday": "Avviato oggi alle {time}",
+    "bootOn": "Avviato il {date} alle {time}",
+    "network": "Nome host e indirizzo",
+    "dur": {
+      "dh": "{d} g {h} h",
+      "hm": "{h} h {m} min",
+      "m": "{m} min"
+    }
+  },
+  "service": {
+    "empty": "Scegli i servizi da tenere d'occhio.",
+    "notFound": "Non installato",
+    "state": {
+      "active": "In esecuzione",
+      "inactive": "Fermo",
+      "failed": "Fallito",
+      "activating": "In avvio",
+      "deactivating": "In arresto",
+      "not-found": "Non trovato"
+    }
+  },
+  "log": {
+    "empty": "Scegli cosa seguire.",
+    "live": "Live",
+    "nothing": "Ancora nessuna riga.",
+    "system": "Journal di sistema"
+  },
+  "output": {
+    "empty": "Inserisci il comando che questo widget deve eseguire.",
+    "every": "ogni {s} s",
+    "none": "(nessun output)",
+    "success": "Completato",
+    "notRun": "Non eseguito",
+    "truncated": "L'output è stato tagliato a 256 KiB",
+    "copy": "Copia output",
+    "copied": "Output copiato",
+    "copyFailed": "Non sono riuscito a copiare. Seleziona il testo e copialo a mano."
+  },
+  "folder": {
+    "empty": "Scegli una cartella da aprire velocemente."
+  },
+  "plugin": {
+    "missing": "Widget non disponibile",
+    "missingText": "Il plugin {plugin} non è installato o non si è caricato. Installalo o abilitalo in Plugin."
+  },
+  "unknown": {
+    "title": "Widget sconosciuto",
+    "text": "Il tipo di widget {type} non è noto a questa versione. Puoi rimuoverlo."
+  },
+  "settings": {
+    "title": "Impostazioni di {name}",
+    "apply": "Applica",
+    "widgetTitle": "Titolo",
+    "metric": "Risorsa",
+    "range": "Intervallo",
+    "mount": "Disco",
+    "iface": "Interfaccia",
+    "auto": "Automatico",
+    "showOk": "Mostra anche le cose che vanno bene",
+    "max": "Mostra al massimo",
+    "units": "Servizi",
+    "unitsHint": "Separa i nomi con virgole, per esempio nginx, sshd.",
+    "source": "Segui",
+    "srcJournal": "Journal di sistema",
+    "srcUnit": "Un servizio",
+    "srcFile": "Un file",
+    "unit": "Nome del servizio",
+    "file": "Percorso del file",
+    "fileHint": "Leggere alcuni log richiede i diritti di amministratore.",
+    "lines": "Righe da mostrare",
+    "command": "Comando",
+    "commandHint": "Viene eseguito direttamente, non in una shell. Per le pipe usa: sh -c 'ps aux | head'.",
+    "every": "Aggiorna ogni",
+    "seconds_one": "{count} secondo",
+    "seconds_other": "{count} secondi",
+    "admin": "Esegui come amministratore",
+    "confirm": "Chiedi conferma prima di eseguire",
+    "path": "Percorso della cartella",
+    "folderLabel": "Etichetta",
+    "folderLabelPh": "Nome della cartella",
+    "label": "Etichetta",
+    "labelPh": "Riavvia nginx",
+    "colour": "Colore",
+    "icon": "Icona",
+    "addAction": "Aggiungi azione",
+    "removeAction": "Rimuovi questa azione",
+    "untitled": "Azione senza nome",
+    "none": "Questo widget non ha impostazioni.",
+    "errLabel": "Dai un'etichetta all'azione.",
+    "errCommand": "Inserisci un comando da eseguire.",
+    "errQuote": "Nel comando c'è una virgoletta non chiusa. Chiudila o toglila.",
+    "errUnit": "Inserisci il nome del servizio da seguire.",
+    "errUnits": "Puoi tenere d'occhio al massimo 30 servizi per widget.",
+    "errFile": "Inserisci il percorso completo del file di log, che inizia con /.",
+    "errPath": "Inserisci il percorso completo della cartella, che inizia con /."
+  },
+  "palette": {
+    "personalize": "Personalizza la dashboard",
+    "run": "Esegui {name}",
+    "kwDashboard": "dashboard",
+    "kwWidgets": "widget",
+    "kwLayout": "layout"
+  }
+}

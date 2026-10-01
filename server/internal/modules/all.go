@@ -5,6 +5,7 @@ import (
 	configmod "github.com/Fonlogen/LinuxAdmin/server/internal/modules/config"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/files"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/logs"
+	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/overview"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/plugins"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/prefs"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/services"
@@ -18,6 +19,7 @@ import (
 // RegisterAll registers every module. Each section owns one line.
 func RegisterAll(r *rpc.Registry) {
 	system.Register(r)
+	overview.Register(r)
 	prefs.Register(r)
 	configmod.Register(r)
 	terminal.Register(r)

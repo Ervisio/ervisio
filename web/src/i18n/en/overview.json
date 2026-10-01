@@ -1,1 +1,325 @@
-{}
+{
+  "title": "Overview",
+  "greeting": "Hi, {name}",
+  "summary": {
+    "checking": "Checking {host}…",
+    "ok": "{host} is running fine.",
+    "issues_one": "{host} is up. One thing needs attention.",
+    "issues_other": "{host} is up. {count} things need attention."
+  },
+  "personalize": "Personalize",
+  "cancel": "Cancel",
+  "close": "Close",
+  "refresh": "Refresh",
+  "loading": "Loading…",
+  "saved": "Dashboard layout saved",
+  "saveFailed": "Could not save the layout",
+  "setUp": "Set up",
+  "unlock": "Unlock",
+  "needsAdmin": "This needs administrator rights.",
+  "edit": {
+    "title": "Edit dashboard",
+    "hint": "Drag to move, pull the corner to resize",
+    "save": "Save layout",
+    "addWidget": "Add widget",
+    "drop": "Drop a widget from the library here",
+    "drag": "Drag to move",
+    "settingsShort": "Widget settings",
+    "removeShort": "Remove widget",
+    "settings": "Settings for {name}",
+    "remove": "Remove {name}",
+    "roleDesc": "movable widget",
+    "widgetLabel": "{name}, position {pos} of {total}. Arrow keys move it, Shift with left or right arrow resizes it, Enter opens settings, Delete removes it.",
+    "moved": "{name} moved to position {pos} of {total}",
+    "resized": "{name} is now {cols} columns wide",
+    "removed": "{name} removed",
+    "added": "{name} added",
+    "reset": "Default layout restored. Save to keep it.",
+    "discardTitle": "Discard your changes?",
+    "discardText": "The layout you are editing has not been saved.",
+    "discard": "Discard changes",
+    "keepEditing": "Keep editing"
+  },
+  "library": {
+    "title": "Add widgets",
+    "hint": "Drag them into the dashboard, or click to add.",
+    "search": "Search widgets",
+    "noMatch": "No widget matches your search.",
+    "reset": "Restore default layout",
+    "pluginTag": "plugin",
+    "pluginDesc": "Plugin {plugin}",
+    "cat": {
+      "basics": "Dashboard",
+      "system": "System",
+      "personal": "Personal",
+      "plugins": "From plugins"
+    },
+    "stat": {
+      "title": "Stat card",
+      "desc": "CPU, memory, disk or network now"
+    },
+    "activity": {
+      "title": "Activity",
+      "desc": "CPU and network over time"
+    },
+    "actions": {
+      "title": "My actions",
+      "desc": "A set of action tiles"
+    },
+    "alerts": {
+      "title": "Needs attention",
+      "desc": "Failed services, updates, disks"
+    },
+    "machine": {
+      "title": "This machine",
+      "desc": "System, CPU and uptime"
+    },
+    "chart": {
+      "title": "Chart",
+      "desc": "CPU, memory, network or disk"
+    },
+    "service": {
+      "title": "Service status",
+      "desc": "One or more systemd services"
+    },
+    "log": {
+      "title": "Live log",
+      "desc": "Journal or a file of your choice"
+    },
+    "action": {
+      "title": "Action button",
+      "desc": "Runs a command"
+    },
+    "output": {
+      "title": "Command output",
+      "desc": "Refreshed every N seconds"
+    },
+    "folder": {
+      "title": "Favourite folder",
+      "desc": "Shortcut to the file manager"
+    }
+  },
+  "widgets": {
+    "stat": {
+      "title": "Stat card",
+      "desc": "A live number for one resource."
+    },
+    "activity": {
+      "title": "Activity",
+      "desc": "CPU and network traffic over time."
+    },
+    "chart": {
+      "title": "Chart",
+      "desc": "A live chart of one resource."
+    },
+    "actions": {
+      "title": "My actions",
+      "desc": "Tiles that run commands. Each one can run as administrator."
+    },
+    "action": {
+      "title": "Action button",
+      "desc": "A button that runs one command."
+    },
+    "alerts": {
+      "title": "Needs attention",
+      "desc": "Things that should be looked at, with a link to fix them."
+    },
+    "machine": {
+      "title": "This machine",
+      "desc": "What this computer is and how long it has been on."
+    },
+    "service": {
+      "title": "Service status",
+      "desc": "Watch the state of systemd services."
+    },
+    "log": {
+      "title": "Live log",
+      "desc": "The latest lines of the journal or a log file."
+    },
+    "output": {
+      "title": "Command output",
+      "desc": "Runs a command again and again and shows what it prints."
+    },
+    "folder": {
+      "title": "Favourite folder",
+      "desc": "Opens a folder in Files."
+    },
+    "plugin": {
+      "title": "Plugin widget",
+      "desc": "Provided by a plugin."
+    }
+  },
+  "metrics": {
+    "cpu": "CPU",
+    "memory": "Memory",
+    "disk": "Disk",
+    "network": "Network"
+  },
+  "range": {
+    "5m": "last 5 minutes",
+    "15m": "last 15 minutes",
+    "1h": "last hour"
+  },
+  "stat": {
+    "threads_one": "{count} thread",
+    "threads_other": "{count} threads",
+    "load": "Load {v}",
+    "ofTotal": "of {total}",
+    "free": "{unit} free",
+    "usedOf": "{used} used of {total} on {mount}",
+    "netSub": "{iface}, {rx} in and {tx} out",
+    "noDisk": "No disk found",
+    "noNet": "No network interface"
+  },
+  "activity": {
+    "label": "CPU and network over time",
+    "collecting": "Collecting data. The chart fills in as the dashboard stays open."
+  },
+  "actions": {
+    "empty": "No actions yet. Add one that runs a command for you."
+  },
+  "action": {
+    "empty": "This button has no command yet.",
+    "run": "Run",
+    "asAdmin": "as administrator",
+    "showOutput": "Show output",
+    "done": "{name} finished",
+    "took": "Took {time}",
+    "failed": "{name} failed",
+    "exit": "Exit code {code}",
+    "timedOut": "{name} took too long and was stopped",
+    "timedOutShort": "Timed out",
+    "couldNotRun": "Could not run {name}",
+    "confirmTitle": "Run {name}?"
+  },
+  "alerts": {
+    "none": "Nothing needs your attention",
+    "failedUnit": "{unit} failed",
+    "moreFailed_one": "One more service failed",
+    "moreFailed_other": "{count} more services failed",
+    "updates_one": "One update ready",
+    "updates_other": "{count} updates ready",
+    "upToDate": "System is up to date",
+    "noSSH": "No failed SSH logins in the last 24 hours",
+    "sshFailed_one": "One failed SSH login in the last 24 hours",
+    "sshFailed_other": "{count} failed SSH logins in the last 24 hours",
+    "diskFull": "{mount} is {percent}% full",
+    "swapHigh": "Swap is {percent}% used",
+    "open": {
+      "services": "Open",
+      "software": "Review",
+      "logs": "View logs",
+      "files": "Open folder",
+      "terminal": "Open terminal",
+      "default": "Open"
+    }
+  },
+  "machine": {
+    "kernel": "Kernel {kernel} ({arch})",
+    "cpu": "Processor",
+    "cores": "{cores} cores, {threads} threads, {mem} memory",
+    "uptime": "On for {dur}",
+    "bootToday": "Started today at {time}",
+    "bootOn": "Started {date} at {time}",
+    "network": "Hostname and address",
+    "dur": {
+      "dh": "{d} d {h} h",
+      "hm": "{h} h {m} min",
+      "m": "{m} min"
+    }
+  },
+  "service": {
+    "empty": "Pick the services you want to watch.",
+    "notFound": "Not installed",
+    "state": {
+      "active": "Running",
+      "inactive": "Stopped",
+      "failed": "Failed",
+      "activating": "Starting",
+      "deactivating": "Stopping",
+      "not-found": "Not found"
+    }
+  },
+  "log": {
+    "empty": "Choose what to follow.",
+    "live": "Live",
+    "nothing": "No lines yet.",
+    "system": "System journal"
+  },
+  "output": {
+    "empty": "Enter the command this widget should run.",
+    "every": "every {s} s",
+    "none": "(no output)",
+    "success": "Finished",
+    "notRun": "Did not run",
+    "truncated": "Output was cut at 256 KiB",
+    "copy": "Copy output",
+    "copied": "Output copied",
+    "copyFailed": "Could not copy. Select the text and copy it by hand."
+  },
+  "folder": {
+    "empty": "Choose a folder to open quickly."
+  },
+  "plugin": {
+    "missing": "Widget not available",
+    "missingText": "The plugin {plugin} is not installed or has not loaded. Install or enable it in Plugins."
+  },
+  "unknown": {
+    "title": "Unknown widget",
+    "text": "Widget type {type} is not known to this version. You can remove it."
+  },
+  "settings": {
+    "title": "{name} settings",
+    "apply": "Apply",
+    "widgetTitle": "Title",
+    "metric": "Resource",
+    "range": "Time span",
+    "mount": "Disk",
+    "iface": "Interface",
+    "auto": "Automatic",
+    "showOk": "Also show things that are fine",
+    "max": "Show at most",
+    "units": "Services",
+    "unitsHint": "Separate names with commas, for example nginx, sshd.",
+    "source": "Follow",
+    "srcJournal": "System journal",
+    "srcUnit": "A service",
+    "srcFile": "A file",
+    "unit": "Service name",
+    "file": "File path",
+    "fileHint": "Reading some logs needs administrator rights.",
+    "lines": "Lines to show",
+    "command": "Command",
+    "commandHint": "Runs directly, not in a shell. For pipes use: sh -c 'ps aux | head'.",
+    "every": "Refresh every",
+    "seconds_one": "{count} second",
+    "seconds_other": "{count} seconds",
+    "admin": "Run as administrator",
+    "confirm": "Ask before running",
+    "path": "Folder path",
+    "folderLabel": "Label",
+    "folderLabelPh": "Folder name",
+    "label": "Label",
+    "labelPh": "Restart nginx",
+    "colour": "Colour",
+    "icon": "Icon",
+    "addAction": "Add action",
+    "removeAction": "Remove this action",
+    "untitled": "Untitled action",
+    "none": "This widget has no settings.",
+    "errLabel": "Give the action a label.",
+    "errCommand": "Enter a command to run.",
+    "errQuote": "A quote is not closed in the command. Close it or remove it.",
+    "errUnit": "Enter the name of the service to follow.",
+    "errUnits": "Watch at most 30 services per widget.",
+    "errFile": "Enter the full path of the log file, starting with /.",
+    "errPath": "Enter the full path of the folder, starting with /."
+  },
+  "palette": {
+    "personalize": "Personalize dashboard",
+    "run": "Run {name}",
+    "kwDashboard": "dashboard",
+    "kwWidgets": "widgets",
+    "kwLayout": "layout"
+  }
+}
