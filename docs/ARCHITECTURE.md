@@ -194,3 +194,11 @@ Each section agent owns only `server/internal/modules/<name>/`, `web/src/section
 `web/src/i18n/*/<name>.json` and `docs/api/<name>.md`. Shared code (`rpc`, `sys`, `api`, `ui`,
 `shell`, `theme`) is owned by the foundation; if a section needs something there, it adds it in a
 new file inside its own folder or reports it.
+
+## Future: desktop app
+
+A desktop build (Wails or Tauri, not Electron) may later wrap the same web app for Linux desktops.
+Keep it possible: the web client takes its API base URL from one place (`web/src/api/base.ts`,
+default same origin) and never assumes same-origin elsewhere; authentication is behind one
+interface on both sides so a local mode can authenticate by Unix socket peer credentials
+(SO_PEERCRED) and elevate with polkit instead of PAM + sudo.
