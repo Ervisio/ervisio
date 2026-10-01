@@ -202,7 +202,10 @@ Tags `vX.Y.Z` build signed release archives on GitHub (`.github/workflows/releas
 (ed25519 over `SHA256SUMS`, key in `server/internal/update/sign.go`), installs it next to the running one and hands
 off to `linuxadmind --apply-update` in a transient systemd unit, which switches `current`, restarts the service and
 rolls back if `/api/health` does not report the new version within 30 s. Details: `docs/RELEASING.md`,
-`docs/api/updates.md`.
+`docs/api/updates.md`. New machines are installed by `install.sh` into that layout. Distribution packages (`.deb`,
+`.rpm`, AUR) use a flat layout instead (`/usr/bin/linuxadmind`, `/usr/lib/linuxadmin/linuxadmin-bridge`,
+`/usr/share/linuxadmin/{web,plugins}`) and write `/usr/lib/linuxadmin/managed`, which turns self-update off:
+`docs/PACKAGING.md`.
 
 ## Repository layout
 
@@ -211,7 +214,7 @@ server/            Go: cmd/linuxadmind, cmd/linuxadmin-bridge, internal/…
 web/               React app
 plugins/           first-party example plugins
 docs/              ARCHITECTURE.md, DESIGN-RULES.md, api/<module>.md, design/
-packaging/         systemd unit, PAM file, install.sh (versioned layout), build-release.sh, PKGBUILD (later)
+packaging/         systemd unit, PAM files per distribution, install scripts, build-release.sh, nfpm (.deb/.rpm), AUR
 .github/workflows/ ci.yml (vet/test/lint/build), release.yml (tag → signed GitHub release)
 ```
 

@@ -11,8 +11,8 @@ LinuxAdmin is early software. It runs and I use it on my own machine, but it has
 - Tested by hand on Arch Linux: PAM sign-in, admin unlock through `sudo`, every section in the screenshots below.
 - Admin actions (package transactions, user and group changes, file operations as root, config changes) are covered mostly by unit tests, with limited manual testing.
 - The package manager backends for apt, dnf, zypper and Flatpak exist and have unit tests. I have not run them on real Debian, Fedora or openSUSE machines.
-- The PAM file in `packaging/` is written for Arch. Other distributions need small changes.
-- There are no distribution packages yet. Releases are published on GitHub with signed archives.
+- Installing, sign-in and admin unlock were tested in containers on Debian 12, Ubuntu 24.04, Fedora 44 and openSUSE Tumbleweed, with the install script and with the `.deb` and `.rpm` packages. The sections themselves were not tested there.
+- Releases are published on GitHub with signed archives and, from 0.1.1, `.deb` and `.rpm` packages. The AUR packages are written but not published yet.
 - Self-update from GitHub releases is implemented (Settings > About) but has not yet been exercised on a live install.
 - A security review of the code is in [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md). It lists each finding and how it was fixed. It is a self review, not an external audit.
 
@@ -123,7 +123,7 @@ Run it only on networks you trust until it has had more review. A binary that ru
 
 To run:
 
-- Linux with systemd, PAM and `sudo`
+- Linux with systemd, PAM and `sudo`, x86-64 or ARM64, glibc 2.34 or newer
 - A user in a sudoers rule that allows running the bridge (on Arch, `%wheel ALL=(ALL) ALL`)
 
 To build:
@@ -132,7 +132,56 @@ To build:
 - gcc and the PAM headers (`pam_appl.h`), because the PAM wrapper uses cgo
 - Node.js and npm for the web app
 
-## Install from source
+## Install
+
+LinuxAdmin needs Linux with systemd on x86-64 or ARM64, and glibc 2.34 or newer (Debian 12, Ubuntu 22.04, Fedora, RHEL 9, openSUSE Tumbleweed, Arch, or newer).
+
+### One-line install
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Fonlogen/LinuxAdmin/main/install.sh | sudo sh
+```
+
+The script downloads the latest release from GitHub, checks its signature and checksum, installs it in `/usr/lib/linuxadmin`, writes the PAM file for your distribution and the systemd unit, installs `sudo` if it is missing, and starts the service. At the end it prints the addresses to open and the SHA-256 fingerprint of the certificate, so you can compare it with what the browser shows before you accept the warning. LinuxAdmin installed this way updates itself from Settings > About. Running the script again repairs or upgrades the installation.
+
+To read the script before running it:
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/Fonlogen/LinuxAdmin/main/install.sh
+less install.sh
+sudo sh install.sh
+```
+
+Options (after `sh -s --` when piping, for example `curl ... | sudo sh -s -- --version 0.1.1`):
+
+| Option | Effect |
+|---|---|
+| `--version X.Y.Z` | install that release instead of the latest stable one |
+| `--prerelease` | install the newest release, pre-releases included |
+| `--open-firewall` | open the port in ufw or firewalld when one is active (otherwise the script only tells you the command) |
+| `--dry-run` | show what would be done and change nothing |
+| `--yes` | do not ask questions |
+| `--uninstall` | remove LinuxAdmin, keeping `/etc/linuxadmin` and installed plugins (`--purge` removes those too) |
+
+The signature check needs OpenSSL 3 or newer. On an older system the script stops; `--insecure-skip-signature` installs anyway, checking only the checksum.
+
+### Packages
+
+Each release has `.deb` packages (Debian 12 and newer, Ubuntu 22.04 and newer) and `.rpm` packages (Fedora, RHEL 9 and clones, openSUSE) for x86-64 and ARM64 on the [release page](https://github.com/Fonlogen/LinuxAdmin/releases), from version 0.1.1 on:
+
+```sh
+sudo apt install ./linuxadmin_0.1.1_amd64.deb
+sudo dnf install ./linuxadmin-0.1.1-1.x86_64.rpm
+sudo zypper install ./linuxadmin-0.1.1-1.x86_64.rpm
+```
+
+The package enables and starts the service. A packaged LinuxAdmin does not update itself: Settings > About says which package manager installs updates, and you install the next package the same way. The packages are listed in the signed `SHA256SUMS` of the release. There is no apt or dnf repository yet.
+
+### Arch Linux (AUR)
+
+Once published, `yay -S linuxadmin-bin` (prebuilt) or `yay -S linuxadmin` (built from source), then `sudo systemctl enable --now linuxadmin`. The PKGBUILDs are in [packaging/arch](packaging/arch). On Arch the `%wheel` rule in sudoers is commented out by default; enable it with `visudo` to get administrator rights.
+
+### From source
 
 ```sh
 git clone https://github.com/Fonlogen/LinuxAdmin.git
@@ -141,20 +190,13 @@ make build                          # builds web/dist and server/bin/*
 sudo ./packaging/install-dev.sh     # installs and starts the systemd service
 ```
 
-Read the script before you run it. It installs:
+`install-dev.sh` puts the local build into the same layout as `install.sh`. Read the scripts before you run them. To remove everything except the configuration, run `sudo ./packaging/install-dev.sh --remove`.
 
-| File | Installed as |
-|---|---|
-| `server/bin/linuxadmind` | `/usr/bin/linuxadmind` |
-| `server/bin/linuxadmin-bridge` | `/usr/lib/linuxadmin/linuxadmin-bridge` |
-| `web/dist/` | `/usr/share/linuxadmin/web/` |
-| `plugins/docker` | `/usr/share/linuxadmin/plugins/docker/` |
-| `packaging/pam.d/linuxadmin` | `/etc/pam.d/linuxadmin` |
-| `packaging/linuxadmin.service` | `/etc/systemd/system/linuxadmin.service` |
+### After installing
 
-Then open `https://<host>:9090` and sign in with a Linux account. On first start the daemon generates a self-signed certificate in `/etc/linuxadmin/tls/`, so the browser shows a warning once. To remove everything except the configuration, run `sudo ./packaging/install-dev.sh --remove`.
+Open `https://<host>:9090` and sign in with a Linux account. On first start the daemon generates a self-signed certificate in `/etc/linuxadmin/tls/`, so the browser shows a warning once. Accounts in the `wheel` group (`sudo` on Debian and Ubuntu) can unlock administrator rights with their own password.
 
-A PKGBUILD and distribution packages are not available yet. See [packaging/README.md](packaging/README.md).
+Where things are installed, for each method, and how to publish more packages: [docs/PACKAGING.md](docs/PACKAGING.md) and [packaging/README.md](packaging/README.md).
 
 ## Configuration
 
@@ -250,14 +292,14 @@ server/            Go module: daemon, bridge, modules for each section
 web/               React and TypeScript app (Vite)
   src/sections/    one folder per section
 plugins/           first-party plugins and the plugin catalog
-packaging/         systemd unit, PAM file, install script
+packaging/         systemd unit, PAM files, install scripts, .deb/.rpm (nfpm) and AUR packaging
 docs/              architecture, API notes, design rules, security review
 ```
 
 ## Roadmap
 
 - Test and fix on Debian, Fedora and openSUSE
-- Distribution packages, starting with a PKGBUILD
+- Publish the AUR packages, then package repositories (COPR, OBS or an apt repository)
 - Desktop app wrapper
 - More first-party plugins
 

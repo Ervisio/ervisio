@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased]
+
+Rename this section to the version when tagging (the release workflow uses the matching section as release notes).
+
+### Added
+- One-line installer: `curl -fsSL https://raw.githubusercontent.com/Fonlogen/LinuxAdmin/main/install.sh | sudo sh`. Verifies the release signature with openssl, picks the PAM file for the distribution, installs sudo if missing, can open the port in ufw or firewalld, prints the addresses and the certificate fingerprint. `--version`, `--prerelease`, `--uninstall [--purge]`, `--dry-run`, `--yes`.
+- `.deb` and `.rpm` packages for x86-64 and ARM64 on the release page, covered by the signed `SHA256SUMS`.
+- PKGBUILDs for the AUR (`linuxadmin-bin`, `linuxadmin`), not published yet.
+- PAM files for Debian/Ubuntu, Fedora/RHEL and openSUSE next to the Arch one.
+
+### Changed
+- A LinuxAdmin installed by a package manager does not update itself: Settings › About says which package manager installs updates, and automatic installs are off.
+- The daemon finds the bridge in `/usr/lib/linuxadmin` when it is not next to the daemon (package layout).
+
 ## [0.1.0] - 2026-10-01
 
 First public release. Early software: tested by hand on Arch Linux, other distributions are untested.

@@ -1,16 +1,22 @@
 # Releasing and self-update
 
-The owner publishes a release by pushing a version tag. GitHub Actions builds it for x86-64 and ARM64, signs it and
-publishes it. On every machine running LinuxAdmin, an administrator opens **Settings › About**, clicks
-**Update now**, confirms, and the console updates itself; if the new version does not come up, the old one is put
-back automatically.
+The owner publishes a release by pushing a version tag. GitHub Actions builds it for x86-64 and ARM64 (archives,
+`.deb` and `.rpm` packages), signs it and publishes it. New machines install it with the one-line `install.sh`. On
+every machine installed that way, an administrator opens **Settings › About**, clicks **Update now**, confirms, and
+the console updates itself; if the new version does not come up, the old one is put back automatically. Machines
+installed from a package are updated by their package manager instead (`docs/PACKAGING.md`).
 
 ```
 git tag v1.2.0 ──▶ .github/workflows/release.yml
                      web (npm ci, build) ──┐
                      build amd64 (ubuntu-24.04)     ──▶ linuxadmin-1.2.0-linux-amd64.tar.gz
+                                                        + linuxadmin_1.2.0_amd64.deb, linuxadmin-1.2.0-1.x86_64.rpm (nfpm)
                      build arm64 (ubuntu-24.04-arm) ──▶ linuxadmin-1.2.0-linux-arm64.tar.gz
-                     release: SHA256SUMS + SHA256SUMS.sig (RELEASE_SIGNING_KEY) ──▶ GitHub release
+                                                        + linuxadmin_1.2.0_arm64.deb, linuxadmin-1.2.0-1.aarch64.rpm
+                     release: SHA256SUMS (all six files) + SHA256SUMS.sig (RELEASE_SIGNING_KEY) ──▶ GitHub release
+                     aur (only with the AUR_SSH_KEY secret): PKGBUILDs ──▶ aur.archlinux.org
+
+install.sh ──▶ api.github.com/…/releases/latest → download → openssl: verify signature + sha256 → versioned layout
 
 console ──updates.check──▶ api.github.com/repos/Fonlogen/LinuxAdmin/releases/latest   (cached 1 h, ETag)
         ──updates.apply──▶ download → verify signature + sha256 → extract → run --version → install
@@ -52,11 +58,11 @@ Self-update needs the layout below. Machines installed before this feature (flat
 `/usr/bin/linuxadmind`, the web app in `/usr/share/linuxadmin/web`) must be reinstalled once:
 
 ```sh
-make build VERSION=0.1.0              # as your user, any x.y.z
-sudo ./packaging/install-dev.sh       # installs into /usr/lib/linuxadmin/versions/0.1.0
+curl -fsSL https://raw.githubusercontent.com/Fonlogen/LinuxAdmin/main/install.sh | sudo sh
 ```
 
-or, from a release archive: `tar xzf linuxadmin-1.2.0-linux-amd64.tar.gz && sudo ./linuxadmin-1.2.0-linux-amd64/packaging/install.sh`.
+or from a local build (`make build VERSION=0.1.0` as your user, then `sudo ./packaging/install-dev.sh`), or from a
+release archive: `tar xzf linuxadmin-1.2.0-linux-amd64.tar.gz && sudo ./linuxadmin-1.2.0-linux-amd64/packaging/install.sh`.
 (A flat install running a build that already contains the updater is migrated by its first update: the flat files
 are copied into `versions/<its version>` before the new one is installed.)
 
@@ -86,12 +92,18 @@ are copied into `versions/<its version>` before the new one is installed.)
    * The version is injected into both binaries (`brand.Version`, `-ldflags -X`) without the `v`; `linuxadmind
      --version` prints it.
 
-4. Check the result: the release has `linuxadmin-1.2.0-linux-amd64.tar.gz`, `linuxadmin-1.2.0-linux-arm64.tar.gz`,
-   `SHA256SUMS`, `SHA256SUMS.sig`. To verify by hand:
+4. Check the result: the release has `linuxadmin-1.2.0-linux-{amd64,arm64}.tar.gz`,
+   `linuxadmin_1.2.0_{amd64,arm64}.deb`, `linuxadmin-1.2.0-1.{x86_64,aarch64}.rpm`, `SHA256SUMS` (listing all six) and
+   `SHA256SUMS.sig`. To verify by hand:
 
    ```sh
    gh release download v1.2.0 -D /tmp/r && cd server && go run ./tools/release-sign -verify -dir /tmp/r /tmp/r/SHA256SUMS
    ```
+
+   and try the installer against it: `sh install.sh --dry-run --version 1.2.0` (any machine, no root needed).
+
+5. Stable releases only: update the AUR packages. With the `AUR_SSH_KEY` secret the workflow pushes them; either way
+   run `packaging/arch/update-pkgbuild.sh 1.2.0` on Arch and commit the result here (`docs/PACKAGING.md`).
 
 A tag that fails the workflow publishes nothing; fix, delete the tag (`git push --delete origin v1.2.0; git tag -d
 v1.2.0`) and tag again. Never re-publish different files under a version that consoles may already have installed:
@@ -188,8 +200,16 @@ to update (and to turn `auto_install` on or update by hand), then switch the sec
 release notes.
 
 **Key lost**: consoles cannot verify anything signed with a new key. Generate a new key, release, and have every
-machine reinstalled by hand from the archive (`packaging/install.sh`).
+machine reinstalled by hand (`install.sh`, or from the archive with `packaging/install.sh`).
+
+`install.sh` trusts one key, `RELEASE_KEY_PEM` (the same key as `ReleasePublicKey`, as an SPKI PEM;
+`TestInstallScriptReleaseKey` fails when they differ). Whenever `ReleasePublicKey` changes, convert it with
+`python3 -c "import base64,sys; print(base64.b64encode(bytes.fromhex('302a300506032b6570032100')+base64.b64decode(sys.argv[1])).decode())" <key>`
+and update the PEM in the same commit. Since the one-line install always fetches `install.sh` from `main`, switch
+the secret to the new key only together with that commit.
 
 ## History
 
 * 2026-10-01: release key generated (`eYuaHtzK…`); self-update and the release workflow added.
+* 2026-10-01: `install.sh`, `.deb`/`.rpm` packages (nfpm), AUR PKGBUILDs, managed-install marker. First release with
+  packages: 0.1.1.
