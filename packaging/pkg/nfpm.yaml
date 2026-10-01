@@ -19,7 +19,7 @@ priority: optional
 maintainer: Fonlogen <info.fonlogen@gmail.com>
 vendor: Fonlogen
 homepage: https://github.com/Fonlogen/LinuxAdmin
-license: LicenseRef-Unlicensed
+license: MIT
 description: |-
   Web console for managing a Linux server from the browser
   Sign in with a Linux account (PAM) and get an overview, a terminal, a file
@@ -46,6 +46,10 @@ contents:
   - src: ./plugins
     dst: /usr/share/linuxadmin/plugins
     type: tree
+  - src: ./LICENSE
+    dst: /usr/share/licenses/linuxadmin/LICENSE
+    file_info:
+      mode: 0644
   - src: ./linuxadmin.service
     dst: /usr/lib/systemd/system/linuxadmin.service
     file_info:

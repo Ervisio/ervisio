@@ -34,6 +34,7 @@ cp -r "$SRC/bin" "$SRC/web" "$STAGE/"
 if [ -d "$SRC/plugins" ]; then cp -r "$SRC/plugins" "$STAGE/"; else mkdir "$STAGE/plugins"; fi
 cp -r packaging/pam.d packaging/pkg/scripts "$STAGE/"
 cp packaging/linuxadmin.service packaging/package-service.sh packaging/pkg/nfpm.yaml "$STAGE/"
+if [ -f "$SRC/LICENSE" ]; then cp "$SRC/LICENSE" "$STAGE/"; else cp LICENSE "$STAGE/"; fi
 printf 'apt\n' > "$STAGE/managed.apt"
 chmod -R u+rwX,go+rX,go-w "$STAGE"
 

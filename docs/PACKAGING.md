@@ -137,8 +137,7 @@ keeps the `-`): every console parses `SHA256SUMS`, and its name check does not a
 Two packages: `linuxadmin-bin` (release archives, quick to install) and `linuxadmin` (built from the tag with Go and
 npm). They conflict with each other; `linuxadmin-bin` provides `linuxadmin`.
 
-Before the first upload, choose a license for the project: the PKGBUILDs say `LicenseRef-Unlicensed` until then,
-and the AUR expects packages that may be redistributed.
+The project is MIT licensed; the packages install the license to `/usr/share/licenses/`.
 
 ### One-time setup
 

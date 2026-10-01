@@ -305,4 +305,4 @@ docs/              architecture, API notes, design rules, security review
 
 ## License
 
-Not decided yet.
+MIT. See [LICENSE](LICENSE).

@@ -12,7 +12,7 @@ pkgrel=1
 pkgdesc='Web console for managing a Linux server from the browser (prebuilt)'
 arch=('x86_64' 'aarch64')
 url='https://github.com/Fonlogen/LinuxAdmin'
-license=('LicenseRef-Unlicensed')
+license=('MIT')
 depends=('glibc' 'pam' 'sudo' 'systemd')
 provides=("linuxadmin=$pkgver")
 conflicts=('linuxadmin')
@@ -45,4 +45,5 @@ package() {
 	install -Dm644 packaging/linuxadmin.service "$pkgdir/usr/lib/systemd/system/linuxadmin.service"
 	install -Dm644 "$srcdir/linuxadmin.pam" "$pkgdir/etc/pam.d/linuxadmin"
 	install -dm755 "$pkgdir/etc/linuxadmin" "$pkgdir/var/lib/linuxadmin"
+	install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

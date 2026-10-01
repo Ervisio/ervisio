@@ -41,6 +41,7 @@ cp -r plugins/docker "$D/plugins/docker"
 cp -r packaging/linuxadmin.service packaging/pam.d packaging/install.sh packaging/README.md "$D/packaging/"
 # The installer; packaging/install.sh runs it with --from this folder.
 install -m755 install.sh "$D/install.sh"
+install -m644 LICENSE "$D/LICENSE"
 printf '%s\n' "$VERSION" > "$D/VERSION"
 chmod -R u+rwX,go+rX,go-w "$D"
 
