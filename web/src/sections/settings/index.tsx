@@ -11,6 +11,7 @@ import { ColourBlock, ThemeGrid } from './Appearance';
 import { HostsBlock, type HostEntry } from './Hosts';
 import { usePrefSave, useServerConfig } from './save';
 import { UpdatesBlock } from './Updates';
+import { updateStatus } from './updates';
 import './settings.css';
 
 interface RowDef {
@@ -52,6 +53,16 @@ export default function SettingsPage() {
   const loc = useLocation();
   const isAdmin = !!session && (session.isAdmin || session.canSudo || !!session.isRoot);
   const server = useServerConfig(isAdmin);
+  // A packaged install (.deb, .rpm, AUR) is updated by its package manager: no automatic install here.
+  const [managedBy, setManagedBy] = useState('');
+  useEffect(() => {
+    if (!isAdmin) return;
+    let live = true;
+    updateStatus().then((s) => live && setManagedBy(s.managedBy ?? ''), () => {});
+    return () => {
+      live = false;
+    };
+  }, [isAdmin]);
   const [q, setQ] = useState('');
   const [active, setActive] = useState('appearance');
   const [recentOn, setRecentOn] = useState(recentUsersEnabled);
@@ -225,12 +236,16 @@ export default function SettingsPage() {
               control: <Switch aria-label={t('updates.autoCheck.title')} disabled={srvDisabled} checked={server.get('updates.auto_check', true)} onChange={(v) => void sv('updates.auto_check', v, t('updates.autoCheck.title'))} />,
             },
             {
-              id: 'uautoinstall', title: t('updates.autoInstall.title'), desc: t('updates.autoInstall.desc', { name: Name }), words: 'update automatic night schedule time',
+              id: 'uautoinstall', title: t('updates.autoInstall.title'),
+              desc: managedBy === 'unknown' ? t('updates.managedUnknown')
+                : managedBy ? t('updates.autoInstall.managed', { manager: managedBy, name: Name })
+                : t('updates.autoInstall.desc', { name: Name }),
+              words: 'update automatic night schedule time',
               cfgKey: `updates.auto_install = ${String(server.get('updates.auto_install', false))} · updates.auto_install_at = "${server.get('updates.auto_install_at', '03:30')}"`,
               control: (
                 <>
-                  <TimeInput label={t('updates.autoInstall.at')} disabled={srvDisabled || !server.get('updates.auto_install', false)} value={server.get('updates.auto_install_at', '03:30')} onCommit={(v) => void sv('updates.auto_install_at', v, t('updates.autoInstall.at'))} />
-                  <Switch aria-label={t('updates.autoInstall.title')} disabled={srvDisabled} checked={server.get('updates.auto_install', false)} onChange={(v) => void sv('updates.auto_install', v, t('updates.autoInstall.title'))} />
+                  <TimeInput label={t('updates.autoInstall.at')} disabled={srvDisabled || !!managedBy || !server.get('updates.auto_install', false)} value={server.get('updates.auto_install_at', '03:30')} onCommit={(v) => void sv('updates.auto_install_at', v, t('updates.autoInstall.at'))} />
+                  <Switch aria-label={t('updates.autoInstall.title')} disabled={srvDisabled || !!managedBy} checked={!managedBy && server.get('updates.auto_install', false)} onChange={(v) => void sv('updates.auto_install', v, t('updates.autoInstall.title'))} />
                 </>
               ),
             },

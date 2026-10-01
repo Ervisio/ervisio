@@ -112,11 +112,15 @@ type CheckResult struct {
 	Latest    *Latest `json:"latest"`
 	Newer     bool    `json:"newer"`
 	Arch      string  `json:"arch"`
+	// ManagedBy names the package manager that installs updates of a
+	// packaged LinuxAdmin ("" = self-update).
+	ManagedBy string `json:"managedBy,omitempty"`
 }
 
 func check(ctx context.Context, force bool) (*CheckResult, error) {
 	st := settings()
-	res := &CheckResult{Current: brand.Version, Channel: st.Channel, AutoCheck: st.AutoCheck, Arch: update.Arch}
+	res := &CheckResult{Current: brand.Version, Channel: st.Channel, AutoCheck: st.AutoCheck, Arch: update.Arch,
+		ManagedBy: newUpdater().Layout.ManagedBy()}
 	rel, at, err := checker.Latest(ctx, st.Channel, force)
 	res.CheckedAt = at.UnixMilli()
 	switch {
@@ -151,6 +155,8 @@ type Status struct {
 	PackageBusy bool           `json:"packageBusy"`
 	Settings    Settings       `json:"settings"`
 	Arch        string         `json:"arch"`
+	// ManagedBy: see CheckResult.
+	ManagedBy string `json:"managedBy,omitempty"`
 }
 
 func status() *Status {
@@ -166,6 +172,7 @@ func status() *Status {
 		PackageBusy: u.State.PackageTransactionRunning(),
 		Settings:    settings(),
 		Arch:        update.Arch,
+		ManagedBy:   u.Layout.ManagedBy(),
 	}
 	if s.Installed == nil {
 		s.Installed = []string{}
@@ -215,7 +222,7 @@ func mapErr(err error) error {
 		return rpc.Errorf(rpc.Conflict, "%v", err)
 	case errors.Is(err, update.ErrNoPrevious), errors.Is(err, update.ErrNoRelease):
 		return rpc.Errorf(rpc.NotFound, "%v", err)
-	case errors.Is(err, update.ErrNotInstalled), errors.Is(err, update.ErrNoBuild):
+	case errors.Is(err, update.ErrNotInstalled), errors.Is(err, update.ErrNoBuild), errors.Is(err, update.ErrManaged):
 		return rpc.Errorf(rpc.Unavailable, "%v", err)
 	}
 	var re *rpc.Error

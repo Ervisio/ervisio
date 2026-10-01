@@ -32,6 +32,13 @@ const (
 	// and the `current` / `previous` symlinks used by self-update. See
 	// internal/update and docs/RELEASING.md.
 	LibDir = "/usr/lib/" + Slug
+	// ManagedMarker exists when a package manager installed LinuxAdmin
+	// (.deb, .rpm, PKGBUILD). It holds the manager's name ("apt", "dnf",
+	// "zypper", "pacman"); self-update is then off, the package manager
+	// installs new versions. Packages use the flat layout: BinLink is the
+	// daemon itself, the bridge is LibDir/linuxadmin-bridge, the web app
+	// and plugins are in /usr/share/linuxadmin.
+	ManagedMarker = LibDir + "/managed"
 	// BinLink is the command on PATH; with the versioned layout it is a
 	// symlink to LibDir/current/bin/linuxadmind.
 	BinLink = "/usr/bin/" + DaemonBinary

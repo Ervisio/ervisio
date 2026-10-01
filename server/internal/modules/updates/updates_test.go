@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Fonlogen/LinuxAdmin/server/internal/brand"
@@ -65,5 +66,27 @@ func TestStatusDevAndErrors(t *testing.T) {
 		if !rpc.IsCode(mapErr(err), code) {
 			t.Errorf("%v -> %v, want %s", err, mapErr(err), code)
 		}
+	}
+}
+
+func TestManagedInstall(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "managed")
+	os.WriteFile(marker, []byte("pacman\n"), 0o644)
+	old := newUpdater
+	newUpdater = func() *update.Updater {
+		u := update.New(checker)
+		u.Layout.Managed = marker
+		return u
+	}
+	defer func() { newUpdater = old }()
+	s := status()
+	if s.ManagedBy != "pacman" || s.CanUpdate || !strings.Contains(s.Reason, "pacman") {
+		t.Fatalf("status %+v", s)
+	}
+	if err := mapErr(update.ErrManaged); !rpc.IsCode(err, rpc.Unavailable) {
+		t.Fatalf("ErrManaged -> %v", err)
+	}
+	if _, err := rollback(context.Background(), ""); !rpc.IsCode(err, rpc.Unavailable) {
+		t.Fatalf("rollback on a managed install: %v", err)
 	}
 }

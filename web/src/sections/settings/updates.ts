@@ -24,6 +24,8 @@ export interface CheckResult {
   latest: Latest | null;
   newer: boolean;
   arch: string;
+  /** Package manager that installs updates of a packaged install ("apt", "dnf", "pacman"…; absent = self-update). */
+  managedBy?: string;
 }
 export interface LastResult {
   state: 'running' | 'ok' | 'failed' | 'rolled-back';
@@ -47,6 +49,8 @@ export interface UpdateStatus {
   packageBusy: boolean;
   settings?: { channel: string; autoCheck: boolean; autoInstall: boolean; autoInstallAt: string };
   arch: string;
+  /** See CheckResult.managedBy. */
+  managedBy?: string;
 }
 export interface ApplyEvent {
   phase: 'check' | 'download' | 'verify' | 'extract' | 'test' | 'install' | 'restart';

@@ -11,7 +11,8 @@ import (
 
 // Auto runs inside linuxadmind (root): it checks for updates periodically
 // (updates.auto_check) and installs them at updates.auto_install_at when
-// updates.auto_install is on. It never starts while a package transaction
+// updates.auto_install is on (never on a packaged install, see
+// Layout.ManagedBy). It never starts while a package transaction
 // runs (Apply refuses), and retries the next day.
 type Auto struct {
 	Updater *Updater
@@ -81,7 +82,8 @@ func (a *Auto) Tick(ctx context.Context) {
 			a.logf("update available: %s (running %s)", rel.Version(), a.Updater.Current)
 		}
 	}
-	if !cfg.Updates.AutoInstall {
+	// A package manager installs the updates of a packaged LinuxAdmin.
+	if !cfg.Updates.AutoInstall || a.Updater.Layout.ManagedBy() != "" {
 		return
 	}
 	at, err := config.ParseClock(cfg.Updates.AutoInstallAt)

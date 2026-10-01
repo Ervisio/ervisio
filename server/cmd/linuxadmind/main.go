@@ -76,6 +76,13 @@ func main() {
 			log.Fatal(err)
 		}
 		bp = filepath.Join(filepath.Dir(exe), brand.BridgeBinary)
+		// Packages (flat layout) install the daemon as /usr/bin/linuxadmind
+		// and the bridge as /usr/lib/linuxadmin/linuxadmin-bridge.
+		if _, err := os.Stat(bp); err != nil {
+			if alt := filepath.Join(brand.LibDir, brand.BridgeBinary); isFile(alt) {
+				bp = alt
+			}
+		}
 	}
 	if bp, err = filepath.Abs(bp); err != nil {
 		log.Fatal(err)
@@ -150,14 +157,23 @@ func main() {
 		if r, err := filepath.EvalSymlinks(exe); err == nil {
 			exe = r
 		}
-		if ok, why := u.Supported(exe, false); ok {
+		ok, why := u.Supported(exe, false)
+		if !ok {
+			log.Printf("self-update disabled: %s", why)
+		}
+		// A packaged install still checks (and logs) new releases; Auto
+		// never installs them there.
+		if ok || u.Layout.ManagedBy() != "" {
 			auto := &update.Auto{Updater: u, Config: srv.Config, Logf: log.Printf}
 			go auto.Run(ctx)
-		} else {
-			log.Printf("self-update disabled: %s", why)
 		}
 	}
 	if err := srv.Run(ctx); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func isFile(p string) bool {
+	fi, err := os.Stat(p)
+	return err == nil && fi.Mode().IsRegular()
 }

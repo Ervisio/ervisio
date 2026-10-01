@@ -229,6 +229,9 @@
     "cannot": "Questo server non può aggiornarsi da solo: {reason}",
     "packageBusy": "È in corso un'installazione o rimozione di software. L'aggiornamento potrà partire quando sarà finita.",
     "adminOnly": "Un amministratore può installarla da qui.",
+    "managed": "Gli aggiornamenti li installa {manager}.",
+    "managedUnknown": "Gli aggiornamenti li installa il gestore di pacchetti del sistema.",
+    "managedDesc": "{name} è stato installato come pacchetto della distribuzione, quindi non si aggiorna da solo. Installa le nuove versioni nello stesso modo in cui l'hai installato.",
     "confirm": {
       "title": "Aggiornare a {version}?",
       "text": "{name} scaricherà la versione {version} ({size}), ne verificherà la firma, la installerà e si riavvierà. Questa pagina si ricarica da sola quando la nuova versione risponde.",
@@ -288,7 +291,8 @@
     "autoInstall": {
       "title": "Installa aggiornamenti automaticamente",
       "desc": "{name} installa da solo le nuove versioni ogni giorno a quest'ora, e si riavvia. Saltato mentre si installa software.",
-      "at": "Ora"
+      "at": "Ora",
+      "managed": "Non disponibile: gli aggiornamenti di {name} li installa {manager}."
     }
   }
 }

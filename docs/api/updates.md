@@ -18,7 +18,9 @@ hour. 15 s timeout.
            "notes":"## Changes\n- …","url":"https://github.com/…/releases/tag/v1.1.0","prerelease":false,
            "asset":"linuxadmin-1.1.0-linux-amd64.tar.gz","size":16432392}}
 ```
-`latest` is `null` when nothing is published. `notes` is Markdown: render it as text (the UI never uses HTML).
+`managedBy` (absent when empty) names the package manager of a packaged install (`apt`, `dnf`, `zypper`, `pacman`,
+or `unknown`), read from `/usr/lib/linuxadmin/managed`; the UI then shows "Updates are installed by …" instead of the
+Update button. `latest` is `null` when nothing is published. `notes` is Markdown: render it as text (the UI never uses HTML).
 `size` 0 = the release has no archive for this architecture. GitHub unreachable or rate-limited → `unavailable`.
 `newer` compares semantic versions; a dev build (`0647974-dirty`) is older than any release.
 
@@ -31,9 +33,10 @@ hour. 15 s timeout.
  "running":false,"packageBusy":false,"arch":"amd64",
  "settings":{"channel":"stable","autoCheck":true,"autoInstall":false,"autoInstallAt":"03:30"}}
 ```
-`install`: `versioned` | `flat` (old layout, migrated by the first update) | `none` (not installed, e.g. a build
-folder). `canUpdate` false with a `reason` in `--dev`, when not installed in `/usr/lib/linuxadmin`, or without
-`systemd-run`. `last.state`: `running` | `ok` | `failed` (nothing changed) | `rolled-back` (switched, the new version
+`install`: `versioned` | `flat` (old layout, migrated by the first update, or a package) | `none` (not installed,
+e.g. a build folder). `managedBy`: as in `updates.check`. `canUpdate` false with a `reason` in `--dev`, on a packaged
+install (`managedBy` set; `apply` and `rollback` then answer `unavailable` and the daemon never installs by itself),
+when not installed in `/usr/lib/linuxadmin`, or without `systemd-run`. `last.state`: `running` | `ok` | `failed` (nothing changed) | `rolled-back` (switched, the new version
 did not answer, back on the old one); a `running` record whose helper died reads as `failed` / `interrupted`.
 `packageBusy`: a Software transaction runs, updates wait.
 

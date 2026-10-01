@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -32,11 +33,39 @@ type Layout struct {
 	// Flat-layout locations (read by Migrate only).
 	FlatWeb     string
 	FlatPlugins string
+	// Managed is the marker file written by distribution packages
+	// (brand.ManagedMarker); see ManagedBy.
+	Managed string
 }
 
 // DefaultLayout is the system layout.
 func DefaultLayout() *Layout {
-	return &Layout{LibDir: brand.LibDir, BinLink: brand.BinLink, FlatWeb: brand.WebDir, FlatPlugins: brand.PackagedPluginsDir}
+	return &Layout{LibDir: brand.LibDir, BinLink: brand.BinLink, FlatWeb: brand.WebDir, FlatPlugins: brand.PackagedPluginsDir,
+		Managed: brand.ManagedMarker}
+}
+
+var managerRe = regexp.MustCompile(`^[a-z][a-z0-9._+-]{0,31}$`)
+
+// ManagedBy returns the package manager that installed LinuxAdmin, read
+// from the marker file ("" when there is none: an install.sh or source
+// install that updates itself). A marker whose content is not a plain name
+// still counts and reads as "unknown".
+func (l *Layout) ManagedBy() string {
+	if l.Managed == "" {
+		return ""
+	}
+	if _, err := os.Lstat(l.Managed); err != nil {
+		return ""
+	}
+	b, err := readSmall(l.Managed, 256)
+	if err != nil {
+		return "unknown"
+	}
+	name := strings.TrimSpace(string(b))
+	if !managerRe.MatchString(name) {
+		return "unknown"
+	}
+	return name
 }
 
 // Kinds of installation.

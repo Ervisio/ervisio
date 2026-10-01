@@ -41,7 +41,13 @@ var (
 	ErrNoPrevious   = errors.New("there is no previous version to roll back to")
 	ErrNotInstalled = errors.New("this copy of LinuxAdmin was not installed in " + brand.LibDir + "; update it the way it was installed")
 	ErrNoBuild      = errors.New("the release has no build for this architecture")
+	ErrManaged      = errors.New("LinuxAdmin was installed by a package manager, which installs its updates")
 )
+
+// managedErr names the package manager in ErrManaged.
+func managedErr(by string) error {
+	return fmt.Errorf("%w (%s)", ErrManaged, by)
+}
 
 // Launcher starts the switch helper outside the daemon's service.
 type Launcher func(ctx context.Context, unit string, argv []string) error
@@ -99,6 +105,9 @@ func (u *Updater) Supported(exe string, dev bool) (bool, string) {
 	if dev {
 		return false, "the daemon runs in development mode"
 	}
+	if by := u.Layout.ManagedBy(); by != "" {
+		return false, managedErr(by).Error()
+	}
 	if u.Layout.Kind() == KindNone {
 		return false, ErrNotInstalled.Error()
 	}
@@ -119,6 +128,9 @@ func (u *Updater) Supported(exe string, dev bool) (bool, string) {
 func (u *Updater) Apply(ctx context.Context, channel, want string, auto bool, progress func(Event)) (string, string, error) {
 	if progress == nil {
 		progress = func(Event) {}
+	}
+	if by := u.Layout.ManagedBy(); by != "" {
+		return "", "", managedErr(by)
 	}
 	if u.Layout.Kind() == KindNone {
 		return "", "", ErrNotInstalled
@@ -282,6 +294,9 @@ func (u *Updater) Apply(ctx context.Context, channel, want string, auto bool, pr
 // Rollback starts the switch helper towards the previous version. The
 // helper is the running version's binary (an old build may not have it).
 func (u *Updater) Rollback(ctx context.Context, want string) (string, string, error) {
+	if by := u.Layout.ManagedBy(); by != "" {
+		return "", "", managedErr(by)
+	}
 	if u.Layout.Kind() != KindVersioned {
 		return "", "", ErrNoPrevious
 	}

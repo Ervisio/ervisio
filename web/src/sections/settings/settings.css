@@ -125,6 +125,8 @@
 .st-upd-note { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--sunk); color: var(--ink2); font-size: 13.5px; font-weight: 600; }
 .st-upd-note .ui-icon { flex: none; }
 .st-upd-note--ok { background: var(--ok-s); color: var(--ok); }
+.st-upd-note b { display: block; color: var(--ink); }
+.st-upd-note-sub { display: block; margin-top: 2px; font-weight: 500; color: var(--ink2); }
 .st-upd-card { border-radius: 18px; background: var(--sunk); padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
 .st-upd-card-hd { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .st-upd-card-hd b { font-size: 16px; font-weight: 800; }

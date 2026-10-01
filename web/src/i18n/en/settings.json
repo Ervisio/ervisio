@@ -229,6 +229,9 @@
     "cannot": "This server cannot update itself: {reason}",
     "packageBusy": "Software is being installed or removed. The update can start when that has finished.",
     "adminOnly": "An administrator can install it from here.",
+    "managed": "Updates are installed by {manager}.",
+    "managedUnknown": "Updates are installed by the system package manager.",
+    "managedDesc": "{name} was installed as a distribution package, so it does not update itself. Install new versions the same way you installed it.",
     "confirm": {
       "title": "Update to {version}?",
       "text": "{name} will download version {version} ({size}), check its signature, install it and restart. This page reloads by itself when the new version answers.",
@@ -288,7 +291,8 @@
     "autoInstall": {
       "title": "Install updates automatically",
       "desc": "{name} installs new versions by itself every day at this time, and restarts. Skipped while software is being installed.",
-      "at": "Time"
+      "at": "Time",
+      "managed": "Not available: {manager} installs the updates of {name}."
     }
   }
 }

@@ -56,7 +56,17 @@ export function UpdatesBlock({ isAdmin }: { isAdmin: boolean }) {
   const current = status?.current ?? check?.current ?? '';
   const latest = check?.latest ?? null;
   const newer = !!check?.newer && !!latest;
-  const canApply = isAdmin && !!status?.canUpdate && newer && !!latest && latest.size > 0 && !status?.running;
+  const managedBy = status?.managedBy || check?.managedBy || '';
+  const canApply = isAdmin && !managedBy && !!status?.canUpdate && newer && !!latest && latest.size > 0 && !status?.running;
+  const managedNote = managedBy ? (
+    <div className="st-upd-note">
+      <Icon name="info" />
+      <div>
+        <b>{managedBy === 'unknown' ? t('updates.managedUnknown') : t('updates.managed', { manager: managedBy })}</b>
+        <small className="st-upd-note-sub">{t('updates.managedDesc', { name: Name })}</small>
+      </div>
+    </div>
+  ) : null;
 
   return (
     <div className="st-upd">
@@ -83,6 +93,7 @@ export function UpdatesBlock({ isAdmin }: { isAdmin: boolean }) {
           {!checkErr && check && latest && !newer && (
             <div className="st-upd-note st-upd-note--ok"><Icon name="check" />{t('updates.upToDate', { name: Name, version: current })}</div>
           )}
+          {!newer && managedNote}
           {newer && latest && (
             <div className="st-upd-card">
               <div className="st-upd-card-hd">
@@ -94,19 +105,20 @@ export function UpdatesBlock({ isAdmin }: { isAdmin: boolean }) {
                   </small>
                 </div>
                 {latest.prerelease && <Badge tone="warn">{t('updates.prerelease')}</Badge>}
-                {isAdmin && (
+                {isAdmin && !managedBy && (
                   <Button variant="primary" icon="download" disabled={!canApply} onClick={() => setConfirm('update')}>
                     {t('updates.updateNow')}
                   </Button>
                 )}
               </div>
+              {managedNote}
               <ReleaseNotes source={latest.notes} empty={t('updates.noNotes')} />
-              {latest.size === 0 && <div className="st-warn"><Icon name="alert" /><div>{t('updates.noBuild', { arch: check?.arch ?? '' })}</div></div>}
-              {isAdmin && status && !status.canUpdate && status.reason && (
+              {!managedBy && latest.size === 0 && <div className="st-warn"><Icon name="alert" /><div>{t('updates.noBuild', { arch: check?.arch ?? '' })}</div></div>}
+              {isAdmin && !managedBy && status && !status.canUpdate && status.reason && (
                 <div className="st-warn"><Icon name="info" /><div>{t('updates.cannot', { reason: status.reason })}</div></div>
               )}
               {isAdmin && status?.packageBusy && <div className="st-warn"><Icon name="alert" /><div>{t('updates.packageBusy')}</div></div>}
-              {!isAdmin && <div className="st-upd-note"><Icon name="lock" />{t('updates.adminOnly')}</div>}
+              {!isAdmin && !managedBy && <div className="st-upd-note"><Icon name="lock" />{t('updates.adminOnly')}</div>}
             </div>
           )}
         </>
@@ -114,7 +126,7 @@ export function UpdatesBlock({ isAdmin }: { isAdmin: boolean }) {
 
       {status?.last && !run && <LastLine last={status.last} />}
 
-      {isAdmin && status?.previous && !run && (
+      {isAdmin && !managedBy && status?.previous && !run && (
         <div className="st-upd-row">
           <div className="grow">
             <b>{t('updates.rollback.title')}</b>
