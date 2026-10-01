@@ -13,7 +13,7 @@ after a change; keys marked `restart` need a daemon restart.
 | `login.show_ip` | bool | `true` | |
 | `login.max_failures` | int 1–1000 | `5` | per IP per 15 min |
 | `session.timeout` | duration 5m–720h | `"12h"` | idle timeout |
-| `session.admin_unlock` | duration 30s–24h | `"5m"` | admin idle timeout |
+| `session.admin_unlock` | duration 30s–24h, or `"0s"` | `"5m"` | admin idle timeout; `"0s"` keeps admin rights until sign-out |
 | `tls.mode` | enum `self-signed`/`letsencrypt`/`custom` | `self-signed` | restart; letsencrypt not implemented yet (falls back to self-signed) |
 | `tls.redirect` | bool | `true` | plain HTTP on the same port → redirect to HTTPS; restart |
 | `tls.cert`, `tls.key` | absolute path | `""` | for `custom`; restart |

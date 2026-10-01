@@ -41,16 +41,16 @@ export async function session(): Promise<Session> {
   const s = await (MOCK ? mockAuth('/api/auth/session', {}) : http<any>('/api/auth/session'));
   return {
     user: s.user, name: s.name, uid: s.uid, home: s.home, groups: s.groups, isRoot: !!s.isRoot,
-    isAdmin: !!s.isAdmin, canSudo: !!s.canSudo || !!s.isRoot, unlockedUntil: normUntil(s.unlockedUntil),
+    isAdmin: !!s.isAdmin, canSudo: !!s.canSudo || !!s.isRoot, unlockedUntil: normUntil(s.unlockedUntil), unlockedForever: !!s.unlockedForever,
   };
 }
 
 /** remember: cookie lives for session.timeout instead of until the browser closes. */
 export const login = (user: string, password: string, remember = true) => post<LoginResult>('/api/auth/login', { user, password, remember });
 export const logout = () => post<unknown>('/api/auth/logout', {});
-export async function unlock(password: string): Promise<number | undefined> {
-  const r = await post<{ unlockedUntil?: unknown }>('/api/auth/unlock', { password });
-  return normUntil(r?.unlockedUntil);
+export async function unlock(password: string): Promise<{ until?: number; forever: boolean }> {
+  const r = await post<{ unlockedUntil?: unknown; unlockedForever?: unknown }>('/api/auth/unlock', { password });
+  return { until: normUntil(r?.unlockedUntil), forever: !!r?.unlockedForever };
 }
 export const lock = () => post<unknown>('/api/auth/lock', {});
 export async function publicHost(): Promise<PublicHost> {

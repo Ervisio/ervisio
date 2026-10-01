@@ -128,5 +128,6 @@
     "ports": "Porte aperte",
     "failed": "Servizi in errore",
     "journal": "Segui il log di sistema"
-  }
+  },
+  "sudoForever": "fino all'uscita"
 }

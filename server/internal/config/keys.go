@@ -70,7 +70,13 @@ var keys = []Key{
 		validate: durationRange(5*time.Minute, 30*24*time.Hour)},
 	{Name: "session.admin_unlock", Type: Dur,
 		get: func(c *Config) any { return c.Session.AdminUnlock }, set: func(c *Config, v any) { c.Session.AdminUnlock = v.(Duration) },
-		validate: durationRange(30*time.Second, 24*time.Hour)},
+		validate: func(v any) error {
+			// 0 keeps admin rights until sign-out.
+			if v.(Duration).Duration == 0 {
+				return nil
+			}
+			return durationRange(30*time.Second, 24*time.Hour)(v)
+		}},
 	{Name: "tls.mode", Type: Enum, Values: []string{"self-signed", "letsencrypt", "custom"}, Restart: true,
 		get: func(c *Config) any { return c.TLS.Mode }, set: func(c *Config, v any) { c.TLS.Mode = v.(string) },
 		validate: func(v any) error {

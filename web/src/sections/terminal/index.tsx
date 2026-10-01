@@ -39,7 +39,7 @@ export default function TerminalPage() {
   const t = useT('terminal');
   const { lang } = useI18n();
   const { prefs, set, ready } = usePrefs();
-  const { session, isUnlocked, unlockLeft, lock } = useSession();
+  const { session, isUnlocked, unlockLeft, unlockForever, lock } = useSession();
   const mobile = useIsMobile();
   const compact = useMediaQuery('(max-width: 1100px)');
 
@@ -410,7 +410,7 @@ export default function TerminalPage() {
     const raw = s?.title || s?.name || '';
     return home && home !== '/' ? raw.split(home).join('~') : raw;
   };
-  const sudoLeft = unlockLeft >= 60 ? t('sudoMin', { count: Math.ceil(unlockLeft / 60) }) : t('sudoSec', { count: unlockLeft });
+  const sudoLeft = unlockForever ? t('sudoForever') : unlockLeft >= 60 ? t('sudoMin', { count: Math.ceil(unlockLeft / 60) }) : t('sudoSec', { count: unlockLeft });
   const sidebar = (
     <Sidebar
       open={openSessions}

@@ -44,7 +44,9 @@
     "chip": "sudo, {time} left",
     "chipTip": "Administrator rights are unlocked. Click to lock them now.",
     "lockNow": "Lock administrator rights ({time} left)",
-    "unlock": "Unlock administrator rights"
+    "unlock": "Unlock administrator rights",
+    "chipForever": "sudo, until sign-out",
+    "lockNowForever": "Lock administrator rights"
   },
   "user": {
     "menu": "Account menu",

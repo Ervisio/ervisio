@@ -93,6 +93,7 @@ Always 200 `{}`; clears the cookie and stops the session's bridges.
 - `isAdmin`: admin rights are usable right now (root, or unlocked and not expired).
 - `canSudo`: hint only — root or member of `wheel`/`sudo`/`admin`. sudo decides on unlock.
 - `unlockedUntil`: present only while unlocked; it slides forward with every admin call
+- `unlockedForever`: true while unlocked with `session.admin_unlock = "0s"`; then `unlockedUntil` is the session end and the UI shows no countdown.
   (idle timeout `session.admin_unlock`).
 - `name` is the GECOS full name (may be empty).
 
@@ -100,7 +101,7 @@ Always 200 `{}`; clears the cookie and stops the session's bridges.
 
 ## `POST /api/auth/unlock`
 
-Request `{"password":"…"}` → 200 `{"unlockedUntil":1790879000000}`.
+Request `{"password":"…"}` → 200 `{"unlockedUntil":1790879000000,"unlockedForever":false}`.
 For root sessions it returns 200 `{}` (root needs no unlock).
 
 Failures: 400 `invalid` (wrong password), 403 `forbidden` (user may not use sudo, or sudo did not

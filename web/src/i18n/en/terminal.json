@@ -128,5 +128,6 @@
     "ports": "Open ports",
     "failed": "Failed services",
     "journal": "Follow system log"
-  }
+  },
+  "sudoForever": "until sign-out"
 }

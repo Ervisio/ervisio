@@ -13,6 +13,8 @@ export interface SessionValue {
   /** Seconds of admin rights left (0 when locked). */
   unlockLeft: number;
   isUnlocked: boolean;
+  /** Unlocked until sign-out: show no countdown. */
+  unlockForever: boolean;
   /** Root users (or sessions with no sudo) can always run admin calls. */
   signIn(user: string, password: string, stay?: boolean): Promise<{ user: string; isAdmin: boolean; isRoot: boolean }>;
   signOut(): Promise<void>;
@@ -95,18 +97,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const unlock = useCallback(async (password: string) => {
     const u = await client.unlock(password);
-    setSession((s) => (s ? { ...s, unlockedUntil: u ?? Date.now() + 5 * 60_000 } : s));
+    setSession((s) => (s ? { ...s, unlockedUntil: u.until ?? Date.now() + 5 * 60_000, unlockedForever: u.forever } : s));
   }, []);
 
   const lock = useCallback(async () => {
     await client.lock().catch(() => undefined);
-    setSession((s) => (s ? { ...s, unlockedUntil: undefined } : s));
+    setSession((s) => (s ? { ...s, unlockedUntil: undefined, unlockedForever: false } : s));
   }, []);
 
   const unlockLeft = until > now ? Math.ceil((until - now) / 1000) : 0;
+  const unlockForever = unlockLeft > 0 && !!session?.unlockedForever;
   const value = useMemo<SessionValue>(
-    () => ({ status, session, host, unlockLeft, isUnlocked: unlockLeft > 0, signIn, signOut, unlock, lock, refresh }),
-    [status, session, host, unlockLeft, signIn, signOut, unlock, lock, refresh],
+    () => ({ status, session, host, unlockLeft, isUnlocked: unlockLeft > 0, unlockForever, signIn, signOut, unlock, lock, refresh }),
+    [status, session, host, unlockLeft, unlockForever, signIn, signOut, unlock, lock, refresh],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

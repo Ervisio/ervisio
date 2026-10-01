@@ -12,7 +12,7 @@ import { Popover } from './Popover';
 export function TopBar({ onSearch }: { onSearch(): void }) {
   const t = useT('shell');
   const { lang } = useI18n();
-  const { host, isUnlocked, unlockLeft, lock } = useSession();
+  const { host, isUnlocked, unlockLeft, unlockForever, lock } = useSession();
   const { isDark, toggleDark } = useTheme();
   const nav = useNavigate();
   const notices = useNotices();
@@ -45,7 +45,7 @@ export function TopBar({ onSearch }: { onSearch(): void }) {
         <Tooltip label={t('sudo.chipTip')}>
           <button type="button" className="sudo-chip" onClick={() => void lock()}>
             <Icon name="unlock" />
-            {t('sudo.chip', { time: formatClock(unlockLeft) })}
+            {unlockForever ? t('sudo.chipForever') : t('sudo.chip', { time: formatClock(unlockLeft) })}
           </button>
         </Tooltip>
       )}

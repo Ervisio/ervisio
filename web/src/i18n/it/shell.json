@@ -44,7 +44,9 @@
     "chip": "sudo, {time} rimasti",
     "chipTip": "I diritti di amministratore sono sbloccati. Clicca per bloccarli ora.",
     "lockNow": "Blocca i diritti di amministratore ({time} rimasti)",
-    "unlock": "Sblocca i diritti di amministratore"
+    "unlock": "Sblocca i diritti di amministratore",
+    "chipForever": "sudo, fino all'uscita",
+    "lockNowForever": "Blocca i diritti di amministratore"
   },
   "user": {
     "menu": "Menu account",

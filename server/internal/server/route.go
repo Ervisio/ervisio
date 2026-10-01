@@ -56,12 +56,12 @@ func (s *Server) userBridge(ctx context.Context, sess *Session) (*bridge.Proc, *
 }
 
 // rootBridge returns the unlocked root bridge, or nil (and stops it) when
-// it is gone or idle for longer than session.admin_unlock.
+// it is gone or idle for longer than session.admin_unlock (0 = never).
 func (s *Server) rootBridge(sess *Session) *bridge.Proc {
 	idle := s.Config().Session.AdminUnlock.Duration
 	sess.mu.Lock()
 	p := sess.root
-	if p != nil && (!p.Alive() || (!p.Busy() && time.Since(sess.rootUsed) > idle)) {
+	if p != nil && (!p.Alive() || (idle > 0 && !p.Busy() && time.Since(sess.rootUsed) > idle)) {
 		sess.root = nil
 		sess.mu.Unlock()
 		go p.Stop()

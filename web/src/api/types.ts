@@ -45,6 +45,8 @@ export interface Session {
   canSudo: boolean;
   /** Epoch milliseconds (normalised from whatever the server sends). */
   unlockedUntil?: number;
+  /** Admin rights last until sign-out (session.admin_unlock = 0). */
+  unlockedForever?: boolean;
 }
 
 export interface DistroInfo {

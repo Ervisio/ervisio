@@ -19,7 +19,7 @@ export function RailItem({ e }: { e: NavEntry }) {
 
 export function Rail() {
   const t = useT('shell');
-  const { host, session, isUnlocked, unlockLeft, lock, signOut } = useSession();
+  const { host, session, isUnlocked, unlockLeft, unlockForever, lock, signOut } = useSession();
   const { main, settings, plugins } = useNav();
   const nav = useNavigate();
   const avRef = useRef<HTMLButtonElement>(null);
@@ -28,7 +28,7 @@ export function Rail() {
   const items: MenuItem[] = [
     { type: 'heading', label: t('user.signedInAs', { user: session?.user ?? '' }) },
     isUnlocked
-      ? { id: 'lock', label: t('sudo.lockNow', { time: formatClock(unlockLeft) }), icon: 'lock', onSelect: () => void lock() }
+      ? { id: 'lock', label: unlockForever ? t('sudo.lockNowForever') : t('sudo.lockNow', { time: formatClock(unlockLeft) }), icon: 'lock', onSelect: () => void lock() }
       : { id: 'unlock', label: t('sudo.unlock'), icon: 'unlock', disabled: session ? !session.canSudo && !session.isAdmin : false, onSelect: () => void requestUnlock().catch(() => undefined) },
     { id: 'settings', label: t('nav.settings'), icon: 'cog', onSelect: () => nav('/settings') },
     { type: 'separator' },

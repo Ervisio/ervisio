@@ -257,6 +257,9 @@ type userInfo struct {
 	IsAdmin       bool     `json:"isAdmin"`
 	CanSudo       bool     `json:"canSudo"`
 	UnlockedUntil *int64   `json:"unlockedUntil,omitempty"`
+	// UnlockedForever is set while unlocked with session.admin_unlock = 0:
+	// admin rights last until sign-out, unlockedUntil is the session end.
+	UnlockedForever bool `json:"unlockedForever,omitempty"`
 }
 
 func (s *Server) info(sess *Session) userInfo {
@@ -269,6 +272,7 @@ func (s *Server) info(sess *Session) userInfo {
 	if until := sess.unlockedUntil(s.Config().Session.AdminUnlock.Duration); !until.IsZero() && time.Now().Before(until) {
 		ms := until.UnixMilli()
 		ui.UnlockedUntil = &ms
+		ui.UnlockedForever = s.Config().Session.AdminUnlock.Duration == 0
 	}
 	ui.IsAdmin = ui.IsRoot || ui.UnlockedUntil != nil
 	return ui
@@ -483,12 +487,16 @@ func (s *Server) handleUnlock(w http.ResponseWriter, r *http.Request, sess *Sess
 		go old.Stop()
 	}
 	s.log.Printf("admin rights unlocked for %q from %s", sess.Account.Name, ip)
-	until := time.Now().Add(cfg.Session.AdminUnlock.Duration).UnixMilli()
-	writeJSON(w, http.StatusOK, map[string]int64{"unlockedUntil": until})
+	idle := cfg.Session.AdminUnlock.Duration
+	writeJSON(w, http.StatusOK, map[string]any{
+		"unlockedUntil":   sess.unlockedUntil(idle).UnixMilli(),
+		"unlockedForever": idle == 0,
+	})
 }
 
 func (s *Server) handleLock(w http.ResponseWriter, r *http.Request, sess *Session) {
 	sess.lock()
+	s.log.Printf("admin rights locked by %q", sess.Account.Name)
 	writeJSON(w, http.StatusOK, struct{}{})
 }
 

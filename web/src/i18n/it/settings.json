@@ -200,7 +200,8 @@
     "1m": "1 minuto",
     "5m": "5 minuti",
     "15m": "15 minuti",
-    "30m": "30 minuti"
+    "30m": "30 minuti",
+    "0s": "Finché non esco"
   },
   "browser": {
     "recent": {

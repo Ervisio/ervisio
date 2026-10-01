@@ -79,7 +79,7 @@ export default function SettingsPage() {
   const srvDisabled = server.state !== 'ready';
   const sv = server.set;
   const durOptions = DURATIONS.map((d) => ({ value: d, label: t(`dur.${d}`) }));
-  const unlockOptions = ['1m', '5m', '15m', '30m'].map((d) => ({ value: d, label: t(`dur.${d}`) }));
+  const unlockOptions = ['1m', '5m', '15m', '30m', '1h', '4h', '0s'].map((d) => ({ value: d, label: t(`dur.${d}`) }));
 
   const groups: GroupDef[] = [
     {

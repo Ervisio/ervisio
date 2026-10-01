@@ -68,6 +68,8 @@ type Proc struct {
 
 	waitOnce sync.Once
 	waited   chan struct{}
+	log      *log.Logger
+	tag      string
 
 	// active counts calls and streams in progress (see Hold).
 	active atomic.Int64
@@ -181,7 +183,7 @@ func (s *Spec) start(cmd *exec.Cmd, tag string, onStderr func(string)) (*Proc, i
 		}
 		_, _ = io.Copy(io.Discard, stderr)
 	}()
-	p := &Proc{cmd: cmd, stdin: stdin, waited: make(chan struct{})}
+	p := &Proc{cmd: cmd, stdin: stdin, waited: make(chan struct{}), log: lg, tag: tag}
 	p.Client = rpc.NewClient(stdout, stdin, lg)
 	go func() {
 		<-p.Client.Done()
@@ -192,7 +194,9 @@ func (s *Spec) start(cmd *exec.Cmd, tag string, onStderr func(string)) (*Proc, i
 
 func (p *Proc) wait() {
 	p.waitOnce.Do(func() {
-		_ = p.cmd.Wait()
+		if err := p.cmd.Wait(); err != nil && p.log != nil {
+			p.log.Printf("[%s] exited: %v", p.tag, err)
+		}
 		close(p.waited)
 	})
 }
