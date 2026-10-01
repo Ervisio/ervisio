@@ -139,5 +139,9 @@
     "errors": "Log: mostra solo gli errori",
     "live": "Log: attiva o disattiva la vista live",
     "all": "Log: mostra tutti i livelli"
+  },
+  "notice": {
+    "error": "Errore in {name}",
+    "errors": "{count} errori in {name}"
   }
 }

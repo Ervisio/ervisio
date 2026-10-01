@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -38,6 +39,10 @@ type Spec struct {
 	// SwitchUser runs the process with the account's credentials. It is
 	// false in dev mode, where the daemon already runs as that user.
 	SwitchUser bool
+	// Dev passes --dev to the bridges (the daemon runs in --dev), and
+	// DevPlugins the daemon's ./plugins folder with --dev-plugins.
+	Dev        bool
+	DevPlugins string
 	// Sudo overrides the sudo binary (tests); "" = sudo from the safe PATH.
 	Sudo   string
 	Logger *log.Logger
@@ -52,7 +57,23 @@ type Proc struct {
 
 	waitOnce sync.Once
 	waited   chan struct{}
+
+	// active counts calls and streams in progress (see Hold).
+	active atomic.Int64
 }
+
+// Hold marks a call or stream in progress on the bridge; the returned
+// function ends it. The daemon never stops an idle root bridge while
+// something holds it, so a long package transaction, an attached root
+// terminal or a big copy is not cut off by the admin idle timeout.
+func (p *Proc) Hold() (release func()) {
+	p.active.Add(1)
+	var once sync.Once
+	return func() { once.Do(func() { p.active.Add(-1) }) }
+}
+
+// Busy reports whether a call or stream holds the bridge.
+func (p *Proc) Busy() bool { return p.active.Load() > 0 }
 
 func (s *Spec) logger() *log.Logger {
 	if s.Logger != nil {
@@ -104,6 +125,12 @@ func (s *Spec) command(name string, args ...string) *exec.Cmd {
 
 func (s *Spec) bridgeArgs(admin bool) []string {
 	args := []string{"--config", s.Config}
+	if s.Dev {
+		args = append(args, "--dev")
+		if s.DevPlugins != "" {
+			args = append(args, "--dev-plugins", s.DevPlugins)
+		}
+	}
 	if admin {
 		args = append([]string{"--admin"}, args...)
 	}

@@ -26,7 +26,9 @@ browser ──HTTPS/WS──▶ linuxadmind (root, one per machine)
 - **Admin rights (sudo model)**: when the user unlocks, linuxadmind starts a second bridge with
   `sudo -S -p '' -- /path/linuxadmin-bridge --admin` *as the user*, writing the password to stdin.
   sudoers decides: if the user may not sudo, unlock fails with `forbidden`. The root bridge is
-  stopped after 5 minutes without admin calls (configurable) or on lock/logout.
+  stopped after 5 minutes without admin calls (configurable) or on lock/logout. Calls and streams
+  in progress on it (a package transaction, an attached root terminal, a copy, a transfer) count
+  as activity: it is never stopped for idleness while one runs, and the 5 minutes restart when it ends.
   If the logged-in user is root, the user bridge already is root and every call is admin.
 - **Root login** is refused unless `allow_root = true` in the config.
 
@@ -35,6 +37,7 @@ browser ──HTTPS/WS──▶ linuxadmind (root, one per machine)
 `linuxadmind --dev` listens on `127.0.0.1:9090` without TLS, does not need root, only lets the
 user running the daemon sign in (PAM still checks the password), spawns the bridge without
 changing uid, and proxies the web app to Vite (`http://127.0.0.1:5173`) unless `--web dist/`.
+It passes `--dev --dev-plugins <cwd>/plugins` to the bridges, so they know about dev mode explicitly.
 
 ## Wire protocols
 

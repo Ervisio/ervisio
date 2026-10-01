@@ -60,11 +60,12 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request, sess *Se
 	}
 	inline := r.URL.Query().Get("inline") == "1"
 	const method = "files.readStream"
-	b, _, e := s.route(r.Context(), sess, method, admin)
+	b, isAdmin, e := s.route(r.Context(), sess, method, admin)
 	if e != nil {
 		writeError(w, e)
 		return
 	}
+	defer sess.hold(b, isAdmin)()
 	st, err := b.Stream(r.Context(), method, map[string]string{"path": p})
 	if err != nil {
 		writeError(w, rpc.ToError(err, false))
@@ -158,6 +159,7 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request, sess *Sess
 		writeError(w, e)
 		return
 	}
+	defer sess.hold(b, isAdmin)()
 	params := map[string]any{"path": p, "size": r.ContentLength, "overwrite": overwrite}
 	st, err := b.Stream(r.Context(), method, params)
 	if err != nil {

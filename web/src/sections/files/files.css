@@ -104,7 +104,7 @@
 .files-fold-t small { color: var(--ink3); font-size: 12px; }
 .files-fold .files-mo { opacity: 0; }
 .files-fold:hover .files-mo { opacity: 1; }
-.is-hid { opacity: 0.55; }
+.files-root .is-hid { opacity: 0.55; }
 .files-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
 .files-fc { border-radius: 18px; background: var(--surface); padding: 8px; cursor: pointer; user-select: none; box-shadow: inset 0 0 0 2px transparent; min-width: 0; }
 .files-fc:hover { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ink3) 35%, transparent); }

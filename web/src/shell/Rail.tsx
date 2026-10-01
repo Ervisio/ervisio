@@ -37,7 +37,7 @@ export function Rail() {
 
   return (
     <nav className="rail" aria-label={t('nav.main')}>
-      <Link to="/" className="rail-distro" aria-label={host?.hostname ?? 'Home'}>
+      <Link to="/" className="rail-distro" aria-label={host?.hostname ?? t('nav.overview')}>
         <span className="lg"><DistroLogo id={host?.distro.id} logo={host?.distro.logo} url={host?.distro.logoUrl} /></span>
         <span className="dn">{host?.hostname ?? ''}</span>
       </Link>

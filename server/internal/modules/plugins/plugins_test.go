@@ -546,10 +546,8 @@ func TestLoadDevNeedsDevMode(t *testing.T) {
 	t.Setenv("HOME", home)
 	dir := filepath.Join(t.TempDir(), "demo")
 	writePlugin(t, dir, goodManifest, map[string]string{"index.js": "x"})
-	if daemonCwd() == "" {
-		if _, err := loadDev(dir); !rpc.IsCode(err, rpc.Forbidden) {
-			t.Fatalf("dev off: %v", err)
-		}
+	if _, err := loadDev(dir); !rpc.IsCode(err, rpc.Forbidden) {
+		t.Fatalf("dev off: %v", err)
 	}
 	os.WriteFile(configmod.Path, []byte("[plugins]\ndev = true\n"), 0o644)
 	info, err := loadDev(dir)
@@ -614,5 +612,56 @@ func TestShippedCatalog(t *testing.T) {
 	m, _ := LoadManifest("../../../../plugins/docker")
 	if m == nil || !sameJSON(c.find("docker").Capabilities, m.Capabilities) {
 		t.Error("docker catalog entry differs from plugins/docker/manifest.json")
+	}
+}
+
+type assetStream struct {
+	events []json.RawMessage
+	data   []byte
+}
+
+func (f *assetStream) Send(v any) error {
+	b, _ := json.Marshal(v)
+	f.events = append(f.events, b)
+	return nil
+}
+func (f *assetStream) SendBytes(b []byte) error      { f.data = append(f.data, b...); return nil }
+func (f *assetStream) Input() <-chan json.RawMessage { return nil }
+
+func TestDevAsset(t *testing.T) {
+	setup(t)
+	DevDirs = nil
+	t.Setenv("HOME", t.TempDir())
+	outside := filepath.Join(t.TempDir(), "secret.txt")
+	os.WriteFile(outside, []byte("secret"), 0o644)
+	dir := filepath.Join(t.TempDir(), "demo")
+	writePlugin(t, dir, goodManifest, map[string]string{"index.js": "export default 1", "assets/a.css": "body{}"})
+	os.Symlink(outside, filepath.Join(dir, "link.txt"))
+
+	get := func(id, file string) (*assetStream, error) {
+		raw, _ := json.Marshal(map[string]string{"id": id, "file": file})
+		s := &assetStream{}
+		return s, devAsset(context.Background(), &rpc.Call{Params: raw}, s)
+	}
+	// Not loaded yet / dev off.
+	if _, err := get("demo", "index.js"); !rpc.IsCode(err, rpc.NotFound) {
+		t.Fatalf("not loaded: %v", err)
+	}
+	DaemonDev = true
+	t.Cleanup(func() { DaemonDev = false })
+	if _, err := loadDev(dir); err != nil {
+		t.Fatal(err)
+	}
+	s, err := get("demo", "assets/a.css")
+	if err != nil || string(s.data) != "body{}" || len(s.events) != 1 {
+		t.Fatalf("%v %q %d", err, s.data, len(s.events))
+	}
+	for _, bad := range []string{"../secret.txt", "/etc/passwd", "link.txt", "assets/../../x", "assets", ""} {
+		if _, err := get("demo", bad); err == nil {
+			t.Errorf("%q served", bad)
+		}
+	}
+	if _, err := get("other", "index.js"); err == nil {
+		t.Error("unknown id served")
 	}
 }

@@ -114,6 +114,9 @@
 .plugins-dev-form .ui-field, .plugins-dev-form > :first-child { flex: 1; min-width: 240px; }
 .plugins-devlist { display: flex; flex-direction: column; gap: 6px; }
 .plugins-devrow { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; background: var(--sunk); }
+.plugins-devrow .plugins-dev-tx { min-width: 0; }
+.plugins-devrow .plugins-dev-tx small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plugins-devrow > .ui-btn { flex: none; }
 
 @media (max-width: 859px) {
   .plugins-bar { padding: 12px 12px 6px; display: grid; grid-template-columns: 1fr auto; }

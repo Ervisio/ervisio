@@ -19,7 +19,7 @@ function logClass(line: string): string {
   return '';
 }
 
-export function TxPanel({ tx, openTerminal }: { tx: TxState; openTerminal(): void }) {
+export function TxPanel({ tx, openTerminal }: { tx: TxState; openTerminal(cmd?: string): void }) {
   const t = useT('software');
   const ref = useRef<HTMLPreElement>(null);
   const stick = useRef(true);
@@ -56,7 +56,7 @@ export function TxPanel({ tx, openTerminal }: { tx: TxState; openTerminal(): voi
       hue="sw"
       footer={
         <div className="sw-tx-ft">
-          <Button icon="terminal" onClick={openTerminal}>{t('openTerminal')}</Button>
+          <Button icon="terminal" onClick={() => openTerminal()}>{t('openTerminal')}</Button>
           {tx.phase === 'running' ? (
             <Button onClick={closePanel}>{t('tx.hide')}</Button>
           ) : (
@@ -127,7 +127,7 @@ export interface PkgTarget {
 const SKIP = new Set(['Name']);
 
 export function PkgPanel({
-  target, update, busy, onClose, onInstall, onRemove, onUpdate, openTerminal,
+  target, update, busy, onClose, onInstall, onRemove, onUpdate, openTerminal, aurHelper = 'yay',
 }: {
   target: PkgTarget | null;
   update?: Update;
@@ -136,7 +136,8 @@ export function PkgPanel({
   onInstall(t: PkgTarget, d: Detail | null): void;
   onRemove(t: PkgTarget): void;
   onUpdate(u: Update): void;
-  openTerminal(): void;
+  openTerminal(cmd?: string): void;
+  aurHelper?: string;
 }) {
   const t = useT('software');
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -170,7 +171,7 @@ export function PkgPanel({
           <div className="sw-tx-ft">
             {update ? (
               update.kind === 'aur' ? (
-                <Button icon="terminal" onClick={openTerminal}>{t('terminal')}</Button>
+                <Button icon="terminal" onClick={() => openTerminal(`${aurHelper} -S ${target.name}`)}>{t('terminal')}</Button>
               ) : (
                 <Button variant="primary" icon="download" disabled={busy} onClick={() => onUpdate(update)}>{t('update')}</Button>
               )
@@ -178,7 +179,7 @@ export function PkgPanel({
             {installed ? (
               <Button variant="danger" icon="trash" disabled={busy} onClick={() => onRemove(target)}>{t('remove.button')}</Button>
             ) : target.kind === 'aur' ? (
-              <Button icon="terminal" onClick={openTerminal}>{t('terminal')}</Button>
+              <Button icon="terminal" onClick={() => openTerminal(`${aurHelper} -S ${target.name}`)}>{t('terminal')}</Button>
             ) : (
               <Button variant="primary" icon="download" disabled={busy} onClick={() => onInstall(target, detail)}>{t('install.button')}</Button>
             )}

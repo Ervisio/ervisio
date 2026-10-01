@@ -22,6 +22,9 @@ interface Props {
   /** The session ended (shell exited) or no longer exists. */
   onEnded(): void;
   onClosePane(): void;
+  /** Typed at the prompt (not run) once the session shows its first output. */
+  initialInput?: string;
+  onInitialInputUsed?(): void;
 }
 
 const enc = new TextEncoder();
@@ -49,6 +52,15 @@ const TerminalView = forwardRef<TermHandle, Props>(function TerminalView(props, 
   const [status, setStatus] = useState<'ok' | 'reconnecting' | 'exited' | 'gone'>('ok');
   const [exitCode, setExitCode] = useState(0);
   const [tick, setTick] = useState(0);
+  const gotData = useRef(false);
+  // initialInput set after the first output arrived: type it now.
+  const { initialInput } = props;
+  useEffect(() => {
+    if (!initialInput || !gotData.current || !termRef.current) return;
+    live.current.onInitialInputUsed?.();
+    termRef.current.paste(initialInput);
+    termRef.current.focus();
+  }, [initialInput]);
 
   const sendRaw = (s: string) => {
     if (!s) return;
@@ -119,7 +131,21 @@ const TerminalView = forwardRef<TermHandle, Props>(function TerminalView(props, 
           onData: (d) => {
             retry = 0;
             setStatus((s) => (s === 'reconnecting' ? 'ok' : s));
-            if (d instanceof Uint8Array) term.write(d);
+            if (d instanceof Uint8Array) {
+              term.write(d);
+              gotData.current = true;
+              const init = live.current.initialInput;
+              if (init) {
+                live.current.onInitialInputUsed?.();
+                // after the prompt has been drawn
+                window.setTimeout(() => {
+                  if (!closed) {
+                    term.paste(init);
+                    term.focus();
+                  }
+                }, 120);
+              }
+            }
             else if (d && d.type === 'exit') {
               ended = true;
               setExitCode(d.code ?? 0);

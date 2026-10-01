@@ -1,3 +1,4 @@
+import { formatTime } from '../../lib/format';
 import type { FEntry, RawEntry, SortState } from './types';
 import { isDirLike } from './types';
 
@@ -53,7 +54,7 @@ export function formatWhen(ms: number, lang: string): string {
   if (!ms) return '';
   const d = new Date(ms);
   const now = new Date();
-  const time = d.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' });
+  const time = formatTime(d, { lang });
   if (d.toDateString() === now.toDateString()) return time;
   const y = new Date(now);
   y.setDate(now.getDate() - 1);

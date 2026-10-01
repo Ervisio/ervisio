@@ -1,3 +1,4 @@
+import { clockOptions, getRegion } from '../../lib/format';
 import { useEffect, useMemo, useState } from 'react';
 import { ApiError, call } from '../../api';
 import { useI18n, useT } from '../../i18n';
@@ -40,7 +41,8 @@ export function HistoryTab({ reloadKey }: { reloadKey: number }) {
   }, [entries]);
 
   const day = useMemo(() => new Intl.DateTimeFormat(lang, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }), [lang]);
-  const clock = useMemo(() => new Intl.DateTimeFormat(lang, { hour: '2-digit', minute: '2-digit' }), [lang]);
+  const hour12 = getRegion().hour12;
+  const clock = useMemo(() => new Intl.DateTimeFormat(lang, clockOptions()), [lang, hour12]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!entries) return <div className="sw-body"><Skeleton lines={6} height={54} /></div>;
   if (groups.length === 0) {

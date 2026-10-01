@@ -55,7 +55,7 @@ func (s *Server) rootBridge(sess *Session) *bridge.Proc {
 	idle := s.Config().Session.AdminUnlock.Duration
 	sess.mu.Lock()
 	p := sess.root
-	if p != nil && (!p.Alive() || time.Since(sess.rootUsed) > idle) {
+	if p != nil && (!p.Alive() || (!p.Busy() && time.Since(sess.rootUsed) > idle)) {
 		sess.root = nil
 		sess.mu.Unlock()
 		go p.Stop()
@@ -75,6 +75,20 @@ func (sess *Session) touchAdmin() {
 		sess.rootUsed = time.Now()
 	}
 	sess.mu.Unlock()
+}
+
+// hold marks a call or stream in progress on p (when it is the root bridge,
+// so the admin idle timeout does not stop it meanwhile). The release
+// function records admin activity at the end.
+func (sess *Session) hold(p *bridge.Proc, isAdmin bool) func() {
+	if !isAdmin {
+		return func() {}
+	}
+	release := p.Hold()
+	return func() {
+		release()
+		sess.touchAdmin()
+	}
 }
 
 // route picks the bridge for a call: the root bridge when admin is asked
@@ -121,11 +135,12 @@ func (s *Server) handleRPC(w http.ResponseWriter, r *http.Request, sess *Session
 		writeError(w, e)
 		return
 	}
-	p, _, e := s.route(r.Context(), sess, req.Method, req.Admin)
+	p, isAdmin, e := s.route(r.Context(), sess, req.Method, req.Admin)
 	if e != nil {
 		writeError(w, e)
 		return
 	}
+	defer sess.hold(p, isAdmin)()
 	res, err := p.Call(r.Context(), req.Method, req.Params)
 	if err != nil {
 		if r.Context().Err() != nil {

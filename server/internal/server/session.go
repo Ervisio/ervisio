@@ -50,6 +50,10 @@ func (s *Session) unlockedUntil(idle time.Duration) time.Time {
 	if s.root == nil || !s.root.Alive() {
 		return time.Time{}
 	}
+	if s.root.Busy() {
+		// Kept alive while something runs; report a full window from now.
+		return time.Now().Add(idle)
+	}
 	return s.rootUsed.Add(idle)
 }
 
@@ -174,7 +178,7 @@ func (st *store) expire(now time.Time, timeout, adminIdle time.Duration) {
 	for k, s := range st.sessions {
 		s.mu.Lock()
 		idle := now.Sub(s.lastSeen)
-		rootIdle := s.root != nil && (now.Sub(s.rootUsed) > adminIdle || !s.root.Alive())
+		rootIdle := s.root != nil && ((!s.root.Busy() && now.Sub(s.rootUsed) > adminIdle) || !s.root.Alive())
 		s.mu.Unlock()
 		if idle > timeout {
 			delete(st.sessions, k)

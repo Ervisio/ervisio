@@ -30,5 +30,7 @@ export const SECTIONS: SectionDef[] = [
 ];
 
 export const sectionById = (id: string) => SECTIONS.find((s) => s.id === id);
-export { registerPaletteActions, usePaletteActions, useAllPaletteActions, setRailBadge, useRailBadge, useRailBadges, useSectionBadgeHooks } from './registry';
+export { registerPaletteActions, usePaletteActions, useAllPaletteActions, setRailBadge, useRailBadge, useRailBadges, useSectionBadgeHooks, useSectionBackgroundHooks } from './registry';
 export type { PaletteAction, RailBadge } from './registry';
+export { useFocusMode, setFocusMode } from '../shell/focus';
+export { notify, dismissNotice, type Notice, type NoticeInput } from '../shell/notifications';

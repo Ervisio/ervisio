@@ -131,6 +131,8 @@ td .sw-nm b { display: inline; }
   .sw-tbar .sw-sp { display: none; }
   .sw-tbar .sw-filter { width: 100%; flex: 1 1 100%; }
   .sw-body--table .ui-table-wrap { max-height: none; }
+  /* phones: checkbox, package, source (version and the rest are in the side panel) */
+  .sw-body--table .ui-table th:nth-child(3), .sw-body--table .ui-table td:nth-child(3),
   .sw-body--table .ui-table th:nth-child(n+5), .sw-body--table .ui-table td:nth-child(n+5) { display: none; }
 }
 

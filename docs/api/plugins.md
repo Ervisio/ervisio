@@ -9,7 +9,7 @@ SDK in `web/PLUGIN-SDK.md`). Error codes follow `docs/ARCHITECTURE.md`.
 |---|---|---|
 | `system` | `/usr/share/linuxadmin/plugins/<id>` | packaged, removed by the package manager |
 | `installed` | `/var/lib/linuxadmin/plugins/<id>` | from Browse / `plugins.install`, removable |
-| `dev` | `./plugins` of the daemon's working directory, plus folders from `plugins.loadDev` | only when `plugins.dev = true` or the daemon runs in `--dev` from the repo |
+| `dev` | `./plugins` of the daemon's working directory (daemon `--dev` only, passed to the bridge as `--dev --dev-plugins <dir>`), plus folders from `plugins.loadDev` | loaded folders only when `plugins.dev = true` or the daemon runs in `--dev` |
 
 The folder name must equal the manifest `id`. On duplicate ids the order is dev, system, installed.
 Enabled state: `/var/lib/linuxadmin/plugins-state.json` (`{"enabled":{"docker":false}}`, missing = enabled).
@@ -120,8 +120,15 @@ Same params and checks. Events: `{"stream":"stdout"|"stderr","line":"…"}` per 
 
 ### `plugins.loadDev` (user)
 Params `{"path":"~/projects/my-plugin"}` → `{path,id,name,linked,note?}`. Allowed only in dev mode (`plugins.dev = true` or daemon `--dev`),
-else `forbidden`. Validates the folder, remembers it in `~/.config/linuxadmin/plugins-dev.json` and, in dev, symlinks it into the
-daemon's `./plugins` so `/plugins/<id>/…` is served. `conflict` when the id exists as a system/installed plugin.
+else `forbidden`. Validates the folder and remembers it in `~/.config/linuxadmin/plugins-dev.json`; `linked` is always true
+(kept for older clients). `conflict` when the id exists as a system/installed plugin. Works in production too (with `plugins.dev = true`):
+the daemon serves `/plugins/<id>/…` of a loaded folder through `plugins.devAsset` on the session's user bridge (see below).
 
 ### `plugins.unloadDev` (user)
-Params `{"path"}` → `{path}`. Forgets the folder and removes the symlink made by `loadDev`.
+Params `{"path"}` → `{path}`. Forgets the folder.
+
+### `plugins.devAsset` (stream, user; used by the daemon only)
+Params `{"id","file"}`. When `/plugins/<id>/<file>` is not found in the packaged/installed (and, in `--dev`, the repo) folders,
+linuxadmind opens this stream on the requesting session's user bridge. The bridge looks the id up among the folders that user loaded
+with `plugins.loadDev` (developer mode must be on), opens the file through `os.Root` (no `..`, absolute paths or symlinks out of the
+folder) with the user's own rights, and sends `{"name","size","mime"}` then base64 chunks (16 MiB max). Any failure is `not_found`.

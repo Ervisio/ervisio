@@ -160,8 +160,10 @@ func (wc *wsConn) open(f *wsFrame) {
 		wc.sendError(f.Ch, e)
 		return
 	}
+	release := wc.sess.hold(p, isAdmin)
 	st, err := p.Stream(wc.ctx, f.Method, f.Params)
 	if err != nil {
+		release()
 		wc.sendError(f.Ch, rpc.ToError(err, false))
 		return
 	}
@@ -181,6 +183,7 @@ func (wc *wsConn) open(f *wsFrame) {
 		}
 	}()
 	go func() {
+		defer release()
 		defer st.Close()
 		for ev := range st.Events() {
 			wc.send(&wsFrame{Ch: id, Op: "data", Data: ev.Data, B64: ev.B64})

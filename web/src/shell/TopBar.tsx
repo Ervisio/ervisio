@@ -21,10 +21,15 @@ export function TopBar({ onSearch }: { onSearch(): void }) {
   const hostRef = useRef<HTMLButtonElement>(null);
   const [pop, setPop] = useState<null | { kind: 'bell' | 'host'; rect: DOMRect }>(null);
 
+  // Unread notices keep their marker while the list is open; they become read when it closes.
+  const close = () => {
+    if (pop?.kind === 'bell') markAllRead();
+    setPop(null);
+  };
   const open = (kind: 'bell' | 'host', el: HTMLElement | null) => {
     if (!el) return;
-    if (pop?.kind === kind) return setPop(null);
-    if (kind === 'bell') markAllRead();
+    if (pop?.kind === kind) return close();
+    if (pop?.kind === 'bell') markAllRead();
     setPop({ kind, rect: el.getBoundingClientRect() });
   };
 
@@ -56,13 +61,13 @@ export function TopBar({ onSearch }: { onSearch(): void }) {
         variant="secondary"
         onClick={toggleDark}
       />
-      <button ref={bellRef} type="button" className="top-ib" aria-label={t('notifications.title')} aria-haspopup="dialog" aria-expanded={pop?.kind === 'bell'} onClick={() => open('bell', bellRef.current)}>
+      <button ref={bellRef} type="button" className="top-ib" aria-label={unread ? t('notifications.unread', { count: unread }) : t('notifications.title')} aria-haspopup="dialog" aria-expanded={pop?.kind === 'bell'} onClick={() => open('bell', bellRef.current)}>
         <Icon name="bell" />
         {unread > 0 && <span className="dot" />}
       </button>
 
       {pop?.kind === 'bell' && (
-        <Popover anchor={pop.rect} onClose={() => setPop(null)} label={t('notifications.title')}>
+        <Popover anchor={pop.rect} onClose={close} label={t('notifications.title')}>
           <div className="pop-hd">
             <span className="grow">{t('notifications.title')}</span>
             {notices.length > 0 && <button type="button" className="ui-toast-act" onClick={clearNotices}>{t('notifications.clear')}</button>}
@@ -70,16 +75,34 @@ export function TopBar({ onSearch }: { onSearch(): void }) {
           {notices.length === 0 ? (
             <div className="pop-note">{t('notifications.empty')}</div>
           ) : (
-            notices.map((n) => (
-              <div key={n.id} className={`note ${n.tone ?? ''}`}>
-                <span className="ic"><Icon name={n.icon ?? (n.tone === 'err' ? 'alert' : n.tone === 'ok' ? 'check' : 'info')} /></span>
-                <div>
-                  <b>{n.title}</b>
-                  {n.detail && <small>{n.detail}</small>}
-                  <small>{relativeTime(n.at, lang)}</small>
-                </div>
-              </div>
-            ))
+            notices.map((n) => {
+              const body = (
+                <>
+                  <span className="ic"><Icon name={n.icon ?? (n.tone === 'err' ? 'alert' : n.tone === 'ok' ? 'check' : 'info')} /></span>
+                  <div className="note-tx">
+                    <b>{n.title}</b>
+                    {n.detail && <small className="note-detail">{n.detail}</small>}
+                    <small>{relativeTime(n.at, lang)}</small>
+                  </div>
+                  {!n.read && <span className="note-unread" aria-hidden />}
+                </>
+              );
+              return n.to ? (
+                <button
+                  key={n.id}
+                  type="button"
+                  className={`note note--link ${n.tone ?? ''}`}
+                  onClick={() => {
+                    setPop(null);
+                    nav(n.to!);
+                  }}
+                >
+                  {body}
+                </button>
+              ) : (
+                <div key={n.id} className={`note ${n.tone ?? ''}`}>{body}</div>
+              );
+            })
           )}
         </Popover>
       )}

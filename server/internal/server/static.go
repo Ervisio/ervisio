@@ -1,6 +1,9 @@
 package server
 
 import (
+	"bytes"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"io/fs"
 	"log"
@@ -11,6 +14,7 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
 )
@@ -124,7 +128,70 @@ func (s *Server) handlePlugin(w http.ResponseWriter, r *http.Request, sess *Sess
 		root.Close()
 		return
 	}
-	writeError(w, errNotFound)
+	s.serveDevPlugin(w, r, sess, id, file)
+}
+
+// maxDevAsset matches plugins.MaxDevAsset (the bridge refuses bigger files).
+const maxDevAsset = 16 << 20
+
+// serveDevPlugin serves a file of a folder the user loaded with
+// plugins.loadDev. The daemon keeps no list of those folders: it asks the
+// session's own user bridge (plugins.devAsset), which reads the file with
+// the user's rights and confines it to the registered folder. Without a
+// matching folder (or with developer mode off) the answer is 404.
+func (s *Server) serveDevPlugin(w http.ResponseWriter, r *http.Request, sess *Session, id, file string) {
+	const method = "plugins.devAsset"
+	b, e := s.userBridge(r.Context(), sess)
+	if e != nil {
+		writeError(w, e)
+		return
+	}
+	if _, ok := b.Level(method); !ok {
+		writeError(w, errNotFound)
+		return
+	}
+	st, err := b.Stream(r.Context(), method, map[string]string{"id": id, "file": file})
+	if err != nil {
+		writeError(w, errNotFound)
+		return
+	}
+	defer st.Close()
+	var meta fileMeta
+	var buf bytes.Buffer
+	first := true
+	for ev := range st.Events() {
+		if first {
+			first = false
+			if ev.B64 || json.Unmarshal(ev.Data, &meta) != nil || meta.Size < 0 || meta.Size > maxDevAsset {
+				writeError(w, errNotFound)
+				return
+			}
+			buf.Grow(int(meta.Size))
+			continue
+		}
+		var b64 string
+		if !ev.B64 || json.Unmarshal(ev.Data, &b64) != nil {
+			writeError(w, errNotFound)
+			return
+		}
+		chunk, err := base64.StdEncoding.DecodeString(b64)
+		if err != nil || int64(buf.Len()+len(chunk)) > meta.Size {
+			writeError(w, errNotFound)
+			return
+		}
+		buf.Write(chunk)
+	}
+	if first || st.Err() != nil || int64(buf.Len()) != meta.Size {
+		writeError(w, errNotFound)
+		return
+	}
+	if meta.Mime != "" {
+		w.Header().Set("Content-Type", meta.Mime)
+	}
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Security-Policy", appCSP)
+	http.ServeContent(w, r, path.Base(file), time.Time{}, bytes.NewReader(buf.Bytes()))
 }
 
 // redirectHandler answers plain-HTTP requests on the HTTPS port.

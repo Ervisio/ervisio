@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ApiError, downloadUrl, usePrefs, useSession } from '../../api';
 import { useT } from '../../i18n';
 import { Button, ConfirmDialog, Dialog, Icon, IconButton, Menu, Sheet, toast, type MenuItem } from '../../ui';
@@ -94,6 +95,42 @@ export default function FilesPage() {
       setActiveId(r.active);
     }
   }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ---------- ?path=/some/dir or ?path=/some/file (links from Overview and Logs) ---------- */
+  const [params, setParams] = useSearchParams();
+  const linkPath = params.get('path');
+  useEffect(() => {
+    if (!ready || !linkPath || !linkPath.startsWith('/')) return;
+    let live = true;
+    const open = (dir: string, select?: string) => {
+      if (!live) return;
+      const nt = newTab(home, dir);
+      setTabs((ts) => {
+        const cur = ts.find((x) => x.left.loc === dir && !x.split);
+        if (cur) {
+          setActiveId(cur.id);
+          return ts;
+        }
+        setActiveId(nt.id);
+        return [...ts, nt].slice(-12);
+      });
+      setAct('L');
+      setQuery({ L: '', R: '' });
+      setSel({ L: select ? new Set([select]) : none, R: none });
+      setParams((p) => {
+        const n = new URLSearchParams(p);
+        n.delete('path');
+        return n;
+      }, { replace: true });
+    };
+    fcall<FEntry>('files.stat', { path: linkPath }).then(
+      (e) => (isDirLike(e) ? open(e.path || linkPath) : open(dirname(linkPath), linkPath)),
+      () => open(dirname(linkPath), linkPath),
+    );
+    return () => {
+      live = false;
+    };
+  }, [ready, linkPath]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!restored.current) return;

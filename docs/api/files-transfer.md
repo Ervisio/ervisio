@@ -3,8 +3,8 @@
 linuxadmind implements `GET /api/files/download` and `POST /api/files/upload` by streaming
 to/from two **bridge stream methods** that the Files section implements in
 `server/internal/modules/files`. Both are `rpc.User` level (the daemon sends them to the root
-bridge when the request has `admin=1`). A reference implementation used by the daemon tests is
-in `server/internal/server/testdata/fakebridge/main.go`.
+bridge when the request has `admin=1`). The daemon tests (`server/internal/server/files_test.go`)
+exercise them end to end through the real bridge.
 
 Flow control is handled by the rpc layer (`Stream.Send` blocks while the window is full), so
 handlers just loop.

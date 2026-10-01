@@ -6,7 +6,7 @@ import { Badge, Button, Chip, DropdownMenu, EmptyState, Icon, IconButton, Input,
 import { useRailBadge } from '../index';
 import { bootMode, short, stateKey, stateTone } from './helpers';
 import { UnitPanel } from './UnitPanel';
-import { publishFailed, publishRunning } from './store';
+import { publishRunning, publishSummary } from './store';
 import type { Action, FailedUnit, PanelTab, Summary, Unit, UnitKind } from './types';
 import { PURPOSES } from './types';
 import { useActions } from './useActions';
@@ -14,6 +14,7 @@ import { formatBytes, relativeTime } from '../../lib/format';
 import './services.css';
 
 type Tab = 'all' | 'running' | 'failed' | 'stopped' | 'timers' | 'sockets';
+const TAB_IDS: Tab[] = ['all', 'running', 'failed', 'stopped', 'timers', 'sockets'];
 type Purpose = 'all' | (typeof PURPOSES)[number];
 const PURPOSE_HUE = { web: 'term', containers: 'plg', system: 'ov' } as const;
 
@@ -29,10 +30,16 @@ export default function ServicesPage() {
   const { prefs, set: setPref } = usePrefs();
   const view: 'table' | 'cards' = prefs['services.view'] === 'cards' ? 'cards' : 'table';
 
-  const selected = params.get('unit');
+  // ?unit=nginx or ?unit=nginx.service (links from Overview / Logs); ?state=failed|running|… picks the tab.
+  const unitParam = params.get('unit');
+  const selected = unitParam ? (/\.[a-z]+$/.test(unitParam) ? unitParam : `${unitParam}.service`) : null;
   const panelTab = (params.get('tab') as PanelTab | null) ?? 'info';
 
-  const [tab, setTab] = useState<Tab>('all');
+  const stateParam = params.get('state');
+  const [tab, setTab] = useState<Tab>(() => (TAB_IDS.includes(stateParam as Tab) ? (stateParam as Tab) : 'all'));
+  useEffect(() => {
+    if (TAB_IDS.includes(stateParam as Tab)) setTab(stateParam as Tab);
+  }, [stateParam]);
   const [purpose, setPurpose] = useState<Purpose>('all');
   const [q, setQ] = useState('');
   const kind = kindOf(tab);
@@ -48,7 +55,7 @@ export default function ServicesPage() {
     try {
       const s = await call<Summary>('services.summary');
       setSummary(s);
-      publishFailed(s.failed.length);
+      publishSummary(s);
     } catch (e) {
       if (e instanceof ApiError) setError(e);
     }

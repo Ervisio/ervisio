@@ -69,22 +69,25 @@ func main() {
 		}
 	}
 	pluginDirs := []string{brand.PackagedPluginsDir, brand.InstalledPluginsDir}
+	devPlugins := ""
 	if *dev {
 		if wd, err := os.Getwd(); err == nil {
-			pluginDirs = append([]string{filepath.Join(wd, "plugins")}, pluginDirs...)
+			devPlugins = filepath.Join(wd, "plugins")
+			pluginDirs = append([]string{devPlugins}, pluginDirs...)
 		}
 	}
 
 	srv, err := server.New(server.Options{
-		ConfigPath: cfgAbs,
-		Dev:        *dev,
-		NoAuth:     *noAuth,
-		Listen:     *listen,
-		WebDir:     webDir,
-		ViteURL:    *vite,
-		Bridge:     bp,
-		PluginDirs: pluginDirs,
-		Logger:     log.Default(),
+		ConfigPath:    cfgAbs,
+		Dev:           *dev,
+		NoAuth:        *noAuth,
+		Listen:        *listen,
+		WebDir:        webDir,
+		ViteURL:       *vite,
+		Bridge:        bp,
+		PluginDirs:    pluginDirs,
+		DevPluginsDir: devPlugins,
+		Logger:        log.Default(),
 	})
 	if err != nil {
 		log.Fatal(err)

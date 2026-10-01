@@ -103,3 +103,20 @@ func TestClassifySudo(t *testing.T) {
 		t.Fatal("classification")
 	}
 }
+
+func TestHold(t *testing.T) {
+	p := &Proc{}
+	if p.Busy() {
+		t.Fatal("new proc busy")
+	}
+	r1, r2 := p.Hold(), p.Hold()
+	r1()
+	r1() // idempotent
+	if !p.Busy() {
+		t.Fatal("one hold left")
+	}
+	r2()
+	if p.Busy() {
+		t.Fatal("released")
+	}
+}

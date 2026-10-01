@@ -9,17 +9,15 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestFileTransfer(t *testing.T) {
-	bridgeBin := filepath.Join(t.TempDir(), "fakebridge")
-	if b, err := exec.Command("go", "build", "-o", bridgeBin, "./testdata/fakebridge").CombinedOutput(); err != nil {
-		t.Fatalf("build: %v\n%s", err, b)
-	}
+	// The real bridge: files.readStream / files.writeStream live in
+	// internal/modules/files.
+	bridgeBin := buildBridge(t)
 	srv, err := New(Options{ConfigPath: filepath.Join(t.TempDir(), "c.conf"), Dev: true, NoAuth: true,
 		WebDir: t.TempDir(), Bridge: bridgeBin, Logger: log.New(io.Discard, "", 0)})
 	if err != nil {

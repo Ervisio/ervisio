@@ -1,3 +1,4 @@
+import { formatTime, getRegion } from '../../lib/format';
 import { LEVELS, type Level, type Watcher, type WatchFormat } from './types';
 
 export type RangeId = '15m' | '1h' | '24h' | '7d' | 'custom';
@@ -88,6 +89,7 @@ const p2 = (n: number) => String(n).padStart(2, '0');
 
 export function fmtClock(ts: number, ms = true): string {
   const d = new Date(ts);
+  if (getRegion().hour12) return formatTime(d, { seconds: true, ms });
   const base = `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
   return ms ? `${base}.${String(d.getMilliseconds()).padStart(3, '0')}` : base;
 }
@@ -103,8 +105,8 @@ export function fmtFull(ts: number, lang: string): string {
 }
 
 export function fmtAxis(ts: number, span: number, lang: string): string {
-  if (span > 36 * 3_600_000) return `${fmtDay(ts, lang)} ${p2(new Date(ts).getHours())}:00`;
-  return fmtClock(ts, false).slice(0, 5);
+  if (span > 36 * 3_600_000) return getRegion().hour12 ? `${fmtDay(ts, lang)} ${formatTime(ts)}` : `${fmtDay(ts, lang)} ${p2(new Date(ts).getHours())}:00`;
+  return getRegion().hour12 ? formatTime(ts) : fmtClock(ts, false).slice(0, 5);
 }
 
 export function toLocalInput(ms: number): string {

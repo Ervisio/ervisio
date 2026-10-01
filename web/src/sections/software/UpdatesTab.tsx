@@ -10,7 +10,7 @@ import type { Update } from './types';
 const FOLD = 6;
 
 interface Props {
-  actions: { busy: boolean; updateAll(): void; updateSome(list: Update[]): void; openTerminal(): void };
+  actions: { busy: boolean; updateAll(): void; updateSome(list: Update[]): void; openTerminal(cmd?: string): void };
 }
 
 export function UpdatesTab({ actions }: Props) {
@@ -126,7 +126,7 @@ export function UpdatesTab({ actions }: Props) {
               <div>{t('aur.warning')}</div>
               <small>{t('aur.terminal', { helper: summary?.aurHelper || 'yay' })}</small>
             </div>
-            <Button size="sm" icon="terminal" onClick={actions.openTerminal}>{t('openTerminal')}</Button>
+            <Button size="sm" icon="terminal" onClick={() => actions.openTerminal(`${summary?.aurHelper || 'yay'} -Sua`)}>{t('openTerminal')}</Button>
           </div>
         )}
         {shown.map((u) => row(u, id === 'aur'))}

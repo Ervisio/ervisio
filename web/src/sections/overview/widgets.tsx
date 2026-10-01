@@ -1,3 +1,4 @@
+import { formatTime } from '../../lib/format';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ApiError, call, stream, useSession } from '../../api';
@@ -289,7 +290,7 @@ function Machine({ w }: { w: Widget; ctx: WidgetCtx }) {
     const up = Math.max(0, Date.now() / 1000 - h.bootTime);
     const started = new Date(h.bootTime * 1000);
     const sameDay = started.toDateString() === new Date().toDateString();
-    const clock = started.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' });
+    const clock = formatTime(started, { lang });
     rows.push(
       { icon: 'server', title: h.distro.prettyName || h.distro.name, sub: t('machine.kernel', { kernel: h.kernel, arch: h.arch }) },
       { icon: 'cpu', title: h.cpu.model.replace(/\((R|TM)\)/g, '').replace(/\s+/g, ' ').trim() || t('machine.cpu'), sub: t('machine.cores', { cores: h.cpu.cores, threads: h.cpu.threads, mem: bytesStr(h.memoryTotal, lang) }) },

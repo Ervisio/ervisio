@@ -89,6 +89,8 @@ func Register(r *rpc.Registry) {
 		return loadDev(p.Path)
 	})
 
+	r.Stream("plugins.devAsset", rpc.User, devAsset)
+
 	r.Handle("plugins.unloadDev", rpc.User, func(ctx context.Context, c *rpc.Call) (any, error) {
 		var p struct {
 			Path string `json:"path"`
@@ -102,9 +104,11 @@ func Register(r *rpc.Registry) {
 
 // DevInfo is the result of plugins.loadDev.
 type DevInfo struct {
-	Path   string `json:"path"`
-	ID     string `json:"id"`
-	Name   string `json:"name"`
+	Path string `json:"path"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Linked is always true: the daemon serves the folder's files at
+	// /plugins/<id>/ (kept for older clients).
 	Linked bool   `json:"linked"`
 	Note   string `json:"note,omitempty"`
 }
@@ -150,24 +154,9 @@ func loadDev(raw string) (*DevInfo, error) {
 			return nil, rpc.Errorf(rpc.Internal, "Could not remember the folder: %v", cleanErr(err))
 		}
 	}
-	info := &DevInfo{Path: dir, ID: m.ID, Name: m.Name}
-	// The daemon serves /plugins/<id>/ from fixed folders. In dev, link the folder into the first one.
-	if dd := devDirs(pol); len(dd) > 0 {
-		link := filepath.Join(dd[0], m.ID)
-		if filepath.Clean(link) == dir {
-			info.Linked = true
-		} else if _, err := os.Lstat(link); err == nil {
-			if t, err := os.Readlink(link); err == nil && t == dir {
-				info.Linked = true
-			} else {
-				info.Note = link + " already exists, so the folder is not linked into the dev plugins folder."
-			}
-		} else if err := os.Symlink(dir, link); err == nil {
-			info.Linked = true
-		} else {
-			info.Note = "Could not link the folder into " + dd[0] + ": " + cleanErr(err)
-		}
-	}
+	// The daemon serves /plugins/<id>/… of loaded folders through
+	// plugins.devAsset on the user's own bridge, so nothing is linked.
+	info := &DevInfo{Path: dir, ID: m.ID, Name: m.Name, Linked: true}
 	return info, nil
 }
 
@@ -186,14 +175,6 @@ func unloadDev(raw string) (any, error) {
 	st.Folders = out
 	if err := saveDev(st); err != nil {
 		return nil, rpc.Errorf(rpc.Internal, "Could not save the folder list: %v", cleanErr(err))
-	}
-	for _, d := range devDirs(readPolicy()) {
-		if m, err := LoadManifest(dir); err == nil {
-			l := filepath.Join(d, m.ID)
-			if t, err := os.Readlink(l); err == nil && t == dir {
-				_ = os.Remove(l)
-			}
-		}
 	}
 	return map[string]any{"path": dir}, nil
 }

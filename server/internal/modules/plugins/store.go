@@ -30,8 +30,14 @@ var (
 	InstalledDir   = brand.InstalledPluginsDir
 	StatePath      = "/var/lib/" + brand.Slug + "/plugins-state.json"
 	CatalogURLFile = brand.ConfigDir + "/plugins-catalog.url"
-	// DevDirs overrides the automatic dev folder detection (tests).
+	// DevDirs overrides the dev folder list (tests).
 	DevDirs []string
+	// DaemonDev is set by the bridge's --dev flag: the daemon runs in
+	// --dev, so plugins.loadDev is allowed without plugins.dev.
+	DaemonDev bool
+	// DaemonPluginsDir is the daemon's ./plugins folder in --dev (bridge
+	// flag --dev-plugins), scanned as a dev location.
+	DaemonPluginsDir string
 	// Keys are the trusted signing keys.
 	Keys = func() []ed25519.PublicKey { return TrustedKeys }
 )
@@ -63,53 +69,21 @@ func readPolicy() policy {
 	return policy{AllowUnsigned: c.Plugins.AllowUnsigned, Dev: c.Plugins.Dev}
 }
 
-// devDirs returns the folders scanned as "dev" plugin locations: ./plugins of
-// the daemon's working directory when it runs in dev mode from the repository
-// (we can read its cwd), and ./plugins of ours when plugins.dev is true.
+// devDirs returns the folders scanned as "dev" plugin locations: the
+// daemon's ./plugins when it runs in --dev (passed explicitly to the bridge).
 func devDirs(p policy) []string {
 	if DevDirs != nil {
 		return DevDirs
 	}
-	var dirs []string
-	if cwd := daemonCwd(); cwd != "" {
-		dirs = append(dirs, filepath.Join(cwd, "plugins"))
+	if DaemonDev && DaemonPluginsDir != "" && filepath.IsAbs(DaemonPluginsDir) {
+		return []string{filepath.Clean(DaemonPluginsDir)}
 	}
-	if p.Dev {
-		if wd, err := os.Getwd(); err == nil {
-			dirs = append(dirs, filepath.Join(wd, "plugins"))
-		}
-	}
-	return dedupe(dirs)
+	return nil
 }
 
-func dedupe(in []string) []string {
-	seen := map[string]bool{}
-	var out []string
-	for _, d := range in {
-		if !seen[d] {
-			seen[d] = true
-			out = append(out, d)
-		}
-	}
-	return out
-}
-
-// daemonCwd reads the working directory of the parent process (the daemon). It
-// only works when the daemon runs as the same user, which is dev mode.
-func daemonCwd() string {
-	p, err := os.Readlink("/proc/" + strconv.Itoa(os.Getppid()) + "/cwd")
-	if err != nil || !filepath.IsAbs(p) {
-		return ""
-	}
-	exe, err := os.Readlink("/proc/" + strconv.Itoa(os.Getppid()) + "/exe")
-	if err != nil || !strings.Contains(filepath.Base(exe), brand.DaemonBinary) {
-		return ""
-	}
-	return p
-}
-
-// devEnabled says whether plugins.loadDev is allowed.
-func devEnabled(p policy) bool { return p.Dev || DevDirs != nil || daemonCwd() != "" }
+// devEnabled says whether plugins.loadDev is allowed: plugins.dev = true in
+// the configuration, or a daemon in --dev.
+func devEnabled(p policy) bool { return p.Dev || DevDirs != nil || DaemonDev }
 
 // scan lists every plugin folder, first location wins on duplicate ids.
 func scan(p policy) []*Found {

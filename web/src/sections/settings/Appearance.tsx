@@ -8,7 +8,7 @@ function Mini({ t, mode, distro }: { t: ThemeDef; mode: ColourMode; distro: stri
   const v = useMemo(() => themeVars(t, mode, distro), [t, mode, distro]);
   const hues = HUE_KEYS.slice(0, 5).map((k) => v[`--h-${k}`]);
   return (
-    <div className="mini" style={{ background: t.bg }} aria-hidden="true">
+    <div className="st-mini" style={{ background: t.bg }} aria-hidden="true">
       <div className="mr" style={{ background: t.surface }}>{hues.map((h, i) => <i key={i} style={{ background: h }} />)}</div>
       <div className="mc" style={{ background: t.surface }}>
         <b style={{ background: t.ink }} />
@@ -27,19 +27,19 @@ function ThemeCard({ t: def, on, onPick, onEdit, onDelete }: { t: ThemeDef; on: 
   const t = useT('settings');
   const th = useTheme();
   return (
-    <div className="tc-wrap">
-      <button type="button" className="tc" aria-pressed={on} onClick={onPick}>
+    <div className="st-tc-wrap">
+      <button type="button" className="st-tc" aria-pressed={on} onClick={onPick}>
         <Mini t={def} mode={th.colourMode} distro={th.distroColour} />
         <div className="nm">
           {def.name}
           {def.note && <small>{t(`note.${def.note.toLowerCase()}`)}</small>}
           {def.custom && <small>{t('appearance.custom')}</small>}
-          {def.own && <span className="own">{t('appearance.ownColours')}</span>}
+          {def.own && <span className="st-own">{t('appearance.ownColours')}</span>}
           <span className="ck"><Icon name="check" /></span>
         </div>
       </button>
       {(onEdit || onDelete) && (
-        <div className="tc-act">
+        <div className="st-tc-act">
           {onEdit && <button type="button" aria-label={t('appearance.edit')} onClick={onEdit}><Icon name="edit" /></button>}
           {onDelete && <button type="button" aria-label={t('appearance.delete')} onClick={onDelete}><Icon name="trash" /></button>}
         </div>
@@ -155,14 +155,14 @@ function ThemeEditor({ initial, onDone }: { initial: ThemeDef; onDone(): void })
     URL.revokeObjectURL(url);
   };
   const field = (key: string, label: string, val: string, on: (v: string) => void) => (
-    <label className="cf" key={key}>
+    <label className="st-cf" key={key}>
       <input type="color" value={val} onChange={(e) => on(e.target.value.toUpperCase())} aria-label={label} />
       <div>{label}<small>{val.toUpperCase()}</small></div>
     </label>
   );
 
   return (
-    <div className="ed">
+    <div className="st-ed">
       <div className="hd">
         <b>{initial.id === 'custom-new' ? t('appearance.createTitle') : t('appearance.editTitle')}</b>
         <span className="muted" style={{ fontSize: 13 }}>{t('appearance.createHint')}</span>
@@ -173,15 +173,15 @@ function ThemeEditor({ initial, onDone }: { initial: ThemeDef; onDone(): void })
         </div>
       </div>
       <Input label={t('appearance.name')} value={name} maxLength={40} onChange={(e) => setName(e.target.value)} />
-      <div className="ed-lb">{t('appearance.base')}</div>
-      <div className="cols2">
+      <div className="st-ed-lb">{t('appearance.base')}</div>
+      <div className="st-cols2">
         {field('bg', t('appearance.c.bg'), d.bg, (v) => base('bg', v))}
         {field('surface', t('appearance.c.surface'), d.surface, (v) => base('surface', v))}
         {field('sunk', t('appearance.c.sunk'), d.sunk, (v) => base('sunk', v))}
         {field('ink', t('appearance.c.ink'), d.ink, (v) => base('ink', v))}
       </div>
-      <div className="ed-lb">{t('appearance.sectionColours')}</div>
-      <div className="cols2">
+      <div className="st-ed-lb">{t('appearance.sectionColours')}</div>
+      <div className="st-cols2">
         {HUE_KEYS.map((k) => field(k, t(`appearance.h.${HUE_LABEL_KEYS[k]}`), d.hues[k], (v) => hue(k, v)))}
       </div>
     </div>
@@ -212,13 +212,13 @@ export function ColourBlock() {
           { value: 'mono', label: t('appearance.colours.mono') },
         ]}
       />
-      <div className={`drow${th.colourMode === 'distro' ? '' : ' dim'}`}>
+      <div className={`st-drow${th.colourMode === 'distro' ? '' : ' dim'}`}>
         <span className="dl">{t('appearance.colours.detected')} <b>{detected}</b>. {t('appearance.colours.preview')}</span>
         {DISTRO_PRESETS.map((p) => (
           <button
             key={p.id}
             type="button"
-            className="dc"
+            className="st-dc"
             aria-pressed={chip === p.id}
             onClick={() => {
               setChip(p.id);
@@ -231,7 +231,7 @@ export function ColourBlock() {
           </button>
         ))}
         {chip && (
-          <button type="button" className="dc" onClick={() => { setChip(null); th.previewDistro(null); }}>
+          <button type="button" className="st-dc" onClick={() => { setChip(null); th.previewDistro(null); }}>
             <Icon name="undo" size={14} />
             {t('appearance.colours.reset')}
           </button>

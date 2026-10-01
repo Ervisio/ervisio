@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ApiError, call, usePrefs, useSession } from '../../api';
 import { useI18n, useT } from '../../i18n';
 import { relativeTime } from '../../lib/format';
 import { Button, ConfirmDialog, EmptyState, Icon, Page, Sheet, Tooltip, toast, useIsMobile, useMediaQuery } from '../../ui';
-import { usePaletteActions } from '../../sections';
+import { useFocusMode, usePaletteActions } from '../../sections';
 import { HostDialog, RenameDialog, SnippetDialog } from './Dialogs';
 import ExtraKeys from './ExtraKeys';
 import Palette, { type PaletteItem } from './Palette';
@@ -160,7 +161,8 @@ export default function TerminalPage() {
     if (p0) {
       const id = p0;
       patch((l) => ({ ...l, panes: [id, p1 && p1 !== id ? p1 : null], open: l.open.includes(id) ? l.open : [...l.open, id] }));
-    } else if (!bootstrapping) {
+    } else if (!bootstrapping && !new URLSearchParams(window.location.search).has('cmd')) {
+      // (with ?cmd= the link handler below starts the session)
       bootstrapping = true;
       void create({}).finally(() => (bootstrapping = false));
     }
@@ -264,6 +266,23 @@ export default function TerminalPage() {
     void create({ kind: 'ssh', host: h.host, user: h.user, port: h.port, name: h.name });
   };
 
+  // ----- ?cmd=… (links from other sections, e.g. Software's AUR "Open in terminal"):
+  // a new session with the command typed at the prompt, not run, so the user reviews it first.
+  const [params, setParams] = useSearchParams();
+  const linkCmd = params.get('cmd');
+  const [pendingInput, setPendingInput] = useState<{ id: string; text: string } | null>(null);
+  useEffect(() => {
+    if (!loaded || loadError || !linkCmd) return;
+    const cmd = linkCmd.replace(/[\r\n]+/g, ' ').slice(0, 1000);
+    setParams((p) => {
+      const n = new URLSearchParams(p);
+      n.delete('cmd');
+      return n;
+    }, { replace: true });
+    void create({}).then((id) => id && setPendingInput({ id, text: cmd }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, loadError, linkCmd]);
+
   // ----- running things in the active pane -----
   const target = (): TermHandle | null => handles.current[(split && !mobile ? active : 0) as 0 | 1] ?? handles.current[0];
   const remember = (cmd: string) => {
@@ -322,10 +341,7 @@ export default function TerminalPage() {
     window.addEventListener('keydown', on, true);
     return () => window.removeEventListener('keydown', on, true);
   }, []);
-  useEffect(() => {
-    document.documentElement.classList.toggle('terminal-focus-on', focus);
-    return () => document.documentElement.classList.remove('terminal-focus-on');
-  }, [focus]);
+  useFocusMode('terminal', focus);
   useEffect(() => {
     if (!focus) return;
     const on = (e: KeyboardEvent) => {
@@ -474,6 +490,8 @@ export default function TerminalPage() {
           onActivate={() => setActive(idx)}
           onEnded={() => void refresh()}
           onClosePane={() => closePane(idx)}
+          initialInput={pendingInput?.id === id ? pendingInput.text : undefined}
+          onInitialInputUsed={() => setPendingInput(null)}
         />
       </div>
     );

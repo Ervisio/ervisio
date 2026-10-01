@@ -4,6 +4,10 @@
 .app-content { flex: 1; min-height: 0; background: var(--surface); border-radius: 22px; overflow: auto; position: relative; display: flex; flex-direction: column; }
 .app-content > * { min-width: 0; }
 
+/* Focus mode (shell/focus.ts): no rail, top bar or dock; the content panel fills the window. */
+.app.app--focus { grid-template-columns: minmax(0, 1fr); padding: 10px; }
+.app.app--focus .app-main { height: calc(100vh - 20px); }
+
 /* ---------- Rail ---------- */
 .rail { background: var(--surface); border-radius: 24px; padding: 14px 8px; display: flex; flex-direction: column; align-items: center; gap: 4px; height: calc(100vh - 24px); position: sticky; top: var(--gap); overflow: hidden; }
 .rail-distro { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 10px; color: var(--ink2); font-size: 11px; font-weight: 700; text-decoration: none; max-width: 76px; }
@@ -24,6 +28,22 @@
 .rail-foot { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: none; }
 .rail-av { width: 40px; height: 40px; border-radius: 14px; background: var(--h-usr); color: var(--surface); display: grid; place-items: center; font-weight: 800; flex: none; text-transform: uppercase; position: relative; }
 .rail-av[aria-expanded='true'] { box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--h-usr); }
+/* Shorter windows: tighten the rail so every section and plugin page fits without scrolling. */
+@media (max-height: 940px) {
+  .rail { padding: 12px 8px; }
+  .rail-distro { margin-bottom: 4px; }
+  .rail-distro .dn { display: none; }
+  .rail-distro .lg { width: 42px; height: 42px; border-radius: 14px; }
+  .rail-list, .rail { gap: 2px; }
+  .rail-it { gap: 3px; padding: 3px 0 4px; }
+  .rail-it .pi { height: 30px; }
+  .rail-gap { height: 6px; }
+}
+@media (max-height: 760px) {
+  .rail-it { font-size: 10.5px; padding: 2px 0 3px; }
+  .rail-it .pi { height: 28px; }
+  .rail-av { width: 36px; height: 36px; }
+}
 .rail-av .sudo-dot { position: absolute; right: -3px; bottom: -3px; width: 14px; height: 14px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 3px var(--surface); }
 
 /* ---------- Top bar ---------- */
@@ -59,6 +79,10 @@
 .note .ic { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; flex: none; background: var(--acc-s); color: var(--acc); }
 .note .ic .ui-icon { width: 16px; height: 16px; }
 .note.ok .ic { background: var(--ok-s); color: var(--ok); } .note.err .ic { background: var(--err-s); color: var(--err); } .note.warn .ic { background: var(--warn-s); color: var(--warn); }
+.note--link { width: 100%; text-align: left; cursor: pointer; }
+.note-tx { flex: 1; min-width: 0; }
+.note-detail { overflow-wrap: anywhere; display: -webkit-box !important; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.note-unread { width: 8px; height: 8px; border-radius: 50%; background: var(--acc); flex: none; margin-top: 6px; }
 .note b { display: block; font-weight: 700; font-size: 13.5px; }
 .note small { color: var(--ink3); font-size: 12.5px; display: block; }
 
@@ -101,6 +125,9 @@
   .app-content { overflow: visible; border-radius: 18px; min-height: calc(100vh - 160px); }
   .top-pill, .top-search kbd { display: none; }
   .top-search { height: 42px; font-size: 14px; }
+  .app.app--focus { padding: 6px; }
+  .app.app--focus .app-main { height: calc(100dvh - 12px); min-height: 0; }
+  .app.app--focus .app-content { overflow: hidden; min-height: 0; }
   .dock { display: flex; position: fixed; left: 8px; right: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); background: var(--surface); border-radius: 22px; padding: 8px; justify-content: space-around; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); z-index: 50; }
   .dock a, .dock button { display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--ink2); font-size: 11px; font-weight: 600; text-decoration: none; min-width: 56px; position: relative; }
   .dock .pi { width: 48px; height: 30px; border-radius: 12px; display: grid; place-items: center; color: var(--h, var(--ink2)); }

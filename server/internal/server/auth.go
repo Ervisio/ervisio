@@ -145,6 +145,8 @@ func (s *Server) spec(a *account.Account) *bridge.Spec {
 		Config:     s.opts.ConfigPath,
 		Account:    a,
 		SwitchUser: !s.opts.Dev,
+		Dev:        s.opts.Dev,
+		DevPlugins: s.opts.DevPluginsDir,
 		Logger:     s.log,
 	}
 }

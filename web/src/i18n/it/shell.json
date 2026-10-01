@@ -36,7 +36,9 @@
   "notifications": {
     "title": "Notifiche",
     "empty": "Non ci sono novità.",
-    "clear": "Cancella tutto"
+    "clear": "Cancella tutto",
+    "unread_one": "Notifiche, {count} da leggere",
+    "unread_other": "Notifiche, {count} da leggere"
   },
   "sudo": {
     "chip": "sudo, {time} rimasti",

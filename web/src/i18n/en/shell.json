@@ -36,7 +36,9 @@
   "notifications": {
     "title": "Notifications",
     "empty": "You're all caught up.",
-    "clear": "Clear all"
+    "clear": "Clear all",
+    "unread_one": "Notifications, {count} unread",
+    "unread_other": "Notifications, {count} unread"
   },
   "sudo": {
     "chip": "sudo, {time} left",

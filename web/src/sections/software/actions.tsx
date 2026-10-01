@@ -20,7 +20,9 @@ export function useActions() {
   const [partial, setPartial] = useState<{ names: string[] } | null>(null);
   const manager = summary?.manager ?? '';
 
-  const openTerminal = useCallback(() => nav('/terminal'), [nav]);
+  /** Open the Terminal; with cmd, a new session gets it typed at the prompt (not run). */
+  const openTerminal = useCallback((cmd?: string) => nav(cmd ? `/terminal?cmd=${encodeURIComponent(cmd)}` : '/terminal'), [nav]);
+  const aurHelper = summary?.aurHelper || 'yay';
 
   /** Upgrade everything (system packages + system Flatpaks, and user Flatpaks). */
   const updateAll = useCallback(() => {
@@ -162,5 +164,5 @@ export function useActions() {
     </>
   );
 
-  return { ui, busy, openTerminal, updateAll, updateSome, runUpdates, askInstall: setInstall, askRemove: setRemove, updateKey };
+  return { ui, busy, openTerminal, aurHelper, updateAll, updateSome, runUpdates, askInstall: setInstall, askRemove: setRemove, updateKey };
 }

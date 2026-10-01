@@ -24,7 +24,7 @@ from `ui` for the standard 26/800 title row and padding, or `<Page flush>` when 
 its own columns (Files, Terminal, Logs). The panel scrolls on desktop; make long lists scroll inside
 your own container when you want sticky toolbars.
 
-Run: `npm run dev` (Vite on :5173, proxies `/api` incl. WebSocket and `/plugins` to 127.0.0.1:9090) next to
+Run: `npm run dev` (Vite on :5173, proxies `/api` incl. WebSocket and `/plugins/` to 127.0.0.1:9090) next to
 `linuxadmind --dev`, or `VITE_MOCK=1 npm run dev` without a daemon (mock answers only `system.host`,
 `system.metrics`, `prefs.*`, `config.*`, `plugins.list` and the auth routes; sign in with any password
 except `wrong`). `npm run typecheck`, `npm run lint`, `npm run build` must pass.
@@ -82,7 +82,8 @@ Hue scopes: wrap your root in `className="hue-svc"` (or pass `hue`) and use `var
 section colour and its soft fill. Status uses `--ok --warn --err --info` (a failed thing is always `--err`).
 File-type tiles reuse section hues (`--h-file`, `--h-plg`...).
 
-Helpers: `src/lib/format.ts` has `formatBytes`, `formatDuration`, `formatClock`, `formatPercent`, `relativeTime`.
+Helpers: `src/lib/format.ts` has `formatBytes`, `formatDuration`, `formatClock`, `formatPercent`, `relativeTime`,
+`formatTime`, `formatDate`, `formatDateTime` (see "Dates and times").
 
 ## i18n
 
@@ -118,6 +119,48 @@ export default function useBadge(): number | undefined { /* a cheap hook: one po
 
 and/or `sections/<id>/palette.ts` with `export default function usePalette(): PaletteAction[]`. They are
 picked up automatically (build-time glob) and called by the shell on every page, so keep them light.
+
+## Notifications, background work, focus mode
+
+```ts
+import { notify, useFocusMode } from '../../sections';
+
+// Notification center (the bell in the top bar: recent notices, unread dot). Does not toast by itself.
+notify({ title: t('notice.failed', { name }), detail, tone: 'err', icon: 'services',
+         to: `/services?unit=${name}`,   // optional: clicking the entry navigates there
+         key: `svc:${name}` });          // optional: replaces the previous notice with the same key
+toast.err(title, detail);                // when the user should see it right away too
+
+// Focus mode: the shell hides the rail, top bar and phone dock while `on` is true and the component is mounted.
+// Provide your own keyboard exit (the terminal uses F11 / Ctrl+Shift+F) and a visible toggle.
+useFocusMode('terminal', focus);
+```
+
+Work that must run on every page while the app is open (e.g. log watchers that notify) goes in
+`sections/<id>/background.ts`: a default-exported hook with no return value, picked up like `badge.ts`. Keep it light
+(one stream or a slow poll), never ask for the administrator password from it, and stay quiet on errors.
+
+## Links between sections
+
+Navigate with query parameters; every target accepts these:
+
+| Target | Parameters |
+|---|---|
+| `/logs` | `unit=nginx[.service]`, `file=/abs/path`, `src=<source id>` (repeatable), `level=err,warn`, `q=text`, `range=1h…`, `live=1` |
+| `/files` | `path=/abs/dir` (opens it in a tab) or `path=/abs/file` (opens its folder with the file selected) |
+| `/services` | `unit=nginx[.service]` (opens the panel), `tab=info|logs|unit|deps` (panel tab), `state=failed|running|stopped|timers|sockets` |
+| `/terminal` | `cmd=text` (new session with the command typed at the prompt, not run) |
+| `/software` | `tab=updates|store|installed|history` |
+| `/plugins` | `tab=installed|updates|browse|security|developer` |
+| `/` | `personalize=1` |
+
+Overview alerts carry `{section, params}` from the bridge and map onto this table.
+
+## Dates and times
+
+Use `formatTime`, `formatDate`, `formatDateTime`, `relativeTime` (or `clockOptions()` with your own `Intl.DateTimeFormat`)
+from `src/lib/format.ts`: they follow Settings › Language & region (language, 12/24-hour clock; `getRegion()` also gives
+the first day of the week). Do not hard-code `hour: '2-digit'`.
 
 ## Design rules (see `docs/DESIGN-RULES.md`)
 

@@ -133,6 +133,7 @@ export default function SoftwarePage() {
           acts.updateSome([u]);
         }}
         openTerminal={acts.openTerminal}
+        aurHelper={acts.aurHelper}
       />
       {acts.ui}
     </Page>

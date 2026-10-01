@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { usePrefs } from '../api';
+import { setRegion } from '../lib/format';
 
 export const LANGUAGES = [
   { id: 'en', name: 'English' },
@@ -64,6 +65,8 @@ export type TFn = (key: string, vars?: Record<string, string | number>) => strin
 
 interface I18nValue {
   lang: Lang;
+  /** Changes when the region settings change, so every useT() consumer re-renders its dates. */
+  regionKey: string;
   setLang(l: Lang): void;
 }
 const Ctx = createContext<I18nValue | null>(null);
@@ -81,6 +84,9 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const pref = prefs.language === 'it' || prefs.language === 'en' ? (prefs.language as Lang) : undefined;
   const lang: Lang = pref ?? initialLang();
   const [ready, setReady] = useState(false);
+  // Region settings for lib/format (set during render so children format with the current values).
+  const reg = (prefs.region ?? {}) as { timeFormat?: string; weekStart?: string };
+  setRegion({ lang, hour12: reg.timeFormat === '12', weekStart: reg.weekStart === 'sun' ? 0 : reg.weekStart === 'sat' ? 6 : 1 });
 
   useEffect(() => {
     try {
@@ -97,7 +103,8 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     };
   }, [lang]);
 
-  const value = useMemo<I18nValue>(() => ({ lang, setLang: (l) => void set('language', l).catch(() => undefined) }), [lang, set]);
+  const regionKey = `${reg.timeFormat ?? ''}/${reg.weekStart ?? ''}`;
+  const value = useMemo<I18nValue>(() => ({ lang, regionKey, setLang: (l) => void set('language', l).catch(() => undefined) }), [lang, regionKey, set]);
   return <Ctx.Provider value={value}>{ready ? children : null}</Ctx.Provider>;
 }
 

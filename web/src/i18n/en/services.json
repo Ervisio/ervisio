@@ -6,13 +6,52 @@
   "more": "More actions",
   "filter": "Filter by name",
   "openInLogs": "Open in Logs",
-  "tabs": { "all": "All", "running": "Running", "failed": "Failed", "stopped": "Stopped", "timers": "Timers", "sockets": "Sockets" },
-  "purpose": { "label": "Group", "all": "All purposes", "web": "Web", "containers": "Containers", "system": "System" },
-  "view": { "label": "View", "table": "Table", "cards": "Cards" },
-  "error": { "title": "Services could not be loaded" },
-  "empty": { "title": "No services match", "text": "Try another tab, group or filter." },
-  "col": { "name": "Service", "state": "State", "boot": "At boot", "memory": "Memory", "cpu": "CPU", "next": "Next run", "last": "Last run", "listen": "Listens on" },
-  "state": { "running": "Running", "failed": "Failed", "stopped": "Stopped", "finished": "Finished", "waiting": "Waiting", "listening": "Listening", "masked": "Masked" },
+  "tabs": {
+    "all": "All",
+    "running": "Running",
+    "failed": "Failed",
+    "stopped": "Stopped",
+    "timers": "Timers",
+    "sockets": "Sockets"
+  },
+  "purpose": {
+    "label": "Group",
+    "all": "All purposes",
+    "web": "Web",
+    "containers": "Containers",
+    "system": "System"
+  },
+  "view": {
+    "label": "View",
+    "table": "Table",
+    "cards": "Cards"
+  },
+  "error": {
+    "title": "Services could not be loaded"
+  },
+  "empty": {
+    "title": "No services match",
+    "text": "Try another tab, group or filter."
+  },
+  "col": {
+    "name": "Service",
+    "state": "State",
+    "boot": "At boot",
+    "memory": "Memory",
+    "cpu": "CPU",
+    "next": "Next run",
+    "last": "Last run",
+    "listen": "Listens on"
+  },
+  "state": {
+    "running": "Running",
+    "failed": "Failed",
+    "stopped": "Stopped",
+    "finished": "Finished",
+    "waiting": "Waiting",
+    "listening": "Listening",
+    "masked": "Masked"
+  },
   "boot": {
     "label": "Start {name} at boot",
     "short": "At boot",
@@ -30,8 +69,21 @@
     "bad": "Invalid",
     "unknown": "Unknown"
   },
-  "actions": { "start": "Start", "stop": "Stop", "restart": "Restart", "reload": "Reload", "enable": "Enable", "disable": "Disable", "mask": "Mask", "unmask": "Unmask" },
-  "rowMenu": { "label": "Actions for {name}", "logs": "Log", "unitFile": "Unit file" },
+  "actions": {
+    "start": "Start",
+    "stop": "Stop",
+    "restart": "Restart",
+    "reload": "Reload",
+    "enable": "Enable",
+    "disable": "Disable",
+    "mask": "Mask",
+    "unmask": "Unmask"
+  },
+  "rowMenu": {
+    "label": "Actions for {name}",
+    "logs": "Log",
+    "unitFile": "Unit file"
+  },
   "banner": {
     "title_one": "{count} service failed",
     "title_other": "{count} services failed",
@@ -67,12 +119,32 @@
     "failed": "Could not {action} {name}"
   },
   "confirm": {
-    "stop": { "title": "Stop {name}?", "text": "Stopping {name} could cut you off from this machine or break things that depend on it. Type its name to confirm." },
-    "disable": { "title": "Disable {name} at boot?", "text": "{name} will no longer start by itself when the machine boots. It could be something you rely on to sign in. Type its name to confirm." },
-    "mask": { "title": "Mask {name}?", "text": "A masked service cannot be started by anyone, not even by other services, until you unmask it." }
+    "stop": {
+      "title": "Stop {name}?",
+      "text": "Stopping {name} could cut you off from this machine or break things that depend on it. Type its name to confirm."
+    },
+    "disable": {
+      "title": "Disable {name} at boot?",
+      "text": "{name} will no longer start by itself when the machine boots. It could be something you rely on to sign in. Type its name to confirm."
+    },
+    "mask": {
+      "title": "Mask {name}?",
+      "text": "A masked service cannot be started by anyone, not even by other services, until you unmask it."
+    }
   },
-  "panel": { "tabs": "Service details", "info": "Info", "logs": "Logs", "unitFile": "Unit file", "deps": "Dependencies", "notFound": "This unit was not found" },
-  "since": { "running": "Running for {time}", "failed": "Failed {time} ago", "finished": "Finished {time} ago" },
+  "panel": {
+    "tabs": "Service details",
+    "info": "Info",
+    "logs": "Logs",
+    "unitFile": "Unit file",
+    "deps": "Dependencies",
+    "notFound": "This unit was not found"
+  },
+  "since": {
+    "running": "Running for {time}",
+    "failed": "Failed {time} ago",
+    "finished": "Finished {time} ago"
+  },
   "info": {
     "status": "Status",
     "pid": "Process ID",
@@ -87,7 +159,11 @@
     "description": "Description",
     "lastResult": "Last result"
   },
-  "logs": { "error": "The log could not be read", "empty": "No recent log lines", "emptyHint": "If you expected some, your account may not be allowed to read the journal. Unlock administrator rights and try again." },
+  "logs": {
+    "error": "The log could not be read",
+    "empty": "No recent log lines",
+    "emptyHint": "If you expected some, your account may not be allowed to read the journal. Unlock administrator rights and try again."
+  },
   "unit": {
     "package": "Unit file",
     "noFile": "This unit has no file on disk.",
@@ -106,6 +182,18 @@
     "saveFailed": "Could not save the override",
     "error": "The unit file could not be read"
   },
-  "deps": { "needs": "Needs", "neededBy": "Needed by", "conflicts": "Conflicts with", "triggers": "Starts", "triggeredBy": "Started by", "none": "None" },
-  "palette": { "restart": "Restart {name}" }
+  "deps": {
+    "needs": "Needs",
+    "neededBy": "Needed by",
+    "conflicts": "Conflicts with",
+    "triggers": "Starts",
+    "triggeredBy": "Started by",
+    "none": "None"
+  },
+  "palette": {
+    "restart": "Restart {name}"
+  },
+  "notice": {
+    "failed": "{name} failed"
+  }
 }

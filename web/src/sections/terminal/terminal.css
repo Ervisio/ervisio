@@ -10,8 +10,8 @@
   background: var(--surface);
 }
 html[data-scheme='light'] .terminal-root { --tbg: var(--sunk); }
-.terminal-root.terminal-focus { position: fixed; inset: 0; z-index: 90; padding: 10px; }
-.terminal-root.terminal-focus .terminal-body { border-radius: 18px; }
+/* Focus mode: the shell hides rail, top bar and dock (useFocusMode); we only drop the sessions sidebar. */
+.terminal-root.terminal-focus { padding: 8px; }
 
 /* ---- sessions sidebar ---- */
 .terminal-sess { width: 256px; flex: none; display: flex; flex-direction: column; gap: 4px; overflow: auto; padding: 6px 2px 6px 0; }
@@ -126,7 +126,7 @@ html[data-scheme='light'] .terminal-root { --tbg: var(--sunk); }
 @media (max-width: 1100px) { .terminal-sess { display: none; } .terminal-sheet .terminal-sess { display: flex; } }
 @media (max-width: 859px) {
   .terminal-root { height: calc(var(--term-vh, 100dvh) - 176px); min-height: 360px; flex: none; padding: 8px; }
-  .terminal-root.terminal-focus { height: auto; min-height: 0; inset: 0; }
+  .terminal-root.terminal-focus { height: auto; flex: 1; min-height: 0; }
   .terminal-body { border-radius: 14px; }
   .terminal-tb > button span { display: none; }
   .terminal-tb > button:not(.terminal-sudo) { padding: 0 9px; }

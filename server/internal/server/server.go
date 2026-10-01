@@ -35,9 +35,13 @@ type Options struct {
 	ViteURL string
 	// Bridge is the absolute path of linuxadmin-bridge.
 	Bridge string
-	// PluginDirs are searched in order for /plugins/<id>/<file>.
+	// PluginDirs are searched in order for /plugins/<id>/<file>; then the
+	// folders the user loaded with plugins.loadDev (through their bridge).
 	PluginDirs []string
-	Logger     *log.Logger
+	// DevPluginsDir (dev only) is the repository's ./plugins folder, passed
+	// to the bridges so they list its plugins.
+	DevPluginsDir string
+	Logger        *log.Logger
 }
 
 // Server is the daemon.

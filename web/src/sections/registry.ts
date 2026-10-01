@@ -100,6 +100,12 @@ type PaletteHook = () => PaletteAction[];
 const badgeHooks = Object.entries(import.meta.glob<{ default: BadgeHook }>('./*/badge.ts', { eager: true })).map(
   ([p, m]) => [p.split('/')[1], m.default] as const,
 );
+/** Optional `sections/<id>/background.ts`: a default-exported hook with no return value, for work that must run
+ * while the app is open on any page (e.g. watchers that push notifications). Keep it light. */
+const backgroundHooks = Object.values(import.meta.glob<{ default: () => void }>('./*/background.ts', { eager: true })).map((m) => m.default);
+export function useSectionBackgroundHooks() {
+  for (const h of backgroundHooks) h();
+}
 const paletteHooks = Object.values(import.meta.glob<{ default: PaletteHook }>('./*/palette.ts', { eager: true })).map((m) => m.default);
 
 /** Called once by the shell. */

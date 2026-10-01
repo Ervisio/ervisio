@@ -17,6 +17,7 @@ import (
 	"github.com/Fonlogen/LinuxAdmin/server/internal/brand"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/modules"
 	configmod "github.com/Fonlogen/LinuxAdmin/server/internal/modules/config"
+	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/plugins"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/sys"
 )
@@ -24,6 +25,8 @@ import (
 func main() {
 	admin := flag.Bool("admin", false, "run as the root bridge (must be started as root)")
 	configPath := flag.String("config", brand.ConfigPath, "daemon configuration file")
+	dev := flag.Bool("dev", false, "the daemon runs in --dev (passed by linuxadmind)")
+	devPlugins := flag.String("dev-plugins", "", "with --dev: the daemon's ./plugins folder")
 	flag.Parse()
 
 	log.SetFlags(0)
@@ -36,6 +39,15 @@ func main() {
 		log.Fatal("--config must be an absolute path")
 	}
 	configmod.Path = filepath.Clean(*configPath)
+	if *dev {
+		plugins.DaemonDev = true
+		if *devPlugins != "" {
+			if !filepath.IsAbs(*devPlugins) {
+				log.Fatal("--dev-plugins must be an absolute path")
+			}
+			plugins.DaemonPluginsDir = filepath.Clean(*devPlugins)
+		}
+	}
 
 	// Commands are resolved in a fixed PATH; the environment we were given
 	// (possibly by sudo) is not trusted for that.

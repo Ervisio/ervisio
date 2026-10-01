@@ -10,7 +10,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': { target, ws: true, changeOrigin: false },
-      '/plugins': { target, changeOrigin: false },
+      '/plugins/': { target, changeOrigin: false },
     },
   },
   // assetsInlineLimit 0: never inline fonts/images as data: URIs (strict CSP served by linuxadmind)

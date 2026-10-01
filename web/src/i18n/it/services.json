@@ -6,13 +6,52 @@
   "more": "Altre azioni",
   "filter": "Filtra per nome",
   "openInLogs": "Apri nei Log",
-  "tabs": { "all": "Tutti", "running": "In esecuzione", "failed": "Falliti", "stopped": "Fermi", "timers": "Timer", "sockets": "Socket" },
-  "purpose": { "label": "Gruppo", "all": "Tutti gli scopi", "web": "Web", "containers": "Container", "system": "Sistema" },
-  "view": { "label": "Vista", "table": "Tabella", "cards": "Schede" },
-  "error": { "title": "Impossibile caricare i servizi" },
-  "empty": { "title": "Nessun servizio corrisponde", "text": "Prova un'altra scheda, un altro gruppo o un altro filtro." },
-  "col": { "name": "Servizio", "state": "Stato", "boot": "All'avvio", "memory": "Memoria", "cpu": "CPU", "next": "Prossima esecuzione", "last": "Ultima esecuzione", "listen": "In ascolto su" },
-  "state": { "running": "In esecuzione", "failed": "Fallito", "stopped": "Fermo", "finished": "Terminato", "waiting": "In attesa", "listening": "In ascolto", "masked": "Mascherato" },
+  "tabs": {
+    "all": "Tutti",
+    "running": "In esecuzione",
+    "failed": "Falliti",
+    "stopped": "Fermi",
+    "timers": "Timer",
+    "sockets": "Socket"
+  },
+  "purpose": {
+    "label": "Gruppo",
+    "all": "Tutti gli scopi",
+    "web": "Web",
+    "containers": "Container",
+    "system": "Sistema"
+  },
+  "view": {
+    "label": "Vista",
+    "table": "Tabella",
+    "cards": "Schede"
+  },
+  "error": {
+    "title": "Impossibile caricare i servizi"
+  },
+  "empty": {
+    "title": "Nessun servizio corrisponde",
+    "text": "Prova un'altra scheda, un altro gruppo o un altro filtro."
+  },
+  "col": {
+    "name": "Servizio",
+    "state": "Stato",
+    "boot": "All'avvio",
+    "memory": "Memoria",
+    "cpu": "CPU",
+    "next": "Prossima esecuzione",
+    "last": "Ultima esecuzione",
+    "listen": "In ascolto su"
+  },
+  "state": {
+    "running": "In esecuzione",
+    "failed": "Fallito",
+    "stopped": "Fermo",
+    "finished": "Terminato",
+    "waiting": "In attesa",
+    "listening": "In ascolto",
+    "masked": "Mascherato"
+  },
   "boot": {
     "label": "Avvia {name} all'avvio",
     "short": "All'avvio",
@@ -30,8 +69,21 @@
     "bad": "Non valido",
     "unknown": "Sconosciuto"
   },
-  "actions": { "start": "Avvia", "stop": "Ferma", "restart": "Riavvia", "reload": "Ricarica", "enable": "Abilita", "disable": "Disabilita", "mask": "Maschera", "unmask": "Smaschera" },
-  "rowMenu": { "label": "Azioni per {name}", "logs": "Log", "unitFile": "File unit" },
+  "actions": {
+    "start": "Avvia",
+    "stop": "Ferma",
+    "restart": "Riavvia",
+    "reload": "Ricarica",
+    "enable": "Abilita",
+    "disable": "Disabilita",
+    "mask": "Maschera",
+    "unmask": "Smaschera"
+  },
+  "rowMenu": {
+    "label": "Azioni per {name}",
+    "logs": "Log",
+    "unitFile": "File unit"
+  },
   "banner": {
     "title_one": "{count} servizio fallito",
     "title_other": "{count} servizi falliti",
@@ -67,12 +119,32 @@
     "failed": "Impossibile eseguire «{action}» su {name}"
   },
   "confirm": {
-    "stop": { "title": "Fermare {name}?", "text": "Fermare {name} potrebbe tagliarti fuori da questa macchina o rompere ciò che ne dipende. Scrivi il suo nome per confermare." },
-    "disable": { "title": "Disabilitare {name} all'avvio?", "text": "{name} non partirà più da solo all'avvio della macchina. Potrebbe servirti per accedere. Scrivi il suo nome per confermare." },
-    "mask": { "title": "Mascherare {name}?", "text": "Un servizio mascherato non può essere avviato da nessuno, nemmeno da altri servizi, finché non lo smascheri." }
+    "stop": {
+      "title": "Fermare {name}?",
+      "text": "Fermare {name} potrebbe tagliarti fuori da questa macchina o rompere ciò che ne dipende. Scrivi il suo nome per confermare."
+    },
+    "disable": {
+      "title": "Disabilitare {name} all'avvio?",
+      "text": "{name} non partirà più da solo all'avvio della macchina. Potrebbe servirti per accedere. Scrivi il suo nome per confermare."
+    },
+    "mask": {
+      "title": "Mascherare {name}?",
+      "text": "Un servizio mascherato non può essere avviato da nessuno, nemmeno da altri servizi, finché non lo smascheri."
+    }
   },
-  "panel": { "tabs": "Dettagli del servizio", "info": "Info", "logs": "Log", "unitFile": "File unit", "deps": "Dipendenze", "notFound": "Questa unit non è stata trovata" },
-  "since": { "running": "In esecuzione da {time}", "failed": "Fallito {time} fa", "finished": "Terminato {time} fa" },
+  "panel": {
+    "tabs": "Dettagli del servizio",
+    "info": "Info",
+    "logs": "Log",
+    "unitFile": "File unit",
+    "deps": "Dipendenze",
+    "notFound": "Questa unit non è stata trovata"
+  },
+  "since": {
+    "running": "In esecuzione da {time}",
+    "failed": "Fallito {time} fa",
+    "finished": "Terminato {time} fa"
+  },
   "info": {
     "status": "Stato",
     "pid": "ID processo",
@@ -87,7 +159,11 @@
     "description": "Descrizione",
     "lastResult": "Ultimo risultato"
   },
-  "logs": { "error": "Impossibile leggere il log", "empty": "Nessuna riga di log recente", "emptyHint": "Se te le aspettavi, il tuo account potrebbe non poter leggere il journal. Sblocca i diritti di amministratore e riprova." },
+  "logs": {
+    "error": "Impossibile leggere il log",
+    "empty": "Nessuna riga di log recente",
+    "emptyHint": "Se te le aspettavi, il tuo account potrebbe non poter leggere il journal. Sblocca i diritti di amministratore e riprova."
+  },
   "unit": {
     "package": "File unit",
     "noFile": "Questa unit non ha un file su disco.",
@@ -106,6 +182,18 @@
     "saveFailed": "Impossibile salvare l'override",
     "error": "Impossibile leggere il file unit"
   },
-  "deps": { "needs": "Richiede", "neededBy": "Richiesto da", "conflicts": "In conflitto con", "triggers": "Avvia", "triggeredBy": "Avviato da", "none": "Nessuna" },
-  "palette": { "restart": "Riavvia {name}" }
+  "deps": {
+    "needs": "Richiede",
+    "neededBy": "Richiesto da",
+    "conflicts": "In conflitto con",
+    "triggers": "Avvia",
+    "triggeredBy": "Avviato da",
+    "none": "Nessuna"
+  },
+  "palette": {
+    "restart": "Riavvia {name}"
+  },
+  "notice": {
+    "failed": "{name} non è riuscito"
+  }
 }
