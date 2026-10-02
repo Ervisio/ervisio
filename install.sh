@@ -1327,7 +1327,7 @@ dk() { DOCKER_HOST='' DOCKER_CONTEXT='' docker -H unix:///var/run/docker.sock "$
 # and CADDY_CF_IN (container name and the Caddyfile path inside it).
 caddy_detect() {
 	CADDY_KIND='' CADDY_CF='' CADDY_CTR='' CADDY_CF_IN=''
-	CD_HOSTNET=0 CD_GW='' CD_SUBNET='' CD_EXTRAHOST=0 CD_NOTE=''
+	CD_HOSTNET=0 CD_GW='' CD_SUBNET='' CD_NOTE=''
 	[ "$CADDY_MODE" = no ] && return 0
 	cd_unit=
 	for cd_u in /etc/systemd/system/caddy.service /usr/lib/systemd/system/caddy.service /lib/systemd/system/caddy.service; do
@@ -1383,9 +1383,6 @@ caddy_docker_inspect() {
 		CD_HOSTNET=1
 		return 0
 	fi
-	case $(dk inspect -f '{{range .HostConfig.ExtraHosts}}{{.}} {{end}}' "$CADDY_CTR" 2>/dev/null) in
-	*host.docker.internal:*) CD_EXTRAHOST=1 ;;
-	esac
 	# shellcheck disable=SC2016
 	ci_net="$(dk inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{$v.Gateway}}{{"\n"}}{{end}}' "$CADDY_CTR" 2>/dev/null | awk 'NF == 2 { print; exit }')"
 	if [ -n "$ci_net" ]; then
@@ -1511,11 +1508,15 @@ caddy_plan() {
 			C_TLS=http
 		elif [ -n "$CD_GW" ]; then
 			# Inside the container 127.0.0.1 is the container itself: Caddy has to
-			# reach the host through the Docker bridge, so LinuxAdmin must listen
-			# on that address or on all of them (the bridge may not exist yet when
-			# linuxadmin.service starts, so all of them).
-			C_HOST=0.0.0.0
-			if [ "$CD_EXTRAHOST" = 1 ]; then UPHOST=host.docker.internal; else UPHOST=$CD_GW; fi
+			# reach the host through the Docker bridge, so LinuxAdmin listens on the
+			# bridge's gateway address only (not on every interface, where other
+			# machines could reach it). The bridge exists once docker.service has
+			# started: a drop-in orders linuxadmin.service after it.
+			C_HOST=$CD_GW
+			DOCKER_DROPIN=1
+			# Not host.docker.internal: host-gateway is docker0's address, which may
+			# not be the gateway of Caddy's network that LinuxAdmin listens on.
+			UPHOST=$CD_GW
 			[ -n "$CD_SUBNET" ] && C_PROXIES="$(list_add "$C_PROXIES" "$CD_SUBNET")"
 		else
 			UPHOST=HOST_ADDRESS
@@ -1946,7 +1947,7 @@ decide_config() {
 			say "  Caddy:             $CADDY_ACTION $CADDY_DOMAIN -> https://$UPHOST:$C_PORT (certificate not checked: it is this machine)"
 		fi
 		case $CADDY_ACTION in manual) say "                     (the Caddyfile is not edited: ${CADDY_WHY:-the snippet is printed})" ;; *) say "                     ($CADDY_CF is backed up, validated, rolled back on errors, then Caddy is reloaded)" ;; esac
-		[ "$CADDY_KIND" = docker ] && [ "$C_HOST" = 0.0.0.0 ] && say "                     (Caddy is in Docker: LinuxAdmin listens on all interfaces so the container can reach it)"
+		[ "${DOCKER_DROPIN:-0}" = 1 ] && say "                     (Caddy is in Docker: LinuxAdmin listens on the Docker bridge $CD_GW and starts after docker.service)"
 	elif [ "$PROXY" = other ]; then
 		if [ "$C_TLS" = http ]; then
 			say "  Reverse proxy:     yes; point it at http://127.0.0.1:$C_PORT (plain HTTP) and let it send X-Forwarded-Proto and X-Forwarded-Host"
@@ -2114,8 +2115,26 @@ install_unit() {
 	fi
 }
 
+# docker_dropin writes or removes the drop-in that starts LinuxAdmin after
+# Docker, needed when it listens on a Docker bridge address.
+docker_dropin() {
+	dd_f="$UNIT_FILE.d/docker-bridge.conf"
+	if [ "${DOCKER_DROPIN:-0}" = 1 ]; then
+		printf '%s\n' '# Written by install.sh: LinuxAdmin listens on a Docker bridge address,' \
+			'# which exists only once Docker has started.' \
+			'[Unit]' 'After=docker.service' 'Wants=docker.service' >"$TMPD/dropin"
+		say "Writing $dd_f."
+		run install -D -m 644 "$TMPD/dropin" "$dd_f"
+	elif [ -f "$dd_f" ] && [ "$CFG_MODE" != keep ]; then
+		say "Removing $dd_f (no longer listening on a Docker bridge)."
+		run rm -f "$dd_f"
+		run rmdir "$UNIT_FILE.d" 2>/dev/null || true
+	fi
+}
+
 start_service() {
 	step "Starting $UNIT"
+	docker_dropin
 	run systemctl daemon-reload
 	if [ "$ENABLE" = 1 ]; then
 		run systemctl enable --quiet "$UNIT"
@@ -2281,7 +2300,8 @@ do_uninstall() {
 		run systemctl disable --quiet --now "$UNIT" || true
 	fi
 	close_firewall
-	run rm -f "$UNIT_FILE"
+	run rm -f "$UNIT_FILE" "$UNIT_FILE.d/docker-bridge.conf"
+	run rmdir "$UNIT_FILE.d" 2>/dev/null || true
 	if [ -L "$BIN_LINK" ] || [ -f "$BIN_LINK" ]; then
 		run rm -f "$BIN_LINK"
 	fi
