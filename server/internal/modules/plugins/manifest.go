@@ -65,7 +65,12 @@ type Capabilities struct {
 	HTTP    []HTTPAPI  `json:"http"`
 	Files   FileAccess `json:"files"`
 	Sockets []string   `json:"sockets"`
-	Network []string   `json:"network"`
+	// Network lists the hosts the plugin's frame may connect to. In the
+	// manifest it is a list, or {"hosts": [...], "userHosts": true} (see
+	// netcap.go).
+	Network []string `json:"network"`
+	// UserHosts lets the plugin ask an administrator to approve more hosts.
+	UserHosts bool `json:"userHosts,omitempty"`
 }
 
 // FileAccess lists folders the plugin reads or edits.
@@ -134,6 +139,8 @@ type HTTPAPI struct {
 	// TimeoutSec bounds plugins.http, and the wait for the response
 	// headers of plugins.httpStream (default 30, max 600).
 	TimeoutSec int `json:"timeoutSec,omitempty"`
+	// Remote ("docker") lets calls target an environment instead of Socket.
+	Remote string `json:"remote,omitempty"`
 }
 
 // HTTPRule allows Methods on the URL paths matching Path (a regexp that
@@ -158,6 +165,9 @@ type Command struct {
 	TimeoutSec int `json:"timeoutSec,omitempty"`
 	// PTY commands run only through plugins.pty, in a pseudo-terminal.
 	PTY bool `json:"pty,omitempty"`
+	// Remote ("docker") lets the command run against an environment: argv
+	// holds one {env} item, replaced by the endpoint's address.
+	Remote string `json:"remote,omitempty"`
 }
 
 // ArgSpec constrains one {N} slot of argv.
@@ -526,7 +536,7 @@ func (c *Command) validate() error {
 	if c.TimeoutSec < 0 || c.TimeoutSec > 600 {
 		return fmt.Errorf("timeoutSec must be between 0 and 600")
 	}
-	return nil
+	return c.validateRemote()
 }
 
 func (f Folder) validate() error {
@@ -580,6 +590,9 @@ func (h *HTTPAPI) validate() error {
 			return fmt.Errorf("header %q is listed twice", name)
 		}
 		seen[k] = true
+	}
+	if err := h.validateRemote(); err != nil {
+		return err
 	}
 	if len(h.Rules) == 0 || len(h.Rules) > maxHTTPRules {
 		return fmt.Errorf("rules must hold between 1 and %d entries", maxHTTPRules)

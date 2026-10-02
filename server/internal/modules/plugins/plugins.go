@@ -115,6 +115,9 @@ func Register(r *rpc.Registry) {
 	// Used by the daemon before serving plugin assets or the plugin frame.
 	r.Handle("plugins.access", rpc.User, access)
 
+	// Environments (envbridge.go) and user-approved network hosts (userhosts.go).
+	registerEnvs(r)
+
 	r.Handle("plugins.loadDev", rpc.User, func(ctx context.Context, c *rpc.Call) (any, error) {
 		var p struct {
 			Path string `json:"path"`

@@ -50,7 +50,11 @@ type Options struct {
 	// DevAuthorizedKeys (dev only) replaces the authorized_keys files for
 	// SSH-key sign-in, so the flow can be tried without touching ~/.ssh.
 	DevAuthorizedKeys string
-	Logger            *log.Logger
+	// EnvsDir and TunnelDir override where environments are stored
+	// (default /var/lib/ervisio/envs) and where their per-user tunnel sockets
+	// live (default /run/ervisio/tunnels).
+	EnvsDir, TunnelDir string
+	Logger             *log.Logger
 }
 
 // Server is the daemon.
@@ -77,6 +81,8 @@ type Server struct {
 	baseCtx context.Context
 	cancel  context.CancelFunc
 	vite    http.Handler
+	// env is the environments feature (envs.go).
+	env *envState
 }
 
 // New validates options and loads the configuration.
@@ -117,6 +123,7 @@ func New(opts Options) (*Server, error) {
 		cancel:     cancel,
 	}
 	s.checker.keyAuth = s.keyAuthorized
+	s.env = s.newEnvState()
 	if opts.Dev {
 		if s.devUser, err = account.Current(); err != nil {
 			cancel()
@@ -166,6 +173,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/ws", s.authed(s.handleWS))
 	mux.HandleFunc("GET /api/files/download", s.authed(s.handleDownload))
 	mux.HandleFunc("POST /api/files/upload", s.authed(s.csrfS(s.handleUpload)))
+	s.registerPair(mux)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errNotFound)
 	})
@@ -240,6 +248,7 @@ func (s *Server) Run(ctx context.Context) error {
 	var redirect *http.Server
 
 	go s.janitor(ctx)
+	go s.envLoop(ctx)
 
 	errCh := make(chan error, 2)
 	if s.opts.Dev {

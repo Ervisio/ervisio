@@ -141,13 +141,24 @@ func (s *Server) handleRPC(w http.ResponseWriter, r *http.Request, sess *Session
 		writeError(w, e)
 		return
 	}
-	p, isAdmin, e := s.route(r.Context(), sess, req.Method, req.Admin)
+	if res, e, ok := s.envsCall(r.Context(), sess, req.Method, req.Params); ok {
+		if e != nil {
+			writeError(w, e)
+			return
+		}
+		writeJSON(w, http.StatusOK, struct {
+			Result any `json:"result"`
+		}{res})
+		return
+	}
+	p, isAdmin, params, relEnv, e := s.routeWithEnv(r.Context(), sess, req.Method, req.Params, req.Admin)
 	if e != nil {
 		writeError(w, e)
 		return
 	}
+	defer relEnv()
 	defer sess.hold(p, isAdmin)()
-	res, err := p.Call(r.Context(), req.Method, req.Params)
+	res, err := p.Call(r.Context(), req.Method, params)
 	if err != nil {
 		if r.Context().Err() != nil {
 			return // client went away

@@ -205,6 +205,9 @@ func (p *Proc) wait() {
 // it otherwise.
 func (p *Proc) Stop() {
 	_ = p.stdin.Close()
+	if p.cmd == nil { // a remote bridge (NewRemote): closing the connection ends it
+		return
+	}
 	select {
 	case <-p.waited:
 		return
