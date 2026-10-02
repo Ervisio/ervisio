@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -198,9 +199,19 @@ func (s *Spec) minLevel() string {
 
 // keepSecrets copies the secrets that the new spec leaves empty from old,
 // so editing a channel without retyping its password keeps it. A different
-// type keeps nothing.
+// type keeps nothing, and neither does a different destination (mail
+// server, port or security; webhook origin; ntfy or Gotify server): a
+// stored password or token never goes to a server it was not typed for
+// (security review L4).
 func (s *Spec) keepSecrets(old *Spec) {
 	if old == nil || old.Type != s.Type {
+		return
+	}
+	dest := s.destination()
+	if s.Type == TypeWebhook && strings.TrimSpace(s.URL) == "" {
+		dest = old.destination() // the URL itself is kept
+	}
+	if dest != old.destination() {
 		return
 	}
 	oldF := old.secretFields()
@@ -209,6 +220,31 @@ func (s *Spec) keepSecrets(old *Spec) {
 			*p = *oldF[k]
 		}
 	}
+}
+
+// destination is where the channel's secrets go, normalised: two specs with
+// the same destination may share secrets. A webhook spec whose URL is empty
+// (kept from the stored one) has no destination of its own: "".
+func (s *Spec) destination() string {
+	n := *s
+	n.To = append([]string(nil), s.To...)
+	n.Normalise()
+	switch n.Type {
+	case TypeEmail:
+		return strings.ToLower(n.Host) + "|" + strconv.Itoa(n.Port) + "|" + n.Security
+	case TypeWebhook:
+		if n.URL == "" {
+			return ""
+		}
+		u, err := url.Parse(n.URL)
+		if err != nil {
+			return "invalid:" + n.URL
+		}
+		return strings.ToLower(u.Scheme) + "://" + strings.ToLower(u.Host)
+	case TypeNtfy, TypeGotify:
+		return strings.ToLower(n.Server)
+	}
+	return ""
 }
 
 // Normalise fills defaults, trims text and clears the fields that belong to

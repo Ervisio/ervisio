@@ -64,6 +64,12 @@ Without administrator rights they fail with `needs_admin`.
 
 `Channel.last` is the result of the last delivery or test since the daemon started: `{at, ok, error?}`.
 
+**Kept secrets follow the destination.** An empty secret in `notify.save` or `notify.test` keeps the stored one only
+while the destination is the same: the mail server (host, port and security), the webhook's origin (scheme, host and
+port; an empty URL keeps the stored URL), the ntfy or Gotify server. Change any of them and the password or token has
+to be typed again, so a stored secret is never sent to a server it was not entered for. Delivery errors never contain a
+secret or a webhook URL's path: a failed webhook request is reported as `<operation> <scheme>://<host>: <error>`.
+
 ## `plugins.notify` (user level; SDK `sdk.api.notify`)
 
 `{plugin, title, body?, level?, link?}` → `{channels, delivered, failed}`.

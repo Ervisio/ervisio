@@ -108,15 +108,42 @@ func (m Message) text() string {
 
 // redact removes the channel's secrets (and the text a URL error would
 // carry) from an error message.
+//
+// A *url.Error (what net/http returns) carries the request URL, re-encoded
+// by Go (non-ASCII and some characters become %XX), so matching the stored
+// value is not enough: its URL is replaced by scheme://host before the
+// message is built, and the inner error is redacted on its own.
 func redact(err error, spec *Spec) string {
-	msg := err.Error()
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		where := "the server"
+		if u, perr := url.Parse(ue.URL); perr == nil && u.Host != "" {
+			where = u.Scheme + "://" + u.Host
+		}
+		inner := "unknown error"
+		if ue.Err != nil {
+			inner = redactText(ue.Err.Error(), spec)
+		}
+		return cut(oneLine(ue.Op+" "+where+": "+inner), 300)
+	}
+	return cut(oneLine(redactText(err.Error(), spec)), 300)
+}
+
+// redactText replaces every secret of the channel in msg, as typed and in
+// the encoded forms a URL may take.
+func redactText(msg string, spec *Spec) string {
 	for _, s := range spec.secretValues() {
-		msg = strings.ReplaceAll(msg, s, "***")
-		if esc := url.PathEscape(s); esc != s {
-			msg = strings.ReplaceAll(msg, esc, "***")
+		forms := []string{s, url.PathEscape(s), url.QueryEscape(s)}
+		if u, err := url.Parse(s); err == nil {
+			forms = append(forms, u.String(), u.EscapedPath(), u.Path)
+		}
+		for _, f := range forms {
+			if len(f) >= 4 {
+				msg = strings.ReplaceAll(msg, f, "***")
+			}
 		}
 	}
-	return cut(oneLine(msg), 300)
+	return msg
 }
 
 // ---- sending ----
