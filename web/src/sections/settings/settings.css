@@ -222,8 +222,9 @@
 .st-job-act { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .st-job .st-warn { margin: 0; }
 .st-warn--soft { background: var(--surface); color: var(--ink2); }
-.st-warn .grow { flex: 1; min-width: 0; }
-.st-warn .ui-btn { flex: none; align-self: center; }
+.st-warn:has(> .ui-btn) { flex-wrap: wrap; }
+.st-warn:has(> .ui-btn) > .grow { flex: 1 1 220px; min-width: 0; }
+.st-warn > .ui-btn { flex: none; align-self: center; margin-left: auto; }
 .st-approve { display: grid; gap: 8px; min-width: 0; }
 .st-approve ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .st-approve li { display: grid; gap: 4px; min-width: 0; }

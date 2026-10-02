@@ -80,7 +80,7 @@ export function PluginJobsBlock() {
                 )}
                 <div className="st-job-meta">
                   {last && <small>{t('jobs.lastRun', { when: relativeTime(last.started, lang) })}{last.error ? ` · ${last.error}` : ''}</small>}
-                  {j.enabled && j.nextRun ? <small>{t('jobs.nextRun', { when: relativeTime(j.nextRun, lang) })}</small> : null}
+                  {j.enabled && !j.awaitingApproval && j.nextRun ? <small>{t('jobs.nextRun', { when: relativeTime(j.nextRun, lang) })}</small> : null}
                 </div>
                 <div className="st-job-hooks">
                   <b>{t('jobs.webhooks.title')}</b>

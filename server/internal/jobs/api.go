@@ -51,7 +51,8 @@ type InstanceView struct {
 	Created  int64         `json:"created"`
 	Updated  int64         `json:"updated"`
 	Running  bool          `json:"running"`
-	// NextRun is the next scheduled start in ms (absent when none).
+	// NextRun is the next scheduled start in ms (absent when none, or while
+	// the instance waits for approval).
 	NextRun int64       `json:"nextRun,omitempty"`
 	Last    *RunSummary `json:"last,omitempty"`
 }
@@ -185,7 +186,7 @@ func (m *Manager) view(in *Instance) InstanceView {
 	m.mu.Lock()
 	if lv := m.live[in.ID]; lv != nil {
 		v.Running = lv.running
-		if !lv.next.IsZero() && in.Enabled {
+		if !lv.next.IsZero() && in.Enabled && !v.AwaitingApproval {
 			v.NextRun = lv.next.UnixMilli()
 		}
 	}
