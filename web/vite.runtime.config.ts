@@ -24,7 +24,7 @@ export default defineConfig({
     lib: {
       entry: fileURLToPath(new URL('./src/plugins/frame/runtime.tsx', import.meta.url)),
       formats: ['iife'],
-      name: 'LinuxAdminPluginRuntime',
+      name: 'ErvisioPluginRuntime',
       fileName: () => 'plugin-runtime.js',
     },
   },

@@ -69,6 +69,6 @@ export async function publicHost(): Promise<PublicHost> {
 /** URL helpers for streamed downloads / uploads. */
 export const downloadUrl = (path: string, admin = false, inline = false) =>
   apiUrl(`/api/files/download?path=${encodeURIComponent(path)}&admin=${admin ? 1 : 0}${inline ? '&inline=1' : ''}`);
-/** POST the raw body here with header X-Requested-With: linuxadmin. */
+/** POST the raw body here with header X-Requested-With: ervisio. */
 export const uploadUrl = (path: string, admin = false, overwrite = false) =>
   apiUrl(`/api/files/upload?path=${encodeURIComponent(path)}&admin=${admin ? 1 : 0}&overwrite=${overwrite ? 1 : 0}`);

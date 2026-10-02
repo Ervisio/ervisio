@@ -97,7 +97,7 @@ export function useServerConfig(enabled: boolean) {
 
   return {
     cfg, state, get, set: setKey, reload: load,
-    path: info?.path ?? '/etc/linuxadmin/linuxadmin.conf',
+    path: info?.path ?? '/etc/ervisio/ervisio.conf',
     warnings: info?.warnings ?? [],
     hasKey: (k: string) => !!info?.keys.some((x) => x.key === k),
     needsRestart: (k: string) => !!info?.keys.find((x) => x.key === k)?.restart,

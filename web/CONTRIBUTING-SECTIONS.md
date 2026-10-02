@@ -25,7 +25,7 @@ its own columns (Files, Terminal, Logs). The panel scrolls on desktop; make long
 your own container when you want sticky toolbars.
 
 Run: `npm run dev` (Vite on :5173, proxies `/api` incl. WebSocket and `/plugins/` to 127.0.0.1:9090) next to
-`linuxadmind --dev`, or `VITE_MOCK=1 npm run dev` without a daemon (mock answers only `system.host`,
+`ervisiod --dev`, or `VITE_MOCK=1 npm run dev` without a daemon (mock answers only `system.host`,
 `system.metrics`, `prefs.*`, `config.*`, `plugins.list` and the auth routes; sign in with any password
 except `wrong`). `npm run typecheck`, `npm run lint`, `npm run build` must pass.
 

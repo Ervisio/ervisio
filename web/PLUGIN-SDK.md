@@ -158,7 +158,7 @@ fit.onResize?.(() => term.resize(xterm.cols, xterm.rows));
 
 `capabilities.files.read` / `.write` entries may be objects: `{"path": "/opt/stacks", "admin": true,
 "adminUnlessGroup": "docker"}` is used with administrator rights (the app asks for them when needed, as for commands),
-or as the user when the user is in `adminUnlessGroup`. `{"path": "~/.config/linuxadmin/plugins/docker", "create":
+or as the user when the user is in `adminUnlessGroup`. `{"path": "~/.config/ervisio/plugins/docker", "create":
 true}` is created (0700 under `~`, else 0755) the first time you write into it. `files.mkdir` and `files.remove` work
 only inside `write` folders.
 
@@ -218,4 +218,4 @@ access is limited to
 `capabilities.network` hosts over https/wss, and requests from the frame never carry the user's session cookie.
 A plugin can still show the user whatever it likes inside its frame, and it can send data it was given to a declared
 network host, or away by navigating its own frame (the app then stops the frame). Install plugins you trust; signed
-plugins are verified against the LinuxAdmin team key.
+plugins are verified against the Ervisio team key.

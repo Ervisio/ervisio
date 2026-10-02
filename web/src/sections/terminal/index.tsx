@@ -14,7 +14,7 @@ import TerminalView from './TerminalView';
 import { newId, type Host, type HistoryItem, type SessionInfo, type Snippet, type TermHandle } from './types';
 import './terminal.css';
 
-const LAYOUT_KEY = 'la.term.layout';
+const LAYOUT_KEY = 'ervisio.term.layout';
 type Panes = [string | null, string | null];
 interface Layout {
   open: string[];

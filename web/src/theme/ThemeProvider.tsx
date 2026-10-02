@@ -157,7 +157,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       exportTheme: (t) => {
         const { custom: _c, ...rest } = t;
         void _c;
-        return JSON.stringify({ linuxadminTheme: 1, ...rest }, null, 2);
+        return JSON.stringify({ ervisioTheme: 1, ...rest }, null, 2);
       },
       snapshot: () => ({ themeId, colourMode, follow }),
       restore: (s) => {

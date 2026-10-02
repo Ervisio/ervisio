@@ -47,7 +47,7 @@
     "export": "Export JSON",
     "imported": "{name} imported",
     "importFailed": "Couldn't import that theme",
-    "importFailedHint": "Pick a JSON file exported from LinuxAdmin.",
+    "importFailedHint": "Pick a JSON file exported from Ervisio.",
     "createTitle": "Create a theme",
     "editTitle": "Edit theme",
     "createHint": "Starts from the current theme. Changes show live.",
@@ -201,7 +201,7 @@
     "devDesc": "Load plugins from a folder and reload them on save."
   },
   "about": {
-    "versionDesc": "A web console for Linux servers.",
+    "versionDesc": "A web console for Linux servers (formerly LinuxAdmin).",
     "host": "This server",
     "user": "Signed in as",
     "config": "Configuration file",
@@ -283,7 +283,7 @@
       "waiting": "Wait for version {version} to answer",
       "done": "Version {version} is running. Reloading…",
       "rolledBack": "Version {version} did not start, so the server went back to {from}. Nothing else changed. Reload the page and sign in again.",
-      "timeout": "The server did not answer within 3 minutes. Reload the page in a moment; if it still does not answer, check `journalctl -u linuxadmin` on the server.",
+      "timeout": "The server did not answer within 3 minutes. Reload the page in a moment; if it still does not answer, check `journalctl -u ervisio` on the server.",
       "error": "The update did not start: {error}",
       "reload": "Reload",
       "close": "Close"

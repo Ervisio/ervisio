@@ -11,7 +11,7 @@ interface PrefsValue {
   set(key: string, value: unknown): Promise<void>;
 }
 const Ctx = createContext<PrefsValue | null>(null);
-const CACHE = 'la.prefs';
+const CACHE = 'ervisio.prefs';
 
 export function PrefsProvider({ children }: { children: ReactNode }) {
   const { status } = useSession();

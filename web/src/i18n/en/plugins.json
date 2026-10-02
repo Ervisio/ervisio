@@ -30,7 +30,7 @@
   "invalidSignature": "Invalid signature",
   "signed": "Signed",
   "unsigned": "Unsigned",
-  "signedOk": "Signed by the LinuxAdmin team",
+  "signedOk": "Signed by the Ervisio team",
   "broken": "Cannot load",
   "blocked": "Blocked",
   "devBadge": "Dev",
@@ -76,8 +76,8 @@
   },
   "cap": {
     "root": "Run commands as root",
-    "rootText_one": "Only the 1 fixed command it declares, through the LinuxAdmin helper.",
-    "rootText_other": "Only the {count} fixed commands it declares, through the LinuxAdmin helper.",
+    "rootText_one": "Only the 1 fixed command it declares, through the Ervisio helper.",
+    "rootText_other": "Only the {count} fixed commands it declares, through the Ervisio helper.",
     "rootGroup": "Without root if you are in the {groups} group.",
     "user": "Run commands as you",
     "userText_one": "Only the 1 fixed command it declares.",
@@ -119,7 +119,7 @@
     "titleInstall": "Install {name}?",
     "titleUpdate": "Update {name}?",
     "lead": "This plugin will be able to:",
-    "leadCommunity": "This plugin is not signed by the LinuxAdmin team. Only continue if you trust its author. It will be able to:",
+    "leadCommunity": "This plugin is not signed by the Ervisio team. Only continue if you trust its author. It will be able to:",
     "allow": "Install and allow",
     "allowUpdate": "Update and allow",
     "sandbox": "Plugins run isolated from the console: they can only use the permissions listed here, with your rights, and ask before using administrator rights."

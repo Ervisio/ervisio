@@ -30,7 +30,7 @@
   "invalidSignature": "Firma non valida",
   "signed": "Firmato",
   "unsigned": "Non firmato",
-  "signedOk": "Firmato dal team LinuxAdmin",
+  "signedOk": "Firmato dal team Ervisio",
   "broken": "Non caricabile",
   "blocked": "Bloccato",
   "devBadge": "Dev",
@@ -76,8 +76,8 @@
   },
   "cap": {
     "root": "Eseguire comandi come root",
-    "rootText_one": "Solo l'unico comando fisso che dichiara, tramite l'helper di LinuxAdmin.",
-    "rootText_other": "Solo i {count} comandi fissi che dichiara, tramite l'helper di LinuxAdmin.",
+    "rootText_one": "Solo l'unico comando fisso che dichiara, tramite l'helper di Ervisio.",
+    "rootText_other": "Solo i {count} comandi fissi che dichiara, tramite l'helper di Ervisio.",
     "rootGroup": "Senza root se fai parte del gruppo {groups}.",
     "user": "Eseguire comandi come te",
     "userText_one": "Solo l'unico comando fisso che dichiara.",
@@ -119,7 +119,7 @@
     "titleInstall": "Installare {name}?",
     "titleUpdate": "Aggiornare {name}?",
     "lead": "Questo plugin potrà:",
-    "leadCommunity": "Questo plugin non è firmato dal team LinuxAdmin. Continua solo se ti fidi dell'autore. Potrà:",
+    "leadCommunity": "Questo plugin non è firmato dal team Ervisio. Continua solo se ti fidi dell'autore. Potrà:",
     "allow": "Installa e consenti",
     "allowUpdate": "Aggiorna e consenti",
     "sandbox": "I plugin girano isolati dalla console: possono usare solo i permessi elencati qui, con i tuoi diritti, e chiedono prima di usare i diritti di amministratore."

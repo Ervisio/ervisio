@@ -123,7 +123,7 @@ export function enqueueUpload(o: UploadOpts) {
   const start = () => {
     xhr = new XMLHttpRequest();
     xhr.open('POST', uploadUrl(target, admin, overwrite));
-    xhr.setRequestHeader('X-Requested-With', 'linuxadmin');
+    xhr.setRequestHeader('X-Requested-With', 'ervisio');
     xhr.withCredentials = true;
     last = { t: performance.now(), b: 0 };
     xhr.upload.onprogress = (ev) => {

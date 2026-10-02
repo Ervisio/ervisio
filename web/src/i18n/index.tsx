@@ -72,7 +72,7 @@ interface I18nValue {
 const Ctx = createContext<I18nValue | null>(null);
 const initialLang = (): Lang => {
   try {
-    const l = localStorage.getItem('la.lang');
+    const l = localStorage.getItem('ervisio.lang');
     return l === 'it' ? 'it' : 'en';
   } catch {
     return 'en';
@@ -90,7 +90,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     try {
-      localStorage.setItem('la.lang', lang);
+      localStorage.setItem('ervisio.lang', lang);
     } catch {
       /* ignore */
     }

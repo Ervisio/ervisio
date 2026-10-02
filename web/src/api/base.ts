@@ -1,6 +1,6 @@
 /**
  * The one place that knows where the daemon lives. Default: same origin as the page (production build served by
- * linuxadmind, or the Vite dev proxy). Set VITE_API_BASE=https://host:9090 for a wrapper that is not served by
+ * ervisiod, or the Vite dev proxy). Set VITE_API_BASE=https://host:9090 for a wrapper that is not served by
  * the daemon (e.g. a desktop shell). Never build API URLs anywhere else.
  */
 export const API_BASE: string = ((import.meta.env.VITE_API_BASE as string | undefined) ?? '').replace(/\/$/, '');

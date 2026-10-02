@@ -46,7 +46,7 @@
     "tonight": "Stanotte alle {time}",
     "at": "Ogni giorno alle {time}",
     "title": "Aggiorna automaticamente",
-    "text": "Il server installa tutti gli aggiornamenti ogni giorno a quest'ora, come Aggiorna tutto. Usa un timer systemd chiamato linuxadmin-update.timer.",
+    "text": "Il server installa tutti gli aggiornamenti ogni giorno a quest'ora, come Aggiorna tutto. Usa un timer systemd chiamato ervisio-update.timer.",
     "time": "Ora del giorno",
     "hint": "Ora del server, formato 24 ore. Se a quell'ora la macchina è spenta, l'aggiornamento parte all'accensione.",
     "save": "Pianifica gli aggiornamenti",

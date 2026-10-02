@@ -47,7 +47,7 @@
     "export": "Esporta JSON",
     "imported": "{name} importato",
     "importFailed": "Impossibile importare quel tema",
-    "importFailedHint": "Scegli un file JSON esportato da LinuxAdmin.",
+    "importFailedHint": "Scegli un file JSON esportato da Ervisio.",
     "createTitle": "Crea un tema",
     "editTitle": "Modifica tema",
     "createHint": "Parte dal tema attuale. Le modifiche si vedono subito.",
@@ -201,7 +201,7 @@
     "devDesc": "Carica i plugin da una cartella e ricaricali al salvataggio."
   },
   "about": {
-    "versionDesc": "Una console web per server Linux.",
+    "versionDesc": "Una console web per server Linux (in precedenza LinuxAdmin).",
     "host": "Questo server",
     "user": "Accesso come",
     "config": "File di configurazione",
@@ -283,7 +283,7 @@
       "waiting": "Attesa della risposta della versione {version}",
       "done": "La versione {version} è in esecuzione. Ricarico…",
       "rolledBack": "La versione {version} non si è avviata, quindi il server è tornato alla {from}. Nient'altro è cambiato. Ricarica la pagina e accedi di nuovo.",
-      "timeout": "Il server non ha risposto entro 3 minuti. Ricarica la pagina tra poco; se ancora non risponde, controlla `journalctl -u linuxadmin` sul server.",
+      "timeout": "Il server non ha risposto entro 3 minuti. Ricarica la pagina tra poco; se ancora non risponde, controlla `journalctl -u ervisio` sul server.",
       "error": "L'aggiornamento non è partito: {error}",
       "reload": "Ricarica",
       "close": "Chiudi"

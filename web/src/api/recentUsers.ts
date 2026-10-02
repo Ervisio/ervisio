@@ -10,8 +10,8 @@ export interface RecentUser {
   method?: 'key';
 }
 
-const LIST = 'la.recentUsers';
-const OPT_IN = 'la.rememberUsers';
+const LIST = 'ervisio.recentUsers';
+const OPT_IN = 'ervisio.rememberUsers';
 
 export function recentUsersEnabled(): boolean {
   try {

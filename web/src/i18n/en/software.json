@@ -46,7 +46,7 @@
     "tonight": "Tonight at {time}",
     "at": "Daily at {time}",
     "title": "Update automatically",
-    "text": "The server installs all updates every day at this time, like Update all. It uses a systemd timer called linuxadmin-update.timer.",
+    "text": "The server installs all updates every day at this time, like Update all. It uses a systemd timer called ervisio-update.timer.",
     "time": "Time of day",
     "hint": "Server time, 24-hour clock. If the machine is off at that time, the update runs when it starts.",
     "save": "Schedule updates",

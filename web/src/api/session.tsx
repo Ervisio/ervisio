@@ -34,7 +34,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [host, setHost] = useState<PublicHost | null>(() => {
     try {
-      return JSON.parse(localStorage.getItem('la.host') || 'null');
+      return JSON.parse(localStorage.getItem('ervisio.host') || 'null');
     } catch {
       return null;
     }
@@ -60,7 +60,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       .then((h) => {
         setHost(h);
         try {
-          localStorage.setItem('la.host', JSON.stringify(h));
+          localStorage.setItem('ervisio.host', JSON.stringify(h));
         } catch {
           /* ignore */
         }

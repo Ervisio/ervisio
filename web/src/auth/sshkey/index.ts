@@ -13,7 +13,7 @@
  *   Prefer `useSession().signInWithKey(...)`, which also updates the session state.
  *
  * The private key and passphrase stay in the page: only the public key and a signature over
- * "linuxadmin-ssh-auth-v1\n<host>\n<user>\n<nonce>" are sent.
+ * "ervisio-ssh-auth-v1\n<host>\n<user>\n<nonce>" are sent.
  */
 import { authChallenge, loginKey } from '../../api/client';
 import { signInWithKeyUsing, type KeySignInResult, type SignInWithKeyArgs, type Transport } from './signin.ts';

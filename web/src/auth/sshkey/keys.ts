@@ -569,7 +569,7 @@ async function signer(k: Material): Promise<(data: Uint8Array) => Promise<Bytes>
  * match its public part fails here (corrupt_key) instead of being refused by the server.
  */
 async function selfTest(k: Material, sign: (data: Uint8Array) => Promise<Bytes>): Promise<void> {
-  const msg = utf8('linuxadmin-ssh-key-self-test');
+  const msg = utf8('ervisio-ssh-key-self-test');
   const r = new Reader(await sign(msg));
   r.string();
   const sig = r.string();

@@ -4,7 +4,7 @@ import { SshKeyError, type SshKeyErrorCode } from './errors.ts';
 import { parsePrivateKey, type PrivateKey } from './keys.ts';
 
 /** Domain-separation prefix; must match server/internal/sshauth.Prefix. */
-export const SIGN_PREFIX = 'linuxadmin-ssh-auth-v1';
+export const SIGN_PREFIX = 'ervisio-ssh-auth-v1';
 
 /** The exact text signed: prefix, host, user and nonce, one per line. */
 export function challengeMessage(host: string, user: string, nonce: string): string {

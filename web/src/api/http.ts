@@ -15,7 +15,7 @@ export async function http<T>(
     res = await fetch(apiUrl(path), {
       method: init.method ?? (init.body !== undefined ? 'POST' : 'GET'),
       headers: {
-        'X-Requested-With': 'linuxadmin',
+        'X-Requested-With': 'ervisio',
         ...(init.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
       },
       body: init.body !== undefined ? JSON.stringify(init.body) : undefined,

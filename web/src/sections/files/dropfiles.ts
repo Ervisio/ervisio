@@ -33,4 +33,4 @@ async function walk(e: FileSystemEntry, prefix: string, out: Dropped[]): Promise
   }
 }
 
-export const DRAG_TYPE = 'application/x-linuxadmin-files';
+export const DRAG_TYPE = 'application/x-ervisio-files';

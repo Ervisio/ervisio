@@ -26,7 +26,7 @@ export function bootMode(enabled: string): 'on' | 'off' | 'fixed' {
 }
 
 /** Units whose stopping can cut the user off from the machine. */
-const CRITICAL = /^(sshd?|linuxadmin.*|NetworkManager|systemd-(networkd|resolved|logind|journald|udevd)|dbus.*|polkit|getty.*|systemd-.*)\.(service|socket)$/i;
+const CRITICAL = /^(sshd?|ervisio.*|linuxadmin.*|NetworkManager|systemd-(networkd|resolved|logind|journald|udevd)|dbus.*|polkit|getty.*|systemd-.*)\.(service|socket)$/i;
 
 export function isCritical(name: string): boolean {
   return CRITICAL.test(name);

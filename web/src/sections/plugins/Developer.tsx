@@ -14,7 +14,7 @@ interface DevInfo {
   note?: string;
 }
 
-export const DOCS_URL = 'https://github.com/Fonlogen/LinuxAdmin/blob/main/web/PLUGIN-SDK.md';
+export const DOCS_URL = 'https://github.com/ervisio/ervisio/blob/main/web/PLUGIN-SDK.md';
 
 export function Developer({ plugins, refresh }: { plugins: PluginInfo[]; refresh(reloadLoader?: boolean): Promise<void> }) {
   const t = useT('plugins');
@@ -44,7 +44,7 @@ export function Developer({ plugins, refresh }: { plugins: PluginInfo[]; refresh
         <Tile icon="code" color="term" />
         <div className="plugins-dev-tx">
           <b>{t('dev.title')}</b>
-          <small>{t('dev.text')} <code>~/projects/linuxadmin-plugin-zfs</code></small>
+          <small>{t('dev.text')} <code>~/projects/ervisio-plugin-zfs</code></small>
         </div>
         <div className="plugins-dev-act">
           <a className="ui-btn" href={DOCS_URL} target="_blank" rel="noreferrer"><Icon name="externallink" />{t('dev.docs')}</a>

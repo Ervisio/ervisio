@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-const target = process.env.LINUXADMIN_API ?? 'http://127.0.0.1:9090';
+const target = process.env.ERVISIO_API ?? process.env.LINUXADMIN_API ?? 'http://127.0.0.1:9090';
 
 export default defineConfig({
   plugins: [react()],
@@ -15,6 +15,6 @@ export default defineConfig({
       '/plugin-frame/': { target, changeOrigin: false },
     },
   },
-  // assetsInlineLimit 0: never inline fonts/images as data: URIs (strict CSP served by linuxadmind)
+  // assetsInlineLimit 0: never inline fonts/images as data: URIs (strict CSP served by ervisiod)
   build: { outDir: 'dist', sourcemap: false, chunkSizeWarningLimit: 700, assetsInlineLimit: 0 },
 });

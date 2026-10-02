@@ -4,7 +4,7 @@ import { useT } from '../../i18n';
 import { Button, Dialog, Input, toast } from '../../ui';
 import { loadSummary } from './store';
 
-/** Schedule the nightly update: a systemd timer (linuxadmin-update.timer) that runs the same upgrade as "Update all". */
+/** Schedule the nightly update: a systemd timer (ervisio-update.timer) that runs the same upgrade as "Update all". */
 export function ScheduleDialog({ open, onClose, current }: { open: boolean; onClose(): void; current: string | null }) {
   const t = useT('software');
   const [at, setAt] = useState('03:00');

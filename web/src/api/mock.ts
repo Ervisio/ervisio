@@ -1,7 +1,7 @@
 // Tiny in-browser fake daemon for `VITE_MOCK=1 npm run dev`.
 import { ApiError, type PublicHost, type Session } from './types';
 
-const LS = 'la.mock.';
+const LS = 'ervisio.mock.';
 const rd = <T,>(k: string, d: T): T => {
   try {
     const v = localStorage.getItem(LS + k);
@@ -49,7 +49,7 @@ export async function mockAuth(path: string, body: any): Promise<any> {
     case '/api/auth/challenge': {
       if (body.user === 'root') throw new ApiError('forbidden', 'Root login is disabled on this server.', { reason: 'root_disabled' }, 403);
       const nonce = Array.from(crypto.getRandomValues(new Uint8Array(43)), (b) => 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'[b & 63]).join('');
-      return delay({ nonce, host: body.host, challenge: `linuxadmin-ssh-auth-v1\n${body.host}\n${body.user}\n${nonce}`, expires: Date.now() + 60_000 });
+      return delay({ nonce, host: body.host, challenge: `ervisio-ssh-auth-v1\n${body.host}\n${body.user}\n${nonce}`, expires: Date.now() + 60_000 });
     }
     case '/api/auth/login-key':
       // Mock: any well-formed key signs in.
@@ -102,7 +102,7 @@ const MOCK_KEYS = [
   { key: 'updates.channel', type: 'enum', values: ['stable', 'prerelease'] }, { key: 'updates.auto_check', type: 'bool' },
   { key: 'updates.auto_install', type: 'bool' }, { key: 'updates.auto_install_at', type: 'string' },
 ];
-const mockState = () => ({ path: '/etc/linuxadmin/linuxadmin.conf', exists: true, values: { ...cfg }, defaults: {}, keys: MOCK_KEYS, warnings: [] });
+const mockState = () => ({ path: '/etc/ervisio/ervisio.conf', exists: true, values: { ...cfg }, defaults: {}, keys: MOCK_KEYS, warnings: [] });
 
 export async function mockCall(method: string, params: any, _admin?: boolean): Promise<any> {
   switch (method) {
@@ -143,11 +143,11 @@ export async function mockCall(method: string, params: any, _admin?: boolean): P
     case 'plugins.list':
       return delay([]);
     case 'updates.status': {
-      // localStorage['la.mock.managedBy'] = '"apt"' shows a packaged install.
+      // localStorage['ervisio.mock.managedBy'] = '"apt"' shows a packaged install.
       const managedBy = rd('managedBy', '');
       if (managedBy) {
         return delay({
-          current: '1.0.0', install: 'flat', canUpdate: false, reason: `LinuxAdmin was installed by a package manager, which installs its updates (${managedBy})`,
+          current: '1.0.0', install: 'flat', canUpdate: false, reason: `Ervisio was installed by a package manager, which installs its updates (${managedBy})`,
           previous: '', installed: [], last: null, running: false, packageBusy: false, arch: 'amd64', managedBy,
           settings: { channel: cfg['updates.channel'], autoCheck: cfg['updates.auto_check'], autoInstall: cfg['updates.auto_install'], autoInstallAt: cfg['updates.auto_install_at'] },
         });
@@ -164,8 +164,8 @@ export async function mockCall(method: string, params: any, _admin?: boolean): P
         current: '1.0.0', channel: cfg['updates.channel'], autoCheck: cfg['updates.auto_check'], checkedAt: Date.now(), newer: true, arch: 'amd64',
         managedBy: rd('managedBy', '') || undefined,
         latest: {
-          version: '1.1.0', tag: 'v1.1.0', name: 'LinuxAdmin 1.1.0', publishedAt: Date.now() - 86400e3 * 2, prerelease: false,
-          asset: 'linuxadmin-1.1.0-linux-amd64.tar.gz', size: 16_432_392, url: 'https://github.com/Fonlogen/LinuxAdmin/releases/tag/v1.1.0',
+          version: '1.1.0', tag: 'v1.1.0', name: 'Ervisio 1.1.0', publishedAt: Date.now() - 86400e3 * 2, prerelease: false,
+          asset: 'ervisio-1.1.0-linux-amd64.tar.gz', size: 16_432_392, url: 'https://github.com/ervisio/ervisio/releases/tag/v1.1.0',
           notes: '## Highlights\n- **Self-update** from Settings › About\n- Faster file manager thumbnails\n\n## Fixes\n- Terminal no longer loses the cursor after a resize (`#42`)\n- Logs: watcher retention is applied',
         },
       }, 400);

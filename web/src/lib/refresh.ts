@@ -34,7 +34,7 @@ export function formatInterval(ms: number): string {
   return `${s} s`;
 }
 
-const NOW_EVENT = 'la:refresh-now';
+const NOW_EVENT = 'ervisio:refresh-now';
 /** Ask every live view (metrics stream, alerts, pollers using usePolling) to refresh immediately. */
 export function refreshNow() {
   window.dispatchEvent(new Event(NOW_EVENT));

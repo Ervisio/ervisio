@@ -74,7 +74,7 @@ export function applyVars(vars: Record<string, string>, scheme: 'dark' | 'light'
   }
   m.setAttribute('content', vars['--bg']);
   try {
-    localStorage.setItem('la.themeVars', JSON.stringify({ vars, scheme }));
+    localStorage.setItem('ervisio.themeVars', JSON.stringify({ vars, scheme }));
   } catch {
     /* ignore */
   }
