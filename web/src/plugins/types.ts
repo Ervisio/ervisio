@@ -97,6 +97,8 @@ export interface PluginEnv {
   id: string;
   name: string;
   kind: 'tcp-tls' | 'ssh' | 'portainer-agent' | 'ervisio';
+  /** Display address, no secret: host:port, user@host:port (ssh), or the other server's host (ervisio). */
+  address?: string;
   status?: { reachable: boolean; engineVersion?: string; apiVersion?: string; latencyMs: number; error?: string; checked: string };
 }
 

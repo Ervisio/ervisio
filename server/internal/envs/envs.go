@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -185,10 +186,33 @@ func (v View) MarshalJSON() ([]byte, error) {
 
 // Brief is what plugins.envs.list gives a plugin.
 type Brief struct {
-	ID     string  `json:"id"`
-	Name   string  `json:"name"`
-	Kind   string  `json:"kind"`
-	Status *Status `json:"status,omitempty"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Kind string `json:"kind"`
+	// Address is for display only: host:port (tcp-tls, portainer-agent),
+	// user@host:port (ssh), the host of the other server's URL (ervisio).
+	// It holds no path, credential or secret.
+	Address string  `json:"address,omitempty"`
+	Status  *Status `json:"status,omitempty"`
+}
+
+// DisplayAddress is the non-secret address a user who may use the
+// environment sees (plugins.envs.list). Never anything but a host name or
+// address, a port and, for ssh, the login name.
+func (e *Env) DisplayAddress() string {
+	switch e.Kind {
+	case KindErvisio:
+		u, err := url.Parse(e.Address)
+		if err != nil || u.Host == "" {
+			return ""
+		}
+		return u.Host // the userinfo, path and query are left out
+	case KindSSH:
+		if e.User != "" {
+			return e.User + "@" + e.Address
+		}
+	}
+	return e.Address
 }
 
 // Input is a create or update request. Secret fields are only read: an

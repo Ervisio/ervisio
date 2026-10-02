@@ -552,8 +552,12 @@ Params `{"id"}` → `{"id","network":[…]}` when the plugin exists, is enabled,
 user; any refusal is `not_found`. The daemon asks it before serving `/plugins/<id>/…` or `/plugin-frame/<id>`.
 
 ### `plugins.envs.list` (user; answered by the daemon)
-Params `{}` → `[{"id","name","kind","status"?:{"reachable","engineVersion"?,"apiVersion"?,"latencyMs","error"?,"checked"}}]`: the
-environments the user may use (access list), never any secret. See [environments.md](environments.md).
+Params `{}` → `[{"id","name","kind","address"?,"status"?:{"reachable","engineVersion"?,"apiVersion"?,"latencyMs","error"?,"checked"}}]`: the
+environments the user may use (access list), never any secret. `address` is for display: `host:port` (tcp-tls, portainer-agent),
+`user@host:port` (ssh), the host of the other server's URL (ervisio; no path, no credentials). It is shown to every user
+who may use the environment, which is acceptable: an administrator chose to give them the environment, the list is
+already filtered by its access list, the address is not a secret (the keys, passphrases, tokens and certificates
+pinned never leave the daemon), and the Docker plugin needs it to tell two hosts with the same name apart. See [environments.md](environments.md).
 
 ### `plugins.envCheck` (user; used by the daemon)
 Params `{"method","kind","params"}` (the original call). For the files methods it succeeds only for `kind: "ervisio"` when the

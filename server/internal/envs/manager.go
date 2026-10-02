@@ -398,7 +398,7 @@ func (m *Manager) Briefs(user string, groups []string) []Brief {
 	defer m.mu.Unlock()
 	for _, e := range m.st.list() {
 		if e.Allowed(user, groups) {
-			out = append(out, Brief{ID: e.ID, Name: e.Name, Kind: e.Kind, Status: m.status[e.ID]})
+			out = append(out, Brief{ID: e.ID, Name: e.Name, Kind: e.Kind, Address: e.DisplayAddress(), Status: m.status[e.ID]})
 		}
 	}
 	return out

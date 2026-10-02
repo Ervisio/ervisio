@@ -182,7 +182,7 @@ Answered by the daemon. Admin unless noted. Errors: `invalid` (message fit for t
 
 | Method | Params | Result |
 |---|---|---|
-| `plugins.envs.list` (user) | `{}` | `[{id, name, kind, status}]` for the caller |
+| `plugins.envs.list` (user) | `{}` | `[{id, name, kind, address, status}; `address` is the non-secret display address (see plugins.md)]` for the caller |
 | `envs.list` | `{}` | `{envs:[View], pairings:[{id,name,user,createdBy,created,lastUsed,lastVia,lastAddr}], openTokens, server}` |
 | `envs.probe` | `{kind, address, user?, insecure?}` | `{fingerprint, hostKey?, plain?, kind}`: connects and shows what to confirm |
 | `envs.create` | `Input` (below) | the View with its first status. Saved even if the host is down (the status says why) |

@@ -78,3 +78,21 @@ func TestTunnelFolderIsTheDaemonsAndReplacesAnOldOne(t *testing.T) {
 		t.Fatal("a symlinked base was accepted")
 	}
 }
+
+func TestDisplayAddressIsNonSecret(t *testing.T) {
+	for _, c := range []struct {
+		e    Env
+		want string
+	}{
+		{Env{Kind: KindTCPTLS, Address: "10.0.0.5:2376"}, "10.0.0.5:2376"},
+		{Env{Kind: KindPortainerAgent, Address: "agent.lan:9001"}, "agent.lan:9001"},
+		{Env{Kind: KindSSH, Address: "box:22", User: "deploy"}, "deploy@box:22"},
+		{Env{Kind: KindSSH, Address: "box:22"}, "box:22"},
+		{Env{Kind: KindErvisio, Address: "https://tok:pw@srv.lan:9090/x?y=1"}, "srv.lan:9090"},
+		{Env{Kind: KindErvisio, Address: "::bad"}, ""},
+	} {
+		if got := c.e.DisplayAddress(); got != c.want {
+			t.Errorf("%+v: %q, want %q", c.e, got, c.want)
+		}
+	}
+}
