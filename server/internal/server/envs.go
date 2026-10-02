@@ -184,6 +184,11 @@ func (s *Server) envsCall(ctx context.Context, sess *Session, method string, par
 			return nil, envErr(err), true
 		}
 		s.log.Printf("environments: %s added %q (%s)", sess.Account.Name, v.Name, v.Kind)
+		if v.Kind == envs.KindErvisio {
+			// The name is what the other server says it is; what identifies
+			// it is the certificate pinned when it was added.
+			s.log.Printf("environments: %q is paired with a server that calls itself %q, pinned certificate %s", v.Name, v.PairedWith, v.Fingerprint)
+		}
 		return v, nil, true
 	case "envs.update":
 		var p struct {

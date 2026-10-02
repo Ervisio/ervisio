@@ -65,6 +65,10 @@ func writeHosts(f hostsFile) error {
 		return err
 	}
 	defer os.Remove(tmp.Name())
+	// World-readable on purpose: every user's bridge reads the approvals
+	// (plugins.network.request/list, plugins.access for the frame's
+	// policy). The file holds plugin ids, host names and the approver's
+	// user name, nothing secret; only root writes it (state dir 0755).
 	if err := tmp.Chmod(0o644); err != nil {
 		tmp.Close()
 		return err
@@ -192,7 +196,10 @@ func netRequest(_ context.Context, c *rpc.Call) (any, error) {
 		return NetworkRequest{Status: "approved", Host: hp, Scheme: "https"}, nil
 	}
 	for _, a := range approvedFor(f.M.ID) {
-		if a.Host == hp && (a.Scheme == sch || a.Scheme == "http" && sch == "https") {
+		// The scheme must match: an approval for plain http is not one for
+		// https (or the other way round); the frame's policy holds exactly
+		// what was approved.
+		if a.Host == hp && a.Scheme == sch {
 			return NetworkRequest{Status: "approved", Host: hp, Scheme: a.Scheme}, nil
 		}
 	}

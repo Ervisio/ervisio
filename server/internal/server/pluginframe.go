@@ -83,7 +83,9 @@ func pluginFrameCSP(nonce string, hosts []string) string {
 			switch {
 			case !pluginHostRe.MatchString(h):
 			case strings.HasPrefix(h, "http://"): // approved as plain http
-				srcs = append(srcs, h, "ws://"+h[len("http://"):])
+				// Only http: an http approval is not one for unencrypted
+				// WebSockets (ws://), which nobody approved.
+				srcs = append(srcs, h)
 			default:
 				srcs = append(srcs, "https://"+h, "wss://"+h)
 			}

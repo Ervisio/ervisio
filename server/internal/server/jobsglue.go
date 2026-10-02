@@ -112,6 +112,9 @@ type pooled struct {
 	p     *bridge.Proc
 	refs  int
 	timer *time.Timer
+	// starting is closed when the bridge has started (or failed to); it is
+	// nil once p is set.
+	starting chan struct{}
 }
 
 // jobBridgeIdle is how long an unused job bridge is kept.
@@ -120,24 +123,56 @@ const jobBridgeIdle = 5 * time.Minute
 func newBridgePool() *bridgePool { return &bridgePool{m: map[string]*pooled{}} }
 
 // acquire returns the live bridge for key, starting it with start when
-// there is none, and counts a use. release must follow.
+// there is none, and counts a use. release must follow. A bridge is started
+// without holding the pool's lock (it can take seconds: a PAM session, a
+// slow NSS lookup); other callers for the same key wait for it, callers for
+// other keys do not.
 func (bp *bridgePool) acquire(key string, start func() (*bridge.Proc, error)) (*bridge.Proc, error) {
 	bp.mu.Lock()
-	defer bp.mu.Unlock()
-	e := bp.m[key]
-	if e != nil && e.p.Alive() {
-		e.refs++
-		if e.timer != nil {
-			e.timer.Stop()
-			e.timer = nil
+	for {
+		e := bp.m[key]
+		if e != nil && e.starting != nil {
+			ch := e.starting
+			bp.mu.Unlock()
+			<-ch
+			bp.mu.Lock()
+			continue
 		}
-		return e.p, nil
+		if e != nil && e.p.Alive() {
+			e.refs++
+			if e.timer != nil {
+				e.timer.Stop()
+				e.timer = nil
+			}
+			bp.mu.Unlock()
+			return e.p, nil
+		}
+		break
 	}
+	e := &pooled{starting: make(chan struct{})}
+	bp.m[key] = e
+	bp.mu.Unlock()
+
 	p, err := start()
-	if err != nil {
+
+	bp.mu.Lock()
+	defer bp.mu.Unlock()
+	close(e.starting)
+	e.starting = nil
+	if bp.m[key] != e { // closeAll ran meanwhile (shutdown)
+		if p != nil {
+			go p.Stop()
+		}
+		if err == nil {
+			err = rpc.Errorf(rpc.Unavailable, "The server is shutting down.")
+		}
 		return nil, err
 	}
-	bp.m[key] = &pooled{p: p, refs: 1}
+	if err != nil {
+		delete(bp.m, key)
+		return nil, err
+	}
+	e.p, e.refs = p, 1
 	return p, nil
 }
 
@@ -174,7 +209,9 @@ func (bp *bridgePool) closeAll() {
 		if e.timer != nil {
 			e.timer.Stop()
 		}
-		e.p.Stop()
+		if e.p != nil { // a bridge still starting is stopped by acquire
+			e.p.Stop()
+		}
 	}
 }
 

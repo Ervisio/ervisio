@@ -269,6 +269,14 @@ func TestUserHostApproval(t *testing.T) {
 	if _, err := call("plugins.network.approve", map[string]string{"plugin": "envp", "host": "plain.lan", "scheme": "http"}, true); err != nil {
 		t.Fatal(err)
 	}
+	// An http approval is not one for https (review: the frame's policy
+	// would not allow it anyway).
+	if r := req("plain.lan", "http"); r.Status != "approved" || r.Scheme != "http" {
+		t.Fatalf("http after an http approval: %+v", r)
+	}
+	if r := req("plain.lan", "https"); r.Status != "pending" {
+		t.Fatalf("https after an http approval: %+v", r)
+	}
 	// The frame's CSP list gets both, http ones with their scheme.
 	info, err := access(ctx, &rpc.Call{Params: []byte(`{"id":"envp"}`)})
 	if err != nil {

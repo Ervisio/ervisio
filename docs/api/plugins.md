@@ -556,9 +556,11 @@ administrator already approved it; `pending` otherwise: the web app then asks an
 
 ### `plugins.network.approve` / `plugins.network.revoke` (admin)
 Params `{"plugin","host","scheme"?}` / `{"plugin","host"}`. Approvals are kept in `/var/lib/ervisio/plugins-hosts.json` (root writes, 0644)
-as `{plugin, host, scheme, by, at}`. `plugins.access` adds the approved hosts to the frame's `network` list (an http
-approval as `http://host:port`, which the frame's CSP turns into `http://` and `ws://` sources); the web app reloads the
-plugin's frames after an approval. `plugins.network.list` (user) returns `{"approved":[…]}` for Settings.
+as `{plugin, host, scheme, by, at}`; it is world-readable because every user's bridge reads it, and holds nothing secret.
+`plugins.access` adds the approved hosts to the frame's `network` list (an http approval as `http://host:port`, which the
+frame's CSP turns into an `http://` source only: not `ws://`, which nobody approved); the web app reloads the plugin's
+frames after an approval. An approval is for its scheme only: `plugins.network.request` for `https` stays `pending` when
+only `http` was approved, and the other way round. `plugins.network.list` (user) returns `{"approved":[…]}` for Settings.
 
 ### `plugins.loadDev` (user)
 Params `{"path":"~/projects/my-plugin"}` → `{path,id,name,linked,note?}`. Allowed only in dev mode (`plugins.dev = true` or daemon `--dev`),

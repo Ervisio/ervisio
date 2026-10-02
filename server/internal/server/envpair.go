@@ -67,7 +67,7 @@ func (s *Server) handlePairRedeem(w http.ResponseWriter, r *http.Request) {
 		writeErrorStatus(w, http.StatusForbidden, envErr(err))
 		return
 	}
-	s.log.Printf("pairing: %q (%s) paired as %s", req.Name, clientIP(r), res.User)
+	s.log.Printf("pairing: a server that calls itself %q (%s) paired as %s, pairing %s", req.Name, clientIP(r), res.User, res.PairID)
 	writeJSON(w, http.StatusOK, res)
 }
 
@@ -110,7 +110,7 @@ func (s *Server) handlePairRevoke(w http.ResponseWriter, r *http.Request) {
 	}
 	_, _ = s.env.m.RevokePairing(p.ID)
 	s.closePairConns(p.ID)
-	s.log.Printf("pairing: %q revoked its own pairing %s", p.Name, p.ID)
+	s.log.Printf("pairing: pairing %s (calls itself %q) revoked itself", p.ID, p.Name)
 	writeJSON(w, http.StatusOK, map[string]string{"id": p.ID})
 }
 
@@ -132,13 +132,17 @@ func (s *Server) handlePairBridge(w http.ResponseWriter, r *http.Request) {
 		writeError(w, e)
 		return
 	}
+	// The server and user names come from the other server: they are what
+	// it claims. What is known is the pairing (its id, made when a token of
+	// this server was redeemed), so the text names the pairing too.
 	viaSrv, viaUser := r.Header.Get(envs.HeaderViaSrv), r.Header.Get(envs.HeaderViaUsr)
-	via := p.Name
+	claimed := p.Name
 	if viaSrv != "" {
-		via = viaSrv
+		claimed = viaSrv
 	}
+	via := clipText(claimed, 64) + " (pairing " + p.ID + ")"
 	if viaUser != "" {
-		via += " by " + viaUser
+		via += " by " + clipText(viaUser, 64)
 	}
 	s.env.mu.Lock()
 	open := len(s.env.pairConns[p.ID])
@@ -269,6 +273,20 @@ func (s *Server) handlePairBridge(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+// clipText keeps a claimed name printable and short for the logs.
+func clipText(s string, n int) string {
+	s = strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, s)
+	if len(s) > n {
+		s = strings.ToValidUTF8(s[:n], "") + "…"
+	}
+	return s
 }
 
 // readLongLine reads one protocol line of at most rpc.MaxLine bytes.
