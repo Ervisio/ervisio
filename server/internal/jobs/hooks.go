@@ -210,5 +210,7 @@ func (m *Manager) HandleHook(plugin, token, ip string, body []byte, query url.Va
 	if err != nil {
 		return HookResult{Status: http.StatusNotFound}
 	}
+	snapAudit := *cur
+	defer m.auditWebhook(&snapAudit, hookID, ip, runID)
 	return HookResult{Status: http.StatusAccepted, Run: runID}
 }

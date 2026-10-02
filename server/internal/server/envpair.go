@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -25,7 +26,7 @@ const maxPairConns = 16
 var pairAllowed = map[string]bool{
 	"plugins.http": true, "plugins.httpStream": true,
 	"plugins.exec": true, "plugins.execStream": true, "plugins.pty": true,
-	"plugins.download": true, "plugins.upload": true,
+	"plugins.httpDownload": true, "plugins.httpUpload": true, "plugins.execDownload": true,
 }
 
 func (s *Server) registerPair(mux *http.ServeMux) {
@@ -184,6 +185,42 @@ func (s *Server) handlePairBridge(w http.ResponseWriter, r *http.Request) {
 	defer stop()
 	defer s.trackPairConn(p.ID, stop)()
 
+	// The calls this server runs for the other one go to the activity log
+	// as the local user, with origin "via <server> by <user>".
+	var rmu sync.Mutex
+	recs := map[uint64]*auditRec{}
+	defer func() {
+		rmu.Lock()
+		defer rmu.Unlock()
+		for _, rec := range recs {
+			rec.streamDone(errors.New("the connection to the other server closed"))
+		}
+	}()
+	observe := func(line []byte) {
+		var m rpc.Message
+		if json.Unmarshal(line, &m) != nil || m.ID == 0 || m.Method != "" {
+			return
+		}
+		rmu.Lock()
+		defer rmu.Unlock()
+		rec := recs[m.ID]
+		if rec == nil {
+			return
+		}
+		switch {
+		case m.Error != nil:
+			rec.callDone(nil, m.Error)
+			delete(recs, m.ID)
+		case m.Event == rpc.EventEnd:
+			rec.streamDone(nil)
+			delete(recs, m.ID)
+		case m.Event == rpc.EventData:
+			rec.observe(rpc.Event{Data: m.Data, B64: m.B64})
+		case m.Event == "" && !m.Stream:
+			rec.callDone(m.Result, nil)
+			delete(recs, m.ID)
+		}
+	}
 	// bridge -> other server
 	go func() {
 		defer stop()
@@ -193,6 +230,7 @@ func (s *Server) handlePairBridge(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return
 			}
+			observe(line)
 			if writeLine(line) != nil {
 				return
 			}
@@ -219,6 +257,11 @@ func (s *Server) handlePairBridge(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			m.Params = addVia(m.Params, via)
+			if rec := s.pairAudit(acc.Name, clientIP(r), m, via); rec != nil && m.ID != 0 {
+				rmu.Lock()
+				recs[m.ID] = rec
+				rmu.Unlock()
+			}
 			s.log.Printf("pairing: via %s -> %s %s", via, acc.Name, describeCall(m))
 			line, _ = json.Marshal(m)
 		}
@@ -273,4 +316,27 @@ func describeCall(m rpc.Message) string {
 		s += "/" + p.Command
 	}
 	return s
+}
+
+// pairAudit starts the activity log entry of a call another server made.
+func (s *Server) pairAudit(user, ip string, m rpc.Message, via string) *auditRec {
+	var rec *auditRec
+	switch m.Method {
+	case "plugins.httpDownload", "plugins.httpUpload", "plugins.execDownload":
+		q := &transferRequest{Kind: "download"}
+		if m.Method == "plugins.httpUpload" {
+			q.Kind = "upload"
+		}
+		if json.Unmarshal(m.Params, q) != nil {
+			return nil
+		}
+		rec = s.transferRecordFor(user, ip, q)
+	default:
+		rec = s.auditBeginFor(user, ip, m.Method, m.Params, false)
+	}
+	if rec != nil {
+		rec.e.Origin = via
+		rec.e.Env = ""
+	}
+	return rec
 }

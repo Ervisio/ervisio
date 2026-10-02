@@ -217,5 +217,18 @@ send nothing more.
 
 ## Activity log
 
-Commands and HTTP calls made by jobs are not yet recorded in an activity log: the call sites in
-`server/internal/jobs/run.go` carry `// audit:` comments where the core's audit hook should be called.
+Jobs write to the activity log (Settings › Activity log, `sdk.audit.list()`) as the instance's owner, with `origin` set to
+`job <name>` for scheduled and manual runs and to `webhook` for runs started by a webhook:
+
+* `command` and `http` entries for every step command and every HTTP call other than `GET`/`HEAD` (with `detail` naming the
+  job and instance);
+* `job.run` when a run ends (`ok` or `failed`, with the run id and who started it);
+* `job.webhook` when a webhook call is accepted (token misses are not logged);
+* `job.approve` when an administrator approves an instance that needs administrator rights.
+
+Changes to notification channels (`notify.channel.add`, `notify.channel.change`, `notify.channel.delete`) are core entries.
+
+## Environments
+
+Job steps cannot target an environment yet (`docs/api/environments.md`): commands and HTTP calls of a job always run on this
+machine.

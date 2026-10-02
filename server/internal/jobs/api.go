@@ -176,6 +176,7 @@ func (m *Manager) approve(c Caller, man *plugins.Manifest, job *plugins.JobDef, 
 		return errAdminConfirm("Pass confirmAdmin: true to approve it.")
 	}
 	in.Approval = &Approval{By: c.Name, At: m.env.Now().UnixMilli(), Sig: approvalSig(man, job)}
+	m.auditApproval(c.Name, in)
 	return nil
 }
 

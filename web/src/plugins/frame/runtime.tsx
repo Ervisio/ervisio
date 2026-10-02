@@ -150,8 +150,8 @@ function makeSdk(plugin: { id: string; name: string; version: string }, view: Fr
         return request<{ filename: string; size?: number; status?: number }>('download', { req, filename: downloadName(filename, req) });
       },
       /** SDK 0.2: same for the standard output of a declared command. */
-      async downloadCommand(command: string, args: string[], filename?: string) {
-        return request<{ filename: string; size?: number; status?: number }>('download', { command, args: args ?? [], filename: downloadName(filename, { path: command }) });
+      async downloadCommand(command: string, args: string[], filename?: string, o?: { env?: string }) {
+        return request<{ filename: string; size?: number; status?: number }>('download', { command, args: args ?? [], filename: downloadName(filename, { path: command }), ...(o?.env ? { env: o.env } : {}) });
       },
       /** SDK 0.2: sends a File or Blob as the body of a POST or PUT, streamed with progress; cancel() stops it. */
       upload(name: string, o: HttpOptions, file: Blob, opts?: UploadOptions | ((p: { loaded: number; total: number }) => void)) {

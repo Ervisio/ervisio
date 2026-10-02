@@ -14,6 +14,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/ervisio/ervisio/server/internal/audit"
+	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
 func rpcOK(t *testing.T, e *xferEnv, method string, params any) map[string]any {
@@ -115,7 +116,7 @@ func TestAuditPluginCalls(t *testing.T) {
 
 	// The export has the same scope, as CSV and JSON.
 	code, body := doc(t, e.cl, "GET", e.ts.URL+"/api/audit/export?format=csv&plugin=xfer", "", false)
-	if code != 200 || !strings.HasPrefix(body, "time,user,ip,source,plugin,action,via,target,result,code,bytes,admin,detail\n") || strings.Count(body, "\n") != 4 {
+	if code != 200 || !strings.HasPrefix(body, "time,user,ip,source,plugin,action,via,target,result,code,bytes,admin,detail,env,origin\n") || strings.Count(body, "\n") != 4 {
 		t.Fatalf("csv: %d %q", code, body)
 	}
 	code, body = doc(t, e.cl, "GET", e.ts.URL+"/api/audit/export?format=json&plugin=xfer", "", false)
@@ -186,18 +187,28 @@ func TestAuditDisabledAndCore(t *testing.T) {
 // A call proxied from a paired server carries via/env params: both end up in the entry.
 func TestAuditEnvAndOrigin(t *testing.T) {
 	e := newXferEnv(t)
-	rpcOK(t, e, "plugins.exec", map[string]any{"plugin": "xfer", "command": "seq", "args": []string{"2"}, "env": "nas", "via": "via box by ann"})
+	rec := e.srv.auditBeginFor("ann", "", "plugins.exec", json.RawMessage(`{"plugin":"xfer","command":"seq","args":["2"],"env":"env-aabbccdd","via":"box by ann"}`), false)
+	rec.callDone(json.RawMessage(`{"exitCode":0}`), nil)
 	l := e.entries(t, audit.Query{Action: "command"})
-	if len(l) != 1 || l[0].Env != "nas" || l[0].Origin != "via box by ann" {
+	if len(l) != 1 || l[0].Env != "env-aabbccdd" || l[0].Origin != "box by ann" || l[0].User != "ann" {
 		t.Fatalf("%+v", l)
 	}
-	// A transfer for an environment this version does not have is refused, and the browser cannot set the socket.
-	st, out := e.start(t, map[string]any{"kind": "download", "name": "svc", "method": "GET", "path": "/dl/5", "env": "nas", "envSocket": "/var/run/docker.sock"})
-	if st != 400 || !strings.Contains(fmt.Sprint(out), "no environment") {
+	// The relay of a paired server records transfers too, with the origin.
+	m := rpc.Message{ID: 1, Method: "plugins.httpDownload", Params: json.RawMessage(`{"plugin":"xfer","name":"svc","method":"GET","path":"/dl/5"}`)}
+	rec = e.srv.pairAudit("ann", "", m, "box by bob")
+	rec.observe(rpc.Event{Data: json.RawMessage(`{"status":200}`)})
+	rec.streamDone(nil)
+	l = e.entries(t, audit.Query{Action: "download"})
+	if len(l) != 1 || l[0].Origin != "box by bob" || l[0].User != "ann" || l[0].Result != audit.OK {
+		t.Fatalf("%+v", l)
+	}
+	// A transfer for an environment that does not exist is refused.
+	st, out := e.start(t, map[string]any{"kind": "download", "name": "svc", "method": "GET", "path": "/dl/5", "env": "env-00000000"})
+	if st != 404 || !strings.Contains(fmt.Sprint(out), "no environment") {
 		t.Fatalf("env: %d %v", st, out)
 	}
-	req := &transferRequest{Kind: "download", Name: "svc", Method: "GET", Path: "/dl/5", Env: "nas", EnvSocket: "/x"}
-	if _, p, _ := req.bridge(); p["env"] != "nas" || p["envSocket"] != "/x" {
+	req := &transferRequest{Kind: "download", Name: "svc", Method: "GET", Path: "/dl/5", Env: "env-aabbccdd"}
+	if _, p, _ := req.bridge(); p["env"] != "env-aabbccdd" || p["envSocket"] != nil {
 		t.Fatalf("bridge params %v", p)
 	}
 }

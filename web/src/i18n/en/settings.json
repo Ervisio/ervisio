@@ -380,6 +380,12 @@
       "plugin_uninstall": "Removed a plugin",
       "plugin_enable": "Turned a plugin on",
       "plugin_disable": "Turned a plugin off",
+      "job_run": "Ran a background job",
+      "job_webhook": "Ran a job from a webhook call",
+      "job_approve": "Approved a job to run as administrator",
+      "notify_channel_add": "Added a notification channel",
+      "notify_channel_change": "Changed a notification channel",
+      "notify_channel_delete": "Deleted a notification channel",
       "settings": "Changed a setting"
     },
     "on": {

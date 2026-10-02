@@ -63,6 +63,11 @@ func auditKind(method string) string {
 // auditBegin returns the record for a call, or nil when the call is not
 // logged (reads, other methods, the log is off).
 func (s *Server) auditBegin(sess *Session, ip, method string, params json.RawMessage, admin bool) *auditRec {
+	return s.auditBeginFor(sess.Account.Name, ip, method, params, admin)
+}
+
+// auditBeginFor is auditBegin for a user name: the pairing relay has no session.
+func (s *Server) auditBeginFor(user, ip, method string, params json.RawMessage, admin bool) *auditRec {
 	if !s.audit.Enabled() {
 		return nil
 	}
@@ -92,7 +97,7 @@ func (s *Server) auditBegin(sess *Session, ip, method string, params json.RawMes
 	}
 	_ = json.Unmarshal(params, &p)
 	r := &auditRec{s: s, kind: kind}
-	r.e = audit.Entry{Time: time.Now(), User: sess.Account.Name, IP: ip, Source: audit.SourcePlugin, Plugin: p.Plugin, Action: kind, Admin: admin, Env: p.Env, Origin: p.Via}
+	r.e = audit.Entry{Time: time.Now(), User: user, IP: ip, Source: audit.SourcePlugin, Plugin: p.Plugin, Action: kind, Admin: admin, Env: p.Env, Origin: p.Via}
 	switch kind {
 	case "command", "pty":
 		r.e.Target = audit.CommandTarget(p.Command, p.Args)
@@ -229,7 +234,7 @@ func (r *auditRec) observe(ev rpc.Event) {
 		if json.Unmarshal(ev.Data, &v) == nil && v.Exit != nil {
 			r.setCode(*v.Exit)
 		}
-	case "http":
+	case "http", "download":
 		var v struct {
 			Status int `json:"status"`
 		}

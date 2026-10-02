@@ -129,7 +129,7 @@ http" (the credential and calls would travel unencrypted).
 to it after a filter. A's daemon wraps the connection as a bridge process (`bridge.NewRemote`), so streams, flow
 control, cancellation and binary chunks work exactly as for local bridges, for every method, with no special cases.
 The filter lets through **only** `plugins.http`, `plugins.httpStream`, `plugins.exec`, `plugins.execStream`,
-`plugins.pty`, `plugins.download` and `plugins.upload` (`pairAllowed` in `server/internal/server/envpair.go`); anything else
+`plugins.pty`, and the transfer methods `plugins.httpDownload`, `plugins.httpUpload` and `plugins.execDownload` (`pairAllowed` in `server/internal/server/envpair.go`); anything else
 (`plugins.list`, `plugins.install`, files, terminal, config, ...) is answered `forbidden` without reaching the bridge.
 A call is also checked on A first (`plugins.envCheck`: plugin usable, capability opted in) and then by B's bridge
 against B's manifest, signature policy, visibility and the capability rules.
@@ -199,8 +199,13 @@ for a capability or command that does not declare `remote` fails with `forbidden
 
 ## Known limits
 
-* Large transfers and uploads (`plugins.download`/`upload`, another change) will use the same `env` option; they go
-  through the tunnel like `httpStream`.
+* Large transfers (`sdk.api.download`, `downloadCommand`, `upload`) take the same `env` option as `http` and `exec`.
+  The daemon resolves it for the transfer request as for any other call (access list, plugin opt-in, tunnel socket or
+  paired server) and the bytes go through the tunnel like `httpStream`. The capability or command must declare `remote`.
+* Plugin jobs (`docs/api/jobs.md`) cannot target an environment yet: a job step has no `env` parameter and always runs on
+  this machine.
+* The paired server writes its own activity log entries for what it runs for another one (`origin` = `via <server> by
+  <user>`); the first server records the same calls with `env`.
 * Portainer agents cannot carry upgraded connections (above).
 * The remote bridge of an Ervisio environment is started on first use and closed after 5 minutes without calls.
 * Docker Swarm node targeting (`X-PortainerAgent-Target`) is not supported.

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ervisio/ervisio/server/internal/audit"
 	"github.com/ervisio/ervisio/server/internal/modules/plugins"
 	"github.com/ervisio/ervisio/server/internal/notify"
 	"github.com/ervisio/ervisio/server/internal/rpc"
@@ -89,6 +90,7 @@ func (m *Manager) execute(ctx context.Context, in *Instance, run *Run, tr Trigge
 	run.Status, run.Error, run.Ended = status, errMsg, m.env.Now().UnixMilli()
 	m.mu.Unlock()
 	prev := m.finish(in, run, outputs, status)
+	m.auditRunEnd(in, run, tr)
 	m.alert(in, status, prev, errMsg)
 }
 
@@ -194,7 +196,7 @@ func (m *Manager) runSteps(ctx context.Context, in *Instance, run *Run, tr Trigg
 		}
 		started := m.env.Now()
 		sr.Started = started.UnixMilli()
-		o, failMsg := m.doStep(jctx, ex, man, in, s, &sr, val, root, groups)
+		o, failMsg := m.doStep(jctx, ex, man, in, tr, s, &sr, val, root, groups)
 		sr.Duration = m.env.Now().Sub(started).Milliseconds()
 		if o != nil {
 			results[s.ID] = o
@@ -262,7 +264,7 @@ func holds(c *plugins.JobCond, res map[string]*outcome, prev map[string]string) 
 
 // doStep runs one step. It returns what later steps see (nil for a step
 // that did not produce anything) and, on failure, why.
-func (m *Manager) doStep(ctx context.Context, ex Executor, man *plugins.Manifest, in *Instance, s *plugins.JobStep, sr *StepRun,
+func (m *Manager) doStep(ctx context.Context, ex Executor, man *plugins.Manifest, in *Instance, tr Trigger, s *plugins.JobStep, sr *StepRun,
 	val func(plugins.Ref) (string, error), root bool, groups map[string]bool) (*outcome, string) {
 	switch s.Kind() {
 	case "command":
@@ -277,13 +279,14 @@ func (m *Manager) doStep(ctx context.Context, ex Executor, man *plugins.Manifest
 		cmd := man.Command(s.Command)
 		admin := cmd.Admin && !root && !(cmd.AdminUnlessGroup != "" && groups[cmd.AdminUnlessGroup])
 		sr.Admin = admin
-		// audit: record this command (plugin, command, args, the job instance and its owner, admin) in the
-		// activity log once the core has an audit hook (core 0.5 "activity log").
+		target := audit.CommandTarget(s.Command, args)
 		r, err := ex.Exec(ctx, admin, plugins.ExecParams{Plugin: in.Plugin, Command: s.Command, Args: args})
 		if err != nil {
+			m.auditStep(in, tr, "command", "", target, admin, nil, false, errText(err))
 			return nil, errText(err)
 		}
 		code := r.ExitCode
+		m.auditStep(in, tr, "command", "", target, admin, &code, code == 0, "")
 		sr.ExitCode, sr.Stdout, sr.Stderr = &code, r.Stdout, r.Stderr
 		o := &outcome{ok: code == 0, output: strings.TrimSpace(r.Stdout), stdout: clip(strings.TrimSpace(r.Stdout), 4096), stderr: clip(strings.TrimSpace(r.Stderr), 4096), exit: strconv.Itoa(code)}
 		if code != 0 {
@@ -321,11 +324,18 @@ func (m *Manager) doStep(ctx context.Context, ex Executor, man *plugins.Manifest
 		}
 		admin := api.Admin && !root && !(api.AdminUnlessGroup != "" && groups[api.AdminUnlessGroup])
 		sr.Admin = admin
-		// audit: record non-GET HTTP calls (plugin, api, method, path, the job instance and its owner, admin)
-		// in the activity log once the core has an audit hook.
+		logged := h.Method != "GET" && h.Method != "HEAD"
+		target := audit.HTTPTarget(h.Method, path, query)
 		r, err := ex.HTTP(ctx, admin, plugins.HTTPParams{Plugin: in.Plugin, Name: h.API, Method: h.Method, Path: path, Query: query, Headers: hdr, Body: body, JSON: h.JSON})
 		if err != nil {
+			if logged {
+				m.auditStep(in, tr, "http", h.API, target, admin, nil, false, errText(err))
+			}
 			return nil, errText(err)
+		}
+		if logged {
+			st := r.Status
+			m.auditStep(in, tr, "http", h.API, target, admin, &st, st < 400, "")
 		}
 		text := r.Body
 		if r.B64 {

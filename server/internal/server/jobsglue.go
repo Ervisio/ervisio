@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ervisio/ervisio/server/internal/account"
+	"github.com/ervisio/ervisio/server/internal/audit"
 	"github.com/ervisio/ervisio/server/internal/brand"
 	"github.com/ervisio/ervisio/server/internal/bridge"
 	"github.com/ervisio/ervisio/server/internal/jobs"
@@ -460,10 +461,16 @@ func init() {
 		if err := bind(raw, &spec); err != nil {
 			return nil, err
 		}
+		act := "notify.channel.add"
+		if spec.ID != "" {
+			act = "notify.channel.change"
+		}
 		c, err := s.notifier.Save(spec)
 		if err != nil {
+			s.auditCore(sess.Account.Name, "", act, spec.Type+" "+spec.Name, audit.Failed, err.Error())
 			return nil, notifyErr(err)
 		}
+		s.auditCore(sess.Account.Name, "", act, spec.Type+" "+c.Name, audit.OK, "")
 		return c, nil
 	}}
 	localMethods["notify.delete"] = localMethod{admin: true, run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
@@ -471,7 +478,13 @@ func init() {
 		if err := bind(raw, &p); err != nil {
 			return nil, err
 		}
-		return struct{}{}, notifyErr(s.notifier.Delete(p.ID))
+		err := s.notifier.Delete(p.ID)
+		if err != nil {
+			s.auditCore(sess.Account.Name, "", "notify.channel.delete", p.ID, audit.Failed, err.Error())
+		} else {
+			s.auditCore(sess.Account.Name, "", "notify.channel.delete", p.ID, audit.OK, "")
+		}
+		return struct{}{}, notifyErr(err)
 	}}
 	localMethods["notify.test"] = localMethod{admin: true, run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
 		var spec notify.Spec

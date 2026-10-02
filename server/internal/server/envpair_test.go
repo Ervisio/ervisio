@@ -8,7 +8,7 @@ import (
 func TestPairAllowlistIsOnlyPluginCapabilities(t *testing.T) {
 	for m := range pairAllowed {
 		switch m {
-		case "plugins.http", "plugins.httpStream", "plugins.exec", "plugins.execStream", "plugins.pty", "plugins.download", "plugins.upload":
+		case "plugins.http", "plugins.httpStream", "plugins.exec", "plugins.execStream", "plugins.pty", "plugins.httpDownload", "plugins.httpUpload", "plugins.execDownload":
 		default:
 			t.Errorf("%s may not be reachable through a pairing", m)
 		}

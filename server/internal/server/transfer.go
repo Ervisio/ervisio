@@ -224,10 +224,10 @@ type transferRequest struct {
 	Filename string `json:"filename"`
 	// Size is the size in bytes of an upload.
 	Size int64 `json:"size"`
-	// Env is the environment the request is for ("" = this machine);
-	// EnvSocket is set by the daemon, never by the browser (see transferEnv).
-	Env       string `json:"env,omitempty"`
-	EnvSocket string `json:"envSocket,omitempty"`
+	// Env is the environment the request is for ("" = this machine). The
+	// daemon resolves it (access list, tunnel or paired server) in
+	// routeWithEnv, as for plugins.http; the browser never sets a socket.
+	Env string `json:"env,omitempty"`
 	// Stream (uploads) answers with the service's response as it arrives,
 	// as application/x-ndjson lines: {"start":{status,headers}},
 	// {"data":"<base64>"}..., {"done":true,"status"} or {"error":{code,message}}.
@@ -239,7 +239,11 @@ type transferRequest struct {
 func (q *transferRequest) bridge() (method string, params map[string]any, ok bool) {
 	switch {
 	case q.Kind == "download" && q.Command != "":
-		return "plugins.execDownload", map[string]any{"plugin": q.Plugin, "command": q.Command, "args": q.Args}, true
+		p := map[string]any{"plugin": q.Plugin, "command": q.Command, "args": q.Args}
+		if q.Env != "" {
+			p["env"] = q.Env
+		}
+		return "plugins.execDownload", p, true
 	case q.Kind == "download" && q.Name != "":
 		return "plugins.httpDownload", q.httpParams(), true
 	case q.Kind == "upload" && q.Name != "":
@@ -257,7 +261,6 @@ func (q *transferRequest) httpParams() map[string]any {
 	p := map[string]any{"plugin": q.Plugin, "name": q.Name, "method": q.Method, "path": q.Path}
 	if q.Env != "" {
 		p["env"] = q.Env
-		p["envSocket"] = q.EnvSocket
 	}
 	if q.Query != "" {
 		p["query"] = q.Query
@@ -332,12 +335,6 @@ func (s *Server) handleTransferStart(w http.ResponseWriter, r *http.Request, ses
 		writeError(w, rpc.Errorf(rpc.Invalid, "A download uses GET."))
 		return
 	}
-	// Whatever the browser sent as EnvSocket is not believed: the daemon decides it.
-	req.EnvSocket = ""
-	if e := s.transferEnv(sess, &req); e != nil {
-		writeError(w, e)
-		return
-	}
 	ip := s.realClientIP(r)
 	rec := s.transferRecord(sess, ip, &req)
 	fail := func(e *rpc.Error) {
@@ -357,12 +354,14 @@ func (s *Server) handleTransferStart(w http.ResponseWriter, r *http.Request, ses
 			s.transfers.done(sess)
 		}
 	}()
-	b, isAdmin, e := s.route(r.Context(), sess, method, req.Admin)
+	rawParams, _ := json.Marshal(params)
+	b, isAdmin, rawParams, relEnv, e := s.routeWithEnv(r.Context(), sess, method, rawParams, req.Admin)
 	if e != nil {
 		fail(e)
 		return
 	}
-	release := sess.hold(b, isAdmin)
+	hold := sess.hold(b, isAdmin)
+	release := func() { hold(); relEnv() }
 	handed := false
 	defer func() {
 		if !handed {
@@ -375,7 +374,7 @@ func (s *Server) handleTransferStart(w http.ResponseWriter, r *http.Request, ses
 			cancel()
 		}
 	}()
-	st, err := b.Stream(sctx, method, params)
+	st, err := b.Stream(sctx, method, json.RawMessage(rawParams))
 	if err != nil {
 		fail(rpc.ToError(err, false))
 		return
@@ -510,25 +509,18 @@ func textOf(b []byte) string {
 	return ": " + s
 }
 
-// transferEnv resolves req.Env to the socket of that environment and sets
-// req.EnvSocket (the bridge then connects there instead of to the API's own
-// socket), after checking the user may use it. Environments are not part of
-// this version: only "" (this machine) is accepted.
-func (s *Server) transferEnv(sess *Session, req *transferRequest) *rpc.Error {
-	if req.Env != "" {
-		return rpc.Errorf(rpc.Invalid, "There is no environment %q.", req.Env)
-	}
-	return nil
-}
-
 // transferRecord is the audit record of a transfer: downloads are "read"
 // entries, uploads change the service.
 func (s *Server) transferRecord(sess *Session, ip string, q *transferRequest) *auditRec {
+	return s.transferRecordFor(sess.Account.Name, ip, q)
+}
+
+func (s *Server) transferRecordFor(user, ip string, q *transferRequest) *auditRec {
 	if !s.audit.Enabled() {
 		return nil
 	}
 	rec := &auditRec{s: s, kind: q.Kind}
-	rec.e = audit.Entry{Time: time.Now(), User: sess.Account.Name, IP: ip, Source: audit.SourcePlugin, Plugin: q.Plugin, Action: q.Kind, Admin: q.Admin, Env: q.Env}
+	rec.e = audit.Entry{Time: time.Now(), User: user, IP: ip, Source: audit.SourcePlugin, Plugin: q.Plugin, Action: q.Kind, Admin: q.Admin, Env: q.Env}
 	if q.Command != "" {
 		rec.e.Target = audit.CommandTarget(q.Command, q.Args)
 	} else {

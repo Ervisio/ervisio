@@ -459,13 +459,13 @@ off stops recording immediately, nothing already written is removed.
 | `time`, `user`, `ip` | when, the signed-in account, the client address (as for sign-in: `X-Forwarded-For` only from a trusted proxy) |
 | `source` | `plugin` or `core` |
 | `plugin` | the plugin id (also for the removal or switching of a plugin) |
-| `action` | plugins: `command`, `pty`, `http`, `upload`, `download`, `file.write`, `file.mkdir`, `file.remove`; core: `login`, `login.failed`, `logout`, `unlock`, `lock`, `plugin.install`, `plugin.uninstall`, `plugin.enable`, `plugin.disable`, `settings` |
+| `action` | plugins: `command`, `pty`, `http`, `upload`, `download`, `file.write`, `file.mkdir`, `file.remove`; core: `login`, `login.failed`, `logout`, `unlock`, `lock`, `plugin.install`, `plugin.uninstall`, `plugin.enable`, `plugin.disable`, `settings`, `notify.channel.add`, `notify.channel.change`, `notify.channel.delete`; jobs (as the owner): `job.run`, `job.webhook`, `job.approve` plus `command`/`http` entries of job steps |
 | `via` | the `capabilities.http` API a request went to |
 | `target` | `METHOD /path?query`, `command arg arg`, a file path, the source of an install, or `key = value` of a setting |
 | `result` | `ok`; `failed` (the call ran, but the command exited non-zero or the service answered 400 or more); `denied` (refused by the rules or the user's rights); `error` (could not run) |
 | `code`, `bytes` | exit code or HTTP status; size transferred (uploads, downloads, file writes) |
 | `admin`, `detail` | ran with administrator rights; the error message when `result` is not `ok` |
-| `env`, `origin` | the environment a call was for when it was not this machine; `via <server> by <user>` when a paired Ervisio server proxied the call (`user` is then the account on this machine). Both come from the `env` and `via` params of the call |
+| `env`, `origin` | the environment a call was for when it was not this machine; `via <server> by <user>` when a paired Ervisio server proxied the call (`user` is then the account on this machine), `job <name>` or `webhook` for what a background job did. `env` and `origin` come from the `env` and `via` params of the call; the paired server records what it runs for another one |
 
 What is recorded: every command (`plugins.exec`, `execStream`, `pty` at its first output), every HTTP request that is
 not `GET` or `HEAD`, uploads, file writes, folders and removals, downloads (as read entries), and the core actions of

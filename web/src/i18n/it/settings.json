@@ -380,6 +380,12 @@
       "plugin_uninstall": "Ha rimosso un plugin",
       "plugin_enable": "Ha acceso un plugin",
       "plugin_disable": "Ha spento un plugin",
+      "job_run": "Ha eseguito un job in background",
+      "job_webhook": "Ha eseguito un job da una chiamata webhook",
+      "job_approve": "Ha approvato un job con diritti di amministratore",
+      "notify_channel_add": "Ha aggiunto un canale di notifica",
+      "notify_channel_change": "Ha modificato un canale di notifica",
+      "notify_channel_delete": "Ha eliminato un canale di notifica",
       "settings": "Ha cambiato un'impostazione"
     },
     "on": {

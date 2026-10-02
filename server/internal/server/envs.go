@@ -307,7 +307,7 @@ func (s *Server) createPairToken(sess *Session, user string) (any, *rpc.Error, b
 var envMethods = map[string]bool{
 	"plugins.http": true, "plugins.httpStream": true,
 	"plugins.exec": true, "plugins.execStream": true, "plugins.pty": true,
-	"plugins.download": true, "plugins.upload": true,
+	"plugins.httpDownload": true, "plugins.httpUpload": true, "plugins.execDownload": true,
 }
 
 // routeWithEnv is route for the methods above: without "env" it is route;

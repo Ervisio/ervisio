@@ -245,7 +245,7 @@ export interface PluginSDK {
      */
     download(name: string, req: HttpRequestOptions, filename?: string): Promise<DownloadStarted>;
     /** SDK 0.2: same for the standard output of a command declared in the manifest (not pty). */
-    downloadCommand(command: string, args: string[], filename?: string): Promise<DownloadStarted>;
+    downloadCommand(command: string, args: string[], filename?: string, o?: { env?: string }): Promise<DownloadStarted>;
     /**
      * SDK 0.2: sends a File or Blob as the body of a POST or PUT to an HTTP API, streamed with progress, up to the API's
      * `maxUpload` (default 20 GiB). The result is the service's answer like `http` (a non-2xx status is a normal result;

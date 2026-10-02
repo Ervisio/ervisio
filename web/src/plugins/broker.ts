@@ -296,12 +296,15 @@ export function authorizeDownload(m: BrokerManifest, a: Record<string, unknown>,
     if (c.pty) return deny(`${c.name} is a terminal command: it cannot be downloaded.`, 'invalid');
     const list = argList(a.args);
     if (!list) return deny('Command arguments must be a list of at most 16 strings.', 'invalid');
-    return { kind: 'transfer', transfer: 'download', body: { kind: 'download', plugin: m.id, command: c.name, args: list, filename, admin: needsAdmin(c, u) }, admin: needsAdmin(c, u) };
+    const env = remoteEnv(m, c, a.env);
+    if (typeof env === 'object' && env) return env;
+    const admin = env ? false : needsAdmin(c, u);
+    return { kind: 'transfer', transfer: 'download', body: { kind: 'download', plugin: m.id, command: c.name, args: list, filename, ...(env ? { env } : {}), admin }, admin };
   }
   const x = transferHttp(m, a.req, u, ['GET'], 'download');
   if ('kind' in x) return x;
-  const { name, method, path, query, headers } = x.params as { name: string; method: string; path: string; query?: string; headers?: Record<string, string> };
-  return { kind: 'transfer', transfer: 'download', body: { kind: 'download', plugin: m.id, name, method, path, query, headers, filename, admin: x.admin }, admin: x.admin };
+  const { name, method, path, query, headers, env } = x.params as { name: string; method: string; path: string; query?: string; headers?: Record<string, string>; env?: string };
+  return { kind: 'transfer', transfer: 'download', body: { kind: 'download', plugin: m.id, name, method, path, query, headers, filename, ...(env ? { env } : {}), admin: x.admin }, admin: x.admin };
 }
 
 /** Decision for plugins.upload(name, req, file): POST or PUT of `size` bytes, at most the API's maxUpload. */
@@ -311,8 +314,8 @@ export function authorizeUpload(m: BrokerManifest, req: unknown, size: unknown, 
   if ('kind' in x) return x;
   const max = x.api.maxUpload ? x.api.maxUpload : DEFAULT_MAX_UPLOAD;
   if (size > max) return deny(`The file is larger than the ${max} bytes ${m.id} may upload to ${x.api.name}.`, 'invalid');
-  const { name, method, path, query, headers } = x.params as { name: string; method: string; path: string; query?: string; headers?: Record<string, string> };
-  return { kind: 'transfer', transfer: 'upload', body: { kind: 'upload', plugin: m.id, name, method, path, query, headers, size, ...(stream ? { stream: true } : {}), admin: x.admin }, admin: x.admin, size };
+  const { name, method, path, query, headers, env } = x.params as { name: string; method: string; path: string; query?: string; headers?: Record<string, string>; env?: string };
+  return { kind: 'transfer', transfer: 'upload', body: { kind: 'upload', plugin: m.id, name, method, path, query, headers, size, ...(env ? { env } : {}), ...(stream ? { stream: true } : {}), admin: x.admin }, admin: x.admin, size };
 }
 
 /** Decision for plugins.audit.list: the plugin's own entries only. */
