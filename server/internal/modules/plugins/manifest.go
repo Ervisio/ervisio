@@ -66,6 +66,12 @@ type Capabilities struct {
 	Files   FileAccess `json:"files"`
 	Sockets []string   `json:"sockets"`
 	Network []string   `json:"network"`
+	// Jobs are named sequences of the declared commands and HTTP calls
+	// the daemon runs in the background (see manifest_jobs.go).
+	Jobs []JobDef `json:"jobs,omitempty"`
+	// Notify lets the plugin send notifications through plugins.notify
+	// and job notify steps.
+	Notify bool `json:"notify,omitempty"`
 }
 
 // FileAccess lists folders the plugin reads or edits.
@@ -245,6 +251,7 @@ func (m *Manifest) normalise() {
 	if c.Network == nil {
 		c.Network = []string{}
 	}
+	c.normaliseJobs()
 	if m.Contributes.Pages == nil {
 		m.Contributes.Pages = []Contribution{}
 	}
@@ -464,7 +471,7 @@ func (c *Capabilities) validate() error {
 			return fmt.Errorf("capabilities.network: %q is not a host name (like api.example.org, *.example.org or host:8443)", h)
 		}
 	}
-	return nil
+	return c.validateJobs()
 }
 
 func (c *Command) validate() error {

@@ -18,6 +18,8 @@ import (
 
 	"github.com/ervisio/ervisio/server/internal/account"
 	"github.com/ervisio/ervisio/server/internal/config"
+	"github.com/ervisio/ervisio/server/internal/jobs"
+	"github.com/ervisio/ervisio/server/internal/notify"
 	"github.com/ervisio/ervisio/server/internal/sshauth"
 )
 
@@ -50,7 +52,13 @@ type Options struct {
 	// DevAuthorizedKeys (dev only) replaces the authorized_keys files for
 	// SSH-key sign-in, so the flow can be tried without touching ~/.ssh.
 	DevAuthorizedKeys string
-	Logger            *log.Logger
+	// StateDir keeps the daemon's state, here the plugin job instances
+	// (StateDir/jobs). "" = /var/lib/ervisio; --dev-state-dir in dev.
+	StateDir string
+	// NotifyFile is the notification channels file, which holds secrets
+	// (0600). "" = notify.json next to the configuration file.
+	NotifyFile string
+	Logger     *log.Logger
 }
 
 // Server is the daemon.
@@ -77,6 +85,11 @@ type Server struct {
 	baseCtx context.Context
 	cancel  context.CancelFunc
 	vite    http.Handler
+
+	// jobs runs plugin job instances; notifier sends notifications
+	// (jobsglue.go). jobs is nil when its state file cannot be read.
+	jobs     *jobs.Manager
+	notifier *notify.Service
 }
 
 // New validates options and loads the configuration.
@@ -117,6 +130,9 @@ func New(opts Options) (*Server, error) {
 		cancel:     cancel,
 	}
 	s.checker.keyAuth = s.keyAuthorized
+	if err := s.initJobs(); err != nil {
+		opts.Logger.Printf("background jobs are off: %v", err)
+	}
 	if opts.Dev {
 		if s.devUser, err = account.Current(); err != nil {
 			cancel()
@@ -174,6 +190,9 @@ func (s *Server) Handler() http.Handler {
 	}
 	mux.HandleFunc("GET /plugins/{id}/{file...}", s.authed(s.handlePlugin))
 	mux.HandleFunc("GET /plugin-frame/{id}", s.authed(s.handlePluginFrame))
+	// Webhooks of plugin jobs: no session and no CSRF header by design,
+	// the random token in the path is the credential (docs/api/jobs.md).
+	mux.HandleFunc("POST /hooks/{plugin}/{token}", s.handleHook)
 	mux.Handle("/", s.webHandler())
 	var h http.Handler = mux
 	if s.opts.Dev {
@@ -240,6 +259,9 @@ func (s *Server) Run(ctx context.Context) error {
 	var redirect *http.Server
 
 	go s.janitor(ctx)
+	if s.jobs != nil {
+		go s.jobs.Run(ctx)
+	}
 
 	errCh := make(chan error, 2)
 	if s.opts.Dev {
