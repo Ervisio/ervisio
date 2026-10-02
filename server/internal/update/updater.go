@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -52,12 +53,32 @@ func managedErr(by string) error {
 // Launcher starts the switch helper outside the daemon's service.
 type Launcher func(ctx context.Context, unit string, argv []string) error
 
+// systemdVersion is the major version printed by `systemd-run --version`
+// ("systemd 219"), or 0 when it cannot be read.
+func systemdVersion(ctx context.Context) int {
+	out, err := exec.CommandContext(ctx, "systemd-run", "--version").Output()
+	if err != nil {
+		return 0
+	}
+	f := strings.Fields(string(out))
+	if len(f) < 2 || f[0] != "systemd" {
+		return 0
+	}
+	n, _ := strconv.Atoi(f[1])
+	return n
+}
+
 // SystemdRun starts argv as a transient systemd service.
 func SystemdRun(ctx context.Context, unit string, argv []string) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	args := append([]string{"--unit=" + unit, "--collect", "--quiet",
-		"--description=" + brand.Name + " update", "--"}, argv...)
+	args := []string{"--unit=" + unit}
+	// --collect (systemd 236) removes the unit even when it fails; older
+	// systemd (Amazon Linux 2 has 219) refuses the option.
+	if systemdVersion(ctx) >= 236 {
+		args = append(args, "--collect")
+	}
+	args = append(append(args, "--quiet", "--description="+brand.Name+" update", "--"), argv...)
 	cmd := exec.CommandContext(ctx, "systemd-run", args...)
 	cmd.Env = []string{"PATH=/usr/sbin:/usr/bin:/sbin:/bin", "LANG=C.UTF-8"}
 	cmd.Dir = "/"
