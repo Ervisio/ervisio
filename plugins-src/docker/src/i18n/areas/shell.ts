@@ -18,8 +18,8 @@ const s: AreaStrings = {
     'nav.aria': 'Docker sections',
     'shell.search': 'Search containers, images, stacks',
     'shell.engine': 'Engine {version}',
-    'shell.oldSdk.title': 'This LinuxAdmin is too old for the Docker plugin',
-    'shell.oldSdk.text': 'Docker 2 needs plugin SDK version 3 or newer. Update LinuxAdmin, then reload.',
+    'shell.oldSdk.title': 'This Ervisio is too old for the Docker plugin',
+    'shell.oldSdk.text': 'Docker 2 needs plugin SDK version 3 or newer. Update Ervisio, then reload.',
   },
   it: {
     'nav.workloads': 'Carichi',
@@ -38,8 +38,8 @@ const s: AreaStrings = {
     'nav.aria': 'Sezioni di Docker',
     'shell.search': 'Cerca container, immagini, stack',
     'shell.engine': 'Engine {version}',
-    'shell.oldSdk.title': 'Questo LinuxAdmin è troppo vecchio per il plugin Docker',
-    'shell.oldSdk.text': 'Docker 2 richiede la versione 3 o successiva dell’SDK dei plugin. Aggiorna LinuxAdmin e ricarica.',
+    'shell.oldSdk.title': 'Questo Ervisio è troppo vecchio per il plugin Docker',
+    'shell.oldSdk.text': 'Docker 2 richiede la versione 3 o successiva dell’SDK dei plugin. Aggiorna Ervisio e ricarica.',
   },
 };
 export default s;

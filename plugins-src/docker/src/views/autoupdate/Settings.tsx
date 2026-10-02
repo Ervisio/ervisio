@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { containerName } from '../../api/format';
-import { WATCHTOWER, WATCHTOWER_ONCE, cronOf, validCron } from '../../api/autoupdate';
+import { OWN_CONTAINERS, cronOf, validCron } from '../../api/autoupdate';
 import type { Container } from '../../api/types';
 import { t } from '../../i18n';
 import { Checkbox, Icon, Input, Segmented, Select, Switch } from '../../kit';
@@ -60,7 +60,7 @@ export function ScheduleCard({ c, set }: { c: AutoUpdateConfig; set: Patch }) {
 }
 
 export function ScopeCard({ c, set, all }: { c: AutoUpdateConfig; set: Patch; all: Container[] }) {
-  const names = useMemo(() => all.map(containerName).filter((n) => n !== WATCHTOWER && n !== WATCHTOWER_ONCE).sort(), [all]);
+  const names = useMemo(() => all.map(containerName).filter((n) => !OWN_CONTAINERS.includes(n)).sort(), [all]);
   const gone = c.containers.filter((n) => !names.includes(n));
   const toggle = (n: string, on: boolean) => set({ containers: on ? [...c.containers, n] : c.containers.filter((x) => x !== n) });
   return (

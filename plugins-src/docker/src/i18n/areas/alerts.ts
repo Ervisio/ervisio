@@ -4,7 +4,7 @@ const s: AreaStrings = {
   en: {
     'alerts.title': 'Alerts',
     'alerts.sub': 'Get a message when a container stops, restarts in a loop, turns unhealthy or uses too much.',
-    'alerts.notice.title': 'Alerts are checked while LinuxAdmin is open in a browser',
+    'alerts.notice.title': 'Alerts are checked while Ervisio is open in a browser',
     'alerts.notice.text': 'Nothing runs in the background. Close the browser tab and the checks stop; they start again when you open the Docker page or the Overview.',
     'alerts.notice.running': 'Checking now',
     'alerts.notice.idle': 'Not checking',
@@ -94,7 +94,7 @@ const s: AreaStrings = {
   it: {
     'alerts.title': 'Avvisi',
     'alerts.sub': 'Ricevi un messaggio quando un container si ferma, si riavvia in continuazione, diventa non sano o consuma troppo.',
-    'alerts.notice.title': 'Gli avvisi sono controllati mentre LinuxAdmin è aperto in un browser',
+    'alerts.notice.title': 'Gli avvisi sono controllati mentre Ervisio è aperto in un browser',
     'alerts.notice.text': 'Nulla gira in background. Se chiudi la scheda del browser i controlli si fermano; ripartono quando apri la pagina Docker o la Panoramica.',
     'alerts.notice.running': 'Controllo in corso',
     'alerts.notice.idle': 'Controllo fermo',

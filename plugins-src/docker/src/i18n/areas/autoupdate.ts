@@ -9,7 +9,7 @@ const s: AreaStrings = {
     'autoupdate.explain.title': 'What updating does',
     'autoupdate.explain.1': 'A container is restarted when a newer image exists under the same tag, for example nginx:latest. It is stopped, removed and created again with its settings, so it is down for a short time.',
     'autoupdate.explain.2': 'Images pinned to a version, such as nginx:1.27.2, or to a digest never change. Stacks that use pinned versions are left alone until you edit the version yourself.',
-    'autoupdate.explain.3': 'This runs a helper container, Watchtower, that has access to the Docker socket. It works while Docker is running, even when LinuxAdmin is closed.',
+    'autoupdate.explain.3': 'This runs a helper container, Watchtower, that has access to the Docker socket. It works while Docker is running, even when Ervisio is closed.',
 
     'autoupdate.master': 'Update containers automatically',
     'autoupdate.master.on': 'Watchtower is set up and checks on the schedule below.',
@@ -111,7 +111,7 @@ const s: AreaStrings = {
     'autoupdate.explain.title': 'Cosa fa l\'aggiornamento',
     'autoupdate.explain.1': 'Un container viene riavviato quando esiste un\'immagine più nuova con lo stesso tag, ad esempio nginx:latest. Viene fermato, rimosso e creato di nuovo con le sue impostazioni, quindi resta spento per un breve momento.',
     'autoupdate.explain.2': 'Le immagini fissate a una versione, come nginx:1.27.2, o a un digest non cambiano mai. Gli stack che usano versioni fissate restano come sono finché non cambi tu la versione.',
-    'autoupdate.explain.3': 'Funziona con un container di supporto, Watchtower, che ha accesso al socket di Docker. Lavora finché Docker è attivo, anche con LinuxAdmin chiuso.',
+    'autoupdate.explain.3': 'Funziona con un container di supporto, Watchtower, che ha accesso al socket di Docker. Lavora finché Docker è attivo, anche con Ervisio chiuso.',
 
     'autoupdate.master': 'Aggiorna i container in automatico',
     'autoupdate.master.on': 'Watchtower è configurato e controlla secondo l\'orario qui sotto.',

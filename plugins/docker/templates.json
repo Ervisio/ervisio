@@ -1,6 +1,6 @@
 {
  "version": 1,
- "name": "LinuxAdmin catalog",
+ "name": "Ervisio catalog",
  "templates": [
   {
    "id": "nginx",

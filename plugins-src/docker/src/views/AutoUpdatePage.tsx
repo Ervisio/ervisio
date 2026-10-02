@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { WATCHTOWER, applyAutoUpdate, findWatchtower, parseSessions, readLogs, runOnce, validCron, withTag, type ApplyStep } from '../api/autoupdate';
+import { applyAutoUpdate, findWatchtower, parseSessions, readLogs, runOnce, validCron, withTag, type ApplyStep } from '../api/autoupdate';
 import { errorText } from '../api/engine';
 import { containers } from '../api/resources';
 import { t } from '../i18n';
@@ -39,19 +39,20 @@ export function AutoUpdatePage(_props: RouteProps<'autoupdate'>) {
   }, [draft, wt?.config, file.config, settings.watchtowerImage]);
   const dirty = !!draft && !!baseline && !same(draft, baseline);
   const wtId = wt?.container.Id;
+  const wtName = wt?.name;
   const wtState = wt?.container.State;
 
   const loadLogs = useCallback(async () => {
-    if (!wtId) {
+    if (!wtId || !wtName) {
       setLogs([]);
       return;
     }
     try {
-      setLogs(await readLogs(WATCHTOWER));
+      setLogs(await readLogs(wtName));
     } catch {
       /* the container may be starting */
     }
-  }, [wtId]);
+  }, [wtId, wtName]);
   useEffect(() => {
     void loadLogs();
     if (!wtId) return;

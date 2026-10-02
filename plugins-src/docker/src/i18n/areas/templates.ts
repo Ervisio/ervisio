@@ -22,7 +22,7 @@ const s: AreaStrings = {
     'templates.missing.text': 'Its source may be turned off or have changed.',
     'templates.backToStore': 'Back to templates',
 
-    'templates.src.builtin': 'LinuxAdmin catalog',
+    'templates.src.builtin': 'Ervisio catalog',
     'templates.src.builtinNote': '{n} apps, part of this plugin',
     'templates.src.signed': 'Signed',
     'templates.src.count': '{n} apps',
@@ -96,7 +96,7 @@ const s: AreaStrings = {
     'templates.missing.text': 'La sua fonte potrebbe essere disattivata o cambiata.',
     'templates.backToStore': 'Torna ai modelli',
 
-    'templates.src.builtin': 'Catalogo LinuxAdmin',
+    'templates.src.builtin': 'Catalogo Ervisio',
     'templates.src.builtinNote': '{n} app, parte di questo plugin',
     'templates.src.signed': 'Firmato',
     'templates.src.count': '{n} app',

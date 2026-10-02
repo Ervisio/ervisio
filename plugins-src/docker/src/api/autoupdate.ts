@@ -1,6 +1,7 @@
 /**
- * Auto-update through Watchtower. Applying the settings removes and creates one container, `linuxadmin-watchtower`,
- * that has the Docker socket mounted. "Check now" runs a second, short-lived one (`linuxadmin-watchtower-once`).
+ * Auto-update through Watchtower. Applying the settings removes and creates one container, `ervisio-watchtower`,
+ * that has the Docker socket mounted. "Check now" runs a second, short-lived one (`ervisio-watchtower-once`).
+ * A Watchtower created under Ervisio's former name (LinuxAdmin) is found and replaced the same way.
  *
  * Containers cannot get new labels once they exist, so "only the containers I choose" is done the other way round:
  * the chosen names are given to Watchtower as arguments, and Watchtower is recreated when the list changes.
@@ -10,8 +11,14 @@ import { docker, DockerError } from './engine';
 import { LogLines } from './streams';
 import type { Container, ContainerInspect } from './types';
 
-export const WATCHTOWER = 'linuxadmin-watchtower';
-export const WATCHTOWER_ONCE = 'linuxadmin-watchtower-once';
+export const WATCHTOWER = 'ervisio-watchtower';
+export const WATCHTOWER_ONCE = 'ervisio-watchtower-once';
+/** Names used when Ervisio was called LinuxAdmin. */
+export const LEGACY_WATCHTOWER = 'linuxadmin-watchtower';
+export const LEGACY_WATCHTOWER_ONCE = 'linuxadmin-watchtower-once';
+/** Our own containers, left out of the "containers to update" list. */
+export const OWN_CONTAINERS = [WATCHTOWER, WATCHTOWER_ONCE, LEGACY_WATCHTOWER, LEGACY_WATCHTOWER_ONCE];
+/** Label names are kept from LinuxAdmin: existing Watchtower containers carry them. */
 export const CONFIG_LABEL = 'la.autoupdate';
 export const DEFAULT_IMAGE = 'nickfedor/watchtower:latest';
 
@@ -91,12 +98,14 @@ export async function applyAutoUpdate(c: AutoUpdateConfig, onStep?: (s: ApplySte
   onStep?.('remove');
   if (!c.enabled) {
     await removeIfExists(WATCHTOWER);
+    await removeIfExists(LEGACY_WATCHTOWER);
     return;
   }
   onStep?.('pull');
   await ensureImage(c.image);
   onStep?.('remove');
   await removeIfExists(WATCHTOWER);
+  await removeIfExists(LEGACY_WATCHTOWER);
   onStep?.('create');
   await docker.post('/containers/create', { name: WATCHTOWER }, body(c, false));
   onStep?.('start');
@@ -104,8 +113,13 @@ export async function applyAutoUpdate(c: AutoUpdateConfig, onStep?: (s: ApplySte
 }
 
 /** The Watchtower container from the list, and the settings it was created with. */
-export function findWatchtower(list: Container[] | undefined): { container: Container; config: AutoUpdateConfig | null } | undefined {
-  const container = list?.find((c) => c.Names?.includes(`/${WATCHTOWER}`));
+export function findWatchtower(list: Container[] | undefined): { container: Container; name: string; config: AutoUpdateConfig | null } | undefined {
+  let name = WATCHTOWER;
+  let container = list?.find((c) => c.Names?.includes(`/${WATCHTOWER}`));
+  if (!container) {
+    name = LEGACY_WATCHTOWER;
+    container = list?.find((c) => c.Names?.includes(`/${LEGACY_WATCHTOWER}`));
+  }
   if (!container) return undefined;
   let config: AutoUpdateConfig | null = null;
   try {
@@ -113,7 +127,7 @@ export function findWatchtower(list: Container[] | undefined): { container: Cont
   } catch {
     /* created by hand */
   }
-  return { container, config };
+  return { container, name, config };
 }
 
 /** Last log lines of a container (stdout and stderr, in order). */
@@ -145,6 +159,7 @@ export async function runOnce(c: AutoUpdateConfig, o: OnceOptions): Promise<numb
   o.onPhase?.('pull');
   await ensureImage(cfg.image);
   await removeIfExists(WATCHTOWER_ONCE);
+  await removeIfExists(LEGACY_WATCHTOWER_ONCE);
   await docker.post('/containers/create', { name: WATCHTOWER_ONCE }, body(cfg, true));
   try {
     o.onPhase?.('run');

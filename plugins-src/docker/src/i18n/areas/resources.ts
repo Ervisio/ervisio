@@ -180,7 +180,7 @@ const s: AreaStrings = {
     'res.cleanup.confirmWord': 'delete',
 
     'res.reg.sub': 'Logins Docker uses to pull images from private registries.',
-    'res.reg.warn': 'The password is stored as plain text in registries.json, in your LinuxAdmin config folder (~/.config/linuxadmin/plugins/docker). That folder is private to your account, so other users on this machine cannot read it. Prefer an access token over your account password.',
+    'res.reg.warn': 'The password is stored as plain text in registries.json, in your Ervisio config folder (~/.config/ervisio/plugins/docker). That folder is private to your account, so other users on this machine cannot read it. Prefer an access token over your account password.',
     'res.reg.add': 'Add registry',
     'res.reg.edit': 'Edit registry',
     'res.reg.hub': 'Docker Hub',
@@ -383,7 +383,7 @@ const s: AreaStrings = {
     'res.cleanup.confirmWord': 'elimina',
 
     'res.reg.sub': 'Gli accessi che Docker usa per scaricare immagini da registri privati.',
-    'res.reg.warn': 'La password è salvata in chiaro in registries.json, nella cartella di configurazione di LinuxAdmin (~/.config/linuxadmin/plugins/docker). La cartella è privata per il tuo account, quindi gli altri utenti di questa macchina non possono leggerla. Meglio usare un token d\'accesso al posto della password dell\'account.',
+    'res.reg.warn': 'La password è salvata in chiaro in registries.json, nella cartella di configurazione di Ervisio (~/.config/ervisio/plugins/docker). La cartella è privata per il tuo account, quindi gli altri utenti di questa macchina non possono leggerla. Meglio usare un token d\'accesso al posto della password dell\'account.',
     'res.reg.add': 'Aggiungi registro',
     'res.reg.edit': 'Modifica registro',
     'res.reg.hub': 'Docker Hub',

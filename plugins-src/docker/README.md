@@ -8,7 +8,7 @@ TypeScript and React source of the Docker plugin (plugin SDK v3). The build writ
 ```
 npm --prefix plugins-src/docker install     # once
 npm --prefix plugins-src/docker run build   # typecheck, then bundle to plugins/docker/index.js
-npm --prefix plugins-src/docker run dev     # rebuild on change (use with linuxadmind --dev, then "Reload" in Plugins)
+npm --prefix plugins-src/docker run dev     # rebuild on change (use with ervisiod --dev, then "Reload" in Plugins)
 npm --prefix plugins-src/docker run typecheck
 ```
 
@@ -40,7 +40,7 @@ src/api/              Docker Engine client and data layer
   actions.ts          start/stop/restart/remove, runBulk
   model.ts            stack grouping, health, ports, filters
   format.ts           bytes, percent, durations, relative time
-src/settings.ts       JSON files in ~/.config/linuxadmin/plugins/docker (settings, registries, alerts, templates-sources)
+src/settings.ts       JSON files in ~/.config/ervisio/plugins/docker (settings, registries, alerts, templates-sources)
 src/i18n/areas/*.ts   strings, one file per area, merged automatically
 src/styles/*.css      CSS, every file is injected automatically
 src/ui/               shared pieces: PageHeader, DataTable, DiskBar, StatusDot, Charts, ErrorState, ComingSoon

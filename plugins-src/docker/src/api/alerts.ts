@@ -1,5 +1,5 @@
 /**
- * Alert engine. It runs inside the page (or the Overview widget) while LinuxAdmin is open in a browser; there is no
+ * Alert engine. It runs inside the page (or the Overview widget) while Ervisio is open in a browser; there is no
  * background service. Rules live in the `alerts` file, the history in `alerts-history` (200 entries at most).
  *
  *   useAlertEngine();                 // in the shell and the widget: starts once per frame, stops with the last user

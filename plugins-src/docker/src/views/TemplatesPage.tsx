@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { containers } from '../api/resources';
-import { useTemplates, type Template } from '../api/templates';
+import { BUILTIN_ID, useTemplates, type Template } from '../api/templates';
 import { t } from '../i18n';
 import { Badge, Button, Chip, EmptyState, Icon, Input, Select, Skeleton } from '../kit';
 import { navigate } from '../router';
@@ -32,7 +32,7 @@ export function TemplatesPage() {
     return cat.templates
       .filter((x) => (!category || x.category === category) && (!source || x.source === source))
       .filter((x) => !n || norm(x.name).includes(n) || norm(x.description).includes(n) || norm(x.category).includes(n))
-      .sort((a, b) => (a.source === b.source ? a.name.localeCompare(b.name) : a.source === 'linuxadmin' ? -1 : b.source === 'linuxadmin' ? 1 : 0));
+      .sort((a, b) => (a.source === b.source ? a.name.localeCompare(b.name) : a.source === BUILTIN_ID ? -1 : b.source === BUILTIN_ID ? 1 : 0));
   }, [cat.templates, q, category, source]);
 
   const featured = !q.trim() && !category && !source ? cat.templates.filter((x) => x.featured).slice(0, 4) : [];

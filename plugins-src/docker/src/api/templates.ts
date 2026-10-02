@@ -61,6 +61,7 @@ export interface Template {
   swarm?: boolean;
 }
 
+/** Id of the plugin's own catalog (templates.json "source"). An identifier, kept from Ervisio's former name. */
 export const BUILTIN_ID = 'linuxadmin';
 export const DEFAULT_SOURCE: TemplateSource = {
   id: 'portainer',
@@ -138,7 +139,7 @@ function parseBuiltin(doc: Json): Template[] {
     out.push({
       id: `${BUILTIN_ID}:${raw.id}`,
       source: BUILTIN_ID,
-      sourceName: String(doc.name ?? 'LinuxAdmin catalog'),
+      sourceName: String(doc.name ?? 'Ervisio catalog'),
       name: raw.name,
       description: raw.description ?? '',
       category: raw.category ?? 'Other',
@@ -346,7 +347,7 @@ export function useTemplates(): TemplateCatalog {
       builtin ??= loadBuiltin();
       const own = await builtin;
       if (!live) return;
-      const status: SourceStatus[] = [{ id: BUILTIN_ID, name: own[0]?.sourceName ?? 'LinuxAdmin catalog', count: own.length }];
+      const status: SourceStatus[] = [{ id: BUILTIN_ID, name: own[0]?.sourceName ?? 'Ervisio catalog', count: own.length }];
       let all = [...own];
       setState({ templates: all, sources: [...status], loading: sources.length > 0 });
       await Promise.all(

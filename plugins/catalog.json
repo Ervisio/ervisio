@@ -42,7 +42,7 @@
       "id": "proxmox",
       "name": "Proxmox",
       "version": "0.7.0",
-      "author": "LinuxAdmin team",
+      "author": "Ervisio team",
       "description": "Manage VMs and containers on a Proxmox node.",
       "icon": "server",
       "color": "usr",
@@ -153,7 +153,7 @@
       "id": "nginx-sites",
       "name": "Nginx sites",
       "version": "2.0.1",
-      "author": "LinuxAdmin team",
+      "author": "Ervisio team",
       "description": "Virtual hosts, certificates and reverse proxies.",
       "icon": "globe",
       "color": "term",
@@ -317,7 +317,7 @@
       "id": "samba-shares",
       "name": "Samba shares",
       "version": "1.0.4",
-      "author": "LinuxAdmin team",
+      "author": "Ervisio team",
       "description": "Share folders with Windows and Mac.",
       "icon": "files",
       "color": "file",
@@ -423,15 +423,15 @@
     {
       "id": "docker",
       "name": "Docker",
-      "version": "2.0.0",
-      "author": "LinuxAdmin team",
+      "version": "2.0.1",
+      "author": "Ervisio team",
       "description": "Manage containers, compose stacks, images, volumes and networks. Live stats, logs, shell, templates and clean-up.",
       "icon": "server",
       "color": "file",
       "category": "Containers",
       "verified": true,
       "installs": 54000,
-      "notes": "Rebuilt as a full container manager: container pages with logs, stats and a shell, compose stacks in /opt/stacks, templates, image updates, clean-up, auto-update and alerts. Asks for new permissions: Docker Engine API access, a terminal, and the /opt/stacks folder.",
+      "notes": "LinuxAdmin is now Ervisio: settings live in ~/.config/ervisio/plugins/docker (Ervisio copies them from ~/.config/linuxadmin), and the auto-update container is called ervisio-watchtower (an existing linuxadmin-watchtower is replaced when you apply the settings).",
       "source": "https://plugins.example.invalid/docker-2.0.0.tar.gz",
       "capabilities": {
         "commands": [
@@ -841,7 +841,7 @@
             },
             {
               "create": true,
-              "path": "~/.config/linuxadmin/plugins/docker"
+              "path": "~/.config/ervisio/plugins/docker"
             }
           ]
         },

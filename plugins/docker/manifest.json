@@ -1,5 +1,5 @@
 {
-  "author": "LinuxAdmin team",
+  "author": "Ervisio team",
   "capabilities": {
     "commands": [
       {
@@ -408,7 +408,7 @@
         },
         {
           "create": true,
-          "path": "~/.config/linuxadmin/plugins/docker"
+          "path": "~/.config/ervisio/plugins/docker"
         }
       ]
     },
@@ -638,7 +638,7 @@
   "icon": "server",
   "id": "docker",
   "name": "Docker",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "visibleTo": {
     "groups": [
       "docker",

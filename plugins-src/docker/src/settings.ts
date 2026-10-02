@@ -1,5 +1,5 @@
 /**
- * Plugin settings as JSON files in ~/.config/linuxadmin/plugins/docker (declared in manifest files.write).
+ * Plugin settings as JSON files in ~/.config/ervisio/plugins/docker (declared in manifest files.write).
  * Missing or unreadable files give the defaults. Writes to one file are queued so they cannot overlap.
  *
  *   const s = await loadFile('settings');           // Settings
@@ -9,7 +9,7 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { getSdk } from './sdk';
 
-export const CONFIG_DIR = '~/.config/linuxadmin/plugins/docker';
+export const CONFIG_DIR = '~/.config/ervisio/plugins/docker';
 
 export interface Settings {
   /** Folder that holds managed compose stacks, one sub-folder per stack. */

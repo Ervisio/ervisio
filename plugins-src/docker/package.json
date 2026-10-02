@@ -1,7 +1,7 @@
 {
-  "name": "linuxadmin-plugin-docker",
+  "name": "ervisio-plugin-docker",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.0.1",
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit && vite build",
