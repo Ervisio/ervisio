@@ -161,6 +161,11 @@ func (t *Transition) Run(ctx context.Context) update.Result {
 	}
 	if err != nil {
 		t.rollback(ctx, u, true)
+		// Like LinuxAdmin's own rollback, drop the version that failed (unless
+		// LinuxAdmin's layout runs it: an install made by its install.sh).
+		if cur, _ := t.legacyLayout().Current(); cur != v {
+			os.RemoveAll(src)
+		}
 		return finish(update.StateRolledBack, fmt.Errorf("%s %s did not start (%v); %s is running again", brand.Name, v, err, brand.LegacyName))
 	}
 

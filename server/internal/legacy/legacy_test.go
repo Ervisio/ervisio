@@ -483,13 +483,18 @@ func TestTransitionRollback(t *testing.T) {
 	if !FailedBefore(p, "0.3.0") || FailedBefore(p, "0.3.1") {
 		t.Error("failure not recorded for 0.3.0 only")
 	}
+	if exists(p.At("/usr/lib/linuxadmin/versions/0.3.0")) || !exists(p.At("/usr/lib/linuxadmin/versions/0.2.0")) {
+		t.Error("the failed version was kept, or LinuxAdmin's own removed")
+	}
 	if err := StartTransition(context.Background(), p, "/x", "0.3.0", func(context.Context, string, []string) error {
 		t.Error("started again after a failure")
 		return nil
 	}); err == nil {
 		t.Error("StartTransition accepted a version that failed")
 	}
-	// A later attempt succeeds and clears the failure.
+	// A later attempt (LinuxAdmin's updater downloads it again) succeeds and
+	// clears the failure.
+	addRelease(t, p, "0.3.0")
 	tr.Health = func(context.Context, string) error { return nil }
 	if res := tr.Run(context.Background()); res.State != update.StateOK {
 		t.Fatalf("retry: %+v", res)
