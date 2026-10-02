@@ -1,0 +1,200 @@
+{
+  "group": "Environments",
+  "cancel": "Cancel",
+  "back": "Back",
+  "next": "Next",
+  "saving": "Saving…",
+  "list": {
+    "title": "Docker hosts",
+    "desc": "Remote Docker hosts that plugins such as Docker can manage, besides this machine.",
+    "empty": "No environments yet",
+    "emptyText": "Add a remote Docker host to manage it from here. This machine is always available.",
+    "failed": "Could not load the environments",
+    "retry": "Try again"
+  },
+  "status": { "online": "Online", "offline": "Unreachable", "unknown": "Not checked" },
+  "kind": {
+    "tcp-tls": {
+      "name": "Docker over TLS",
+      "desc": "The Docker daemon listens on a TCP port with TLS and client certificates (dockerd --tlsverify).",
+      "addressPlaceholder": "10.0.0.5:2376",
+      "addressHint": "Host and port of the Docker API, usually 2376.",
+      "insecure": "Plain tcp, no encryption (insecure)",
+      "insecureWarn": "Anyone on the network path can read this connection and send commands to Docker, which means root on that machine. Use it only on a closed, trusted network.",
+      "insecureTag": "plain tcp",
+      "skipTag": "certificate not checked",
+      "noCreds": "Plain tcp has no certificates to set."
+    },
+    "ssh": {
+      "name": "SSH",
+      "desc": "Reach the Docker socket of a Linux host over SSH with a key. Docker does not need to listen on the network and nothing is installed on the host.",
+      "addressPlaceholder": "server.lan:22",
+      "addressHint": "Host and port of the SSH server.",
+      "userHint": "The account must be allowed to use Docker (the docker group) and sshd must allow socket forwarding."
+    },
+    "portainer-agent": {
+      "name": "Portainer agent",
+      "desc": "A host that already runs the Portainer agent. The Docker API is reached through the agent on its TLS port.",
+      "addressPlaceholder": "10.0.0.7:9001",
+      "addressHint": "Host and port of the agent, usually 9001."
+    },
+    "ervisio": {
+      "name": "Another Ervisio server",
+      "desc": "Another server running Ervisio. Calls run there, with its own plugins and rules, as a user you choose when you pair.",
+      "addressPlaceholder": "https://server.lan:9090",
+      "addressHint": "The address of the other server's web console.",
+      "plain": "Allow plain http (insecure)",
+      "plainWarn": "The pairing credential and every call travel unencrypted. Use it only to a server on this machine or on a closed network."
+    }
+  },
+  "field": {
+    "name": "Name",
+    "namePlaceholder": "Build server",
+    "kind": "What kind of host is it?",
+    "address": "Address",
+    "serverUrl": "Server address",
+    "sshUser": "SSH user",
+    "trust": "How to trust the server",
+    "ca": "CA certificate",
+    "caHint": "PEM text of the CA that signed the server certificate. Leave empty to use this machine's trusted authorities.",
+    "clientCert": "Client certificate",
+    "clientCertHint": "PEM text (cert.pem). Leave both certificate and key empty if the daemon does not ask for one.",
+    "clientKey": "Client key",
+    "clientKeyHint": "PEM text (key.pem). It is stored on this server, readable only by root, and never shown again.",
+    "keepSecret": "Already stored. Leave empty to keep it.",
+    "sshKey": "Private key",
+    "sshKeyHint": "PEM or OpenSSH private key (id_ed25519). Stored on this server, readable only by root, and never shown again.",
+    "passphrase": "Key passphrase",
+    "passphraseHint": "Only if the key is protected. It is stored encrypted, because jobs and background work need it without you.",
+    "socketPath": "Docker socket on the host",
+    "socketPathHint": "Leave empty for /var/run/docker.sock.",
+    "agentSecret": "Agent secret",
+    "agentSecretHint": "The AGENT_SECRET set on the agent. Without one, the agent ties itself to the first server that talks to it and refuses others, so setting one is strongly advised.",
+    "token": "Pairing token",
+    "tokenHint": "Create it on the other server in Settings > Environments > Pair another server. It works once and for 15 minutes.",
+    "pairedHint": "Paired with {name}. To change the pairing, remove this environment and add it again."
+  },
+  "trust": {
+    "ca": "My CA",
+    "pin": "Pin its certificate",
+    "skip": "Don't check",
+    "pinHint": "Check the connection below and confirm the certificate fingerprint. Ervisio then refuses any other certificate.",
+    "skipWarn": "Without a check, anyone between this server and the host can pretend to be it. Prefer a CA or a pinned certificate."
+  },
+  "probe": {
+    "tls": "Check connection and show certificate",
+    "ssh": "Check connection and show host key",
+    "checking": "Checking…",
+    "tlsFound": "The server presented this certificate (SHA-256):",
+    "sshFound": "The server presented this host key (SHA-256):",
+    "verify": {
+      "tcp-tls": "Compare it with the one on the Docker host (openssl x509 -in server-cert.pem -noout -fingerprint -sha256).",
+      "ssh": "Compare it with the host's own key (ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub, or the ECDSA or RSA file).",
+      "portainer-agent": "Agents use a self-signed certificate. Compare it with the one the agent logs or shows, if you can.",
+      "ervisio": "Compare it with the fingerprint shown on the other server when you created the pairing token."
+    },
+    "confirm": "I checked it, this is the right server",
+    "pinned": "A fingerprint is already pinned. Check the connection again only if the host changed.",
+    "current": "Pinned fingerprint:",
+    "plainServer": "This server speaks plain http, so there is nothing to pin.",
+    "localHttp": "Plain http to this machine is fine. Elsewhere it needs the checkbox above."
+  },
+  "section": { "connection": "Connection", "credentials": "Credentials", "access": "Who can use it" },
+  "access": {
+    "who": "Who can use this environment",
+    "all": "Everyone who can use the plugin",
+    "restricted": "Only these users and groups",
+    "hint": "The plugin's own visibility still applies on top of this.",
+    "users": "Users",
+    "usersHint": "Add a user name and press Enter",
+    "groups": "Groups",
+    "groupsHint": "Add a group name and press Enter",
+    "restrictedShort": "restricted"
+  },
+  "pem": { "choose": "Choose file…", "tooBig": "{name} is too large for a certificate or key." },
+  "add": {
+    "action": "Add environment",
+    "title": "Add an environment",
+    "step": {
+      "kind": "Step {n} of {total}: name and kind",
+      "connection": "Step {n} of {total}: connection",
+      "access": "Step {n} of {total}: credentials and access"
+    }
+  },
+  "edit": { "action": "Edit {name}", "title": "Edit {name}", "save": "Save changes" },
+  "save": {
+    "added": "{name} added",
+    "updated": "{name} updated",
+    "savedButOffline": "{name} saved, but it is not reachable"
+  },
+  "test": {
+    "action": "Check {name} now",
+    "ok": "{name} answers in {ms} ms",
+    "failed": "{name} is not reachable"
+  },
+  "remove": {
+    "action": "Remove {name}",
+    "title": "Remove {name}?",
+    "text": "Plugins can no longer use it. The stored credentials are deleted from this server. The remote host is not changed.",
+    "textPaired": "Plugins can no longer use it. The pairing is revoked on the other server and the stored credential is deleted here.",
+    "confirm": "Remove environment",
+    "done": "{name} removed"
+  },
+  "pair": {
+    "title": "Pair another server",
+    "desc": "Let another Ervisio server use this server's plugins, such as Docker, through a pairing.",
+    "none": "No server is paired with this one.",
+    "create": "Create pairing token",
+    "dialogTitle": "Pair another server",
+    "dialogText": "Create a one-time token, then paste it on the other server in Settings > Environments > Add environment > Another Ervisio server.",
+    "user": "Run calls as this user",
+    "userHint": "Every call from the other server runs on this machine as this Linux user, with that user's rights and under this server's rules. It never gets administrator rights.",
+    "securityNote": "Whoever holds the pairing can do on this machine what {user} can do through the plugins installed here, such as managing Docker. Pair only servers you control. You can revoke it at any time.",
+    "createToken": "Create token",
+    "tokenText": "Paste this token on the other server. It works once and expires in {minutes} minutes.",
+    "copy": "Copy token",
+    "copied": "Token copied",
+    "copyFailed": "Could not copy. Select the token and copy it by hand.",
+    "expiresIn": "Expires in {time}",
+    "expired": "This token has expired. Close this window and create a new one.",
+    "fingerprint": "Certificate fingerprint of {server} (the other server asks you to confirm it):",
+    "fingerprintHint": "The other server shows the fingerprint it found. They must match.",
+    "noTls": "No TLS on this server",
+    "noTlsHint": "This server serves plain http, so there is no certificate to compare. Pair only over a network you trust.",
+    "runsAsNote": "Calls will run as {user} on this machine.",
+    "done": "Done",
+    "runsAs": "runs as {user}",
+    "created": "paired {date}",
+    "lastUsed": "last used {date} {via}",
+    "neverUsed": "not used yet",
+    "revoke": "Revoke the pairing with {name}",
+    "revokeTitle": "Revoke the pairing with {name}?",
+    "revokeText": "{name} can no longer use this server. Its connections close at once. It can pair again with a new token.",
+    "revokeConfirm": "Revoke pairing",
+    "revoked": "Pairing with {name} revoked"
+  },
+  "network": {
+    "title": "Allow {plugin} to connect to a new address?",
+    "text": "{plugin} asks to reach an address that is not part of its permissions.",
+    "exact": "Only this exact host and port. Other addresses stay blocked.",
+    "allow": "Allow connections to this address",
+    "deny": "Don't allow",
+    "close": "Close",
+    "https": "https, encrypted",
+    "http": "http, not encrypted",
+    "plainOk": "I understand that traffic to this address is not encrypted",
+    "needAdmin": "Only an administrator can approve this. Ask one to open the plugin and allow it."
+  },
+  "hosts": {
+    "title": "Approved network addresses",
+    "desc": "Addresses plugins asked for beyond their own permissions, and an administrator approved. Revoking one takes effect the next time the plugin loads.",
+    "none": "No extra address has been approved.",
+    "for": "for {plugin}",
+    "by": "approved by {by} on {date}",
+    "revoke": "Revoke {host}",
+    "revokeTitle": "Revoke {host}?",
+    "revokeText": "{plugin} can no longer connect to it. It can ask again.",
+    "revokeConfirm": "Revoke address",
+    "revoked": "{host} revoked"
+  }
+}

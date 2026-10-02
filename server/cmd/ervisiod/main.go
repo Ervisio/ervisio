@@ -66,6 +66,8 @@ func main() {
 	noAuth := flag.Bool("dev-insecure-noauth", false, "dev only: sign every request in as the daemon's user")
 	devKeys := flag.String("dev-authorized-keys", "", "dev only: authorized_keys file used for SSH-key sign-in instead of ~/.ssh")
 	devState := flag.String("dev-state-dir", "", "dev only: folder for the daemon's state (plugin jobs, notification channels) instead of "+brand.StateDir)
+	envsDir := flag.String("envs-dir", "", "where environments (remote Docker hosts) and their secrets are stored (default "+brand.StateDir+"/envs)")
+	tunnelDir := flag.String("tunnel-dir", "", "where per-user tunnel sockets to environments are created (default "+brand.RunDir+"/tunnels)")
 	check := flag.Bool("check-config", false, "parse and validate the configuration (the file after the flag, else -config), print OK or the errors, exit 0 or 1; starts nothing")
 	version := flag.Bool("version", false, "print the version and exit")
 	installPlugin := flag.String("install-plugin", "", "install (or update) this plugin from the signed marketplace catalog, then exit (root)")
@@ -217,6 +219,8 @@ func main() {
 		DevAuthorizedKeys: *devKeys,
 		StateDir:          stateDir,
 		NotifyFile:        notifyFile,
+		EnvsDir:           *envsDir,
+		TunnelDir:         *tunnelDir,
 		Logger:            log.Default(),
 	})
 	if err != nil {

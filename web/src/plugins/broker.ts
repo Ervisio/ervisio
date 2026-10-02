@@ -22,6 +22,8 @@ export interface BrokerCommand extends AdminLevel {
   name: string;
   args?: unknown[];
   pty?: boolean;
+  /** Kind family ("docker") the command may run against an environment for. */
+  remote?: string;
 }
 
 export interface BrokerHTTP extends AdminLevel {
@@ -31,6 +33,8 @@ export interface BrokerHTTP extends AdminLevel {
   rules?: { methods: string[]; path: string }[];
   /** Largest file plugins.upload may send (default 20 GiB). */
   maxUpload?: number;
+  /** Kind family ("docker") the API may be sent to an environment for. */
+  remote?: string;
 }
 
 /** A capabilities.files entry: a path (SDK v2) or {path, admin, adminUnlessGroup, create} (v3). */
@@ -45,6 +49,8 @@ export interface BrokerManifest {
     jobs?: { name: string }[];
     notify?: boolean;
     files?: { read?: BrokerFolder[]; write?: BrokerFolder[] };
+    /** capabilities.network.userHosts: the plugin may ask an administrator to approve more hosts. */
+    userHosts?: boolean;
   };
   contributes?: { pages?: { id: string }[] };
 }
@@ -68,6 +74,8 @@ export type Plan =
   | { kind: 'toast'; tone: 'ok' | 'err' | 'info'; title: string; detail?: string }
   | { kind: 'open'; to: string }
   | { kind: 'openUrl'; url: string }
+  /** sdk.network.request: the app asks an administrator (a dialog) and reloads the plugin's frames when approved. */
+  | { kind: 'network'; host: string; scheme: 'https' | 'http' }
   | { kind: 'deny'; code: 'forbidden' | 'invalid'; message: string };
 
 const MAX_ARGS = 16;
@@ -83,6 +91,8 @@ const MAX_HTTP_BODY = 8 << 20;
 const TEXT_BODY_INLINE = 256 << 10;
 const TOO_BIG = 'The request body is larger than 8 MiB. Send large bodies with sdk.api.upload.';
 const DEFAULT_MAX_UPLOAD = 20 * 2 ** 30;
+const ENV_RE = /^env-[0-9a-f]{8}$/;
+const HOST_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*(:[0-9]{1,5})?$/;
 const HTTP_METHODS = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'];
 
 const deny = (message: string, code: 'forbidden' | 'invalid' = 'forbidden'): Plan => ({ kind: 'deny', code, message });
@@ -96,6 +106,12 @@ function command(m: BrokerManifest, name: unknown): BrokerCommand | undefined {
 export function needsAdmin(c: AdminLevel, u: BrokerUser): boolean {
   if (!c.admin || u.isRoot) return false;
   return !(c.adminUnlessGroup && (u.groups ?? []).includes(c.adminUnlessGroup));
+}
+
+/** An optional environment id: undefined when absent, null when it is not an id. */
+function envId(v: unknown): string | null | undefined {
+  if (v === undefined || v === null || v === '') return undefined;
+  return typeof v === 'string' && ENV_RE.test(v) ? v : null;
 }
 
 function argList(v: unknown): string[] | null {
@@ -228,7 +244,10 @@ function httpRequest(m: BrokerManifest, req: Record<string, unknown>, u: BrokerU
     if (typeof v !== 'string' || v.length > 8192 || /[\r\n\0]/.test(v)) return deny(`The value of the header ${JSON.stringify(k)} is not allowed.`, 'invalid');
     headers[k] = v;
   }
-  const params: Record<string, unknown> = { plugin: m.id, name: api.name, method, path: req.path, ...(query ? { query } : {}) };
+  const env = envId(req.env);
+  if (env === null) return deny('env must be the id of an environment.', 'invalid');
+  if (env && !api.remote) return deny(`${m.id} does not allow ${api.name} to target an environment.`);
+  const params: Record<string, unknown> = { plugin: m.id, name: api.name, method, path: req.path, ...(query ? { query } : {}), ...(env ? { env } : {}) };
   if (entries.length) params.headers = headers;
   const body = req.body;
   if (body instanceof Uint8Array) {
@@ -248,7 +267,8 @@ function httpRequest(m: BrokerManifest, req: Record<string, unknown>, u: BrokerU
     return deny('The body must be a string or a Uint8Array.', 'invalid');
   }
   if (req.json === true) params.json = true;
-  return { params, admin: needsAdmin(api, u) };
+  // Against an environment the daemon's tunnel is the user's own: no administrator rights apply.
+  return { params, admin: env ? false : needsAdmin(api, u) };
 }
 
 const MAX_FILENAME = 255;
@@ -398,7 +418,9 @@ export function authorize(m: BrokerManifest, op: FrameOp | string, args: Record<
       if (c.pty) return deny(`${c.name} is a terminal command: open it with sdk.api.pty.`, 'invalid');
       const list = argList(a.args);
       if (!list) return deny('Command arguments must be a list of at most 16 strings.', 'invalid');
-      return { kind: 'call', method: 'plugins.exec', params: { plugin: m.id, command: c.name, args: list }, admin: needsAdmin(c, u) };
+      const env = remoteEnv(m, c, a.env);
+      if (typeof env === 'object' && env) return env;
+      return { kind: 'call', method: 'plugins.exec', params: { plugin: m.id, command: c.name, args: list, ...(env ? { env } : {}) }, admin: env ? false : needsAdmin(c, u) };
     }
     case 'readFile':
     case 'listDir':
@@ -436,6 +458,15 @@ export function authorize(m: BrokerManifest, op: FrameOp | string, args: Record<
       return authorizeSave(a);
     case 'auditList':
       return authorizeAuditList(m, a);
+    case 'envs':
+      return { kind: 'call', method: 'plugins.envs.list', params: {}, admin: false };
+    case 'network': {
+      if (!m.capabilities?.userHosts) return deny(`${m.id} does not declare capabilities.network.userHosts.`);
+      const host = typeof a.host === 'string' ? a.host.trim().toLowerCase() : '';
+      const scheme = a.scheme === 'http' ? 'http' : 'https';
+      if (!host || host.length > 253 || !HOST_RE.test(host)) return deny('Give a host name with an optional port, like registry.example.org:5000.', 'invalid');
+      return { kind: 'network', host, scheme };
+    }
     case 'asset':
       if (!validAsset(a.path)) return deny('Give a relative path inside the plugin folder.', 'invalid');
       return { kind: 'asset', path: a.path };
@@ -475,14 +506,24 @@ function externalUrl(v: unknown): string | null {
   return u.href;
 }
 
+/** The environment a command may run on: its id, undefined for none, or a denial. */
+function remoteEnv(m: BrokerManifest, c: BrokerCommand, v: unknown): string | Plan | undefined {
+  const env = envId(v);
+  if (env === null) return deny('env must be the id of an environment.', 'invalid');
+  if (env && !c.remote) return deny(`${m.id} does not allow ${c.name} to run on an environment.`);
+  return env;
+}
+
 /** Decision for a streamed command (plugins.execStream). */
-export function authorizeStream(m: BrokerManifest, cmd: unknown, args: unknown, u: BrokerUser): Plan {
+export function authorizeStream(m: BrokerManifest, cmd: unknown, args: unknown, u: BrokerUser, envArg?: unknown): Plan {
   const c = command(m, cmd);
   if (!c) return deny(`${m.id} does not declare a command ${JSON.stringify(cmd)}.`);
   if (c.pty) return deny(`${c.name} is a terminal command: open it with sdk.api.pty.`, 'invalid');
   const list = argList(args);
   if (!list) return deny('Command arguments must be a list of at most 16 strings.', 'invalid');
-  return { kind: 'stream', method: 'plugins.execStream', params: { plugin: m.id, command: c.name, args: list }, admin: needsAdmin(c, u) };
+  const env = remoteEnv(m, c, envArg);
+  if (typeof env === 'object' && env) return env;
+  return { kind: 'stream', method: 'plugins.execStream', params: { plugin: m.id, command: c.name, args: list, ...(env ? { env } : {}) }, admin: env ? false : needsAdmin(c, u) };
 }
 
 /** Decision for a streamed HTTP request (plugins.httpStream). */
@@ -494,12 +535,14 @@ export function authorizeHttpStream(m: BrokerManifest, req: unknown, u: BrokerUs
 }
 
 /** Decision for a terminal command (plugins.pty): only commands declared `pty: true`. */
-export function authorizePty(m: BrokerManifest, cmd: unknown, args: unknown, cols: unknown, rows: unknown, u: BrokerUser): Plan {
+export function authorizePty(m: BrokerManifest, cmd: unknown, args: unknown, cols: unknown, rows: unknown, u: BrokerUser, envArg?: unknown): Plan {
   const c = command(m, cmd);
   if (!c) return deny(`${m.id} does not declare a command ${JSON.stringify(cmd)}.`);
   if (!c.pty) return deny(`${c.name} is not declared as a terminal (pty) command.`, 'invalid');
   const list = argList(args);
   if (!list) return deny('Command arguments must be a list of at most 16 strings.', 'invalid');
   const size = (v: unknown, d: number) => (Number.isInteger(v) && (v as number) >= 1 && (v as number) <= 1000 ? (v as number) : d);
-  return { kind: 'stream', method: 'plugins.pty', params: { plugin: m.id, command: c.name, args: list, cols: size(cols, 80), rows: size(rows, 24) }, admin: needsAdmin(c, u) };
+  const env = remoteEnv(m, c, envArg);
+  if (typeof env === 'object' && env) return env;
+  return { kind: 'stream', method: 'plugins.pty', params: { plugin: m.id, command: c.name, args: list, cols: size(cols, 80), rows: size(rows, 24), ...(env ? { env } : {}) }, admin: env ? false : needsAdmin(c, u) };
 }

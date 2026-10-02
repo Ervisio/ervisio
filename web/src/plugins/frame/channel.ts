@@ -54,8 +54,8 @@ function open(m: OpenSpec, h: AnyCallbacks) {
   };
 }
 
-export function openStream(command: string, args: string[], h: StreamCallbacks): { close(): void } {
-  const { close } = open({ command, args }, h);
+export function openStream(command: string, args: string[], h: StreamCallbacks, env?: string): { close(): void } {
+  const { close } = open({ command, args, ...(env ? { env } : {}) }, h);
   return { close };
 }
 
@@ -77,8 +77,8 @@ export interface PtyCallbacks {
   onError?(e: PluginError): void;
 }
 
-export function openPty(command: string, args: string[], cols: number, rows: number, h: PtyCallbacks) {
-  const s = open({ kind: 'pty', command, args, cols, rows }, h);
+export function openPty(command: string, args: string[], cols: number, rows: number, h: PtyCallbacks, env?: string) {
+  const s = open({ kind: 'pty', command, args, cols, rows, ...(env ? { env } : {}) }, h);
   const enc = new TextEncoder();
   return {
     write(data: string | Uint8Array) {

@@ -62,7 +62,11 @@ type Options struct {
 	// NotifyFile is the notification channels file, which holds secrets
 	// (0600). "" = notify.json next to the configuration file.
 	NotifyFile string
-	Logger     *log.Logger
+	// EnvsDir and TunnelDir override where environments are stored
+	// (default /var/lib/ervisio/envs) and where their per-user tunnel sockets
+	// live (default /run/ervisio/tunnels).
+	EnvsDir, TunnelDir string
+	Logger             *log.Logger
 }
 
 // configAudit gives the activity log the live configuration.
@@ -104,6 +108,8 @@ type Server struct {
 	jobs     *jobs.Manager
 	notifier *notify.Service
 	jobPool  *bridgePool
+	// env is the environments feature (envs.go).
+	env *envState
 }
 
 // New validates options and loads the configuration.
@@ -153,6 +159,7 @@ func New(opts Options) (*Server, error) {
 	if err := s.initJobs(); err != nil {
 		opts.Logger.Printf("background jobs are off: %v", err)
 	}
+	s.env = s.newEnvState()
 	if opts.Dev {
 		if s.devUser, err = account.Current(); err != nil {
 			cancel()
@@ -206,6 +213,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/audit/export", s.authed(s.handleAuditExport))
 	mux.HandleFunc("GET /api/files/download", s.authed(s.handleDownload))
 	mux.HandleFunc("POST /api/files/upload", s.authed(s.csrfS(s.handleUpload)))
+	s.registerPair(mux)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errNotFound)
 	})
@@ -292,6 +300,7 @@ func (s *Server) Run(ctx context.Context) error {
 		go s.jobs.Run(ctx)
 	}
 	go s.runAlertWatch(ctx)
+	go s.envLoop(ctx)
 
 	errCh := make(chan error, 2)
 	if s.opts.Dev {

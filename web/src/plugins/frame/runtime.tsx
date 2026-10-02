@@ -51,6 +51,8 @@ interface HttpOptions {
   query?: Record<string, string | string[]> | string;
   headers?: Record<string, string>;
   body?: string | Uint8Array | object;
+  /** Id of an environment (sdk.envs.list()). */
+  env?: string;
 }
 
 function httpRequest(name: string, o: HttpOptions): FrameHttpRequest {
@@ -65,6 +67,7 @@ function httpRequest(name: string, o: HttpOptions): FrameHttpRequest {
   const req: FrameHttpRequest = { name, method: String(o.method ?? 'GET').toUpperCase(), path: String(o.path ?? '') };
   if (query) req.query = query;
   if (o.headers) req.headers = { ...o.headers };
+  if (o.env) req.env = String(o.env);
   const b = o.body;
   if (typeof b === 'string' || b instanceof Uint8Array) req.body = b;
   else if (b !== undefined && b !== null) {
@@ -134,8 +137,9 @@ function makeSdk(plugin: { id: string; name: string; version: string }, view: Fr
     react: React,
     ui: kit,
     api: {
-      exec: (command: string, args: string[] = []) => request<{ stdout: string; stderr: string; exitCode: number; truncated?: boolean }>('exec', { command, args }),
-      execStream: (command: string, args: string[], h: Parameters<typeof openStream>[2]) => openStream(command, args ?? [], h ?? {}),
+      exec: (command: string, args: string[] = [], o?: { env?: string }) =>
+        request<{ stdout: string; stderr: string; exitCode: number; truncated?: boolean }>('exec', { command, args, ...(o?.env ? { env: o.env } : {}) }),
+      execStream: (command: string, args: string[], h: Parameters<typeof openStream>[2], o?: { env?: string }) => openStream(command, args ?? [], h ?? {}, o?.env),
       async http(name: string, o: HttpOptions) {
         return httpResponse(await request<FrameHttpResult>('http', httpRequest(name, o) as unknown as Record<string, unknown>));
       },
@@ -165,8 +169,8 @@ function makeSdk(plugin: { id: string; name: string; version: string }, view: Fr
       },
       /** SDK 0.2: saves data the plugin holds in memory (a string, bytes or a Blob, at most 64 MiB) as a browser download. */
       saveFile: (filename: string, data: string | Uint8Array | Blob, mime?: string) => saveFile(filename, data, mime),
-      pty: (command: string, args: string[], o: { cols?: number; rows?: number } & PtyCallbacks) =>
-        openPty(command, args ?? [], Math.floor(o?.cols ?? 80), Math.floor(o?.rows ?? 24), o ?? {}),
+      pty: (command: string, args: string[], o: { cols?: number; rows?: number; env?: string } & PtyCallbacks) =>
+        openPty(command, args ?? [], Math.floor(o?.cols ?? 80), Math.floor(o?.rows ?? 24), o ?? {}, o?.env),
       /** Background jobs and notifications (SDK 0.2; needs capabilities.jobs / capabilities.notify). */
       jobs: jobsApi,
       notify: notifyApi,
@@ -203,6 +207,13 @@ function makeSdk(plugin: { id: string; name: string; version: string }, view: Fr
       async remove(path: string): Promise<void> {
         await request('remove', { path });
       },
+    },
+    envs: {
+      list: () => request<unknown[]>('envs'),
+    },
+    network: {
+      request: (host: string, o?: { scheme?: 'https' | 'http' }) =>
+        request<{ host: string; approved: true; reloading: boolean }>('network', { host, ...(o?.scheme ? { scheme: o.scheme } : {}) }),
     },
     asset(path: string): Promise<string> {
       let p = assets.get(path);

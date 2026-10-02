@@ -219,6 +219,14 @@ runs in an `<iframe sandbox="allow-scripts allow-forms">` (opaque origin, strict
 SDK repository). Signed plugins carry `manifest.sig` (ed25519, team key: `docs/PLUGIN-SIGNING.md`); unsigned ones are
 blocked by default. The remote catalog must be signed by the same key (`catalog.sig`), or it is ignored.
 
+**Environments** are the one place where the daemon itself keeps credentials and connections for users: remote Docker
+hosts (tcp+TLS, SSH, Portainer agent, another Ervisio server) that a plugin capability can target. The daemon
+(`server/internal/envs`, `server/internal/server/envs.go`) answers `envs.*` and `plugins.envs.list` itself, hands the
+user's bridge a `0600` tunnel socket owned by the user (or, for another Ervisio server, a bridge running there over a
+pinned, upgraded connection) and the bridge never sees a secret. Full design and security model:
+`docs/api/environments.md`. Hosts a plugin may reach beyond its manifest are approved one by one by an administrator
+(`capabilities.network.userHosts`, `plugins.network.*`).
+
 ## Releases and self-update
 
 Tags `vX.Y.Z` build signed release archives on GitHub (`.github/workflows/release.yml`). Installed consoles live in

@@ -30,7 +30,7 @@ const pluginRuntimePath = "/plugin-runtime.js"
 
 // pluginHostRe accepts what plugins.access returns for capabilities.network
 // (it validates the same way; checked again here because it goes into a header).
-var pluginHostRe = regexp.MustCompile(`^(\*\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*(:[0-9]{1,5})?$`)
+var pluginHostRe = regexp.MustCompile(`^(http://)?(\*\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*(:[0-9]{1,5})?$`)
 
 type pluginAccessInfo struct {
 	ID      string   `json:"id"`
@@ -80,7 +80,11 @@ func pluginFrameCSP(nonce string, hosts []string) string {
 	if len(hosts) > 0 {
 		var srcs []string
 		for _, h := range hosts {
-			if pluginHostRe.MatchString(h) {
+			switch {
+			case !pluginHostRe.MatchString(h):
+			case strings.HasPrefix(h, "http://"): // approved as plain http
+				srcs = append(srcs, h, "ws://"+h[len("http://"):])
+			default:
 				srcs = append(srcs, "https://"+h, "wss://"+h)
 			}
 		}

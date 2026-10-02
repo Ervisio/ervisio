@@ -199,7 +199,7 @@ func (wc *wsConn) open(f *wsFrame) {
 		wc.sendError(f.Ch, rpc.Errorf(rpc.Unavailable, "too many open channels"))
 		return
 	}
-	p, isAdmin, e := wc.s.route(wc.ctx, wc.sess, f.Method, f.Admin)
+	p, isAdmin, params, relEnv, e := wc.s.routeWithEnv(wc.ctx, wc.sess, f.Method, f.Params, f.Admin)
 	if e != nil {
 		wc.sess.releaseChannel()
 		wc.sendError(f.Ch, e)
@@ -208,10 +208,11 @@ func (wc *wsConn) open(f *wsFrame) {
 	hold := wc.sess.hold(p, isAdmin)
 	release := func() {
 		hold()
+		relEnv()
 		wc.sess.releaseChannel()
 	}
 	rec := wc.s.auditBegin(wc.sess, wc.ip, f.Method, f.Params, isAdmin)
-	st, err := p.Stream(wc.ctx, f.Method, f.Params)
+	st, err := p.Stream(wc.ctx, f.Method, params)
 	if err != nil {
 		rec.streamDone(err)
 		release()

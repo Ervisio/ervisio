@@ -9,7 +9,7 @@ export const LANGUAGES = [
 export type Lang = (typeof LANGUAGES)[number]['id'];
 export const NAMESPACES = [
   'common', 'shell', 'auth', 'ui', 'settings',
-  'overview', 'terminal', 'files', 'logs', 'services', 'software', 'users', 'plugins',
+  'overview', 'terminal', 'files', 'logs', 'services', 'software', 'users', 'plugins', 'envs',
 ] as const;
 
 type Dict = Record<string, string>;

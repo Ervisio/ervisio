@@ -29,6 +29,10 @@ type ExecParams struct {
 	Plugin  string   `json:"plugin"`
 	Command string   `json:"command"`
 	Args    []string `json:"args"`
+	// Env and EnvSocket: see HTTPParams. A remote command (manifest
+	// "remote") gets the tunnel in its {env} argv item.
+	Env       string `json:"env,omitempty"`
+	EnvSocket string `json:"envSocket,omitempty"`
 }
 
 // ExecResult is the result of plugins.exec.
@@ -112,19 +116,31 @@ func resolve(c *rpc.Call, p ExecParams, wantPTY bool) (*resolved, error) {
 		}
 		return nil, rpc.Errorf(rpc.Invalid, "%s does not declare %q as a terminal (pty) command.", m.Name, p.Command)
 	}
-	// A command declared as user-level never runs on the root bridge: the
-	// plugin cannot raise its own rights by asking for admin.
-	if c.Admin && !cmd.Admin {
-		return nil, rpc.Errorf(rpc.Forbidden, "%s declares %q as a user command; it does not run with administrator rights.", m.Name, p.Command)
-	}
-	root := c.Admin || os.Geteuid() == 0
-	if cmd.Admin && !root && !(cmd.AdminUnlessGroup != "" && who.Groups[cmd.AdminUnlessGroup]) {
-		return nil, rpc.Errorf(rpc.NeedsAdmin, "%s needs administrator rights to run %q.", m.Name, p.Command)
+	if p.EnvSocket != "" {
+		// Against an environment the docker program only talks to the user's
+		// own tunnel: no administrator rights are needed or used.
+		if cmd.Remote == "" || c.Admin {
+			return nil, rpc.Errorf(rpc.Forbidden, "%s does not allow %q to run on an environment.", m.Name, p.Command)
+		}
+		if err := envSocketOK(p.EnvSocket); err != nil {
+			return nil, err
+		}
+	} else {
+		// A command declared as user-level never runs on the root bridge: the
+		// plugin cannot raise its own rights by asking for admin.
+		if c.Admin && !cmd.Admin {
+			return nil, rpc.Errorf(rpc.Forbidden, "%s declares %q as a user command; it does not run with administrator rights.", m.Name, p.Command)
+		}
+		root := c.Admin || os.Geteuid() == 0
+		if cmd.Admin && !root && !(cmd.AdminUnlessGroup != "" && who.Groups[cmd.AdminUnlessGroup]) {
+			return nil, rpc.Errorf(rpc.NeedsAdmin, "%s needs administrator rights to run %q.", m.Name, p.Command)
+		}
 	}
 	argv, err := Substitute(cmd, p.Args)
 	if err != nil {
 		return nil, rpc.Errorf(rpc.Invalid, "%v", err)
 	}
+	argv = remoteArgv(cmd, argv, p.EnvSocket)
 	to := defaultTimeout
 	if cmd.TimeoutSec > 0 {
 		to = time.Duration(cmd.TimeoutSec) * time.Second

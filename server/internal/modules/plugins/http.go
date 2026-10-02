@@ -70,6 +70,12 @@ type HTTPParams struct {
 	B64  bool   `json:"b64,omitempty"`
 	// JSON sends Content-Type: application/json (an object body in the SDK).
 	JSON bool `json:"json,omitempty"`
+	// Env is the id of an environment (SDK: the env option). The daemon
+	// handles it: it checks access and replaces it with EnvSocket.
+	Env string `json:"env,omitempty"`
+	// EnvSocket is the tunnel socket the daemon set for Env; a value from
+	// the browser never reaches the bridge.
+	EnvSocket string `json:"envSocket,omitempty"`
 }
 
 // HTTPResult is the result of plugins.http.
@@ -83,7 +89,9 @@ type HTTPResult struct {
 
 // httpPlan is an authorised request, ready to send.
 type httpPlan struct {
-	api     *HTTPAPI
+	api *HTTPAPI
+	// socket is the API's socket, or the environment's tunnel.
+	socket  string
 	req     *http.Request
 	maxBody int64
 	timeout time.Duration
@@ -212,13 +220,26 @@ func resolveHTTP(ctx context.Context, c *rpc.Call, p HTTPParams) (*httpPlan, err
 	if api == nil {
 		return nil, rpc.Errorf(rpc.NotFound, "%s does not declare an HTTP API %q.", m.Name, p.Name)
 	}
-	// As for commands: a user-level API is never called from the root bridge.
-	if c.Admin && !api.Admin {
-		return nil, rpc.Errorf(rpc.Forbidden, "%s declares %q as a user API; it is not called with administrator rights.", m.Name, p.Name)
-	}
-	root := c.Admin || os.Geteuid() == 0
-	if api.Admin && !root && !(api.AdminUnlessGroup != "" && who.Groups[api.AdminUnlessGroup]) {
-		return nil, rpc.Errorf(rpc.NeedsAdmin, "%s needs administrator rights to use %q.", m.Name, p.Name)
+	socket := api.Socket
+	if p.EnvSocket != "" {
+		// An environment replaces the socket; the API must opt in, and the
+		// daemon's tunnel is the user's own, so no administrator rights apply.
+		if api.Remote == "" || c.Admin {
+			return nil, rpc.Errorf(rpc.Forbidden, "%s does not allow %q to target an environment.", m.Name, p.Name)
+		}
+		if err := envSocketOK(p.EnvSocket); err != nil {
+			return nil, err
+		}
+		socket = p.EnvSocket
+	} else {
+		// As for commands: a user-level API is never called from the root bridge.
+		if c.Admin && !api.Admin {
+			return nil, rpc.Errorf(rpc.Forbidden, "%s declares %q as a user API; it is not called with administrator rights.", m.Name, p.Name)
+		}
+		root := c.Admin || os.Geteuid() == 0
+		if api.Admin && !root && !(api.AdminUnlessGroup != "" && who.Groups[api.AdminUnlessGroup]) {
+			return nil, rpc.Errorf(rpc.NeedsAdmin, "%s needs administrator rights to use %q.", m.Name, p.Name)
+		}
 	}
 	if !httpMethods[p.Method] {
 		return nil, rpc.Errorf(rpc.Invalid, "%q is not an allowed HTTP method.", p.Method)
@@ -284,7 +305,7 @@ func resolveHTTP(ctx context.Context, c *rpc.Call, p HTTPParams) (*httpPlan, err
 	if api.TimeoutSec > 0 {
 		to = time.Duration(api.TimeoutSec) * time.Second
 	}
-	return &httpPlan{api: api, req: req, maxBody: maxBody, timeout: to}, nil
+	return &httpPlan{api: api, socket: socket, req: req, maxBody: maxBody, timeout: to}, nil
 }
 
 // unixClient talks HTTP to one unix socket: no proxy, no redirects
@@ -305,7 +326,10 @@ func unixClient(socket string, headerTimeout time.Duration) *http.Client {
 }
 
 func httpErr(ctx context.Context, err error, pl *httpPlan) error {
-	sock := pl.api.Socket
+	sock := pl.socket
+	if pl.socket != pl.api.Socket {
+		sock = "the environment"
+	}
 	switch {
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):
 		return rpc.Errorf(rpc.Unavailable, "%s did not answer within %s.", sock, pl.timeout)
@@ -343,7 +367,7 @@ func runHTTP(ctx context.Context, c *rpc.Call, p HTTPParams) (*HTTPResult, error
 	}
 	tctx, tcancel := context.WithTimeout(ctx, pl.timeout)
 	defer tcancel()
-	resp, err := unixClient(pl.api.Socket, 0).Do(pl.req.WithContext(tctx))
+	resp, err := unixClient(pl.socket, 0).Do(pl.req.WithContext(tctx))
 	if err != nil {
 		return nil, httpErr(tctx, err, pl)
 	}
@@ -391,7 +415,7 @@ func runHTTPStream(ctx context.Context, c *rpc.Call, s rpc.Stream, p HTTPParams)
 			}
 		}
 	}()
-	resp, err := unixClient(pl.api.Socket, pl.timeout).Do(pl.req.WithContext(ctx))
+	resp, err := unixClient(pl.socket, pl.timeout).Do(pl.req.WithContext(ctx))
 	if err != nil {
 		return httpErr(ctx, err, pl)
 	}

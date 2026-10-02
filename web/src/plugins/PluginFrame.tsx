@@ -8,6 +8,7 @@ import { themeVars, useTheme } from '../theme';
 import { EmptyState, Skeleton, toast } from '../ui';
 import { authorize, authorizeHttpStream, authorizePty, authorizeStream, authorizeUpload, SaveLimiter, type BrokerUser, type Plan } from './broker';
 import { isFrameMessage, type FrameError, type FrameHttpResult, type FrameTheme, type FrameToHost, type FrameUploadResult, type FrameView, type HostToFrame } from './protocol';
+import { askNetwork } from './networkApproval';
 import { usePlugins } from './PluginsProvider';
 import type { PluginManifest } from './types';
 
@@ -205,6 +206,9 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
           reply(m.id, Promise.resolve(null));
           return;
         }
+        case 'network':
+          reply(m.id, askNetwork({ id: p.id, name: p.name }, plan.host, plan.scheme));
+          return;
         case 'stream':
           reply(m.id, Promise.reject(new ApiError('invalid', 'Use stream-open.')));
       }
@@ -219,8 +223,8 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
       const kind = m.kind === 'http' || m.kind === 'pty' ? m.kind : 'exec';
       let plan: Plan;
       if (m.kind === 'http') plan = authorizeHttpStream(p, m.req, user);
-      else if (m.kind === 'pty') plan = authorizePty(p, m.command, m.args, m.cols, m.rows, user);
-      else plan = authorizeStream(p, m.command, m.args, user);
+      else if (m.kind === 'pty') plan = authorizePty(p, m.command, m.args, m.cols, m.rows, user, m.env);
+      else plan = authorizeStream(p, m.command, m.args, user, m.env);
       if (plan.kind !== 'stream') return err(plan.kind === 'deny' ? { code: plan.code, message: plan.message } : { code: 'invalid', message: 'bad stream' });
       const onData = (d: unknown) => {
         if (dead || !d || typeof d !== 'object') return;
