@@ -33,7 +33,7 @@ export function Browse({ catalog, query, busyId, onInstall }: Props) {
       {catalog.warning && <div className="plugins-note is-warn">{catalog.warning}</div>}
       {featured && !q && !cat && (
         <div className={`plugins-feat hue-${hueOf(featured.color)}`}>
-          <Tile icon={featured.icon} color={featured.color} size="lg" />
+          <Tile icon={featured.icon} logo={featured.logo} color={featured.color} size="lg" />
           <div>
             <h2>{featured.name}</h2>
             <p>{featured.notes || featured.description}</p>
@@ -54,7 +54,7 @@ export function Browse({ catalog, query, busyId, onInstall }: Props) {
         <div className="plugins-bgrid">
           {list.map((e) => (
             <div key={e.id} className="plugins-bc">
-              <Tile icon={e.icon} color={e.color} />
+              <Tile icon={e.icon} logo={e.logo} color={e.color} />
               <div className="plugins-bc-tx">
                 <b>{e.name}</b>
                 <small>{e.description}</small>

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useT } from '../i18n';
 import { Icon, useFocusTrap, type IconName } from '../ui';
 import { useAllPaletteActions } from '../sections';
+import { NavIcon } from './NavIcon';
 import { useNav } from './useNav';
 
 interface Row {
@@ -12,6 +13,7 @@ interface Row {
   title: string;
   hint?: string;
   icon: IconName;
+  logo?: string;
   hue?: string;
   hay: string;
   run(): void;
@@ -40,6 +42,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose(): vo
       group: 'go',
       title: t('palette.goTo', { name: e.label }),
       icon: e.icon,
+      logo: e.logo,
       hue: e.hueClass,
       hay: e.label.toLowerCase(),
       run: () => nav(e.to),
@@ -108,7 +111,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose(): vo
             <div key={r.id}>
               {(i === 0 || shown[i - 1].group !== r.group) && <div className="pal-g">{r.group === 'go' ? t('palette.sections') : t('palette.actions')}</div>}
               <button type="button" role="option" aria-selected={i === sel} className={`pal-i ${r.hue ?? ''}`} onMouseMove={() => setSel(i)} onClick={() => run(r)}>
-                <span className="ic"><Icon name={r.icon} /></span>
+                <span className="ic"><NavIcon e={r} /></span>
                 {r.title}
                 {r.hint && <small>{r.hint}</small>}
               </button>

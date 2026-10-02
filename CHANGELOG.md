@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- Plugin logos: a `logo.svg` or `logo.png` (at most 64 KiB) at the root of a plugin folder is shown instead of its icon in the rail, the dock, the More sheet, the palette and Plugins. The marketplace catalog can carry it as a `data:` URL (`logo`), so Browse and the install dialog show it too. No manifest field: packages with a logo still load on older consoles.
+
 ## [0.4.0] - 2026-10-02
 
 ### Changed
