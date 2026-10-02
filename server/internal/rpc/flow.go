@@ -9,10 +9,13 @@ import (
 // inbox buffers up to Window messages for a consumer and acknowledges them to
 // the peer as the consumer takes them.
 type inbox[T any] struct {
-	in   chan T
-	out  chan T
-	ack  func(n int)
-	once sync.Once
+	in  chan T
+	out chan T
+	ack func(n int)
+	// mu orders push and close: a stream cancelled by its caller closes the
+	// inbox while the read loop may still be delivering a message to it.
+	mu     sync.Mutex
+	closed bool
 }
 
 func newInbox[T any](ctx context.Context, ack func(n int)) *inbox[T] {
@@ -24,6 +27,11 @@ func newInbox[T any](ctx context.Context, ack func(n int)) *inbox[T] {
 // push queues v without blocking. It returns false when the peer exceeded
 // the window (a protocol violation).
 func (b *inbox[T]) push(v T) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.closed {
+		return true // the consumer is gone: drop it
+	}
 	select {
 	case b.in <- v:
 		return true
@@ -33,7 +41,14 @@ func (b *inbox[T]) push(v T) bool {
 }
 
 // close ends the inbox; queued messages are still delivered first.
-func (b *inbox[T]) close() { b.once.Do(func() { close(b.in) }) }
+func (b *inbox[T]) close() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if !b.closed {
+		b.closed = true
+		close(b.in)
+	}
+}
 
 func (b *inbox[T]) forward(ctx context.Context) {
 	defer close(b.out)
