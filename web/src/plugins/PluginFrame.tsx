@@ -159,6 +159,13 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
           go(plan.to);
           reply(m.id, Promise.resolve(null));
           return;
+        case 'openUrl': {
+          // The frame has no allow-popups; the app opens the tab, detached from both the app and the frame.
+          // With noopener window.open always returns null, so a blocked pop-up cannot be detected here.
+          window.open(plan.url, '_blank', 'noopener,noreferrer');
+          reply(m.id, Promise.resolve(null));
+          return;
+        }
         case 'stream':
           reply(m.id, Promise.reject(new ApiError('invalid', 'Use stream-open.')));
       }

@@ -55,6 +55,7 @@ export type Plan =
   | { kind: 'asset'; path: string }
   | { kind: 'toast'; tone: 'ok' | 'err' | 'info'; title: string; detail?: string }
   | { kind: 'open'; to: string }
+  | { kind: 'openUrl'; url: string }
   | { kind: 'deny'; code: 'forbidden' | 'invalid'; message: string };
 
 const MAX_ARGS = 16;
@@ -293,8 +294,26 @@ export function authorize(m: BrokerManifest, op: FrameOp | string, args: Record<
       if (!page) return deny(`${m.id} has no page ${JSON.stringify(a.page)}.`);
       return { kind: 'open', to: `/p/${m.id}/${page.id}` };
     }
+    case 'openUrl': {
+      const url = externalUrl(a.url);
+      if (!url) return deny('Only http and https addresses without credentials can be opened.', 'invalid');
+      return { kind: 'openUrl', url };
+    }
   }
   return deny(`Plugins cannot use ${JSON.stringify(op)}.`);
+}
+
+/** An http(s) URL without user info, as a normalised string, or null. */
+function externalUrl(v: unknown): string | null {
+  if (typeof v !== 'string' || v.length > 2048) return null;
+  let u: URL;
+  try {
+    u = new URL(v);
+  } catch {
+    return null;
+  }
+  if ((u.protocol !== 'http:' && u.protocol !== 'https:') || u.username || u.password) return null;
+  return u.href;
 }
 
 /** Decision for a streamed command (plugins.execStream). */

@@ -137,6 +137,8 @@ export interface PluginSDK {
   asset(path: string): Promise<string>;
   /** Open one of the plugin's own pages in the app. */
   open(pageId: string): void;
+  /** Opens an http(s) address in a new browser tab (the frame itself cannot open pop-ups). */
+  openExternal(url: string): Promise<void>;
   registerPage(id: string, page: PluginViewDef): void;
   registerWidget(def: { id: string; title?: string; render: PluginViewDef }): void;
   /** Deprecated: snippets come from manifest.contributes.snippets. No-op. */

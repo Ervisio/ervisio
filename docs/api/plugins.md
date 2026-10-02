@@ -35,6 +35,7 @@ maps each request to exactly one daemon call, using the manifest from `plugins.l
 | `asset {path}` | `GET /plugins/<id>/<path>` | relative path inside the plugin folder |
 | `toast {tone, title, detail?}` | none (app toast, prefixed with the plugin name) | |
 | `open {page}` | none (navigates to `/p/<id>/<page>`) | `page` is one of the plugin's pages |
+| `openUrl {url}` | none (the app opens a new tab, `noopener`) | `http:`/`https:` URL without credentials, at most 2048 characters |
 
 Anything else is refused. The daemon repeats every check that matters (commands, HTTP rules and headers, levels, folders, enabled, signature,
 visibility), so the broker is a first gate, not the only one. A frame has at most 32 streams open; all of them are closed

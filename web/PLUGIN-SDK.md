@@ -81,6 +81,7 @@ v1 plugins do not throw.
 | `files.remove(path)` | v3. Removes a file or an empty folder inside a `files.write` folder (never the declared folder itself). |
 | `asset(path)` | Fetches a file of your own plugin folder (relative path) and returns a `blob:` URL for `<img src>`, CSS, etc. |
 | `open(pageId)` | Opens one of your own pages in the app (for example from a widget). |
+| `openExternal(url)` | Opens an `http://` or `https://` address in a new browser tab (the frame cannot open pop-ups itself). Addresses with a user name or password are refused. Use it from a click handler, or the browser may block the tab. |
 | `registerPage(id, view)` | `view` is a React component `({sdk}) => element` or `{ render(container, sdk) => cleanup? }` for framework-free code. The page renders in the app's content panel at `/p/<plugin>/<id>`; its rail entry comes from the manifest. |
 | `registerWidget({id, render})` | A widget the Overview offers in its library ("From plugins"). Title and icon come from the manifest. It renders in a small frame that grows with its content (up to 720 px). |
 | `registerStrings({ en: {...}, it: {...} })` | Your dictionaries; `sdk.t(key, vars?)` uses the app's language, falls back to `en`, then the key, and fills `{name}` placeholders. The frame re-renders when the user changes language. |

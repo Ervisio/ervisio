@@ -210,3 +210,10 @@ test('http path cleaning', () => {
     assert.equal(cleanHttpPath(bad), null, bad);
   }
 });
+
+test('openUrl only takes http(s) addresses without credentials', () => {
+  assert.deepEqual(authorize(docker, 'openUrl', { url: 'http://10.0.0.2:8080/x' }, user), { kind: 'openUrl', url: 'http://10.0.0.2:8080/x' });
+  for (const url of ['javascript:alert(1)', 'data:text/html,x', 'file:///etc/passwd', 'https://u:p@example.org/', 'not a url', 42, 'https://a/' + 'x'.repeat(2048)]) {
+    assert.equal(authorize(docker, 'openUrl', { url }, user).kind, 'deny', String(url));
+  }
+});

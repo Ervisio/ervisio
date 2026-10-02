@@ -146,6 +146,9 @@ function makeSdk(plugin: { id: string; name: string; version: string }, view: Fr
     open(pageId: string) {
       void request('open', { page: pageId }).catch((e) => console.warn(e));
     },
+    openExternal(url: string): Promise<void> {
+      return request<null>('openUrl', { url }).then(() => undefined);
+    },
     registerPage(id: string, def: ViewDef<unknown>) {
       pages.set(id, def);
     },
