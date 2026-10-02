@@ -63,9 +63,16 @@ prints a one-time sign-in URL instead of asking for a password.
 | Activity log | `audit.list` / `plugins.audit.list` (answered by the daemon, which owns `/var/lib/ervisio/audit`), `GET /api/audit/export?format=csv|json` (`docs/api/plugins.md`, "Activity log") |
 | Plugin assets | `GET /plugins/<id>/<file>` (only plugins the user may use) |
 | Plugin frame | `GET /plugin-frame/<id>`: host page of a plugin's sandboxed iframe (`docs/api/plugins.md`, "Isolation") |
+| Webhooks | `POST /hooks/<plugin>/<token>`: runs a plugin job instance. No session, no CSRF header: the random token is the credential (`docs/api/jobs.md`) |
 
 Every POST must carry `X-Requested-With: ervisio` (CSRF) and JSON bodies `Content-Type: application/json`.
 Exact shapes, HTTP statuses and failure reasons: `docs/api/auth.md`.
+
+A few `/api/rpc` methods are answered by **ervisiod itself** instead of a bridge, because they must work with no page
+open: `plugins.jobs.*`, `plugins.notify`, `notify.*` and `jobs.*` (`docs/api/jobs.md`, `docs/api/notify.md`). The daemon
+keeps the job instances (`/var/lib/ervisio/jobs`) and the notification channels (`/etc/ervisio/notify.json`, 0600),
+runs the scheduler, and runs each step through a bridge: the owner's user bridge, or a root bridge it starts directly
+(no sudo, no password) for jobs an administrator approved.
 
 Error codes (string): `needs_admin`, `forbidden`, `not_found`, `invalid`, `conflict`, `unavailable`,
 `internal`, `unauthenticated`. The web client reacts to `needs_admin` by showing the

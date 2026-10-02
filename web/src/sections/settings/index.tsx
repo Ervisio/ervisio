@@ -9,8 +9,10 @@ import { RefreshSelect } from '../../lib/RefreshSelect';
 import { REFRESH_KEY } from '../../lib/refresh';
 import { ActivityLog } from './ActivityLog';
 import { ColourBlock, ThemeGrid } from './Appearance';
+import { ChannelsBlock } from './Channels';
 import { HostsBlock, type HostEntry } from './Hosts';
 import { NameList } from './NameList';
+import { PluginJobsBlock } from './PluginJobs';
 import { usePrefSave, useServerConfig } from './save';
 import { UpdatesBlock } from './Updates';
 import { updateStatus } from './updates';
@@ -239,6 +241,18 @@ export default function SettingsPage() {
           { id: 'unsigned', title: t('plugpol.unsigned'), desc: t('plugpol.unsignedDesc', { name: Name }), cfgKey: 'plugins.allow_unsigned = ' + String(server.get('plugins.allow_unsigned', false)), control: <Switch aria-label={t('plugpol.unsigned')} disabled={srvDisabled} checked={server.get('plugins.allow_unsigned', false)} onChange={(v) => void sv('plugins.allow_unsigned', v, t('plugpol.unsigned'))} /> },
           { id: 'dev', title: t('plugpol.dev'), desc: t('plugpol.devDesc'), cfgKey: 'plugins.dev = ' + String(server.get('plugins.dev', false)), control: <Switch aria-label={t('plugpol.dev')} disabled={srvDisabled} checked={server.get('plugins.dev', false)} onChange={(v) => void sv('plugins.dev', v, t('plugpol.dev'))} /> },
           { id: 'catalog', title: t('plugpol.catalog'), desc: t('plugpol.catalogDesc'), cfgKey: `plugins.catalog_url = "${server.get('plugins.catalog_url', '')}"`, control: <CommitInput disabled={srvDisabled} allowEmpty value={server.get('plugins.catalog_url', '')} label={t('plugpol.catalog')} onCommit={(v) => void sv('plugins.catalog_url', v, t('plugpol.catalog'))} /> },
+        ],
+      },
+      {
+        id: 'channels', part: 'server', icon: 'bell', hue: 'log', title: t('groups.channels'), admin: true,
+        rows: [
+          { id: 'channellist', title: t('channels.title'), words: 'notifications alerts email smtp telegram webhook ntfy gotify slack discord notifiche avvisi', block: <ChannelsBlock /> },
+        ],
+      },
+      {
+        id: 'pluginjobs', part: 'server', icon: 'clock', hue: 'plg', title: t('groups.pluginjobs'), admin: true,
+        rows: [
+          { id: 'joblist', title: t('jobs.title'), words: 'background schedule cron webhook automation plugins jobs attività pianificate', block: <PluginJobsBlock /> },
         ],
       },
       {

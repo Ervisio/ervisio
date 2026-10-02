@@ -30,6 +30,10 @@ export interface Capabilities {
   files: { read: Folder[]; write: Folder[] };
   sockets: string[];
   network: string[];
+  /** Background jobs (core 0.6): named steps over the plugin's own commands and HTTP APIs. */
+  jobs?: { name: string; steps?: { command?: string; http?: { api: string } }[] }[];
+  /** May send notifications to the administrator's channels (core 0.6). */
+  notify?: boolean;
 }
 export interface Contribution {
   id: string;

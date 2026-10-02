@@ -148,6 +148,9 @@ func (s *Server) handleRPC(w http.ResponseWriter, r *http.Request, sess *Session
 		s.handleAuditList(w, sess, req.Method, req.Params)
 		return
 	}
+	if s.handleLocalRPC(w, r, sess, req) {
+		return
+	}
 	p, isAdmin, e := s.route(r.Context(), sess, req.Method, req.Admin)
 	if e != nil {
 		writeError(w, e)

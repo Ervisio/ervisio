@@ -21,6 +21,7 @@ import (
 	"github.com/ervisio/ervisio/server/internal/legacy"
 	configmod "github.com/ervisio/ervisio/server/internal/modules/config"
 	"github.com/ervisio/ervisio/server/internal/modules/plugins"
+	"github.com/ervisio/ervisio/server/internal/notify"
 	"github.com/ervisio/ervisio/server/internal/rpc"
 	"github.com/ervisio/ervisio/server/internal/server"
 	"github.com/ervisio/ervisio/server/internal/update"
@@ -64,6 +65,7 @@ func main() {
 	bridgePath := flag.String("bridge", "", "path of "+brand.BridgeBinary+" (default: next to this binary)")
 	noAuth := flag.Bool("dev-insecure-noauth", false, "dev only: sign every request in as the daemon's user")
 	devKeys := flag.String("dev-authorized-keys", "", "dev only: authorized_keys file used for SSH-key sign-in instead of ~/.ssh")
+	devState := flag.String("dev-state-dir", "", "dev only: folder for the daemon's state (plugin jobs, notification channels) instead of "+brand.StateDir)
 	check := flag.Bool("check-config", false, "parse and validate the configuration (the file after the flag, else -config), print OK or the errors, exit 0 or 1; starts nothing")
 	version := flag.Bool("version", false, "print the version and exit")
 	installPlugin := flag.String("install-plugin", "", "install (or update) this plugin from the signed marketplace catalog, then exit (root)")
@@ -170,21 +172,23 @@ func main() {
 			devPlugins = filepath.Join(wd, "plugins")
 			pluginDirs = append([]string{devPlugins}, pluginDirs...)
 		}
+		// The daemon itself resolves plugins for background jobs and
+		// notifications, as the bridges do (--dev, --dev-plugins).
+		plugins.DaemonDev = true
+		plugins.DaemonPluginsDir = devPlugins
 	}
-
-	// The daemon's state (the activity log) is in /var/lib/ervisio; a dev
-	// daemon is not root and keeps its own under the user's state folder.
-	stateDir := ""
-	if *dev {
-		base := os.Getenv("XDG_STATE_HOME")
-		if base == "" {
-			if home, err := os.UserHomeDir(); err == nil {
-				base = filepath.Join(home, ".local", "state")
-			}
+	stateDir, notifyFile := "", ""
+	if *devState != "" {
+		if !*dev {
+			log.Fatal("--dev-state-dir requires --dev")
 		}
-		if base != "" {
-			stateDir = filepath.Join(base, brand.Slug+"-dev")
+		if stateDir, err = filepath.Abs(*devState); err != nil {
+			log.Fatal(err)
 		}
+		notifyFile = filepath.Join(stateDir, "notify.json")
+	} else if *dev {
+		stateDir = filepath.Join(os.TempDir(), fmt.Sprintf("ervisio-dev-state-%d", os.Getuid()))
+		notifyFile = filepath.Join(stateDir, "notify.json")
 	}
 
 	helper := ""
@@ -212,6 +216,7 @@ func main() {
 		SessionHelper:     helper,
 		DevAuthorizedKeys: *devKeys,
 		StateDir:          stateDir,
+		NotifyFile:        notifyFile,
 		Logger:            log.Default(),
 	})
 	if err != nil {
@@ -235,6 +240,17 @@ func main() {
 		// never installs them there.
 		if ok || u.Layout.ManagedBy() != "" {
 			auto := &update.Auto{Updater: u, Config: srv.Config, Logf: log.Printf}
+			// A new release also goes to the notification channels that
+			// subscribe to "updates" (Settings > Notification channels).
+			auto.Notify = func(version, current string) {
+				srv.NotifyCore(notify.Message{
+					Title:  fmt.Sprintf("%s %s is available", brand.Name, version),
+					Body:   fmt.Sprintf("This server runs %s. Update it in Settings > About.", current),
+					Level:  "info",
+					Source: brand.Name,
+					Link:   "/settings#about",
+				}, notify.EventUpdates)
+			}
 			go auto.Run(ctx)
 		}
 		// Started by linuxadmin.service from LinuxAdmin's layout: move to

@@ -21,6 +21,8 @@ import (
 	"github.com/ervisio/ervisio/server/internal/audit"
 	"github.com/ervisio/ervisio/server/internal/brand"
 	"github.com/ervisio/ervisio/server/internal/config"
+	"github.com/ervisio/ervisio/server/internal/jobs"
+	"github.com/ervisio/ervisio/server/internal/notify"
 	"github.com/ervisio/ervisio/server/internal/sshauth"
 )
 
@@ -53,10 +55,14 @@ type Options struct {
 	// DevAuthorizedKeys (dev only) replaces the authorized_keys files for
 	// SSH-key sign-in, so the flow can be tried without touching ~/.ssh.
 	DevAuthorizedKeys string
-	// StateDir keeps the daemon's state; the activity log is in its audit
-	// folder ("" = brand.StateDir).
+	// StateDir keeps the daemon's state: the activity log (StateDir/audit)
+	// and the plugin job instances (StateDir/jobs). "" = /var/lib/ervisio;
+	// --dev-state-dir in dev.
 	StateDir string
-	Logger   *log.Logger
+	// NotifyFile is the notification channels file, which holds secrets
+	// (0600). "" = notify.json next to the configuration file.
+	NotifyFile string
+	Logger     *log.Logger
 }
 
 // configAudit gives the activity log the live configuration.
@@ -92,6 +98,12 @@ type Server struct {
 	baseCtx context.Context
 	cancel  context.CancelFunc
 	vite    http.Handler
+
+	// jobs runs plugin job instances; notifier sends notifications
+	// (jobsglue.go). jobs is nil when its state file cannot be read.
+	jobs     *jobs.Manager
+	notifier *notify.Service
+	jobPool  *bridgePool
 }
 
 // New validates options and loads the configuration.
@@ -138,6 +150,9 @@ func New(opts Options) (*Server, error) {
 	}
 	s.audit = audit.New(filepath.Join(stateDir, "audit"), configAudit{holder})
 	s.transfers = newTransferStore()
+	if err := s.initJobs(); err != nil {
+		opts.Logger.Printf("background jobs are off: %v", err)
+	}
 	if opts.Dev {
 		if s.devUser, err = account.Current(); err != nil {
 			cancel()
@@ -199,6 +214,9 @@ func (s *Server) Handler() http.Handler {
 	}
 	mux.HandleFunc("GET /plugins/{id}/{file...}", s.authed(s.handlePlugin))
 	mux.HandleFunc("GET /plugin-frame/{id}", s.authed(s.handlePluginFrame))
+	// Webhooks of plugin jobs: no session and no CSRF header by design,
+	// the random token in the path is the credential (docs/api/jobs.md).
+	mux.HandleFunc("POST /hooks/{plugin}/{token}", s.handleHook)
 	mux.Handle("/", s.webHandler())
 	var h http.Handler = mux
 	if s.opts.Dev {
@@ -270,6 +288,10 @@ func (s *Server) Run(ctx context.Context) error {
 	s.audit.Errorf = s.log.Printf
 	audit.SetDefault(s.audit)
 	defer audit.ClearDefault(s.audit)
+	if s.jobs != nil {
+		go s.jobs.Run(ctx)
+	}
+	go s.runAlertWatch(ctx)
 
 	errCh := make(chan error, 2)
 	if s.opts.Dev {
@@ -309,6 +331,13 @@ func (s *Server) shutdown(srv, redirect *http.Server) {
 	sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	s.cancel() // ends websocket handlers and in-flight calls
+	if s.jobs != nil {
+		s.jobs.CancelAll()
+		s.jobs.Wait()
+	}
+	if s.jobPool != nil {
+		s.jobPool.closeAll()
+	}
 	_ = srv.Shutdown(sctx)
 	if redirect != nil {
 		_ = redirect.Shutdown(sctx)

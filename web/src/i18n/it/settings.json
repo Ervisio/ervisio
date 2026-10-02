@@ -25,7 +25,9 @@
     "hosts": "Host",
     "about": "Informazioni",
     "browser": "Questo browser",
-    "activity": "Registro attività"
+    "activity": "Registro attività",
+    "channels": "Canali di notifica",
+    "pluginjobs": "Attività dei plugin"
   },
   "note": {
     "default": "Predefinito",
@@ -390,5 +392,184 @@
       "days": "{count} giorni",
       "forever": "Per sempre"
     }
+  },
+  "channels": {
+    "intro": "Invia gli avvisi per email, Telegram, ntfy, Gotify o a qualsiasi servizio che accetta un webhook. {name}, i plugin e le attività dei plugin usano questi canali.",
+    "empty": "Ancora nessun canale.",
+    "add": "Aggiungi canale",
+    "addTitle": "Aggiungi un canale",
+    "editTitle": "Modifica {name}",
+    "dialogText": "Password e token restano sul server, leggibili solo da root, e non vengono più mostrati.",
+    "type": "Tipo",
+    "types": {
+      "email": "Email (SMTP)",
+      "telegram": "Telegram",
+      "webhook": "Webhook",
+      "ntfy": "ntfy",
+      "gotify": "Gotify"
+    },
+    "name": "Nome",
+    "minLevel": "Invia",
+    "levels": {
+      "info": "Tutto",
+      "warn": "Avvisi ed errori",
+      "error": "Solo errori"
+    },
+    "events": "Cosa inviare",
+    "ev": {
+      "alerts": "Avvisi del server (servizi falliti, aggiornamenti, disco, SSH)",
+      "updates": "Nuove versioni di {name}",
+      "plugins": "Messaggi dei plugin",
+      "jobs": "Attività dei plugin che falliscono o si riprendono"
+    },
+    "noEvents": "Non invia nulla",
+    "enabled": "Invia tramite {name}",
+    "enabledShort": "Invia le notifiche tramite questo canale",
+    "test": "Invia prova",
+    "testOk": "Messaggio di prova inviato tramite {name}.",
+    "testFail": "{name} non ha accettato il messaggio di prova",
+    "save": "Salva canale",
+    "saved": "{name} salvato.",
+    "edit": "Modifica",
+    "delete": "Elimina {name}",
+    "deleteTitle": "Eliminare questo canale?",
+    "deleteText": "{name} non riceve più notifiche e la password o il token salvati vengono rimossi.",
+    "deleteAction": "Elimina canale",
+    "secretKept": "Salvato. Lascia vuoto per tenerlo.",
+    "lastOk": "Ultimo messaggio inviato {when}.",
+    "lastFail": "Ultimo tentativo fallito {when}: {error}",
+    "file": "I canali sono salvati in {path}.",
+    "lockedTitle": "Servono i permessi di amministratore",
+    "lockedText": "I canali contengono password e token. Sblocca i permessi di amministratore per vederli e modificarli.",
+    "unlock": "Sblocca",
+    "detail": {
+      "email": "{host}:{port}, a {to}",
+      "telegram": "chat {chat}"
+    },
+    "email": {
+      "host": "Server di posta",
+      "port": "Porta",
+      "security": "Sicurezza",
+      "sec": {
+        "starttls": "STARTTLS",
+        "tls": "TLS",
+        "none": "Nessuna"
+      },
+      "user": "Nome utente",
+      "password": "Password",
+      "from": "Indirizzo mittente",
+      "to": "Invia a",
+      "toHint": "Separa più indirizzi con virgole."
+    },
+    "telegram": {
+      "token": "Token del bot",
+      "tokenHint": "Crea un bot con @BotFather e incolla il suo token.",
+      "chat": "Id della chat",
+      "chatHint": "Un numero (negativo per i gruppi) o @nomecanale. Scrivi prima al bot."
+    },
+    "webhook": {
+      "url": "URL",
+      "urlHint": "L’indirizzo che riceve ogni notifica.",
+      "urlSet": "Salvato: {url}/... Lascia vuoto per tenerlo.",
+      "method": "Metodo",
+      "template": "Corpo (JSON)",
+      "templateHint": "Usa {title}, {body}, {level}, {link}, {source} e {time}. I valori vengono protetti per te.",
+      "headerName": "Intestazione segreta (facoltativa)",
+      "headerValue": "Valore dell’intestazione"
+    },
+    "ntfy": {
+      "server": "Server",
+      "topic": "Argomento",
+      "token": "Token di accesso (facoltativo)"
+    },
+    "gotify": {
+      "server": "Server",
+      "token": "Token dell’applicazione"
+    },
+    "title": "Dove vanno gli avvisi"
+  },
+  "jobs": {
+    "intro": "Attività che i plugin eseguono in background, a orari stabiliti o quando viene chiamato un webhook. Ogni attività gira come l’utente che l’ha creata.",
+    "empty": "Nessun plugin ha ancora creato un’attività.",
+    "lockedTitle": "Servono i permessi di amministratore",
+    "lockedText": "Sblocca i permessi di amministratore per vedere le attività di tutti gli utenti.",
+    "owner": "Gira come {user}",
+    "onDemand": "Su richiesta o via webhook",
+    "everySeconds": "Ogni {n} s",
+    "everyMinutes": "Ogni {n} min",
+    "everyHours": "Ogni {n} h",
+    "everyDays": "Ogni {n} g",
+    "daily": "Ogni giorno alle {times}",
+    "weekly": "{days} alle {times}",
+    "status": {
+      "running": "In corso",
+      "queued": "In attesa",
+      "ok": "Riuscita",
+      "failed": "Fallita",
+      "timeout": "Tempo scaduto",
+      "cancelled": "Annullata",
+      "never": "Mai eseguita",
+      "disabled": "Spenta"
+    },
+    "enable": "Esegui {name} in automatico",
+    "admin": "Esegue passaggi con permessi di amministratore. Approvata da {by}, {when}.",
+    "adminStale": "Un aggiornamento del plugin ha cambiato ciò che questa attività fa da amministratore. Un amministratore deve approvarla di nuovo.",
+    "adminMissing": "Questa attività richiede i permessi di amministratore e non ha un’approvazione.",
+    "lastRun": "Ultima esecuzione {when}",
+    "nextRun": "prossima {when}",
+    "runNow": "Esegui ora",
+    "started": "{name} avviata.",
+    "logs": "Log",
+    "logsTitle": "{name}: esecuzioni",
+    "noRuns": "Ancora nessuna esecuzione.",
+    "noSteps": "Nessun passaggio eseguito.",
+    "close": "Chiudi",
+    "trigger": {
+      "schedule": "Pianificata",
+      "manual": "Avviata da {by}",
+      "webhook": "Webhook"
+    },
+    "step": {
+      "ok": "Fatto",
+      "failed": "Fallito",
+      "skipped": "Saltato",
+      "handled": "Fallito, proseguito",
+      "exit": "codice di uscita {code}",
+      "http": "HTTP {status}",
+      "admin": "da amministratore",
+      "stdout": "Output",
+      "stderr": "Errori",
+      "truncated": "Il log è stato ridotto all’ultima parte."
+    },
+    "delete": "Elimina {name}",
+    "deleteTitle": "Eliminare questa attività?",
+    "deleteText": "{name} smette di girare. Pianificazione, URL dei webhook e log vengono rimossi.",
+    "deleteAction": "Elimina attività",
+    "webhooks": {
+      "title": "URL dei webhook",
+      "none": "Nessun URL webhook.",
+      "unnamed": "URL webhook",
+      "add": "Aggiungi URL webhook",
+      "addTitle": "Aggiungi un URL webhook",
+      "addText": "Un programma chiama l’URL con POST per eseguire subito questa attività.",
+      "label": "Etichetta",
+      "create": "Crea URL",
+      "created": "creato {when}",
+      "used": "ultima chiamata {when}",
+      "unused": "mai chiamato",
+      "regenerate": "Nuovo URL",
+      "revoke": "Revoca URL",
+      "revokeLabel": "Revoca {name}",
+      "revokeTitle": "Revocare questo URL?",
+      "revokeText": "Tutto ciò che lo chiama smette di funzionare.",
+      "urlTitle": "URL del webhook",
+      "urlText": "Copialo adesso. Viene mostrato una sola volta. Se lo perdi, creane uno nuovo.",
+      "url": "URL",
+      "copy": "Copia",
+      "copied": "Copiato.",
+      "done": "Fatto",
+      "curl": "Provalo da un terminale:"
+    },
+    "title": "Attività create dai plugin"
   }
 }

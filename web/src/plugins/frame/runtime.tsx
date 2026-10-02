@@ -15,6 +15,7 @@ import frameCss from './frame.css?inline';
 import type { FrameHttpRequest, FrameHttpResult, FrameTheme, FrameUploadResult, FrameView, HostToFrame } from '../protocol';
 import { handleReply, openHttpStream, openPty, openStream, openUpload, PluginError, request, send, type HttpStreamCallbacks, type PtyCallbacks, type UploadCallbacks } from './channel';
 import { getLang, setLang, subscribeLang } from './i18n-shim';
+import { jobsApi, notifyApi } from './jobs';
 import * as kit from './kit';
 
 type ViewDef<S> = ComponentType<{ sdk: S }> | { render(container: HTMLElement, sdk: S): void | (() => void) };
@@ -166,6 +167,9 @@ function makeSdk(plugin: { id: string; name: string; version: string }, view: Fr
       saveFile: (filename: string, data: string | Uint8Array | Blob, mime?: string) => saveFile(filename, data, mime),
       pty: (command: string, args: string[], o: { cols?: number; rows?: number } & PtyCallbacks) =>
         openPty(command, args ?? [], Math.floor(o?.cols ?? 80), Math.floor(o?.rows ?? 24), o ?? {}),
+      /** Background jobs and notifications (SDK 0.2; needs capabilities.jobs / capabilities.notify). */
+      jobs: jobsApi,
+      notify: notifyApi,
       call: () => Promise.reject(new PluginError({ code: 'forbidden', message: 'sdk.api.call is not available to plugins (SDK v2+): use sdk.api.exec with a declared command.' })),
       stream: () => {
         throw new PluginError({ code: 'forbidden', message: 'sdk.api.stream is not available to plugins (SDK v2+): use sdk.api.execStream.' });

@@ -9,6 +9,7 @@
  * a command, HTTP API or folder not declared `admin`, files outside `capabilities.files`, sockets other than
  * through its declared commands and `capabilities.http` rules, other plugins' assets.
  */
+import { authorizeJobsOp } from './brokerJobs.ts';
 import type { FrameOp } from './protocol';
 
 /** Anything that may need the root bridge: a command, an HTTP API or a folder. */
@@ -40,6 +41,9 @@ export interface BrokerManifest {
   capabilities?: {
     commands?: BrokerCommand[];
     http?: BrokerHTTP[];
+    /** Background jobs (capabilities.jobs) and the notify capability: see brokerJobs.ts. */
+    jobs?: { name: string }[];
+    notify?: boolean;
     files?: { read?: BrokerFolder[]; write?: BrokerFolder[] };
   };
   contributes?: { pages?: { id: string }[] };
@@ -454,6 +458,7 @@ export function authorize(m: BrokerManifest, op: FrameOp | string, args: Record<
       return { kind: 'openUrl', url };
     }
   }
+  if (op === 'jobs' || op === 'notify') return authorizeJobsOp(m, op, a);
   return deny(`Plugins cannot use ${JSON.stringify(op)}.`);
 }
 

@@ -34,7 +34,9 @@ export type FrameOp =
   | 'openUrl'
   | 'download'
   | 'saveFile'
-  | 'auditList';
+  | 'auditList'
+  | 'jobs'
+  | 'notify';
 
 /** An HTTP request to a capabilities.http entry (sdk.api.http / httpStream). Binary bodies travel as Uint8Array. */
 export interface FrameHttpRequest {

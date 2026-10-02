@@ -21,6 +21,8 @@ export interface PluginManifest {
     files?: { read?: PluginFolder[]; write?: PluginFolder[] };
     sockets?: string[];
     network?: string[];
+    jobs?: { name: string; description?: string; params?: { name: string; pattern: string; description?: string; default?: string }[]; steps?: unknown[] }[];
+    notify?: boolean;
   };
   contributes?: {
     pages?: { id: string; title: string; icon?: string }[];
@@ -141,6 +143,61 @@ export interface AuditEntry {
   origin?: string;
 }
 
+/** A job instance created by a plugin (see docs/api/jobs.md). */
+export interface PluginJobInstance {
+  id: string;
+  plugin: string;
+  job: string;
+  name: string;
+  params: Record<string, string>;
+  schedule?: { every?: number; at?: string[]; days?: number[] };
+  owner: string;
+  enabled: boolean;
+  disabledReason?: string;
+  needsAdmin: boolean;
+  approval?: { by: string; at: number; valid: boolean };
+  webhooks: { id: string; label?: string; created: number; lastUsed?: number }[];
+  running: boolean;
+  nextRun?: number;
+  last?: { id: string; trigger: string; status: string; started: number; ended?: number; error?: string };
+}
+
+export interface PluginJobRun {
+  id: string;
+  instance: string;
+  trigger: 'schedule' | 'manual' | 'webhook';
+  by?: string;
+  started: number;
+  ended?: number;
+  status: 'queued' | 'running' | 'ok' | 'failed' | 'timeout' | 'cancelled';
+  error?: string;
+  steps: { id: string; kind: string; status: 'ok' | 'failed' | 'skipped'; exitCode?: number; httpStatus?: number; stdout?: string; stderr?: string; error?: string; admin?: boolean; handled?: boolean }[];
+}
+
+export interface PluginJobsApi {
+  create(o: {
+    job: string;
+    name?: string;
+    params?: Record<string, string>;
+    schedule?: { every: number } | { at: string[]; days?: number[] };
+    runAs?: string;
+    enabled?: boolean;
+    confirmAdmin?: boolean;
+  }): Promise<PluginJobInstance>;
+  list(o?: { job?: string }): Promise<PluginJobInstance[]>;
+  get(id: string): Promise<PluginJobInstance>;
+  update(id: string, patch: { name?: string; params?: Record<string, string>; schedule?: { every: number } | { at: string[]; days?: number[] } | null; enabled?: boolean; confirmAdmin?: boolean }): Promise<PluginJobInstance>;
+  delete(id: string): Promise<void>;
+  runNow(id: string): Promise<{ run: string }>;
+  history(id: string, limit?: number): Promise<PluginJobRun[]>;
+  webhooks: {
+    /** The result's `token` and `path` are shown once; build the URL as location.origin + path. */
+    create(id: string, label?: string): Promise<{ id: string; label?: string; token: string; path: string }>;
+    regenerate(id: string, webhook: string): Promise<{ id: string; label?: string; token: string; path: string }>;
+    revoke(id: string, webhook: string): Promise<void>;
+  };
+}
+
 export type PluginViewDef<S = PluginSDK> = ComponentType<{ sdk: S }> | { render(container: HTMLElement, sdk: S): void | (() => void) };
 
 export interface PluginSDK {
@@ -201,6 +258,10 @@ export interface PluginSDK {
       args: string[],
       o: { cols: number; rows: number; onData(chunk: Uint8Array): void; onExit(code: number): void; onError(e: PluginError): void },
     ): { write(data: string | Uint8Array): void; resize(cols: number, rows: number): void; close(): void };
+    /** SDK 0.2: background jobs (capabilities.jobs). Absent on consoles older than core 0.6: check before use. */
+    jobs?: PluginJobsApi;
+    /** SDK 0.2: sends a notification to the channels the administrator configured (needs capabilities.notify). */
+    notify?(n: { title: string; body?: string; level?: 'info' | 'success' | 'warn' | 'error'; link?: string }): Promise<{ channels: number; delivered: number; failed: number }>;
   };
   /** Same as `api.saveFile`. */
   saveFile(filename: string, data: string | Uint8Array | Blob, mime?: string): Promise<{ filename: string; size: number }>;
