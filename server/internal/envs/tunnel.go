@@ -101,6 +101,9 @@ func (m *Manager) Tunnel(e *Env, uid, gid int) (string, error) {
 		return "", errf("Could not prepare the tunnel folder: %v", err)
 	}
 	path := filepath.Join(dir, e.ID+".sock")
+	if len(path) > 100 { // sun_path holds 107 bytes; the bridge checks the same
+		return "", errf("The tunnel folder path is too long (%d characters, at most 100): %s", len(path), path)
+	}
 	_ = os.Remove(path)
 	ln, err := net.Listen("unix", path)
 	if err != nil {

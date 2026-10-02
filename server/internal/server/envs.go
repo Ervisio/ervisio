@@ -24,6 +24,11 @@ type envState struct {
 
 	mu      sync.Mutex
 	remotes map[string]*remoteProc // envID:user -> bridge on the other server
+
+	// pairConns are the live pairing connections of other servers on this one
+	// (pairing id -> closers), so a revoked pairing is cut at once.
+	pairConns map[string]map[int]func()
+	pairSeq   int
 }
 
 type remoteProc struct {
@@ -61,9 +66,9 @@ func (s *Server) newEnvState() *envState {
 	m, err := envs.NewManager(envs.Options{Dir: dir, TunnelDir: tun, ServerName: sys.Hostname(), Log: s.log})
 	if err != nil {
 		s.log.Printf("environments disabled: %v", err)
-		return &envState{remotes: map[string]*remoteProc{}}
+		return &envState{remotes: map[string]*remoteProc{}, pairConns: map[string]map[int]func(){}}
 	}
-	return &envState{m: m, remotes: map[string]*remoteProc{}}
+	return &envState{m: m, remotes: map[string]*remoteProc{}, pairConns: map[string]map[int]func(){}}
 }
 
 func splitPort(addr string) (host, port string, err error) {
@@ -106,8 +111,11 @@ func (s *Server) envLoop(ctx context.Context) {
 }
 
 // isAdmin reports whether the session has administrator rights now.
+// A --dev-insecure-noauth daemon (loopback only, never root) counts every
+// session as an administrator, as it signs in without a password; there is
+// no sudo password to unlock with there.
 func (s *Server) isAdmin(sess *Session) bool {
-	return sess.Account.IsRoot() || s.rootBridge(sess) != nil
+	return s.opts.NoAuth || sess.Account.IsRoot() || s.rootBridge(sess) != nil
 }
 
 func (s *Server) envsOff() *rpc.Error {
@@ -246,6 +254,7 @@ func (s *Server) envsCall(ctx context.Context, sess *Session, method string, par
 		if !ok {
 			return nil, rpc.Errorf(rpc.NotFound, "There is no such pairing."), true
 		}
+		s.closePairConns(p.ID)
 		s.log.Printf("environments: %s revoked pairing %s", sess.Account.Name, p.ID)
 		return map[string]string{"id": p.ID}, nil, true
 	}
@@ -428,5 +437,34 @@ func (s *Server) dropRemotes(envID string) {
 			go r.p.Stop()
 			delete(s.env.remotes, k)
 		}
+	}
+}
+
+// trackPairConn registers a live pairing connection; the returned function
+// forgets it.
+func (s *Server) trackPairConn(id string, closer func()) func() {
+	s.env.mu.Lock()
+	defer s.env.mu.Unlock()
+	s.env.pairSeq++
+	n := s.env.pairSeq
+	if s.env.pairConns[id] == nil {
+		s.env.pairConns[id] = map[int]func(){}
+	}
+	s.env.pairConns[id][n] = closer
+	return func() {
+		s.env.mu.Lock()
+		delete(s.env.pairConns[id], n)
+		s.env.mu.Unlock()
+	}
+}
+
+// closePairConns cuts every live connection of a pairing (it was revoked).
+func (s *Server) closePairConns(id string) {
+	s.env.mu.Lock()
+	cs := s.env.pairConns[id]
+	delete(s.env.pairConns, id)
+	s.env.mu.Unlock()
+	for _, c := range cs {
+		c()
 	}
 }

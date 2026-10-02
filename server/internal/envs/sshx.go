@@ -231,9 +231,11 @@ func (p *sshPool) Dial(ctx context.Context) (net.Conn, error) {
 			msg := oe.Message
 			switch oe.Reason {
 			case ssh.Prohibited:
-				return nil, errf("The SSH server forbids forwarding to a socket. Set AllowStreamLocalForwarding yes (or local) in its sshd_config, and check the user's key is not restricted with no-port-forwarding.")
+				return nil, errf("The SSH server forbids forwarding to a socket. In its sshd_config set AllowStreamLocalForwarding yes (or local) and AllowTcpForwarding yes (or local), then reload sshd; also check the user's key in authorized_keys is not restricted with no-port-forwarding.")
 			case ssh.ConnectionFailed:
-				return nil, errf("The SSH server could not open %s (%s). Check that Docker runs there and that user %q may use the socket (the docker group).", p.env.SocketPath, msg, p.env.User)
+				// sshd answers "open failed" both for a socket it cannot open and for
+				// forwarding it forbids, so the message names both causes.
+				return nil, errf("The SSH server could not open %s (%s). Check that Docker runs there and that user %q may use the socket (the docker group), and that sshd allows socket forwarding: AllowStreamLocalForwarding yes (or local) and AllowTcpForwarding yes (or local) in sshd_config.", p.env.SocketPath, msg, p.env.User)
 			}
 			return nil, errf("The SSH server refused the channel: %s", msg)
 		}

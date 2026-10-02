@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -28,6 +29,7 @@ type Manager struct {
 	st     *store
 	signer *AgentSigner
 	sigMu  sync.Mutex
+	poolMu sync.Mutex
 
 	mu      sync.Mutex
 	tunnels map[string]*tunnel
@@ -80,9 +82,11 @@ func (m *Manager) closeAll() {
 		ts = append(ts, t)
 	}
 	m.tunnels = map[string]*tunnel{}
+	m.mu.Unlock()
+	m.poolMu.Lock()
 	ps := m.pools
 	m.pools = map[string]*sshPool{}
-	m.mu.Unlock()
+	m.poolMu.Unlock()
 	for _, t := range ts {
 		t.close()
 	}
@@ -170,8 +174,8 @@ func wrapDialErr(addr string, err error) error {
 }
 
 func (m *Manager) pool(e *Env) *sshPool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.poolMu.Lock()
+	defer m.poolMu.Unlock()
 	if p := m.pools[e.ID]; p != nil {
 		return p
 	}
@@ -181,10 +185,10 @@ func (m *Manager) pool(e *Env) *sshPool {
 }
 
 func (m *Manager) dropPool(id string) {
-	m.mu.Lock()
+	m.poolMu.Lock()
 	p := m.pools[id]
 	delete(m.pools, id)
-	m.mu.Unlock()
+	m.poolMu.Unlock()
 	if p != nil {
 		p.Close()
 	}
@@ -225,6 +229,7 @@ type signingRT struct {
 	rt     http.RoundTripper
 	signer *AgentSigner
 	sigMu  sync.Mutex
+	poolMu sync.Mutex
 	secret string
 }
 
@@ -311,7 +316,7 @@ func (m *Manager) check(ctx context.Context, e *Env, full bool) *Status {
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://docker/version", nil)
 	resp, err := cl.Do(req)
 	if err != nil {
-		return fail(unwrapURLErr(err))
+		return fail(friendlyTLS(unwrapURLErr(err)))
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
@@ -465,4 +470,16 @@ func (m *Manager) Delete(ctx context.Context, id string) error {
 		m.revokeRemote(ctx, e)
 	}
 	return nil
+}
+
+// friendlyTLS explains the TLS alerts an admin meets most.
+func friendlyTLS(err error) error {
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "certificate required"), strings.Contains(msg, "bad certificate"):
+		return errf("The server did not accept our client certificate (%s). Check that the certificate and key are the ones issued by the server's CA.", msg)
+	case strings.Contains(msg, "tls: first record does not look like a TLS handshake"):
+		return errf("That port does not speak TLS. If the Docker daemon listens without TLS, choose plain tcp (insecure).")
+	}
+	return err
 }

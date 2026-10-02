@@ -105,6 +105,7 @@ func (s *Server) handlePairRevoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, _ = s.env.m.RevokePairing(p.ID)
+	s.closePairConns(p.ID)
 	s.log.Printf("pairing: %q revoked its own pairing %s", p.Name, p.ID)
 	writeJSON(w, http.StatusOK, map[string]string{"id": p.ID})
 }
@@ -171,6 +172,7 @@ func (s *Server) handlePairBridge(w http.ResponseWriter, r *http.Request) {
 	var once sync.Once
 	stop := func() { once.Do(func() { close(done); conn.Close(); raw.Stop() }) }
 	defer stop()
+	defer s.trackPairConn(p.ID, stop)()
 
 	// bridge -> other server
 	go func() {
