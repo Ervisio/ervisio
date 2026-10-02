@@ -264,17 +264,30 @@ func (s *Server) createSession(ctx context.Context, a *account.Account, remember
 	return sess, token, nil
 }
 
-// secureCookies reports whether the session cookie gets the Secure flag:
-// always, except in dev mode and in tls.mode = "http" where the request did
-// not come over https through a trusted reverse proxy (X-Forwarded-Proto).
+// secureCookies reports whether the session cookie gets the Secure flag.
+// Always, except in dev mode and for plain-HTTP requests in tls.mode =
+// "http", where it is decided per request, failing closed:
+//   - a trusted reverse proxy (web.trusted_proxies) that says
+//     X-Forwarded-Proto: Secure only for "https";
+//   - otherwise (no such header, or a peer that is not a trusted proxy,
+//     whose header is ignored): Secure unless the browser addressed a
+//     loopback name (http://127.0.0.1:PORT, an SSH tunnel to localhost).
+//
+// A request that arrived over TLS is always Secure, also while a changed
+// tls.mode waits for a restart (the configured mode is not the served one).
 func (s *Server) secureCookies(r *http.Request) bool {
 	if s.opts.Dev {
 		return false
 	}
-	if s.Config().TLS.Mode != config.TLSHTTP || r == nil {
+	if r == nil || r.TLS != nil || s.Config().TLS.Mode != config.TLSHTTP {
 		return true
 	}
-	return s.fromTrustedProxy(r) && strings.EqualFold(firstHeaderValue(r.Header.Get("X-Forwarded-Proto")), "https")
+	if s.fromTrustedProxy(r) {
+		if p := firstHeaderValue(r.Header.Get("X-Forwarded-Proto")); p != "" {
+			return strings.EqualFold(p, "https")
+		}
+	}
+	return !loopbackHost(r.Host)
 }
 
 func (s *Server) setCookie(w http.ResponseWriter, r *http.Request, token string, maxAge int) {

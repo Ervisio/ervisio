@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 // SSHDConfig is sshd's configuration file (variable for tests).
@@ -30,6 +32,9 @@ type User struct {
 	UID  uint32
 	GID  uint32
 	Home string
+	// Groups are the supplementary group ids (from NSS) used while
+	// reading the files as the user.
+	Groups []uint32
 }
 
 // AuthorizedKeysFiles returns the authorized_keys paths for u from the
@@ -178,7 +183,7 @@ func splitConfigLine(line string) []string {
 func ReadAuthorizedKeys(u User) (data []byte, problems []string) {
 	files := AuthorizedKeysFiles(u)
 	var buf bytes.Buffer
-	_ = asUser(u, func() error {
+	err := asUser(u, func() error {
 		for _, f := range files {
 			b, err := readSecure(f, u)
 			if err != nil {
@@ -192,6 +197,9 @@ func ReadAuthorizedKeys(u User) (data []byte, problems []string) {
 		}
 		return nil
 	})
+	if err != nil {
+		problems = append(problems, fmt.Sprintf("cannot read the files as %s: %v", u.Name, err))
+	}
 	return buf.Bytes(), problems
 }
 
@@ -258,29 +266,75 @@ func checkDirs(dir string, u User) error {
 	}
 }
 
-// asUser runs fn with u's file-system uid/gid when the process is root
-// (and u is not root). The OS thread stays locked while switched; if
-// switching back fails the thread is left locked so it ends with the
-// goroutine.
+// asUser runs fn with u's file-system identity (fsuid, fsgid and the
+// user's supplementary groups) when the process is root and u is not, as
+// sshd's temporarily_use_uid does. The switch happens on a dedicated, locked
+// OS thread (setfsuid, setfsgid and the raw setgroups system call only
+// change the calling thread): the caller's thread is never touched, and if
+// the identity cannot be restored the thread is not unlocked, so the Go
+// runtime discards it when the goroutine ends. setfsuid/setfsgid do not
+// report failure, so the switch is read back and fn does not run unless it
+// took effect.
 func asUser(u User, fn func() error) error {
 	if os.Geteuid() != 0 || u.UID == 0 {
 		return fn()
 	}
-	runtime.LockOSThread()
-	if err := syscall.Setfsgid(int(u.GID)); err != nil {
-		runtime.UnlockOSThread()
-		return err
+	done := make(chan error, 1)
+	go func() {
+		runtime.LockOSThread()
+		restore, err := switchFS(u)
+		if err == nil {
+			err = fn()
+		}
+		if restore() == nil {
+			runtime.UnlockOSThread()
+		}
+		done <- err
+	}()
+	return <-done
+}
+
+// switchFS changes the calling thread's file-system identity to u and
+// returns the function that puts root's back (nil error when it did).
+func switchFS(u User) (restore func() error, err error) {
+	oldGroups, err := unix.Getgroups()
+	if err != nil {
+		return func() error { return nil }, err
 	}
-	if err := syscall.Setfsuid(int(u.UID)); err != nil {
-		_ = syscall.Setfsgid(0)
-		runtime.UnlockOSThread()
-		return err
+	restore = func() error {
+		e1 := unix.Setfsuid(0)
+		e2 := unix.Setfsgid(0)
+		e3 := unix.Setgroups(oldGroups)
+		uid, _ := unix.SetfsuidRetUid(-1)
+		gid, _ := unix.SetfsgidRetGid(-1)
+		if e := errors.Join(e1, e2, e3); e != nil {
+			return e
+		}
+		if uid != 0 || gid != 0 {
+			return errors.New("file-system identity not restored")
+		}
+		return nil
 	}
-	err := fn()
-	e1 := syscall.Setfsuid(0)
-	e2 := syscall.Setfsgid(0)
-	if e1 == nil && e2 == nil {
-		runtime.UnlockOSThread()
+	groups := make([]int, 0, len(u.Groups)+1)
+	groups = append(groups, int(u.GID))
+	for _, g := range u.Groups {
+		if g != u.GID {
+			groups = append(groups, int(g))
+		}
 	}
-	return err
+	if err := unix.Setgroups(groups); err != nil {
+		return restore, fmt.Errorf("setgroups: %w", err)
+	}
+	if err := unix.Setfsgid(int(u.GID)); err != nil {
+		return restore, err
+	}
+	if err := unix.Setfsuid(int(u.UID)); err != nil {
+		return restore, err
+	}
+	uid, _ := unix.SetfsuidRetUid(-1)
+	gid, _ := unix.SetfsgidRetGid(-1)
+	if uid != int(u.UID) || gid != int(u.GID) {
+		return restore, fmt.Errorf("cannot take the file-system identity of uid %d (now fsuid %d, fsgid %d)", u.UID, uid, gid)
+	}
+	return restore, nil
 }

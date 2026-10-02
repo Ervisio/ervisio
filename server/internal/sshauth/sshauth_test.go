@@ -387,3 +387,34 @@ func TestReadAuthorizedKeysPermissions(t *testing.T) {
 		}
 	}
 }
+
+// from= follows sshd: only * and ? are wildcards, and a malformed CIDR
+// block refuses the whole list (a negation must not silently vanish).
+func TestMatchFromSSHDSemantics(t *testing.T) {
+	ip := net.ParseIP("10.0.0.5")
+	cases := []struct {
+		list string
+		want bool
+	}{
+		{"10.0.0.*", true},
+		{"10.0.0.?", true},
+		{"10.0.?", false},
+		{"*", true},
+		{"10.0.0.[0-9]", false}, // literal "[", not a class
+		{`10.0.0.\5`, false},    // literal "\"
+		{"!10.0.0.5,*", false},
+		{"!10.0.0.0/33,*", false}, // malformed CIDR: refused, not ignored
+		{"10.0.0.0/8,bad/cidr", false},
+		{"10.0.0.0/8", true},
+		{"*.example.com", false}, // names never match
+		{"1*5", true},
+	}
+	for _, c := range cases {
+		if got := MatchFrom(c.list, ip); got != c.want {
+			t.Errorf("MatchFrom(%q, %s) = %v, want %v", c.list, ip, got, c.want)
+		}
+	}
+	if !wildcardMatch("a*b*c", "axxbyyc") || wildcardMatch("a*b", "ac") || !wildcardMatch("**", "") {
+		t.Fatal("wildcardMatch")
+	}
+}

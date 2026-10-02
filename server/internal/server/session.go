@@ -118,6 +118,9 @@ func (s *Session) lock() {
 type sessionKey struct {
 	pub         ssh.PublicKey
 	fingerprint string
+	// fromIP is the client address authorized_keys from= options were
+	// matched against at sign-in ("" when unknown); revalidation uses it.
+	fromIP string
 }
 
 // store holds sessions in memory, keyed by the SHA-256 of the token so the

@@ -40,16 +40,30 @@ func firstHeaderValue(v string) string {
 // realClientIP is the browser's address: the peer, or for a trusted proxy
 // the last X-Forwarded-For hop that is not itself a trusted proxy.
 func (s *Server) realClientIP(r *http.Request) string {
+	ip, _ := s.clientAddr(r)
+	return ip
+}
+
+// clientAddr is realClientIP plus whether the address is known. It is not
+// when the peer is a trusted proxy that sent no usable X-Forwarded-For (a
+// proxy that does not set it, a malformed header): the peer address is then
+// returned but it is the proxy's, so address-based restrictions such as an
+// authorized_keys from= option must not be matched against it.
+func (s *Server) clientAddr(r *http.Request) (string, bool) {
 	peer := clientIP(r)
 	if !s.fromTrustedProxy(r) {
-		return peer
+		return peer, true
 	}
-	parts := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
+	xff := strings.TrimSpace(r.Header.Get("X-Forwarded-For"))
+	if xff == "" {
+		return peer, false
+	}
+	parts := strings.Split(xff, ",")
 	for i := len(parts) - 1; i >= 0; i-- {
 		h := strings.TrimSpace(parts[i])
 		a, err := netip.ParseAddr(h)
 		if err != nil {
-			break
+			return peer, false
 		}
 		trusted := false
 		for _, p := range s.Config().Web.TrustedProxies {
@@ -59,8 +73,9 @@ func (s *Server) realClientIP(r *http.Request) string {
 			}
 		}
 		if !trusted {
-			return a.Unmap().String()
+			return a.Unmap().String(), true
 		}
 	}
-	return peer
+	// Every hop is a trusted proxy: the browser runs on a proxy host.
+	return peer, true
 }

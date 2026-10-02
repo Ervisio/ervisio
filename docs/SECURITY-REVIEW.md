@@ -138,3 +138,148 @@ Design notes for `POST /api/auth/challenge` + `POST /api/auth/login-key` (`serve
 - Not done: sshd `Match` blocks, `AuthorizedKeysCommand`, `PubkeyAuthentication no` and
   `AllowUsers`/`DenyUsers` in sshd_config are not consulted (this is a separate service with its
   own switch); FIDO keys cannot work in this flow.
+
+## SSH key sign-in, allowlist and HTTP mode review (2026-10-02)
+
+Scope: commits 546a7dd, 80e4579 and dfc3e80. That covers SSH-key sign-in (`server/internal/sshauth`,
+`authkey.go`, `auth.go`, `session.go`, `revalidate.go`, `sudo -n` unlock in the bridge,
+`web/src/auth/sshkey`, `KeyStep.tsx`), the sign-in allowlist (`allow.go`), `tls.mode = "http"`,
+`--check-config` and `--dev-authorized-keys`.
+
+**Fixed**
+
+- **K1 (medium): the root policy and `auth.ssh_keys` were checked only at sign-in.** Turning
+  `allow_root` off left uid-0 sessions open, and turning `auth.ssh_keys` off left key sessions open.
+  Revalidation, which runs every 60 s and again before an admin unlock, now ends both
+  (`revalidate.go`; `TestRevalidateRootAndKeyPolicy`).
+- **K2 (medium): `from=` was matched against the proxy's address.** Behind a trusted proxy that sends
+  no (or a malformed) `X-Forwarded-For`, the client address fell back to the proxy's own loopback
+  address. A key restricted with `from="127.0.0.1"` therefore worked from anywhere. `clientAddr` now
+  reports whether the address is known. When it is not, lines with `from=` refuse the sign-in. The
+  address used is stored with the session so that revalidation matches the same one (`proxy.go`,
+  `authkey.go`; `TestClientAddrKnown`, `TestKeyLoginFromBehindProxy`).
+- **K3 (low): `from=` patterns were more permissive than sshd's.** `path.Match` treated `[...]` and
+  `\` as pattern syntax, and a malformed CIDR was silently skipped, so `!10.0.0.0/33,*` accepted
+  everyone. Now only `*` and `?` are wildcards, and a bad CIDR refuses the line, as in sshd
+  (`TestMatchFromSSHDSemantics`).
+- **K4 (low, hardening): the identity switch used to read `authorized_keys` as the user.**
+  - `setfsuid`/`setfsgid` never report failure. A missing `CAP_SETUID` would have silently read the
+    files as root.
+  - Root's supplementary groups stayed in effect during the read.
+  - If restoring the identity failed, the caller's own goroutine kept running on the switched thread.
+
+  The read now happens on a dedicated locked thread. The switch is read back before any file is
+  opened, the user's NSS groups are set on that thread only (per-thread `setgroups`), and the thread
+  is discarded if root's identity cannot be restored. A failed switch is reported in the log reason.
+  This path needs root, so it is not covered by the unprivileged test run.
+- **K5 (low): `--dev-authorized-keys` had no safeguards beyond `--dev`.** The file was read without
+  any permission check, so in a world-writable location any local user could add a key and sign in
+  as the developer. A `--dev --listen 0.0.0.0:…` daemon also accepted those keys from the network.
+  Now:
+  - the daemon refuses to start unless it listens on loopback;
+  - the file must be a regular file (opened with `O_NOFOLLOW`), owned by the daemon's euid and not
+    writable by group or others;
+  - the file is checked at start and on every read (`TestDevAuthorizedKeysChecks`).
+
+  It still requires `--dev`; `server.New` refuses it otherwise.
+- **K6 (low): the cookie `Secure` flag in `http` mode failed open.**
+  - A TLS proxy that did not send `X-Forwarded-Proto` (nginx without the `proxy_set_header`) got
+    cookies without `Secure`.
+  - Changing `tls.mode` to `http` in Settings, which takes effect only after a restart, immediately
+    dropped `Secure` on the still-TLS listener.
+
+  Now a TLS request is always `Secure`. In `http` mode only an explicit `X-Forwarded-Proto: http`
+  from a trusted proxy, or a loopback `Host` (direct access or SSH tunnel), drops it
+  (`TestSecureCookiesFailClosed`).
+
+**Checked and found sound**
+
+- **Challenges:**
+  - 32 random bytes per challenge, removed on the first `Take` whatever the outcome.
+  - Each challenge is bound to the user name and the exact client address, and expires after 60 s.
+  - The host is checked against the `Origin` rules, stored with the challenge, and is part of the
+    signed text. The client builds that text from `location.host` and refuses to sign anything else.
+  - The store holds at most 8 challenges per client key (oldest evicted) and 4096 in total; expired
+    ones are pruned in issue order.
+  - Someone sharing the victim's IPv6 /64 or NAT can evict that victim's challenges, which is a
+    nuisance only.
+- **Signatures:**
+  - The key type comes from the blob and must equal the declared type.
+  - The accepted signature formats are per key type: `rsa-sha2-256`/`-512` only (SHA-1 `ssh-rsa`
+    refused), ECDSA format equal to the curve, ed25519.
+  - RSA keys must be at least 2048 bits. Certificates, `sk-*` and DSA keys are refused.
+  - `ssh.Signature.Rest` must be empty, and keys are compared by their exact wire encoding.
+- **authorized_keys:**
+  - The checks follow sshd's StrictModes rules (the file and every directory up to `$HOME` or `/`
+    must be owned by the user or root and not group/world writable). A file that fails is skipped;
+    the files are never followed as root.
+  - The `%h %u %U %%` tokens are supported; any other token drops that entry.
+  - Relative paths are taken from `$HOME`, and `none` means no file.
+  - `Include` is followed (globbed, relative to `/etc/ssh`, at most 8 levels deep), and a `Match`
+    ends the global section.
+  - Option handling:
+    - `command=`, `cert-authority`, `principals=` and unknown options refuse that line, and the
+      search goes on to the next line.
+    - `restrict`, forwarding and pty options are ignored.
+    - `expiry-time=` follows sshd's format.
+- **Enumeration:**
+  - A challenge is issued for any valid name.
+  - Every account-dependent refusal is the same `key_refused`, with a 1 s floor.
+  - The account is looked up only after the signature over a fresh nonce verifies, so a probe
+    needs a key of its own and uses one nonce and one limiter slot per try.
+  - `not_allowed` is shown only after the key is proven.
+  - Password sign-ins refused by the allowlist get the generic wrong-password answer.
+- **Rate limiting:** key and password failures share the per-client limiter and the PAM slots, and
+  challenges are refused while the client is blocked. `sudo -n` unlocks are not counted, which is
+  right because they never authenticate.
+- **The policy applies on every path:**
+  - Root is refused by name before the limiter, and by uid 0 after the account lookup, for both
+    passwords and keys.
+  - The allowlist applies to passwords, keys and revalidation; an admin unlock revalidates first.
+  - `admins_only` uses group membership; root counts only with `allow_root`.
+- **`sudo -n -k`:** the bridge never uses a cached sudo timestamp or feeds PAM an empty password. An
+  empty password is otherwise invalid on the `sudo -S` path.
+- **`tls.mode = "http"`:**
+  - The loopback-only rule is enforced by `config.Validate` (Settings, `--check-config`, load) and
+    again in `Run` against `--listen`. No redirect listener is started.
+  - `X-Forwarded-Proto/Host/For` are honoured only from `web.trusted_proxies`.
+  - CSRF protection is unchanged: the custom header plus the `Origin` check, and the cookie is
+    `SameSite=Strict`.
+- **Web client:** the key text and passphrase stay in React state. They are never stored or logged,
+  and the paste box and passphrase field turn off spellcheck and autocomplete (enhanced spellcheck
+  would send the text to a cloud service).
+
+**Accepted and noted (not changed)**
+
+- Any local account can connect to the daemon over loopback, which is a trusted proxy by default
+  and the only way in for `http` mode. Such an account can choose `X-Forwarded-For`, which lets it:
+  - spread password guesses across many limiter keys (PAM delays and `pam_faillock` still apply);
+  - satisfy a `from=` restriction if it holds the private key.
+
+  It cannot set browser headers for other users. Where local users are not trusted, keep TLS mode
+  and narrow `web.trusted_proxies` to the proxy's own address.
+- PAM `rhost` (for `pam_access`) is the proxy's loopback address when the proxy omits
+  `X-Forwarded-For`. The docs now say that the proxy must send it.
+- Things in `sshd_config` that are not followed:
+  - `Match` blocks, including a per-user `AuthorizedKeysFile`;
+  - `AuthorizedKeysCommand`;
+  - `PubkeyAuthentication`, `AuthenticationMethods`, `AllowUsers`/`DenyUsers` and `StrictModes no`.
+
+  Key sign-in also skips the PAM `auth` stack (OTP, `pam_faillock` preauth lockout), as sshd does
+  for public keys. `auth.ssh_keys` and `auth.allow_*` are the controls.
+- The 1 s refusal floor hides timing only while reading `authorized_keys` and running PAM `account`
+  stay under 1 s (slow NSS/LDAP could exceed it).
+- Revalidation reads the key files every 60 s per key session. A transiently unreadable home (for
+  example NFS) ends the session, which fails closed.
+
+**Installer (`install.sh`, reported only, not changed)**
+
+- **The Docker-Caddy path trusts the whole Docker bridge subnet and listens on all interfaces.** It
+  adds that subnet (`CD_SUBNET`) to `web.trusted_proxies` and sets `listen = 0.0.0.0`. As a result:
+  - every container on that network can forge `X-Forwarded-For`/`-Host`/`-Proto`;
+  - the daemon is reachable on every interface.
+
+  Prefer listening on the bridge gateway address (`CD_GW`) and trusting only the Caddy container's
+  address, or host networking with `tls.mode = "http"`. The Caddy upstream uses
+  `tls_insecure_skip_verify`, which is acceptable on a local bridge but should be documented as
+  such.

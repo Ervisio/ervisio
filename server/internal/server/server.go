@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
@@ -195,6 +196,20 @@ func (s *Server) Run(ctx context.Context) error {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
+	}
+	if s.opts.DevAuthorizedKeys != "" {
+		// The file replaces every account's authorized_keys and skips the
+		// StrictModes checks on ~/.ssh: only for a daemon reachable from
+		// this machine, with a file only the daemon's user can change.
+		host, _, _ := net.SplitHostPort(ln.Addr().String())
+		if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
+			ln.Close()
+			return errors.New("--dev-authorized-keys only listens on a loopback address")
+		}
+		if _, err := readDevAuthorizedKeys(s.opts.DevAuthorizedKeys); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			ln.Close()
+			return err
+		}
 	}
 	if s.opts.NoAuth {
 		host, _, _ := net.SplitHostPort(ln.Addr().String())

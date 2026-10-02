@@ -2,10 +2,13 @@ package server
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/Fonlogen/LinuxAdmin/server/internal/account"
@@ -114,19 +117,59 @@ type keyLoginRequest struct {
 
 // keyAuthorized checks pub against a's authorized_keys (read as a, with
 // sshd's StrictModes rules); in --dev with --dev-authorized-keys that
-// file is used instead.
-func (s *Server) keyAuthorized(a *account.Account, pub ssh.PublicKey, rhost string) error {
-	ip := net.ParseIP(rhost)
+// file is used instead. fromIP is the client address from= options are
+// matched against; "" when it is not known (from= lines then refuse).
+func (s *Server) keyAuthorized(a *account.Account, pub ssh.PublicKey, fromIP string) error {
+	ip := net.ParseIP(fromIP)
 	if s.opts.Dev && s.opts.DevAuthorizedKeys != "" {
-		data, err := os.ReadFile(s.opts.DevAuthorizedKeys)
+		data, err := readDevAuthorizedKeys(s.opts.DevAuthorizedKeys)
 		if err != nil {
 			return err
 		}
 		_, err = sshauth.FindKey(data, pub, ip, time.Now())
 		return err
 	}
-	_, err := sshauth.Authorize(sshauth.User{Name: a.Name, UID: a.UID, GID: a.GID, Home: a.Home}, pub, ip, time.Now())
+	_, err := sshauth.Authorize(sshauth.User{Name: a.Name, UID: a.UID, GID: a.GID, Home: a.Home, Groups: a.Groups}, pub, ip, time.Now())
 	return err
+}
+
+// checkDevAuthorizedKeys checks the --dev-authorized-keys file: a regular
+// file (not a symlink) owned by the daemon's user and not writable by group
+// or others, so another local account cannot add its own key to it.
+func checkDevAuthorizedKeys(f *os.File) error {
+	var st syscall.Stat_t
+	if err := syscall.Fstat(int(f.Fd()), &st); err != nil {
+		return err
+	}
+	if st.Mode&syscall.S_IFMT != syscall.S_IFREG {
+		return fmt.Errorf("--dev-authorized-keys %s: not a regular file", f.Name())
+	}
+	if int(st.Uid) != os.Geteuid() || st.Mode&0o022 != 0 {
+		return fmt.Errorf("--dev-authorized-keys %s: must be owned by uid %d and not writable by group or others (owner uid %d, mode %04o)",
+			f.Name(), os.Geteuid(), st.Uid, st.Mode&0o7777)
+	}
+	return nil
+}
+
+// readDevAuthorizedKeys reads the --dev-authorized-keys file after
+// checkDevAuthorizedKeys (at most 1 MiB).
+func readDevAuthorizedKeys(path string) ([]byte, error) {
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	if err := checkDevAuthorizedKeys(f); err != nil {
+		return nil, err
+	}
+	b, err := io.ReadAll(io.LimitReader(f, 1<<20+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(b) > 1<<20 {
+		return nil, errors.New("--dev-authorized-keys: larger than 1 MiB")
+	}
+	return b, nil
 }
 
 // handleLoginKey answers POST /api/auth/login-key: it signs the user in
@@ -219,7 +262,13 @@ func (s *Server) handleLoginKey(w http.ResponseWriter, r *http.Request) {
 		refuse(errKeyRefused, "login shell "+a.Shell+" is not allowed (nologin, restricted or not in /etc/shells)")
 		return
 	}
-	if err := s.keyAuthorized(a, pub, ip); err != nil {
+	// from= is matched against the browser's address only when it is known
+	// (not a trusted proxy that sent no X-Forwarded-For).
+	fromIP, known := s.clientAddr(r)
+	if !known {
+		fromIP = ""
+	}
+	if err := s.keyAuthorized(a, pub, fromIP); err != nil {
 		refuse(errKeyRefused, "key "+fp+": "+err.Error())
 		return
 	}
@@ -250,7 +299,7 @@ func (s *Server) handleLoginKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result = attemptOK
-	sess, token, err := s.createSession(r.Context(), a, req.Remember, ip, &sessionKey{pub: pub, fingerprint: fp})
+	sess, token, err := s.createSession(r.Context(), a, req.Remember, ip, &sessionKey{pub: pub, fingerprint: fp, fromIP: fromIP})
 	if err != nil {
 		s.log.Printf("login %q method=ssh-key: %v", req.User, err)
 		writeError(w, rpc.Errorf(rpc.Unavailable, "could not start the session"))

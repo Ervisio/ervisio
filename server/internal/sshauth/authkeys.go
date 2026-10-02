@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"path"
 	"strings"
 	"time"
 
@@ -146,8 +145,11 @@ func unquote(v string) (string, bool) {
 
 // MatchFrom applies an sshd from= pattern list to ip: a matching negated
 // pattern (!…) refuses, otherwise one matching pattern accepts. Patterns are
-// CIDR blocks or wildcard (*, ?) patterns on the address text. Host names
-// are never resolved, so name patterns do not match.
+// CIDR blocks or wildcard patterns on the address text, where only * and ?
+// are special (as in sshd's match_pattern; [ and \ are literal). Host names
+// are never resolved, so name patterns do not match. A malformed CIDR block
+// refuses the whole list, as sshd does (otherwise "!10.0.0.0/33,*" would
+// accept every address).
 func MatchFrom(list string, ip net.IP) bool {
 	if ip == nil {
 		return false
@@ -166,11 +168,13 @@ func MatchFrom(list string, ip net.IP) bool {
 		}
 		var m bool
 		if strings.Contains(p, "/") {
-			if _, n, err := net.ParseCIDR(p); err == nil {
-				m = n.Contains(ip)
+			_, n, err := net.ParseCIDR(p)
+			if err != nil {
+				return false
 			}
+			m = n.Contains(ip)
 		} else {
-			m, _ = path.Match(strings.ToLower(p), strings.ToLower(addr))
+			m = wildcardMatch(strings.ToLower(p), strings.ToLower(addr))
 			if !m && strings.Contains(p, ":") {
 				// IPv6 written differently ("::1" vs "0:0::1").
 				if pip := net.ParseIP(p); pip != nil {
@@ -186,6 +190,32 @@ func MatchFrom(list string, ip net.IP) bool {
 		}
 	}
 	return ok
+}
+
+// wildcardMatch is sshd's match_pattern: '*' matches any run of bytes,
+// '?' any one byte, everything else itself.
+func wildcardMatch(pat, s string) bool {
+	px, sx := 0, 0
+	starP, starS := -1, 0
+	for sx < len(s) {
+		switch {
+		case px < len(pat) && pat[px] == '*':
+			starP, starS = px, sx
+			px++
+		case px < len(pat) && (pat[px] == '?' || pat[px] == s[sx]):
+			px++
+			sx++
+		case starP >= 0:
+			starS++
+			px, sx = starP+1, starS
+		default:
+			return false
+		}
+	}
+	for px < len(pat) && pat[px] == '*' {
+		px++
+	}
+	return px == len(pat)
 }
 
 // parseExpiry parses sshd's expiry-time: YYYYMMDD[HHMM[SS]], in local

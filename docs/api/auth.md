@@ -17,7 +17,7 @@ In `--dev` every request whose `Host` is not `localhost`, `127.x.x.x` or `[::1]`
 (DNS-rebinding protection).
 On session routes the session is checked first, so a signed-out POST gets 401.
 
-The session cookie is `la_session` (HttpOnly, SameSite=Strict, Secure except in `--dev`).
+The session cookie is `la_session` (HttpOnly, SameSite=Strict, Secure except in `--dev` and, in `tls.mode = "http"`, for plain-HTTP requests as described in `docs/api/config.md`).
 Timestamps are **unix milliseconds**.
 
 ## `GET /api/public/host` (no auth)
@@ -170,8 +170,21 @@ refusing → session ended). Like sshd, a **locked or changed password does not 
 (`usermod -L` locks the password, not the keys); account expiry, PAM account refusal, removed
 account, lost groups and a disallowed shell still do.
 
-`--dev` only: `--dev-authorized-keys <file>` replaces the `authorized_keys` lookup (no permission
-checks) so the flow can be tried without touching `~/.ssh`.
+`--dev` only: `--dev-authorized-keys <file>` replaces the `authorized_keys` lookup so the flow can
+be tried without touching `~/.ssh`. The daemon then refuses to start unless it listens on a loopback
+address, and the file must be a regular file (not a symlink) owned by the daemon's user and not
+writable by group or others (checked at start and at every read).
+
+`from=` is matched against the browser's address: the TCP peer, or behind a trusted proxy the
+`X-Forwarded-For` client. When a trusted proxy sends no usable `X-Forwarded-For` the address is
+unknown and lines with `from=` refuse the sign-in (they are never matched against the proxy's own
+loopback address). Patterns follow sshd: CIDR blocks and `*`/`?` wildcards; a malformed CIDR
+refuses the whole line. Note that a local account can reach the daemon over loopback (a trusted
+proxy by default) and choose `X-Forwarded-For`, so `from=` does not hold against someone who
+already has a shell on the machine and holds the private key.
+
+Live sessions also end when `allow_root` is turned off (uid-0 sessions) and when `auth.ssh_keys` is
+turned off (sessions signed in with a key), at the next 60 s check.
 
 ### Admin unlock after a key sign-in
 

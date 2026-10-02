@@ -58,6 +58,8 @@ func unknownUser(err error) bool {
 // "" when it may, or the reason to end the session:
 //   - the account was removed or its uid changed;
 //   - its login shell is no longer allowed (set to nologin…);
+//   - it is root (uid 0) and allow_root is now off;
+//   - (SSH-key sessions) auth.ssh_keys is now off;
 //   - the sign-in allowlist (auth.allow_*, auth.admins_only) no longer
 //     admits it;
 //   - it lost a group it had at sign-in;
@@ -94,7 +96,14 @@ func (s *Server) revalidate(sess *Session, full bool) string {
 	if !account.ShellAllowed(a.Shell) {
 		return fmt.Sprintf("the account's login shell %q is no longer allowed", a.Shell)
 	}
-	if !s.opts.NoAuth && !signInAllowed(s.Config(), a) {
+	cfg := s.Config()
+	if a.IsRoot() && !cfg.AllowRoot {
+		return "signing in as root is disabled (allow_root = false)"
+	}
+	if sess.sshKey != nil && !cfg.Auth.SSHKeys {
+		return "signing in with an SSH key is disabled (auth.ssh_keys = false)"
+	}
+	if !s.opts.NoAuth && !signInAllowed(cfg, a) {
 		return "the account is no longer allowed to sign in (auth.allow_users, auth.allow_groups, auth.admins_only)"
 	}
 	for _, g := range sess.Account.Groups {
@@ -128,7 +137,7 @@ func (s *Server) revalidate(sess *Session, full bool) string {
 		runPAM = true
 	}
 	if sess.sshKey != nil && c.keyAuth != nil {
-		if err := c.keyAuth(a, sess.sshKey.pub, sess.RHost); err != nil {
+		if err := c.keyAuth(a, sess.sshKey.pub, sess.sshKey.fromIP); err != nil {
 			if errors.Is(err, sshauth.ErrNotAuthorized) {
 				return fmt.Sprintf("the SSH key %s is no longer authorized: %v", sess.sshKey.fingerprint, err)
 			}

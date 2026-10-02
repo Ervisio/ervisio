@@ -55,10 +55,15 @@ host, `0.0.0.0` and other addresses are rejected): `config.set` answers `invalid
 `--check-config` refuse the file, and `--listen` on the command line is checked the same way. (Unix sockets are not
 supported as listen addresses.) Set `listen` first, then `tls.mode`.
 
-Session cookies (`SameSite=Strict`, `HttpOnly`) keep the `Secure` flag in every mode except `http`; in `http` mode
-`Secure` is set when the request came from a trusted proxy (`web.trusted_proxies`, loopback by default) with
-`X-Forwarded-Proto: https`. Without that header (a direct `http://127.0.0.1:PORT`, an SSH tunnel) the cookie is not
-`Secure`, so the console also works there. Origin checks compare host names only, not schemes, so a browser at
+Session cookies (`SameSite=Strict`, `HttpOnly`) keep the `Secure` flag in every mode except `http`, and always
+on a request that arrived over TLS. In `http` mode the flag fails closed: when a trusted proxy
+(`web.trusted_proxies`, loopback by default) sends `X-Forwarded-Proto`, `Secure` is set unless it says `http`;
+without that header (or from a peer that is not a trusted proxy, whose header is ignored) `Secure` is set unless
+the browser addressed a loopback name (`http://127.0.0.1:PORT`, `http://localhost:PORT`, an SSH tunnel), so the
+console also works there. A TLS proxy that forgets `X-Forwarded-Proto` therefore still gets `Secure` cookies.
+The proxy should also send `X-Forwarded-For`: without it every browser looks like the proxy's loopback address to
+the rate limiter and to PAM (`rhost`), and `from=` options in `authorized_keys` refuse SSH-key sign-in.
+Origin checks compare host names only, not schemes, so a browser at
 `https://admin.example.com` is accepted when the proxy forwards `Host: admin.example.com` or sends
 `X-Forwarded-Host` (or the origin is in `web.allowed_origins`). The proxy must also pass WebSocket upgrades. Caddy:
 
