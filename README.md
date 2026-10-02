@@ -247,6 +247,9 @@ allow_root = false
 show_ip = true          # show the server address on the sign-in page
 max_failures = 5        # failed attempts per client before a temporary block
 
+[auth]
+ssh_keys = true         # allow signing in with a key from ~/.ssh/authorized_keys
+
 [session]
 timeout = "12h"         # idle timeout
 admin_unlock = "5m"     # root bridge stops after this long without admin calls; "0s" = until sign-out

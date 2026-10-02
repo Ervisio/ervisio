@@ -17,6 +17,7 @@ import (
 
 	"github.com/Fonlogen/LinuxAdmin/server/internal/account"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/config"
+	"github.com/Fonlogen/LinuxAdmin/server/internal/sshauth"
 )
 
 // Options configure the daemon.
@@ -45,7 +46,10 @@ type Options struct {
 	// `--pam-session-helper` to open a PAM session around each user bridge
 	// (not used in --dev). "" = no PAM session.
 	SessionHelper string
-	Logger        *log.Logger
+	// DevAuthorizedKeys (dev only) replaces the authorized_keys files for
+	// SSH-key sign-in, so the flow can be tried without touching ~/.ssh.
+	DevAuthorizedKeys string
+	Logger            *log.Logger
 }
 
 // Server is the daemon.
@@ -55,15 +59,19 @@ type Server struct {
 	cfg      *configHolder
 	sessions *store
 	limiter  *limiter
-	pamSem   chan struct{}
-	devUser  *account.Account // dev mode: the only account allowed
+	// challenges holds outstanding SSH-key sign-in nonces.
+	challenges *sshauth.Store
+	pamSem     chan struct{}
+	devUser    *account.Account // dev mode: the only account allowed
 
 	noAuthMu    sync.Mutex
 	noAuthToken string // --dev-insecure-noauth one-time sign-in token
 
 	viteHost string // dev: host:port of the Vite dev server (allowed origin)
 	checker  *accountChecker
-	checking sync.Mutex // one revalidation pass at a time
+	// pamAcctHook replaces PAM account management in tests.
+	pamAcctHook func(name, rhost string) error
+	checking    sync.Mutex // one revalidation pass at a time
 
 	baseCtx context.Context
 	cancel  context.CancelFunc
@@ -77,6 +85,9 @@ func New(opts Options) (*Server, error) {
 	}
 	if opts.NoAuth && !opts.Dev {
 		return nil, errors.New("--dev-insecure-noauth requires --dev")
+	}
+	if opts.DevAuthorizedKeys != "" && !opts.Dev {
+		return nil, errors.New("--dev-authorized-keys requires --dev")
 	}
 	if opts.NoAuth && os.Geteuid() == 0 {
 		return nil, errors.New("--dev-insecure-noauth refuses to run as root")
@@ -93,16 +104,18 @@ func New(opts Options) (*Server, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Server{
-		opts:     opts,
-		log:      opts.Logger,
-		cfg:      holder,
-		sessions: newStore(),
-		limiter:  newLimiter(),
-		pamSem:   make(chan struct{}, 8),
-		checker:  newAccountChecker(),
-		baseCtx:  ctx,
-		cancel:   cancel,
+		opts:       opts,
+		log:        opts.Logger,
+		cfg:        holder,
+		sessions:   newStore(),
+		limiter:    newLimiter(),
+		challenges: sshauth.NewStore(),
+		pamSem:     make(chan struct{}, 8),
+		checker:    newAccountChecker(),
+		baseCtx:    ctx,
+		cancel:     cancel,
 	}
+	s.checker.keyAuth = s.keyAuthorized
 	if opts.Dev {
 		if s.devUser, err = account.Current(); err != nil {
 			cancel()
@@ -142,6 +155,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/public/logo", s.handlePublicLogo)
 	mux.HandleFunc("GET /api/health", s.handleHealth)
 	mux.HandleFunc("POST /api/auth/login", s.csrf(s.handleLogin))
+	mux.HandleFunc("POST /api/auth/challenge", s.csrf(s.handleChallenge))
+	mux.HandleFunc("POST /api/auth/login-key", s.csrf(s.handleLoginKey))
 	mux.HandleFunc("POST /api/auth/logout", s.csrf(s.handleLogout))
 	mux.HandleFunc("GET /api/auth/session", s.authed(s.handleSession))
 	mux.HandleFunc("POST /api/auth/unlock", s.authed(s.csrfS(s.handleUnlock)))
@@ -271,6 +286,7 @@ func (s *Server) janitor(ctx context.Context) {
 			cfg := s.Config()
 			s.sessions.expire(time.Now(), cfg.Session.Timeout.Duration, cfg.Session.AdminUnlock.Duration)
 			s.limiter.gc()
+			s.challenges.Prune()
 			go s.revalidateAll(time.Now(), revalidateEvery)
 		}
 	}

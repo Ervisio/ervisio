@@ -102,3 +102,39 @@ do anything as root through LinuxAdmin that they could not already do with the D
 - **Stacks created by an admin on the root bridge are not group-writable.** Their folders are `0755` and their files `0644`, owned by root, so docker-group members cannot edit them afterwards. This is a usability issue, not a security one.
 - **A shell opened by `docker exec` may outlive its PTY.** When the pty stream closes, the Docker CLI is killed, but whether the process in the container ends is up to Docker.
 - **A frame can still navigate itself.** The host then tears the frame down, but only after the request has left; this was already true before this change set. `allow-forms` adds no new way out.
+
+## Addendum 2026-10-02: sign-in with an SSH key
+
+Design notes for `POST /api/auth/challenge` + `POST /api/auth/login-key` (`server/internal/sshauth`,
+`server/internal/server/authkey.go`, `web/src/auth/sshkey`; contract in `docs/api/auth.md`).
+
+- **The private key never leaves the browser.** The page parses and decrypts it (bcrypt_pbkdf in
+  TypeScript, AES and signing through WebCrypto, `@noble/ed25519` fallback) and sends only the public
+  key and a signature. The passphrase is never sent either. A page that can read the key is still
+  trusted with it: an XSS in the app would expose a pasted key, the same as a typed password (CSP and
+  the plugin sandbox from H2 are what protects both).
+- **Domain separation.** The signed text is `"linuxadmin-ssh-auth-v1\n" + host + "\n" + user + "\n" +
+  nonce`. It cannot be an SSH user-auth signature (those start with a 4-byte length; "linu" would be
+  1.8 GB) nor an SSHSIG (starts with `SSHSIG`), so a signature made here cannot be replayed against
+  sshd, and an SSH signature cannot be replayed here. The host is the one the browser used, checked
+  against the same list as the `Origin` check and stored with the challenge; the client builds the
+  text itself and refuses to sign anything else the server sends.
+- **Nonces.** 32 random bytes, valid 60 s, single use (removed on the first attempt, even a failed or
+  mismatched one), bound to the user name and the client address. Memory is bounded (8 per client
+  key, 4096 total); challenges are refused while the client is rate limited.
+- **No user enumeration.** The challenge is issued for any valid user name. Every refusal that
+  depends on the account (unknown user, key not listed, options, PAM account check, shell, uid 0)
+  returns the same `key_refused` and is answered no sooner than 1 s after the request.
+- **Brute force.** Key failures and password failures share the per-client limiter
+  (`login.max_failures` / 15 min) and the PAM slots; PAM is only asked for account management, so
+  key attempts never count toward `pam_faillock`.
+- **authorized_keys** is read with the user's fsuid (no root read through user symlinks), with
+  sshd's StrictModes checks; `command=` keys and certificates are refused, `from=` and
+  `expiry-time=` honoured. Key sessions are re-checked every 60 s against the file.
+- **Policy parity with sshd**: a locked password (`usermod -L`) does not block keys, as with sshd;
+  account expiry and PAM `account` modules do. Admins who want to stop key sign-ins can set
+  `auth.ssh_keys = false`. sudo still requires the password unless sudoers says NOPASSWD;
+  `unlock("")` runs `sudo -n` and never feeds PAM an empty password.
+- Not done: sshd `Match` blocks, `AuthorizedKeysCommand`, `PubkeyAuthentication no` and
+  `AllowUsers`/`DenyUsers` in sshd_config are not consulted (this is a separate service with its
+  own switch); FIDO keys cannot work in this flow.

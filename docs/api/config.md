@@ -11,7 +11,8 @@ after a change; keys marked `restart` need a daemon restart.
 | `listen` | string `host:port` | `0.0.0.0:9090` | restart |
 | `allow_root` | bool | `false` | |
 | `login.show_ip` | bool | `true` | |
-| `login.max_failures` | int 1–1000 | `5` | per IP per 15 min |
+| `login.max_failures` | int 1–1000 | `5` | per IP per 15 min (password and SSH-key failures together) |
+| `auth.ssh_keys` | bool | `true` | sign in with an SSH key listed in the user's `authorized_keys` (`docs/api/auth.md`) |
 | `session.timeout` | duration 5m–720h | `"12h"` | idle timeout |
 | `session.admin_unlock` | duration 30s–24h, or `"0s"` | `"5m"` | admin idle timeout; `"0s"` keeps admin rights until sign-out |
 | `tls.mode` | enum `self-signed`/`letsencrypt`/`custom` | `self-signed` | restart; letsencrypt not implemented yet (falls back to self-signed) |
@@ -30,7 +31,7 @@ Durations are Go duration strings (`"90s"`, `"5m"`, `"12h"`).
 
 ```json
 {"path":"/etc/linuxadmin/linuxadmin.conf","exists":false,
- "values":{"listen":"0.0.0.0:9090","allow_root":false,"login.show_ip":true,"login.max_failures":5,
+ "values":{"listen":"0.0.0.0:9090","allow_root":false,"login.show_ip":true,"login.max_failures":5,"auth.ssh_keys":true,
            "session.timeout":"12h","session.admin_unlock":"5m","tls.mode":"self-signed","tls.redirect":true,
            "tls.cert":"","tls.key":"","plugins.allow_unsigned":false,"plugins.dev":false,
            "updates.channel":"stable","updates.auto_check":true,"updates.auto_install":false,"updates.auto_install_at":"03:30"},

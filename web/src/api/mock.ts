@@ -46,11 +46,21 @@ export async function mockAuth(path: string, body: any): Promise<any> {
       wr('user', body.user);
       return delay({ user: body.user, isAdmin: true, isRoot: false });
     }
+    case '/api/auth/challenge': {
+      if (body.user === 'root') throw new ApiError('forbidden', 'Root login is disabled on this server.', { reason: 'root_disabled' }, 403);
+      const nonce = Array.from(crypto.getRandomValues(new Uint8Array(43)), (b) => 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'[b & 63]).join('');
+      return delay({ nonce, host: body.host, challenge: `linuxadmin-ssh-auth-v1\n${body.host}\n${body.user}\n${nonce}`, expires: Date.now() + 60_000 });
+    }
+    case '/api/auth/login-key':
+      // Mock: any well-formed key signs in.
+      wr('user', body.user);
+      return delay({ user: body.user, isAdmin: true, isRoot: false, authMethod: 'ssh-key' });
     case '/api/auth/logout':
       wr('user', null);
       unlockedUntil = 0;
       return {};
     case '/api/auth/unlock':
+      if (body.password === '') throw new ApiError('invalid', 'sudo needs this account\'s password', { reason: 'password_required' }, 400);
       if (body.password === 'wrong') throw new ApiError('unauthenticated', 'Wrong password.', undefined, 401);
       unlockedUntil = Date.now() + 5 * 60_000;
       return delay({ unlockedUntil });

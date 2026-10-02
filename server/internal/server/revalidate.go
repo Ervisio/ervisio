@@ -10,6 +10,8 @@ import (
 
 	"github.com/Fonlogen/LinuxAdmin/server/internal/account"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/pam"
+	"github.com/Fonlogen/LinuxAdmin/server/internal/sshauth"
+	"golang.org/x/crypto/ssh"
 )
 
 // accountChecker holds the lookups used to re-validate live sessions
@@ -18,6 +20,9 @@ type accountChecker struct {
 	lookup  func(name string) (*account.Account, error)
 	shadow  func(name string) (*account.ShadowEntry, error)
 	pamAcct func(name, rhost string) error
+	// keyAuth checks that an SSH key may still sign the account in from
+	// rhost (nil error) or returns why not; nil = not checked.
+	keyAuth func(a *account.Account, pub ssh.PublicKey, rhost string) error
 	now     func() time.Time
 }
 
@@ -57,7 +62,13 @@ func unknownUser(err error) bool {
 //   - (shadow readable, i.e. the daemon runs as root) the password was
 //     locked or changed, or the account expired;
 //   - PAM account management refuses it: always when the shadow file is
-//     not readable, and on full checks (unlock, bridge restart).
+//     not readable, and on full checks (unlock, bridge restart);
+//   - (SSH-key sessions) the key is no longer in authorized_keys, or its
+//     from=/expiry-time= options now refuse it.
+//
+// SSH-key sessions ignore a locked or changed password, as sshd does: an
+// account with a locked password ("!" in shadow, usermod -L) may still
+// use its keys; account expiry still ends the session.
 //
 // Lookup or PAM failures that do not say anything about the account
 // (NSS or PAM service errors) keep the session.
@@ -90,7 +101,7 @@ func (s *Server) revalidate(sess *Session, full bool) string {
 	sh, err := c.shadow(name)
 	switch {
 	case err == nil:
-		if sh.Locked {
+		if sh.Locked && sess.sshKey == nil {
 			return "the account's password is locked"
 		}
 		if sh.Expired(c.now()) {
@@ -99,7 +110,7 @@ func (s *Server) revalidate(sess *Session, full bool) string {
 		sess.mu.Lock()
 		fp := sess.shadowFP
 		sess.mu.Unlock()
-		if fp != "" && sh.Fingerprint != fp {
+		if fp != "" && sh.Fingerprint != fp && sess.sshKey == nil {
 			return "the account's password changed"
 		}
 	case errors.Is(err, account.ErrNoShadowEntry):
@@ -110,6 +121,14 @@ func (s *Server) revalidate(sess *Session, full bool) string {
 	default:
 		s.log.Printf("revalidate %q: shadow: %v", name, err)
 		runPAM = true
+	}
+	if sess.sshKey != nil && c.keyAuth != nil {
+		if err := c.keyAuth(a, sess.sshKey.pub, sess.RHost); err != nil {
+			if errors.Is(err, sshauth.ErrNotAuthorized) {
+				return fmt.Sprintf("the SSH key %s is no longer authorized: %v", sess.sshKey.fingerprint, err)
+			}
+			s.log.Printf("revalidate %q: key check: %v (session kept)", name, err)
+		}
 	}
 	if runPAM {
 		if err := c.pamAcct(name, sess.RHost); err != nil {

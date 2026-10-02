@@ -38,7 +38,7 @@ export async function http<T>(
   if (!res.ok || (json && json.error)) {
     const e = json?.error;
     const code = e?.code ?? (res.status === 401 ? 'unauthenticated' : res.status === 403 ? 'forbidden' : 'internal');
-    if (res.status === 401 && path !== '/api/auth/login' && path !== '/api/auth/unlock') {
+    if (res.status === 401 && path !== '/api/auth/login' && path !== '/api/auth/login-key' && path !== '/api/auth/unlock') {
       authEvents.dispatchEvent(new Event('unauthenticated'));
     }
     throw new ApiError(code, e?.message ?? res.statusText ?? 'Request failed', e?.data, res.status);

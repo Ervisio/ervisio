@@ -47,6 +47,11 @@ export interface Session {
   unlockedUntil?: number;
   /** Admin rights last until sign-out (session.admin_unlock = 0). */
   unlockedForever?: boolean;
+  /** How this session signed in. With "ssh-key" the server never saw the password: the unlock
+   * dialog can first try unlock('') (sudo NOPASSWD), then ask for the password. */
+  authMethod?: 'password' | 'ssh-key';
+  /** SHA256 fingerprint of the key used to sign in (authMethod "ssh-key"). */
+  keyFingerprint?: string;
 }
 
 export interface DistroInfo {

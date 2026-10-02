@@ -96,6 +96,23 @@ func TestAdminSudoOutcomes(t *testing.T) {
 	}
 }
 
+// An empty password runs sudo -n (NOPASSWD only) and writes nothing to
+// sudo's stdin.
+func TestAdminNoPassword(t *testing.T) {
+	bridge := buildBridge(t)
+	s := spec(t, bridge)
+	s.Sudo = fakeSudo(t, `[ "$1" = "-n" ] && [ "$2" = "-k" ] && [ "$3" = "--" ] || { echo "bad args: $*" >&2; exit 1; }; echo "sudo: a password is required" >&2; exit 1`)
+	if _, err := StartAdmin(context.Background(), s, ""); !rpc.IsCode(err, rpc.Invalid) {
+		t.Fatalf("got %v, want invalid (password required)", err)
+	}
+	// NOPASSWD: sudo runs the bridge directly; here it is not root, so the
+	// hello check refuses it, which proves the bridge was started.
+	s.Sudo = fakeSudo(t, `[ "$1" = "-n" ] || exit 1; shift 3; exec "$1" --config /x/y.conf`)
+	if _, err := StartAdmin(context.Background(), s, ""); !rpc.IsCode(err, rpc.Forbidden) {
+		t.Fatalf("got %v, want forbidden (not root)", err)
+	}
+}
+
 func TestClassifySudo(t *testing.T) {
 	if classifySudo("sudo: 3 incorrect password attempts") != rpc.Invalid ||
 		classifySudo("alice is not in the sudoers file.  This incident will be reported.") != rpc.Forbidden ||

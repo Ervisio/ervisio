@@ -193,7 +193,7 @@ func (s *Server) handleNoAuth(w http.ResponseWriter, r *http.Request) {
 		writeError(w, rpc.Errorf(rpc.Forbidden, "invalid or already used dev sign-in token (see the daemon's console)"))
 		return
 	}
-	sess, token, err := s.createSession(s.baseCtx, s.devUser, false, clientIP(r))
+	sess, token, err := s.createSession(s.baseCtx, s.devUser, false, clientIP(r), nil)
 	if err != nil {
 		s.log.Printf("noauth session: %v", err)
 		writeError(w, rpc.Errorf(rpc.Unavailable, "could not start the session"))
@@ -235,14 +235,19 @@ func sessionLifetime(remember bool, timeout time.Duration) time.Duration {
 	return base
 }
 
-// createSession starts the user bridge and registers a new session.
-func (s *Server) createSession(ctx context.Context, a *account.Account, remember bool, rhost string) (*Session, string, error) {
+// createSession starts the user bridge and registers a new session. key
+// is the SSH key used to sign in, nil for a password sign-in.
+func (s *Server) createSession(ctx context.Context, a *account.Account, remember bool, rhost string, key *sessionKey) (*Session, string, error) {
 	p, err := bridge.StartUser(ctx, s.spec(a, rhost))
 	if err != nil {
 		return nil, "", err
 	}
 	now := time.Now()
-	sess := &Session{Account: a, Created: now, Remember: remember, RHost: rhost, lastSeen: now, user: p,
+	method := "password"
+	if key != nil {
+		method = "ssh-key"
+	}
+	sess := &Session{Account: a, Created: now, Remember: remember, RHost: rhost, Method: method, sshKey: key, lastSeen: now, user: p,
 		expires: now.Add(sessionLifetime(remember, s.Config().Session.Timeout.Duration)), checked: now}
 	sess.shadowFP = s.checker.shadowFingerprint(a.Name)
 	token, err := s.sessions.add(sess)
@@ -285,12 +290,23 @@ type userInfo struct {
 	// UnlockedForever is set while unlocked with session.admin_unlock = 0:
 	// admin rights last until sign-out, unlockedUntil is the session end.
 	UnlockedForever bool `json:"unlockedForever,omitempty"`
+	// AuthMethod is how this session signed in: "password" or "ssh-key".
+	AuthMethod string `json:"authMethod"`
+	// KeyFingerprint is the SHA256 fingerprint of the SSH key used to sign
+	// in (authMethod "ssh-key" only).
+	KeyFingerprint string `json:"keyFingerprint,omitempty"`
 }
 
 func (s *Server) info(sess *Session) userInfo {
 	a := sess.Account
 	ui := userInfo{User: a.Name, Name: a.FullName, UID: a.UID, Home: a.Home, Groups: a.GroupNames,
-		IsRoot: a.IsRoot(), CanSudo: a.CanSudo()}
+		IsRoot: a.IsRoot(), CanSudo: a.CanSudo(), AuthMethod: sess.Method}
+	if ui.AuthMethod == "" {
+		ui.AuthMethod = "password"
+	}
+	if sess.sshKey != nil {
+		ui.KeyFingerprint = sess.sshKey.fingerprint
+	}
 	if ui.Groups == nil {
 		ui.Groups = []string{}
 	}
@@ -415,7 +431,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result = attemptOK
-	sess, token, err := s.createSession(r.Context(), a, req.Remember, ip)
+	sess, token, err := s.createSession(r.Context(), a, req.Remember, ip, nil)
 	if err != nil {
 		s.log.Printf("login %q: %v", req.User, err)
 		writeError(w, rpc.Errorf(rpc.Unavailable, "could not start the session"))
@@ -426,7 +442,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		maxAge = int(cfg.Session.Timeout.Seconds())
 	}
 	s.setCookie(w, token, maxAge)
-	s.log.Printf("login %q from %s", a.Name, ip)
+	s.log.Printf("login %q from %s method=password", a.Name, ip)
 	writeJSON(w, http.StatusOK, s.info(sess))
 }
 
@@ -486,10 +502,15 @@ func (s *Server) handleUnlock(w http.ResponseWriter, r *http.Request, sess *Sess
 		sess.mu.Unlock()
 	}()
 
+	// An empty password tries sudo without one (NOPASSWD rules): useful
+	// for sessions signed in with an SSH key. sudo -n never runs PAM
+	// authentication, so a refusal is not counted as a failed attempt.
 	p, err := bridge.StartAdmin(r.Context(), s.spec(sess.Account, ip), req.Password)
 	if err != nil {
 		e := rpc.ToError(err, false)
-		if e.Code == rpc.Invalid {
+		if e.Code == rpc.Invalid && req.Password == "" {
+			e = rpc.Errorf(rpc.Invalid, "sudo needs this account's password").WithData(map[string]string{"reason": "password_required"})
+		} else if e.Code == rpc.Invalid {
 			result = attemptFailed
 		}
 		s.log.Printf("unlock for %q from %s failed: %v", sess.Account.Name, ip, e)

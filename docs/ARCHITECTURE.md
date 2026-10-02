@@ -52,8 +52,9 @@ prints a one-time sign-in URL instead of asking for a password.
 | Health (no auth) | `GET /api/health` → `{status:"ok",version,startedAt}`; polled while the daemon restarts after an update (`docs/api/updates.md`) |
 | Public host info for the sign-in page | `GET /api/public/host` → `{hostname, ip?, distro:{id,name,color,logo?,logoUrl?}}`; `GET /api/public/logo` serves the distro logo |
 | Sign in / out | `POST /api/auth/login {user,password,remember?}` → same object as session; `POST /api/auth/logout` |
-| Current session | `GET /api/auth/session` → `{user,name,uid,home,groups,isRoot,isAdmin,canSudo,unlockedUntil?}` or 401 (times in unix ms) |
-| Unlock admin | `POST /api/auth/unlock {password}` → `{unlockedUntil}`; `POST /api/auth/lock` |
+| Sign in with an SSH key | `POST /api/auth/challenge {user,host}` → `{nonce,challenge,host,expires}`; the browser signs `challenge` with the private key (never sent); `POST /api/auth/login-key {user,publicKey,signature,nonce,remember?}` → same object as session. Client: `web/src/auth/sshkey` |
+| Current session | `GET /api/auth/session` → `{user,name,uid,home,groups,isRoot,isAdmin,canSudo,unlockedUntil?,authMethod,keyFingerprint?}` or 401 (times in unix ms) |
+| Unlock admin | `POST /api/auth/unlock {password}` → `{unlockedUntil}` (`password:""` tries sudo NOPASSWD); `POST /api/auth/lock` |
 | Calls | `POST /api/rpc {method, params, admin?:bool}` → `{result}` or `{error:{code,message,data?}}` |
 | Streams | `GET /api/ws` (WebSocket), multiplexed channels, see below |
 | Downloads | `GET /api/files/download?path=…&admin=0|1` (streamed) |
@@ -150,6 +151,8 @@ allow_root = false
 [login]
 show_ip = true
 max_failures = 5
+[auth]
+ssh_keys = true        # sign in with a key from ~/.ssh/authorized_keys (signed in the browser)
 [session]
 timeout = "12h"
 admin_unlock = "5m"

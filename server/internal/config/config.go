@@ -54,6 +54,7 @@ type Config struct {
 	Listen    string  `toml:"listen"`
 	AllowRoot bool    `toml:"allow_root"`
 	Login     Login   `toml:"login"`
+	Auth      Auth    `toml:"auth"`
 	Session   Session `toml:"session"`
 	TLS       TLS     `toml:"tls"`
 	Plugins   Plugins `toml:"plugins"`
@@ -65,6 +66,14 @@ type Config struct {
 type Login struct {
 	ShowIP      bool `toml:"show_ip"`
 	MaxFailures int  `toml:"max_failures"`
+}
+
+// Auth holds the sign-in methods.
+type Auth struct {
+	// SSHKeys allows signing in with an SSH key listed in the user's
+	// authorized_keys (the browser signs a challenge; the private key
+	// never leaves it).
+	SSHKeys bool `toml:"ssh_keys"`
 }
 
 // Session holds session lifetimes.
@@ -119,6 +128,7 @@ func Default() *Config {
 	return &Config{
 		Listen:  "0.0.0.0:9090",
 		Login:   Login{ShowIP: true, MaxFailures: 5},
+		Auth:    Auth{SSHKeys: true},
 		Session: Session{Timeout: Duration{12 * time.Hour}, AdminUnlock: Duration{5 * time.Minute}},
 		TLS:     TLS{Mode: "self-signed", Redirect: true},
 		// Only signed plugins by default (security review H2); dev

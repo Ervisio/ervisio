@@ -11,6 +11,7 @@ import (
 
 	"github.com/Fonlogen/LinuxAdmin/server/internal/account"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/bridge"
+	"golang.org/x/crypto/ssh"
 )
 
 // maxSessionsPerUser bounds sessions (and bridge processes) per account.
@@ -24,6 +25,11 @@ type Session struct {
 	Remember bool
 	// RHost is the client address that signed in.
 	RHost string
+	// Method is how the session signed in: "password" or "ssh-key".
+	Method string
+	// key is the SSH key used to sign in (Method "ssh-key"); revalidation
+	// checks it is still authorized.
+	sshKey *sessionKey
 
 	// expires is the absolute end of the session (see sessionLifetime).
 	expires time.Time
@@ -106,6 +112,12 @@ func (s *Session) lock() {
 	if root != nil {
 		root.Stop()
 	}
+}
+
+// sessionKey is the SSH key a session signed in with.
+type sessionKey struct {
+	pub         ssh.PublicKey
+	fingerprint string
 }
 
 // store holds sessions in memory, keyed by the SHA-256 of the token so the

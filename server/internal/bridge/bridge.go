@@ -270,8 +270,13 @@ func classifySudo(line string) rpc.Code {
 // the password on stdin, and waits for the root bridge's hello. Errors are
 // *rpc.Error: Invalid for a wrong password, Forbidden when sudo refuses
 // the user, Unavailable when sudo is missing or times out.
+//
+// An empty password runs `sudo -n -k -- …` instead: it succeeds only when
+// sudoers grants the bridge without a password (NOPASSWD); otherwise sudo
+// fails at once with "a password is required" (Invalid) without running
+// PAM authentication, so nothing counts toward pam_faillock.
 func StartAdmin(ctx context.Context, s *Spec, password string) (*Proc, error) {
-	if password == "" || strings.ContainsAny(password, "\n\r\x00") || len(password) > 4096 {
+	if strings.ContainsAny(password, "\n\r\x00") || len(password) > 4096 {
 		return nil, rpc.Errorf(rpc.Invalid, "invalid password")
 	}
 	sudo := s.Sudo
@@ -281,7 +286,11 @@ func StartAdmin(ctx context.Context, s *Spec, password string) (*Proc, error) {
 			return nil, rpc.Errorf(rpc.Unavailable, "sudo is not installed")
 		}
 	}
-	args := append([]string{"-S", "-p", "", "-k", "--", s.Bridge}, s.bridgeArgs(true)...)
+	sudoArgs := []string{"-S", "-p", "", "-k", "--", s.Bridge}
+	if password == "" {
+		sudoArgs = []string{"-n", "-k", "--", s.Bridge}
+	}
+	args := append(sudoArgs, s.bridgeArgs(true)...)
 	cmd := s.command(sudo, args...)
 	// The root bridge must not start in the user's home (it also does
 	// chdir("/") itself, see linuxadmin-bridge --admin).
@@ -309,9 +318,11 @@ func StartAdmin(ctx context.Context, s *Spec, password string) (*Proc, error) {
 	if err != nil {
 		return nil, rpc.Errorf(rpc.Unavailable, "%v", err)
 	}
-	if _, err := io.WriteString(stdin, password+"\n"); err != nil {
-		p.Stop()
-		return nil, rpc.Errorf(rpc.Unavailable, "sudo: %v", err)
+	if password != "" {
+		if _, err := io.WriteString(stdin, password+"\n"); err != nil {
+			p.Stop()
+			return nil, rpc.Errorf(rpc.Unavailable, "sudo: %v", err)
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, HelloTimeout)

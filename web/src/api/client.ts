@@ -42,12 +42,20 @@ export async function session(): Promise<Session> {
   return {
     user: s.user, name: s.name, uid: s.uid, home: s.home, groups: s.groups, isRoot: !!s.isRoot,
     isAdmin: !!s.isAdmin, canSudo: !!s.canSudo || !!s.isRoot, unlockedUntil: normUntil(s.unlockedUntil), unlockedForever: !!s.unlockedForever,
+    authMethod: s.authMethod === 'ssh-key' ? 'ssh-key' : 'password', keyFingerprint: s.keyFingerprint || undefined,
   };
 }
 
 /** remember: cookie lives for session.timeout instead of until the browser closes. */
 export const login = (user: string, password: string, remember = true) => post<LoginResult>('/api/auth/login', { user, password, remember });
+/** SSH-key sign-in steps (see auth/sshkey for the whole flow). */
+export const authChallenge = (user: string, host: string) =>
+  post<{ nonce: string; challenge: string; host: string; expires: number }>('/api/auth/challenge', { user, host });
+export const loginKey = (body: { user: string; publicKey: string; signature: string; nonce: string; remember: boolean }) =>
+  post<LoginResult>('/api/auth/login-key', body);
 export const logout = () => post<unknown>('/api/auth/logout', {});
+/** password "" tries sudo without a password (NOPASSWD); it fails with code "invalid" and data.reason
+ * "password_required" when sudo needs one (nothing is counted as a failed attempt). */
 export async function unlock(password: string): Promise<{ until?: number; forever: boolean }> {
   const r = await post<{ unlockedUntil?: unknown; unlockedForever?: unknown }>('/api/auth/unlock', { password });
   return { until: normUntil(r?.unlockedUntil), forever: !!r?.unlockedForever };

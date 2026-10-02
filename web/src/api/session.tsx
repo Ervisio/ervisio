@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import * as client from './client';
+import { signInWithKey as keySignIn, type SignInWithKeyArgs } from '../auth/sshkey';
 import { authEvents } from './http';
 import { ApiError, type PublicHost, type Session } from './types';
 
@@ -17,7 +18,10 @@ export interface SessionValue {
   unlockForever: boolean;
   /** Root users (or sessions with no sudo) can always run admin calls. */
   signIn(user: string, password: string, stay?: boolean): Promise<{ user: string; isAdmin: boolean; isRoot: boolean }>;
+  /** Sign in with an SSH key (see auth/sshkey). Throws SshKeyError. */
+  signInWithKey(args: SignInWithKeyArgs): Promise<{ user: string; isAdmin: boolean; isRoot: boolean }>;
   signOut(): Promise<void>;
+  /** password "" tries sudo NOPASSWD (useful after an SSH-key sign-in); see client.unlock. */
   unlock(password: string): Promise<void>;
   lock(): Promise<void>;
   refresh(): Promise<void>;
@@ -89,6 +93,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return res;
   }, []);
 
+  const signInWithKey = useCallback(async (args: SignInWithKeyArgs) => {
+    const res = await keySignIn(args);
+    const s = await client.session();
+    setSession(s);
+    setStatus('authed');
+    return res;
+  }, []);
+
   const signOut = useCallback(async () => {
     await client.logout().catch(() => undefined);
     setSession(null);
@@ -108,8 +120,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const unlockLeft = until > now ? Math.ceil((until - now) / 1000) : 0;
   const unlockForever = unlockLeft > 0 && !!session?.unlockedForever;
   const value = useMemo<SessionValue>(
-    () => ({ status, session, host, unlockLeft, isUnlocked: unlockLeft > 0, unlockForever, signIn, signOut, unlock, lock, refresh }),
-    [status, session, host, unlockLeft, unlockForever, signIn, signOut, unlock, lock, refresh],
+    () => ({ status, session, host, unlockLeft, isUnlocked: unlockLeft > 0, unlockForever, signIn, signInWithKey, signOut, unlock, lock, refresh }),
+    [status, session, host, unlockLeft, unlockForever, signIn, signInWithKey, signOut, unlock, lock, refresh],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

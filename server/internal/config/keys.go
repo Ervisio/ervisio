@@ -65,6 +65,8 @@ var keys = []Key{
 			}
 			return nil
 		}},
+	{Name: "auth.ssh_keys", Type: Bool,
+		get: func(c *Config) any { return c.Auth.SSHKeys }, set: func(c *Config, v any) { c.Auth.SSHKeys = v.(bool) }, validate: noCheck},
 	{Name: "session.timeout", Type: Dur,
 		get: func(c *Config) any { return c.Session.Timeout }, set: func(c *Config, v any) { c.Session.Timeout = v.(Duration) },
 		validate: durationRange(5*time.Minute, 30*24*time.Hour)},

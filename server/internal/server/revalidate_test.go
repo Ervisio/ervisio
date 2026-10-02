@@ -10,6 +10,8 @@ import (
 
 	"github.com/Fonlogen/LinuxAdmin/server/internal/account"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/pam"
+	"github.com/Fonlogen/LinuxAdmin/server/internal/sshauth"
+	"golang.org/x/crypto/ssh"
 )
 
 type fakeAccounts struct {
@@ -148,5 +150,45 @@ func TestAbsoluteExpiry(t *testing.T) {
 	case <-sess.Done():
 	case <-time.After(2 * time.Second):
 		t.Fatal("session past its absolute lifetime was not closed")
+	}
+}
+
+// SSH-key sessions survive a locked or changed password (as with sshd),
+// but not account expiry.
+func TestRevalidateKeySession(t *testing.T) {
+	a, err := account.Current()
+	if err != nil {
+		t.Skip(err)
+	}
+	if !account.ShellAllowed(a.Shell) {
+		t.Skipf("current user's shell %q is not a login shell", a.Shell)
+	}
+	f := &fakeAccounts{acc: a, shadow: &account.ShadowEntry{Fingerprint: "fp2", Locked: true, Expire: -1}}
+	s := &Server{log: log.New(io.Discard, "", 0), checker: f.checker(), sessions: newStore()}
+	keyOK := true
+	s.checker.keyAuth = func(*account.Account, ssh.PublicKey, string) error {
+		if keyOK {
+			return nil
+		}
+		return sshauth.ErrNotAuthorized
+	}
+	sess := &Session{Account: a, Created: time.Now(), lastSeen: time.Now(), shadowFP: "fp1", Method: "ssh-key",
+		sshKey: &sessionKey{fingerprint: "SHA256:x"}}
+	if r := s.revalidate(sess, false); r != "" {
+		t.Fatalf("key session ended by password lock/change: %s", r)
+	}
+	sess.Method, sess.sshKey = "password", nil
+	if r := s.revalidate(sess, false); r == "" {
+		t.Fatal("password session kept with a locked password")
+	}
+	sess.Method, sess.sshKey = "ssh-key", &sessionKey{fingerprint: "SHA256:x"}
+	f.shadow.Expire = 1
+	if r := s.revalidate(sess, false); r == "" {
+		t.Fatal("expired account kept")
+	}
+	f.shadow.Expire = -1
+	keyOK = false
+	if r := s.revalidate(sess, false); r == "" {
+		t.Fatal("removed key kept")
 	}
 }

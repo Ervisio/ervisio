@@ -41,6 +41,7 @@ func main() {
 	vite := flag.String("vite", "http://127.0.0.1:5173", "Vite dev server to proxy to in --dev without --web")
 	bridgePath := flag.String("bridge", "", "path of "+brand.BridgeBinary+" (default: next to this binary)")
 	noAuth := flag.Bool("dev-insecure-noauth", false, "dev only: sign every request in as the daemon's user")
+	devKeys := flag.String("dev-authorized-keys", "", "dev only: authorized_keys file used for SSH-key sign-in instead of ~/.ssh")
 	version := flag.Bool("version", false, "print the version and exit")
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [flags]\n", brand.DaemonBinary)
@@ -132,17 +133,18 @@ func main() {
 	}
 
 	srv, err := server.New(server.Options{
-		ConfigPath:    cfgAbs,
-		Dev:           *dev,
-		NoAuth:        *noAuth,
-		Listen:        *listen,
-		WebDir:        webDir,
-		ViteURL:       *vite,
-		Bridge:        bp,
-		PluginDirs:    pluginDirs,
-		DevPluginsDir: devPlugins,
-		SessionHelper: helper,
-		Logger:        log.Default(),
+		ConfigPath:        cfgAbs,
+		Dev:               *dev,
+		NoAuth:            *noAuth,
+		Listen:            *listen,
+		WebDir:            webDir,
+		ViteURL:           *vite,
+		Bridge:            bp,
+		PluginDirs:        pluginDirs,
+		DevPluginsDir:     devPlugins,
+		SessionHelper:     helper,
+		DevAuthorizedKeys: *devKeys,
+		Logger:            log.Default(),
 	})
 	if err != nil {
 		log.Fatal(err)
