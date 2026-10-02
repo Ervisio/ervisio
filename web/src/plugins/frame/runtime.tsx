@@ -12,8 +12,8 @@ import { createRoot } from 'react-dom/client';
 import tokensCss from '../../styles/tokens.css?inline';
 import uiCss from '../../ui/ui.css?inline';
 import frameCss from './frame.css?inline';
-import type { FrameHttpRequest, FrameHttpResult, FrameTheme, FrameView, HostToFrame } from '../protocol';
-import { handleReply, openHttpStream, openPty, openStream, PluginError, request, send, type HttpStreamCallbacks, type PtyCallbacks } from './channel';
+import type { FrameHttpRequest, FrameHttpResult, FrameTheme, FrameUploadResult, FrameView, HostToFrame } from '../protocol';
+import { handleReply, openHttpStream, openPty, openStream, openUpload, PluginError, request, send, type HttpStreamCallbacks, type PtyCallbacks, type UploadCallbacks } from './channel';
 import { getLang, setLang, subscribeLang } from './i18n-shim';
 import * as kit from './kit';
 
@@ -73,9 +73,26 @@ function httpRequest(name: string, o: HttpOptions): FrameHttpRequest {
   return req;
 }
 
+/** Options of sdk.api.upload. With onResponseData or onResponseStart the response is streamed and the result's body is empty. */
+interface UploadOptions {
+  onProgress?(p: { loaded: number; total: number }): void;
+  onResponseStart?(status: number, headers: Record<string, string>): void;
+  onResponseData?(chunk: Uint8Array): void;
+}
+
+const saveFile = (filename: string, data: string | Uint8Array | Blob, mime?: string) =>
+  request<{ filename: string; size: number }>('saveFile', { filename, data, ...(mime ? { mime } : {}) });
+
+/** The file name of a download: a string, or taken from the path when the plugin gives none. */
+const downloadName = (name: unknown, req: { path?: string }): string => {
+  if (typeof name === 'string' && name) return name;
+  const last = String(req.path ?? '').split('/').filter(Boolean).pop();
+  return last || 'download';
+};
+
 const textDecoder = new TextDecoder();
 const textEncoder = new TextEncoder();
-function httpResponse(r: FrameHttpResult) {
+function httpResponse(r: FrameHttpResult & { truncated?: boolean }) {
   const body = r.text ?? textDecoder.decode(r.bytes ?? new Uint8Array());
   return {
     status: r.status,
@@ -84,6 +101,23 @@ function httpResponse(r: FrameHttpResult) {
     json: () => JSON.parse(body),
     bytes: () => (r.bytes ? r.bytes.slice() : textEncoder.encode(body)),
   };
+}
+
+/** One line of the activity log. */
+interface AuditEntry {
+  time: string;
+  user: string;
+  ip?: string;
+  source: 'plugin' | 'core';
+  plugin?: string;
+  action: string;
+  via?: string;
+  target?: string;
+  result: 'ok' | 'failed' | 'denied' | 'error';
+  code?: number;
+  bytes?: number;
+  admin?: boolean;
+  detail?: string;
 }
 
 /* ---------- SDK ---------- */
@@ -105,12 +139,43 @@ function makeSdk(plugin: { id: string; name: string; version: string }, view: Fr
         return httpResponse(await request<FrameHttpResult>('http', httpRequest(name, o) as unknown as Record<string, unknown>));
       },
       httpStream: (name: string, o: HttpOptions, h: HttpStreamCallbacks) => openHttpStream(httpRequest(name, o), h ?? {}),
+      /** SDK 0.2: the browser saves the response of a GET as a file; it streams, there is no size limit. Resolves when the download starts. */
+      async download(name: string, o: HttpOptions, filename?: string) {
+        const req = httpRequest(name, { ...o, method: o?.method ?? 'GET' });
+        return request<{ filename: string; size?: number; status?: number }>('download', { req, filename: downloadName(filename, req) });
+      },
+      /** SDK 0.2: same for the standard output of a declared command. */
+      async downloadCommand(command: string, args: string[], filename?: string) {
+        return request<{ filename: string; size?: number; status?: number }>('download', { command, args: args ?? [], filename: downloadName(filename, { path: command }) });
+      },
+      /** SDK 0.2: sends a File or Blob as the body of a POST or PUT, streamed with progress; cancel() stops it. */
+      upload(name: string, o: HttpOptions, file: Blob, opts?: UploadOptions | ((p: { loaded: number; total: number }) => void)) {
+        if (!(file instanceof Blob)) throw new PluginError({ code: 'invalid', message: 'Give a File or Blob.' });
+        const req = httpRequest(name, { ...o, method: o?.method ?? 'POST', body: undefined });
+        const u: UploadOptions = typeof opts === 'function' ? { onProgress: opts } : opts ?? {};
+        const cb: UploadCallbacks = {
+          onProgress: u.onProgress ? (loaded, total) => u.onProgress!({ loaded, total }) : undefined,
+          onResponseStart: u.onResponseStart,
+          onResponseData: u.onResponseData,
+        };
+        const h = openUpload(req, file, cb);
+        const done = h.result.then((r: FrameUploadResult) => ({ ...httpResponse(r), truncated: !!r.truncated }));
+        return Object.assign(done, { cancel: h.cancel });
+      },
+      /** SDK 0.2: saves data the plugin holds in memory (a string, bytes or a Blob, at most 64 MiB) as a browser download. */
+      saveFile: (filename: string, data: string | Uint8Array | Blob, mime?: string) => saveFile(filename, data, mime),
       pty: (command: string, args: string[], o: { cols?: number; rows?: number } & PtyCallbacks) =>
         openPty(command, args ?? [], Math.floor(o?.cols ?? 80), Math.floor(o?.rows ?? 24), o ?? {}),
       call: () => Promise.reject(new PluginError({ code: 'forbidden', message: 'sdk.api.call is not available to plugins (SDK v2+): use sdk.api.exec with a declared command.' })),
       stream: () => {
         throw new PluginError({ code: 'forbidden', message: 'sdk.api.stream is not available to plugins (SDK v2+): use sdk.api.execStream.' });
       },
+    },
+    saveFile,
+    /** SDK 0.2: this plugin's entries of the activity log, newest first. Everyone sees their own; administrators see all users. */
+    audit: {
+      list: (q: { user?: string; action?: string; text?: string; since?: number | string; until?: number | string; limit?: number; cursor?: string } = {}) =>
+        request<{ entries: AuditEntry[]; next: string; enabled: boolean }>('auditList', { ...q }),
     },
     files: {
       async read(path: string): Promise<string> {

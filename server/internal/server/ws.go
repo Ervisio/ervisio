@@ -26,9 +26,15 @@ const (
 	// maxSessionConns bounds concurrent WebSockets per session (one per
 	// browser tab is normal).
 	maxSessionConns = 8
-	// wsReadLimit bounds one client frame. Stream inputs are terminal keys,
-	// pastes and resizes; uploads go through HTTP.
+	// wsReadLimit bounds one client frame, except the "open" of a stream.
+	// Stream inputs are terminal keys, pastes and resizes; uploads go
+	// through HTTP.
 	wsReadLimit = 512 << 10
+	// wsOpenLimit bounds the frame that opens a stream: it carries the
+	// params, which for plugins.httpStream hold the request body as base64
+	// (up to 8 MiB, the default maxBody, is 11.2 MiB). Larger bodies use
+	// plugins.upload.
+	wsOpenLimit = 12 << 20
 	// inputQueueLen bounds input frames queued per channel (the bridge
 	// window is rpc.Window frames on top of it).
 	inputQueueLen = rpc.Window
@@ -63,6 +69,8 @@ type wsConn struct {
 	sess *Session
 	c    *websocket.Conn
 	ctx  context.Context
+	// ip is the client address, for the activity log.
+	ip string
 
 	mu       sync.Mutex
 	channels map[int64]*wsChannel
@@ -89,10 +97,10 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request, sess *Session)
 	if err != nil {
 		return // Accept already wrote the response
 	}
-	c.SetReadLimit(wsReadLimit)
+	c.SetReadLimit(wsOpenLimit)
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	wc := &wsConn{s: s, sess: sess, c: c, ctx: ctx, channels: map[int64]*wsChannel{}}
+	wc := &wsConn{s: s, sess: sess, c: c, ctx: ctx, ip: s.realClientIP(r), channels: map[int64]*wsChannel{}}
 	go func() {
 		select {
 		case <-sess.Done():
@@ -160,6 +168,10 @@ func (wc *wsConn) readLoop() error {
 			wc.sendError(0, rpc.Errorf(rpc.Invalid, "invalid frame"))
 			continue
 		}
+		if len(data) > wsReadLimit && f.Op != "open" {
+			wc.c.Close(websocket.StatusMessageTooBig, "frame too large")
+			return errors.New("frame too large")
+		}
 		switch f.Op {
 		case "open":
 			wc.sess.touch(time.Now())
@@ -198,8 +210,10 @@ func (wc *wsConn) open(f *wsFrame) {
 		hold()
 		wc.sess.releaseChannel()
 	}
+	rec := wc.s.auditBegin(wc.sess, wc.ip, f.Method, f.Params, isAdmin)
 	st, err := p.Stream(wc.ctx, f.Method, f.Params)
 	if err != nil {
+		rec.streamDone(err)
 		release()
 		wc.sendError(f.Ch, rpc.ToError(err, false))
 		return
@@ -231,8 +245,10 @@ func (wc *wsConn) open(f *wsFrame) {
 		defer release()
 		defer st.Close()
 		for ev := range st.Events() {
+			rec.observe(ev)
 			wc.send(&wsFrame{Ch: id, Op: "data", Data: ev.Data, B64: ev.B64})
 		}
+		rec.streamDone(st.Err())
 		wc.mu.Lock()
 		if wc.channels[id] == ch {
 			delete(wc.channels, id)

@@ -59,6 +59,8 @@ prints a one-time sign-in URL instead of asking for a password.
 | Streams | `GET /api/ws` (WebSocket), multiplexed channels, see below |
 | Downloads | `GET /api/files/download?path=…&admin=0|1` (streamed) |
 | Uploads | `POST /api/files/upload?path=…&admin=0|1` raw body (streamed) |
+| Plugin transfers | `POST /api/plugins/transfer` asks for a one-time link; `GET` (download) or `POST` (upload) `/api/plugins/transfer/<token>` streams the file between the browser and a plugin's HTTP API or command (`docs/api/plugins.md`, "Large transfers") |
+| Activity log | `audit.list` / `plugins.audit.list` (answered by the daemon, which owns `/var/lib/ervisio/audit`), `GET /api/audit/export?format=csv|json` (`docs/api/plugins.md`, "Activity log") |
 | Plugin assets | `GET /plugins/<id>/<file>` (only plugins the user may use) |
 | Plugin frame | `GET /plugin-frame/<id>`: host page of a plugin's sandboxed iframe (`docs/api/plugins.md`, "Isolation") |
 

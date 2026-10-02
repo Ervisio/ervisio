@@ -13,10 +13,13 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/ervisio/ervisio/server/internal/account"
+	"github.com/ervisio/ervisio/server/internal/audit"
+	"github.com/ervisio/ervisio/server/internal/brand"
 	"github.com/ervisio/ervisio/server/internal/config"
 	"github.com/ervisio/ervisio/server/internal/sshauth"
 )
@@ -50,8 +53,17 @@ type Options struct {
 	// DevAuthorizedKeys (dev only) replaces the authorized_keys files for
 	// SSH-key sign-in, so the flow can be tried without touching ~/.ssh.
 	DevAuthorizedKeys string
-	Logger            *log.Logger
+	// StateDir keeps the daemon's state; the activity log is in its audit
+	// folder ("" = brand.StateDir).
+	StateDir string
+	Logger   *log.Logger
 }
+
+// configAudit gives the activity log the live configuration.
+type configAudit struct{ h *configHolder }
+
+func (c configAudit) AuditEnabled() bool      { return c.h.get().Audit.Enabled }
+func (c configAudit) AuditRetentionDays() int { return c.h.get().Audit.RetentionDays }
 
 // Server is the daemon.
 type Server struct {
@@ -60,6 +72,9 @@ type Server struct {
 	cfg      *configHolder
 	sessions *store
 	limiter  *limiter
+	// audit is the activity log; transfers the one-time plugin transfers.
+	audit     *audit.Log
+	transfers *transferStore
 	// challenges holds outstanding SSH-key sign-in nonces.
 	challenges *sshauth.Store
 	pamSem     chan struct{}
@@ -117,6 +132,12 @@ func New(opts Options) (*Server, error) {
 		cancel:     cancel,
 	}
 	s.checker.keyAuth = s.keyAuthorized
+	stateDir := opts.StateDir
+	if stateDir == "" {
+		stateDir = brand.StateDir
+	}
+	s.audit = audit.New(filepath.Join(stateDir, "audit"), configAudit{holder})
+	s.transfers = newTransferStore()
 	if opts.Dev {
 		if s.devUser, err = account.Current(); err != nil {
 			cancel()
@@ -164,6 +185,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/auth/lock", s.authed(s.csrfS(s.handleLock)))
 	mux.HandleFunc("POST /api/rpc", s.authed(s.csrfS(s.handleRPC)))
 	mux.HandleFunc("GET /api/ws", s.authed(s.handleWS))
+	mux.HandleFunc("POST /api/plugins/transfer", s.authed(s.csrfS(s.handleTransferStart)))
+	mux.HandleFunc("GET /api/plugins/transfer/{token}", s.authed(s.handleTransfer))
+	mux.HandleFunc("POST /api/plugins/transfer/{token}", s.authed(s.csrfS(s.handleTransfer)))
+	mux.HandleFunc("GET /api/audit/export", s.authed(s.handleAuditExport))
 	mux.HandleFunc("GET /api/files/download", s.authed(s.handleDownload))
 	mux.HandleFunc("POST /api/files/upload", s.authed(s.csrfS(s.handleUpload)))
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
@@ -240,6 +265,11 @@ func (s *Server) Run(ctx context.Context) error {
 	var redirect *http.Server
 
 	go s.janitor(ctx)
+	go s.audit.Prune()
+	// Background work (jobs, webhooks) records to the same log through audit.Record.
+	s.audit.Errorf = s.log.Printf
+	audit.SetDefault(s.audit)
+	defer audit.ClearDefault(s.audit)
 
 	errCh := make(chan error, 2)
 	if s.opts.Dev {
@@ -312,6 +342,7 @@ func (s *Server) janitor(ctx context.Context) {
 			s.sessions.expire(time.Now(), cfg.Session.Timeout.Duration, cfg.Session.AdminUnlock.Duration)
 			s.limiter.gc()
 			s.challenges.Prune()
+			s.transfers.gc()
 			go s.revalidateAll(time.Now(), revalidateEvery)
 		}
 	}

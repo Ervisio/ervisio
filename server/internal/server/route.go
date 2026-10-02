@@ -132,13 +132,20 @@ type rpcRequest struct {
 	Admin  bool            `json:"admin"`
 }
 
-// MaxRPCBody bounds /api/rpc request bodies.
-const MaxRPCBody = 1 << 20
+// MaxRPCBody bounds /api/rpc request bodies. It carries a plugins.http body of
+// up to 8 MiB (the default maxBody) as base64 (11.2 MiB), and stays under the
+// 16 MiB protocol line to the bridge. Larger bodies use plugins.upload.
+const MaxRPCBody = 12 << 20
 
 func (s *Server) handleRPC(w http.ResponseWriter, r *http.Request, sess *Session) {
 	var req rpcRequest
 	if e := decodeJSON(w, r, MaxRPCBody, &req); e != nil {
 		writeError(w, e)
+		return
+	}
+	// The activity log is read by the daemon itself (it is root's).
+	if req.Method == "audit.list" || req.Method == "plugins.audit.list" {
+		s.handleAuditList(w, sess, req.Method, req.Params)
 		return
 	}
 	p, isAdmin, e := s.route(r.Context(), sess, req.Method, req.Admin)
@@ -147,7 +154,11 @@ func (s *Server) handleRPC(w http.ResponseWriter, r *http.Request, sess *Session
 		return
 	}
 	defer sess.hold(p, isAdmin)()
+	rec := s.auditBegin(sess, s.realClientIP(r), req.Method, req.Params, isAdmin)
 	res, err := p.Call(r.Context(), req.Method, req.Params)
+	if err == nil || r.Context().Err() == nil {
+		rec.callDone(res, err)
+	}
 	if err != nil {
 		if r.Context().Err() != nil {
 			return // client went away

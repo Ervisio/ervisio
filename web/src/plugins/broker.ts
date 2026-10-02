@@ -3,7 +3,7 @@
  * Pure (no imports with side effects) so it can be unit-tested with `node --test` (web/tests/broker.test.ts).
  *
  * The daemon enforces the same rules again (plugins.exec / plugins.execStream / plugins.pty / plugins.http /
- * plugins.httpStream / plugins.readFile / plugins.writeFile / plugins.listDir / plugins.mkdir / plugins.remove
+ * plugins.httpStream / plugins.download / plugins.upload / plugins.audit.list / plugins.readFile / plugins.writeFile / plugins.listDir / plugins.mkdir / plugins.remove
  * check the manifest, the signature policy and visibleTo), so this is the first of two gates, never the only
  * one. What a plugin can never reach through the broker: any other RPC method, raw streams, admin rights for
  * a command, HTTP API or folder not declared `admin`, files outside `capabilities.files`, sockets other than
@@ -28,6 +28,8 @@ export interface BrokerHTTP extends AdminLevel {
   socket?: string;
   headers?: string[];
   rules?: { methods: string[]; path: string }[];
+  /** Largest file plugins.upload may send (default 20 GiB). */
+  maxUpload?: number;
 }
 
 /** A capabilities.files entry: a path (SDK v2) or {path, admin, adminUnlessGroup, create} (v3). */
@@ -53,6 +55,10 @@ export interface BrokerUser {
 
 export type Plan =
   | { kind: 'call'; method: string; params: Record<string, unknown>; admin: boolean }
+  /** A large transfer: the host asks the daemon for a one-time URL (POST /api/plugins/transfer) with `body`. */
+  | { kind: 'transfer'; transfer: 'download' | 'upload'; body: Record<string, unknown>; admin: boolean; size?: number }
+  /** sdk.saveFile: the app saves data the plugin holds in memory as a browser download. */
+  | { kind: 'save'; filename: string; mime: string; data: Blob | Uint8Array | string; size: number }
   | { kind: 'stream'; method: string; params: Record<string, unknown>; admin: boolean }
   | { kind: 'asset'; path: string }
   | { kind: 'toast'; tone: 'ok' | 'err' | 'info'; title: string; detail?: string }
@@ -67,7 +73,12 @@ const MAX_WRITE = 4 << 20;
 const MAX_HTTP_PATH = 2048;
 const MAX_HTTP_QUERY = 8 << 10;
 const MAX_HTTP_HEADERS = 32;
-const MAX_HTTP_BODY = 64 << 20;
+// A request body travels inside one JSON message (/api/rpc, or the WebSocket frame that opens a stream), which the
+// daemon accepts up to 12 MiB: 8 MiB of bytes is 11.2 MiB as base64. Larger bodies are sent with plugins.upload.
+const MAX_HTTP_BODY = 8 << 20;
+const TEXT_BODY_INLINE = 256 << 10;
+const TOO_BIG = 'The request body is larger than 8 MiB. Send large bodies with sdk.api.upload.';
+const DEFAULT_MAX_UPLOAD = 20 * 2 ** 30;
 const HTTP_METHODS = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'];
 
 const deny = (message: string, code: 'forbidden' | 'invalid' = 'forbidden'): Plan => ({ kind: 'deny', code, message });
@@ -217,17 +228,151 @@ function httpRequest(m: BrokerManifest, req: Record<string, unknown>, u: BrokerU
   if (entries.length) params.headers = headers;
   const body = req.body;
   if (body instanceof Uint8Array) {
-    if (body.length > MAX_HTTP_BODY) return deny('The request body is too large.', 'invalid');
+    if (body.length > MAX_HTTP_BODY) return deny(TOO_BIG, 'invalid');
     params.body = bytesToB64(body);
     params.b64 = true;
   } else if (typeof body === 'string') {
-    if (body.length > MAX_HTTP_BODY) return deny('The request body is too large.', 'invalid');
-    params.body = body;
+    if (body.length > MAX_HTTP_BODY) return deny(TOO_BIG, 'invalid');
+    if (body.length > TEXT_BODY_INLINE) {
+      // JSON escaping can multiply a long text: send it as base64 so the message size is known.
+      const bytes = new TextEncoder().encode(body);
+      if (bytes.length > MAX_HTTP_BODY) return deny(TOO_BIG, 'invalid');
+      params.body = bytesToB64(bytes);
+      params.b64 = true;
+    } else params.body = body;
   } else if (body !== undefined && body !== null) {
     return deny('The body must be a string or a Uint8Array.', 'invalid');
   }
   if (req.json === true) params.json = true;
   return { params, admin: needsAdmin(api, u) };
+}
+
+const MAX_FILENAME = 255;
+const MAX_AUDIT_LIMIT = 1000;
+
+/** A request for plugins.download / plugins.upload: an HTTP request without a body. */
+function transferHttp(m: BrokerManifest, req: unknown, u: BrokerUser, methods: string[], what: string): { params: Record<string, unknown>; admin: boolean; api: BrokerHTTP } | Plan {
+  if (!req || typeof req !== 'object') return deny('Give an HTTP request.', 'invalid');
+  const r = req as Record<string, unknown>;
+  if (typeof r.method !== 'string' || !methods.includes(r.method)) return deny(`A ${what} uses ${methods.join(' or ')}, not ${JSON.stringify(r.method)}.`, 'invalid');
+  if (r.body !== undefined && r.body !== null) return deny(`A ${what} takes no body.`, 'invalid');
+  const x = httpRequest(m, { ...r, body: undefined, json: undefined }, u);
+  if ('kind' in x) return x;
+  const api = (m.capabilities?.http ?? []).find((h) => h.name === r.name)!;
+  return { ...x, api };
+}
+
+/** Decision for plugins.download(name, req, filename): GET of an HTTP API, or the output of a declared command. */
+export function authorizeDownload(m: BrokerManifest, a: Record<string, unknown>, u: BrokerUser): Plan {
+  const filename = a.filename === undefined ? 'download' : str(a.filename, MAX_FILENAME);
+  if (!filename) return deny('The file name is not valid.', 'invalid');
+  if (typeof a.command === 'string') {
+    const c = command(m, a.command);
+    if (!c) return deny(`${m.id} does not declare a command ${JSON.stringify(a.command)}.`);
+    if (c.pty) return deny(`${c.name} is a terminal command: it cannot be downloaded.`, 'invalid');
+    const list = argList(a.args);
+    if (!list) return deny('Command arguments must be a list of at most 16 strings.', 'invalid');
+    return { kind: 'transfer', transfer: 'download', body: { kind: 'download', plugin: m.id, command: c.name, args: list, filename, admin: needsAdmin(c, u) }, admin: needsAdmin(c, u) };
+  }
+  const x = transferHttp(m, a.req, u, ['GET'], 'download');
+  if ('kind' in x) return x;
+  const { name, method, path, query, headers } = x.params as { name: string; method: string; path: string; query?: string; headers?: Record<string, string> };
+  return { kind: 'transfer', transfer: 'download', body: { kind: 'download', plugin: m.id, name, method, path, query, headers, filename, admin: x.admin }, admin: x.admin };
+}
+
+/** Decision for plugins.upload(name, req, file): POST or PUT of `size` bytes, at most the API's maxUpload. */
+export function authorizeUpload(m: BrokerManifest, req: unknown, size: unknown, u: BrokerUser, stream = false): Plan {
+  if (typeof size !== 'number' || !Number.isSafeInteger(size) || size < 0) return deny('Give a file (a File or Blob).', 'invalid');
+  const x = transferHttp(m, req, u, ['POST', 'PUT'], 'upload');
+  if ('kind' in x) return x;
+  const max = x.api.maxUpload ? x.api.maxUpload : DEFAULT_MAX_UPLOAD;
+  if (size > max) return deny(`The file is larger than the ${max} bytes ${m.id} may upload to ${x.api.name}.`, 'invalid');
+  const { name, method, path, query, headers } = x.params as { name: string; method: string; path: string; query?: string; headers?: Record<string, string> };
+  return { kind: 'transfer', transfer: 'upload', body: { kind: 'upload', plugin: m.id, name, method, path, query, headers, size, ...(stream ? { stream: true } : {}), admin: x.admin }, admin: x.admin, size };
+}
+
+/** Decision for plugins.audit.list: the plugin's own entries only. */
+function authorizeAuditList(m: BrokerManifest, a: Record<string, unknown>): Plan {
+  const params: Record<string, unknown> = { plugin: m.id };
+  for (const k of ['user', 'action', 'text', 'cursor'] as const) {
+    if (a[k] === undefined || a[k] === null || a[k] === '') continue;
+    const v = str(a[k], 256);
+    if (v === null) return deny(`${k} must be a short string.`, 'invalid');
+    params[k] = v;
+  }
+  for (const k of ['since', 'until'] as const) {
+    if (a[k] === undefined || a[k] === null || a[k] === '') continue;
+    const v = a[k];
+    if (typeof v === 'number' && Number.isFinite(v)) params[k] = v;
+    else if (typeof v === 'string' && v.length <= 40) params[k] = v;
+    else return deny(`${k} must be a time (milliseconds or ISO 8601).`, 'invalid');
+  }
+  if (a.limit !== undefined) {
+    if (!Number.isInteger(a.limit) || (a.limit as number) < 1 || (a.limit as number) > MAX_AUDIT_LIMIT) return deny(`limit must be between 1 and ${MAX_AUDIT_LIMIT}.`, 'invalid');
+    params.limit = a.limit;
+  }
+  return { kind: 'call', method: 'plugins.audit.list', params, admin: false };
+}
+
+/** Largest file sdk.saveFile may save: it is held in memory twice (the frame's copy and the app's Blob). */
+export const MAX_SAVE = 64 << 20;
+
+/**
+ * A file name safe to offer to the browser, as the daemon cleans download names (server/internal/server/transfer.go):
+ * no path, control or bidi characters, no characters that Windows or shells treat specially, no leading dots, at most
+ * 200 bytes; "download" when nothing is left.
+ */
+export function sanitizeFilename(name: string): string {
+  let n = name.replace(/\p{Cc}|[\u2028\u2029\u202a-\u202e\u2066-\u2069]/gu, '_');
+  n = n.slice(Math.max(n.lastIndexOf('/'), n.lastIndexOf('\\')) + 1);
+  n = n.replace(/[<>:"/\\|?*;%`$]/g, '_').trim().replace(/^\.+/, '').replace(/[. ]+$/, '');
+  const enc = new TextEncoder();
+  while (enc.encode(n).length > 200) n = Array.from(n).slice(0, -1).join('');
+  return n || 'download';
+}
+
+/** A MIME type, or the generic one. */
+const MIME_RE = /^[a-zA-Z0-9][a-zA-Z0-9!#$&^_.+-]{0,60}\/[a-zA-Z0-9][a-zA-Z0-9!#$&^_.+-]{0,60}$/;
+
+/** Decision for sdk.saveFile(filename, data, mime?). */
+export function authorizeSave(a: Record<string, unknown>): Plan {
+  if (typeof a.filename !== 'string' || !a.filename || a.filename.length > 1024) return deny('Give a file name.', 'invalid');
+  const d = a.data;
+  let size: number;
+  if (typeof d === 'string') size = new TextEncoder().encode(d).length;
+  else if (d instanceof Uint8Array) size = d.length;
+  else if (typeof Blob !== 'undefined' && d instanceof Blob) size = d.size;
+  else return deny('The data must be a string, a Uint8Array or a Blob.', 'invalid');
+  if (size > MAX_SAVE) return deny(`The file is larger than ${MAX_SAVE >> 20} MiB. Use sdk.api.download to stream a large file from a service.`, 'invalid');
+  let mime = 'application/octet-stream';
+  if (a.mime !== undefined && a.mime !== null && a.mime !== '') {
+    if (typeof a.mime !== 'string' || !MIME_RE.test(a.mime)) return deny('The MIME type is not valid.', 'invalid');
+    mime = a.mime;
+  }
+  return { kind: 'save', filename: sanitizeFilename(a.filename), mime, data: d, size };
+}
+
+/**
+ * Rate limit of sdk.saveFile for one frame: at most `count` files and `bytes` bytes in any `windowMs`. A plugin
+ * does not need a user gesture to start a download, so this keeps it from flooding the browser with files.
+ */
+export class SaveLimiter {
+  private log: { at: number; size: number }[] = [];
+  private count: number;
+  private windowMs: number;
+  private bytes: number;
+  constructor(count = 10, windowMs = 30_000, bytes = 256 << 20) {
+    this.count = count;
+    this.windowMs = windowMs;
+    this.bytes = bytes;
+  }
+  /** Records the file and returns true when it may be saved now. */
+  allow(size: number, now = Date.now()): boolean {
+    this.log = this.log.filter((e) => now - e.at < this.windowMs);
+    if (this.log.length >= this.count || this.log.reduce((n, e) => n + e.size, 0) + size > this.bytes) return false;
+    this.log.push({ at: now, size });
+    return true;
+  }
 }
 
 /** A relative asset path inside the plugin folder. */
@@ -281,6 +426,12 @@ export function authorize(m: BrokerManifest, op: FrameOp | string, args: Record<
       if ('kind' in r) return r;
       return { kind: 'call', method: 'plugins.http', params: r.params, admin: r.admin };
     }
+    case 'download':
+      return authorizeDownload(m, a, u);
+    case 'saveFile':
+      return authorizeSave(a);
+    case 'auditList':
+      return authorizeAuditList(m, a);
     case 'asset':
       if (!validAsset(a.path)) return deny('Give a relative path inside the plugin folder.', 'invalid');
       return { kind: 'asset', path: a.path };

@@ -7,6 +7,7 @@ import { useTheme } from '../../theme';
 import { BrandLockup, Button, Icon, Input, Segmented, Select, Switch, toast, type HueId, type IconName } from '../../ui';
 import { RefreshSelect } from '../../lib/RefreshSelect';
 import { REFRESH_KEY } from '../../lib/refresh';
+import { ActivityLog } from './ActivityLog';
 import { ColourBlock, ThemeGrid } from './Appearance';
 import { HostsBlock, type HostEntry } from './Hosts';
 import { NameList } from './NameList';
@@ -53,6 +54,8 @@ export default function SettingsPage() {
   const save = usePrefSave();
   const loc = useLocation();
   const isAdmin = !!session && (session.isAdmin || session.canSudo || !!session.isRoot);
+  // What the daemon shows in the activity log: everyone's entries to root and to an unlocked administrator.
+  const canSeeAll = !!session && (!!session.isRoot || isUnlocked);
   const server = useServerConfig(isAdmin);
   // A packaged install (.deb, .rpm, AUR) is updated by its package manager: no automatic install here.
   const [managedBy, setManagedBy] = useState('');
@@ -163,6 +166,27 @@ export default function SettingsPage() {
         { id: 'recentusers', title: t('browser.recent.title'), desc: t('browser.recent.desc'), words: 'sign-in login accounts names privacy shared', control: <Switch aria-label={t('browser.recent.title')} checked={recentOn} onChange={setRecent} /> },
       ],
     },
+    {
+      id: 'activity', part: 'you', icon: 'clock', hue: 'log', title: t('groups.activity'),
+      rows: [
+        {
+          id: 'activitylog', title: t('activity.title'), desc: t('activity.desc'), words: 'audit history who did what log export csv json plugins sign-in cronologia attivita',
+          block: <ActivityLog canSeeAll={canSeeAll} canUnlock={!!session?.canSudo} />,
+        },
+        ...(isAdmin
+          ? [
+              {
+                id: 'auditon', title: t('activity.on.title'), desc: t('activity.on.desc'), cfgKey: 'audit.enabled = ' + String(server.get('audit.enabled', true)),
+                control: <Switch aria-label={t('activity.on.title')} disabled={srvDisabled} checked={server.get('audit.enabled', true)} onChange={(v) => void sv('audit.enabled', v, t('activity.on.title'))} />,
+              },
+              {
+                id: 'auditkeep', title: t('activity.keep.title'), desc: t('activity.keep.desc'), cfgKey: `audit.retention_days = ${server.get('audit.retention_days', 90)}`, words: 'retention days delete old',
+                control: <Select compact aria-label={t('activity.keep.title')} disabled={srvDisabled} value={String(server.get('audit.retention_days', 90))} options={withCurrent(['30', '90', '180', '365', '0'].map((n) => ({ value: n, label: n === '0' ? t('activity.keep.forever') : t('activity.keep.days', { count: Number(n) }) })), String(server.get('audit.retention_days', 90)))} onChange={(v) => void sv('audit.retention_days', Number(v), t('activity.keep.title'))} />,
+              },
+            ]
+          : []),
+      ],
+    },
   ];
 
   const serverTop = (
@@ -191,6 +215,7 @@ export default function SettingsPage() {
           { id: 'showip', title: t('signin.showIp'), desc: t('signin.showIpDesc'), cfgKey: 'login.show_ip = ' + String(server.get('login.show_ip', true)), control: <Switch aria-label={t('signin.showIp')} disabled={srvDisabled} checked={server.get('login.show_ip', true)} onChange={(v) => void sv('login.show_ip', v, t('signin.showIp'))} /> },
           { id: 'timeout', title: t('signin.timeout'), cfgKey: `session.timeout = "${server.get('session.timeout', '12h')}"`, control: <Select compact aria-label={t('signin.timeout')} disabled={srvDisabled} value={normDur(server.get('session.timeout', '12h'))} options={withCurrent(durOptions, server.get('session.timeout', '12h'))} onChange={(v) => void sv('session.timeout', toGoDur(v), t('signin.timeout'))} /> },
           { id: 'unlock', title: t('signin.unlock'), desc: t('signin.unlockDesc'), cfgKey: `session.admin_unlock = "${server.get('session.admin_unlock', '5m')}"`, control: <Select compact aria-label={t('signin.unlock')} disabled={srvDisabled} value={server.get('session.admin_unlock', '5m')} options={withCurrent(unlockOptions, server.get('session.admin_unlock', '5m'))} onChange={(v) => void sv('session.admin_unlock', v, t('signin.unlock'))} /> },
+          { id: 'activitylink', title: t('signin.activity'), desc: t('signin.activityDesc'), words: 'audit history who did what', control: <Button icon="clock" onClick={() => go('activity')}>{t('signin.activityOpen')}</Button> },
           { id: 'failures', title: t('signin.failures'), desc: t('signin.failuresDesc'), cfgKey: `login.max_failures = ${server.get('login.max_failures', 5)}`, control: <Select compact aria-label={t('signin.failures')} disabled={srvDisabled} value={String(server.get('login.max_failures', 5))} options={withCurrent(['3', '5', '10', '20'].map((n) => ({ value: n, label: t('signin.attempts', { count: Number(n) }) })), String(server.get('login.max_failures', 5)))} onChange={(v) => void sv('login.max_failures', Number(v), t('signin.failures'))} /> },
         ],
       },

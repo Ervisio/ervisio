@@ -16,7 +16,7 @@ export interface PluginManifest {
   location?: string;
   capabilities?: {
     commands?: { name: string; admin?: boolean; adminUnlessGroup?: string; args?: unknown[]; pty?: boolean }[];
-    http?: { name: string; socket: string; admin?: boolean; adminUnlessGroup?: string; headers?: string[]; rules?: { methods: string[]; path: string }[]; maxBody?: number; timeoutSec?: number }[];
+    http?: { name: string; socket: string; admin?: boolean; adminUnlessGroup?: string; headers?: string[]; rules?: { methods: string[]; path: string }[]; maxBody?: number; maxUpload?: number; timeoutSec?: number }[];
     /** A path (SDK v2) or {path, admin, adminUnlessGroup, create} (SDK v3). */
     files?: { read?: PluginFolder[]; write?: PluginFolder[] };
     sockets?: string[];
@@ -89,6 +89,58 @@ export interface HttpResponse {
   bytes(): Uint8Array;
 }
 
+export interface UploadOptions {
+  onProgress?(p: { loaded: number; total: number }): void;
+  onResponseStart?(status: number, headers: Record<string, string>): void;
+  onResponseData?(chunk: Uint8Array): void;
+}
+
+export interface DownloadStarted {
+  /** The name the browser saves the file as (cleaned). */
+  filename: string;
+  /** Bytes, when the service sent a Content-Length. */
+  size?: number;
+  status?: number;
+}
+
+export interface AuditQuery {
+  user?: string;
+  action?: string;
+  /** Substring of the target or message. */
+  text?: string;
+  /** Milliseconds since the epoch, or an ISO 8601 time. */
+  since?: number | string;
+  until?: number | string;
+  /** 1 to 1000 (default 100). */
+  limit?: number;
+  /** `next` of the previous page. */
+  cursor?: string;
+}
+
+export interface AuditEntry {
+  time: string;
+  user: string;
+  ip?: string;
+  source: 'plugin' | 'core';
+  plugin?: string;
+  /** command, pty, http, upload, download, file.write, file.mkdir, file.remove (plugins); login, settings... (console). */
+  action: string;
+  /** The HTTP API a request went to. */
+  via?: string;
+  /** "METHOD /path?query" or "command arg arg": secrets are removed. */
+  target?: string;
+  result: 'ok' | 'failed' | 'denied' | 'error';
+  /** Exit code or HTTP status. */
+  code?: number;
+  bytes?: number;
+  admin?: boolean;
+  detail?: string;
+  /** The environment the call was for, when it was not this machine. */
+  env?: string;
+  /** "via <server> by <user>" when a paired Ervisio server proxied the call. */
+  origin?: string;
+}
+
 export type PluginViewDef<S = PluginSDK> = ComponentType<{ sdk: S }> | { render(container: HTMLElement, sdk: S): void | (() => void) };
 
 export interface PluginSDK {
@@ -116,12 +168,45 @@ export interface PluginSDK {
       req: HttpRequestOptions,
       h: { onStart?(status: number, headers: Record<string, string>): void; onData(chunk: Uint8Array): void; onEnd(): void; onError(e: PluginError): void },
     ): { close(): void };
+    /**
+     * SDK 0.2: the browser saves the response of a GET to an HTTP API as a file. The bytes stream from the service to
+     * the disk (no memory, no size limit); resolves when the download starts, rejects when the service refuses.
+     * The file name is cleaned by the daemon.
+     */
+    download(name: string, req: HttpRequestOptions, filename?: string): Promise<DownloadStarted>;
+    /** SDK 0.2: same for the standard output of a command declared in the manifest (not pty). */
+    downloadCommand(command: string, args: string[], filename?: string): Promise<DownloadStarted>;
+    /**
+     * SDK 0.2: sends a File or Blob as the body of a POST or PUT to an HTTP API, streamed with progress, up to the API's
+     * `maxUpload` (default 20 GiB). The result is the service's answer like `http` (a non-2xx status is a normal result;
+     * `truncated` when the body was cut at maxBody). `cancel()` stops it and rejects with code "cancelled".
+     * Give `onResponseData` (and/or `onResponseStart`) to receive the response as it arrives, for a service that
+     * answers with progress while it reads the file (a Docker build): the result's body is then empty.
+     */
+    upload(
+      name: string,
+      req: Omit<HttpRequestOptions, 'body'>,
+      file: Blob,
+      opts?: UploadOptions | ((p: { loaded: number; total: number }) => void),
+    ): Promise<HttpResponse & { truncated: boolean }> & { cancel(): void };
+    /**
+     * SDK 0.2: saves data the plugin already holds (a string, bytes or a Blob) as a browser download. The app does it:
+     * a sandboxed frame cannot download or open a blob: URL. At most 64 MiB; the file name is cleaned; no user gesture is
+     * needed, but a frame may save at most 10 files and 256 MiB in 30 seconds. Resolves once the download starts.
+     */
+    saveFile(filename: string, data: string | Uint8Array | Blob, mime?: string): Promise<{ filename: string; size: number }>;
     /** SDK v3: runs a command declared `pty: true` in a terminal. Closing kills it. */
     pty(
       command: string,
       args: string[],
       o: { cols: number; rows: number; onData(chunk: Uint8Array): void; onExit(code: number): void; onError(e: PluginError): void },
     ): { write(data: string | Uint8Array): void; resize(cols: number, rows: number): void; close(): void };
+  };
+  /** Same as `api.saveFile`. */
+  saveFile(filename: string, data: string | Uint8Array | Blob, mime?: string): Promise<{ filename: string; size: number }>;
+  /** SDK 0.2: the activity log, limited to this plugin's entries. Everyone sees their own; administrators see all users. */
+  audit: {
+    list(q?: AuditQuery): Promise<{ entries: AuditEntry[]; next: string; enabled: boolean }>;
   };
   /** Only inside capabilities.files (read: read+write folders; write: write folders), with the user's own rights (admin folders: administrator rights when needed). */
   files: {

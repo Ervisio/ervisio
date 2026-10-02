@@ -24,6 +24,8 @@ const (
 	maxHTTPRules     = 256
 	maxHTTPHeaders   = 32
 	maxHTTPBodyLimit = 64 << 20
+	// maxHTTPUploadLimit is the largest maxUpload a manifest may ask for.
+	maxHTTPUploadLimit = int64(1) << 40
 )
 
 var (
@@ -131,6 +133,10 @@ type HTTPAPI struct {
 	Rules   []HTTPRule `json:"rules"`
 	// MaxBody caps request and response bodies (default 8 MiB, max 64 MiB).
 	MaxBody int64 `json:"maxBody,omitempty"`
+	// MaxUpload caps the size of a file sent with plugins.upload (default
+	// 20 GiB, max 1 TiB). Uploads and downloads are streamed, so it does not
+	// depend on MaxBody.
+	MaxUpload int64 `json:"maxUpload,omitempty"`
 	// TimeoutSec bounds plugins.http, and the wait for the response
 	// headers of plugins.httpStream (default 30, max 600).
 	TimeoutSec int `json:"timeoutSec,omitempty"`
@@ -605,6 +611,9 @@ func (h *HTTPAPI) validate() error {
 	}
 	if h.MaxBody < 0 || h.MaxBody > maxHTTPBodyLimit {
 		return fmt.Errorf("maxBody must be between 0 and %d", maxHTTPBodyLimit)
+	}
+	if h.MaxUpload < 0 || h.MaxUpload > maxHTTPUploadLimit {
+		return fmt.Errorf("maxUpload must be between 0 and %d", maxHTTPUploadLimit)
 	}
 	if h.TimeoutSec < 0 || h.TimeoutSec > 600 {
 		return fmt.Errorf("timeoutSec must be between 0 and 600")

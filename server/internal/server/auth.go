@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ervisio/ervisio/server/internal/account"
+	"github.com/ervisio/ervisio/server/internal/audit"
 	"github.com/ervisio/ervisio/server/internal/brand"
 	"github.com/ervisio/ervisio/server/internal/bridge"
 	"github.com/ervisio/ervisio/server/internal/config"
@@ -433,9 +434,11 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 			// client gets the generic answer (no password oracle for
 			// locked or expired accounts); the reason goes to the log.
 			s.log.Printf("login %q from %s refused by the PAM account check: %v", req.User, ip, err)
+			s.auditCore(req.User, ip, "login.failed", "password", audit.Denied, "account refused")
 			writeError(w, errBadCredentials)
 		case errors.Is(err, pam.ErrAuth):
 			s.log.Printf("login %q from %s failed", req.User, ip)
+			s.auditCore(req.User, ip, "login.failed", "password", audit.Denied, "wrong password")
 			writeError(w, errBadCredentials)
 		default:
 			result = attemptNeutral
@@ -484,12 +487,14 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	s.setCookie(w, r, token, maxAge)
 	s.log.Printf("login %q from %s method=password", a.Name, ip)
+	s.auditCore(a.Name, ip, "login", "password", audit.OK, "")
 	writeJSON(w, http.StatusOK, s.info(sess))
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(brand.SessionCookie); err == nil {
 		if sess := s.sessions.get(c.Value); sess != nil {
+			s.auditCore(sess.Account.Name, s.realClientIP(r), "logout", "", audit.OK, "")
 			s.sessions.remove(sess)
 		}
 	}
@@ -555,6 +560,7 @@ func (s *Server) handleUnlock(w http.ResponseWriter, r *http.Request, sess *Sess
 			result = attemptFailed
 		}
 		s.log.Printf("unlock for %q from %s failed: %v", sess.Account.Name, ip, e)
+		s.auditCore(sess.Account.Name, ip, "unlock", "", audit.Denied, string(e.Code))
 		writeError(w, e)
 		return
 	}
@@ -574,6 +580,7 @@ func (s *Server) handleUnlock(w http.ResponseWriter, r *http.Request, sess *Sess
 		go old.Stop()
 	}
 	s.log.Printf("admin rights unlocked for %q from %s", sess.Account.Name, ip)
+	s.auditCore(sess.Account.Name, ip, "unlock", "", audit.OK, "")
 	idle := cfg.Session.AdminUnlock.Duration
 	writeJSON(w, http.StatusOK, map[string]any{
 		"unlockedUntil":   sess.unlockedUntil(idle).UnixMilli(),
@@ -584,6 +591,7 @@ func (s *Server) handleUnlock(w http.ResponseWriter, r *http.Request, sess *Sess
 func (s *Server) handleLock(w http.ResponseWriter, r *http.Request, sess *Session) {
 	sess.lock()
 	s.log.Printf("admin rights locked by %q", sess.Account.Name)
+	s.auditCore(sess.Account.Name, s.realClientIP(r), "lock", "", audit.OK, "")
 	writeJSON(w, http.StatusOK, struct{}{})
 }
 

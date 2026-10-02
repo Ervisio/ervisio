@@ -91,6 +91,8 @@ const cfg: Record<string, unknown> = rd('config', {
   'tls.key': '',
   'updates.channel': 'stable',
   'updates.auto_check': true,
+  'audit.enabled': true,
+  'audit.retention_days': 90,
   'updates.auto_install': false,
   'updates.auto_install_at': '03:30',
 });
@@ -103,6 +105,7 @@ const MOCK_KEYS = [
   { key: 'plugins.allow_unsigned', type: 'bool' }, { key: 'plugins.dev', type: 'bool' },
   { key: 'plugins.catalog_url', type: 'string' }, { key: 'plugins.catalog_key', type: 'string' },
   { key: 'updates.channel', type: 'enum', values: ['stable', 'prerelease'] }, { key: 'updates.auto_check', type: 'bool' },
+  { key: 'audit.enabled', type: 'bool' }, { key: 'audit.retention_days', type: 'int' },
   { key: 'updates.auto_install', type: 'bool' }, { key: 'updates.auto_install_at', type: 'string' },
 ];
 const mockState = () => ({ path: '/etc/ervisio/ervisio.conf', exists: true, values: { ...cfg }, defaults: {}, keys: MOCK_KEYS, warnings: [] });
@@ -145,6 +148,8 @@ export async function mockCall(method: string, params: any, _admin?: boolean): P
       return mockState();
     case 'plugins.list':
       return delay([]);
+    case 'audit.list':
+      return delay({ entries: [], next: '', enabled: true });
     case 'updates.status': {
       // localStorage['ervisio.mock.managedBy'] = '"apt"' shows a packaged install.
       const managedBy = rd('managedBy', '');
