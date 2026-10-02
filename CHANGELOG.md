@@ -16,9 +16,17 @@
 - **Pairing between Ervisio servers.** A one-time token (15 minutes) pairs two servers: calls from one run on the other, as a Linux user chosen at pairing, under that server's rules; either side can revoke at any time.
 - Plugins that declare `capabilities.network.userHosts` can ask for a host outside their list through `sdk.network.request`. An administrator approves one exact host and port; approvals are listed and revocable in Settings › Plugin policy.
 - `ervisiod --envs-dir` and `--tunnel-dir`.
+- **Files over a pairing.** The plugin files calls (`readFile`, `writeFile`, `listDir`, `mkdir`, `remove`; SDK `sdk.files.*(…, { env })`) take an environment of kind Ervisio and run on the paired server, as the paired user, under that server's manifest; administrator folders follow the rule commands already follow (never escalated); writes are in the activity log of both servers. The other environment kinds refuse them.
+- `plugins.envs.list` gives each environment a non-secret display `address`.
+- **Download completion.** `sdk.api.download(…, { onDone })` reports `{ ok, bytes, error? }` when the browser's fetch ends, from a new `GET /api/plugins/transfer/<token>/status` that only the session that started the transfer can read.
+- `sdk.appOrigin` (the console's origin, for webhook URLs), a `timeoutSec` per job command step (up to 6 hours), and `minCore` / `requires: { ervisio }` in plugin manifests and marketplace entries (an older core refuses to install, enable or run such a plugin and says which version it needs).
+- With `--dev-state-dir`, `plugins.loadDev` registrations are kept in that folder, not in `~/.config/ervisio/plugins-dev.json`.
 
 ### Security
 - A job that runs steps as root is approved only in Settings › Plugin jobs (Review and approve), by an administrator whose rights are unlocked in that session. A plugin can no longer approve one when it creates or changes it (`confirmAdmin` is ignored): the instance waits for approval and does not run until then. The approval covers the job's values; new values need a new approval, and a webhook call can no longer change them.
+
+### Fixed
+- Streams through a Portainer agent environment (logs follow, stats, events) were held back by up to 32 KiB inside the tunnel on top of the agent's own 4 KiB buffer; they now pass as the agent sends them. The agent itself still sends in 4 KiB steps (documented in `docs/api/environments.md`).
 
 ### Changed
 - A plugin HTTP request body of up to 8 MiB (the default `maxBody`) now reaches the service through `plugins.http` and `plugins.httpStream`. The limits were 1 MiB for `/api/rpc` and 512 KiB for the WebSocket frame that opens a stream, and a body over the second dropped the connection. They are now 12 MiB for both, a body over 8 MiB is refused with a message that points to `sdk.api.upload`, and writing a 4 MiB file with `plugins.writeFile` works.
