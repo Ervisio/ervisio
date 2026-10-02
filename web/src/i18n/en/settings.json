@@ -207,7 +207,8 @@
     "config": "Configuration file",
     "method": "Signed in with",
     "methodPassword": "Password",
-    "methodKey": "SSH key {fingerprint}"
+    "methodKey": "SSH key {fingerprint}",
+    "formerly": "Called {name} up to version 0.2.0."
   },
   "dur": {
     "1h": "1 hour",

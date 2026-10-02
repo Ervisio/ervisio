@@ -1,0 +1,37 @@
+{
+  "group": "Brand / Logo",
+  "title": "Ervisio logo",
+  "question": "Which logo should Ervisio use?",
+  "kind": "page",
+  "head": [
+    "<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">",
+    "<link href=\"https://fonts.googleapis.com/css2?family=Figtree:wght@400;700;800&family=Marcellus&display=swap\" rel=\"stylesheet\">"
+  ],
+  "variants": [
+    {
+      "id": "a",
+      "label": "Visor",
+      "notes": "A window that is also an eye; the pupil is a terminal cursor. Reads as \"a console that watches\"."
+    },
+    {
+      "id": "b",
+      "label": "Keystone",
+      "notes": "A Roman arch whose keystone is the V: the Latin root, carved. Inscription-style wordmark."
+    },
+    {
+      "id": "c",
+      "label": "Spectrum",
+      "notes": "An eye ringed by the eight section colours: one place that sees every part of the server."
+    },
+    {
+      "id": "d",
+      "label": "Noctua",
+      "notes": "Athena's owl keeping watch at night; the brows meet in a V. Works as a mascot too."
+    }
+  ],
+  "created": "2026-10-02T10:59:01.950Z",
+  "viewports": [
+    "laptop",
+    "mobile"
+  ]
+}

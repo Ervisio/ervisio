@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { recentUsersEnabled, setRecentUsersEnabled, useSession, usePrefs } from '../../api';
-import { Name } from '../../brand';
+import { FormerName, Name } from '../../brand';
 import { LANGUAGES, useI18n, useT, type Lang } from '../../i18n';
 import { useTheme } from '../../theme';
-import { Button, Icon, Input, Segmented, Select, Switch, toast, type HueId, type IconName } from '../../ui';
+import { BrandLockup, Button, Icon, Input, Segmented, Select, Switch, toast, type HueId, type IconName } from '../../ui';
 import { RefreshSelect } from '../../lib/RefreshSelect';
 import { REFRESH_KEY } from '../../lib/refresh';
 import { ColourBlock, ThemeGrid } from './Appearance';
@@ -226,6 +226,7 @@ export default function SettingsPage() {
   groups.push({
     id: 'about', part: 'about', icon: 'info', hue: 'sw', title: t('groups.about'),
     rows: [
+      { id: 'brand', title: Name, words: 'ervisio linuxadmin name logo', block: <div className="st-brand"><BrandLockup size={30} /><small>{t('about.formerly', { name: FormerName })}</small></div> },
       { id: 'version', title: t('updates.title'), words: 'version update upgrade release rollback github', block: <UpdatesBlock isAdmin={isAdmin} /> },
       ...(isAdmin
         ? [

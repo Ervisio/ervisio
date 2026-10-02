@@ -25,6 +25,7 @@
 .lmsg .ui-icon { margin-top: 1px; }
 .lmsg code { font-family: var(--mono); font-size: 12.5px; font-weight: 500; }
 .lb-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 22px; color: var(--ink3); font-size: 12.5px; gap: 12px; }
+.lb-note { margin: 18px 0 0; color: var(--ink2); font-size: 12.5px; }
 .lb-foot button { color: var(--ink2); font-weight: 600; display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 8px; }
 .lb-foot button:hover { background: var(--sunk); color: var(--ink); }
 /* SSH key step */

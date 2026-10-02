@@ -240,3 +240,9 @@
 .ui-page-sub { margin-top: 2px; color: var(--ink2); }
 .ui-page-act { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
 @media (max-width: 859px) { .ui-page { padding: 20px 16px 28px; } .ui-page-act { margin-left: 0; } }
+
+/* Ervisio mark (BrandMark.tsx): fixed brand colours, darker on light themes. */
+:root { --brand-frame: #8B93FF; --brand-cursor: #3DDC97; }
+:root[data-scheme='light'] { --brand-frame: #4B53D6; --brand-cursor: #13A86B; }
+.ui-brandmark { flex: none; display: block; }
+.ui-brandlockup { display: inline-flex; align-items: center; gap: .45em; font-weight: 800; letter-spacing: -.045em; color: var(--ink); line-height: 1; }

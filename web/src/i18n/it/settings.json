@@ -207,7 +207,8 @@
     "config": "File di configurazione",
     "method": "Accesso eseguito con",
     "methodPassword": "Password",
-    "methodKey": "Chiave SSH {fingerprint}"
+    "methodKey": "Chiave SSH {fingerprint}",
+    "formerly": "Si chiamava {name} fino alla versione 0.2.0."
   },
   "dur": {
     "1h": "1 ora",

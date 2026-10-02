@@ -5,7 +5,7 @@ import { SshKeyError, type SshKeyErrorCode } from '../auth/sshkey';
 import { KeyStep, type LoadedKey } from './KeyStep';
 import { useT } from '../i18n';
 import { useTheme } from '../theme';
-import { Button, Checkbox, Icon, IconButton, Input } from '../ui';
+import { Button, Checkbox, Icon, IconButton, Input, BrandLockup } from '../ui';
 import { DistroLogo } from '../shell/DistroLogo';
 import './login.css';
 
@@ -284,8 +284,9 @@ export default function LoginPage() {
               </p>
             )}
           </form>
+          {recent.length > 0 && <p className="lb-note">{t('footnote')}</p>}
           <div className="lb-foot">
-            <span>{recent.length ? t('footnote') : ''}</span>
+            <BrandLockup size={20} />
             <button type="button" onClick={toggleDark}><Icon name={isDark ? 'moon' : 'sun'} size={15} />{t('theme')}</button>
           </div>
         </div>

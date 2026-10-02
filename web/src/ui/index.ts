@@ -8,6 +8,7 @@ export type { InputProps, SelectOption, SelectProps, SegmentedOption } from './F
 export { Badge, Chip, Kbd, Page, Progress, Skeleton, EmptyState, Card, StatCard, hueClass } from './Display';
 export type { Tone, HueId, StatCardProps } from './Display';
 export { Tabs } from './Tabs';
+export { BrandMark, BrandLockup } from './BrandMark';
 export type { TabItem } from './Tabs';
 export { Dialog, ConfirmDialog, UnlockDialog, Sheet, Panel } from './Overlay';
 export type { DialogProps, ConfirmDialogProps, PanelProps } from './Overlay';

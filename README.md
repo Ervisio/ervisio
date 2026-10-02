@@ -1,4 +1,4 @@
-# Ervisio
+<h1><picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/ervisio-dark.png"><img src="docs/brand/ervisio-light.png" alt="Ervisio" width="280"></picture></h1>
 
 A web console for managing a Linux server from the browser, in the spirit of Cockpit. You sign in with your Linux account and get an overview, a terminal, a file manager, logs, services, software updates, user management and a plugin system.
 
