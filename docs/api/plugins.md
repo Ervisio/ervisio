@@ -193,7 +193,7 @@ daemon itself, not by a bridge, because jobs must run while no page is open. The
 fills in the plugin id and refuses undeclared jobs, but the daemon checks everything again. Reference:
 `docs/api/jobs.md` (jobs, instances, webhooks `POST /hooks/<plugin>/<token>`) and `docs/api/notify.md` (channels,
 `plugins.notify`). The SDK exposes them as `sdk.api.jobs` and `sdk.api.notify`; both are absent on consoles older than
-0.6, so a plugin checks `sdk.api.jobs` before using it. The SDK contract version stays 3: the additions are backward
+0.5, so a plugin checks `sdk.api.jobs` before using it. The SDK contract version stays 3: the additions are backward
 compatible.
 
 ## Signing
