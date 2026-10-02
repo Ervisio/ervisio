@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- **The Docker plugin moved to the marketplace.** It is no longer part of Ervisio: releases and packages ship no plugins. Its source is at [Ervisio/plugin-docker](https://github.com/Ervisio/plugin-docker), and it is published, signed by the Ervisio team, through the registry [Ervisio/plugins](https://github.com/Ervisio/plugins). A machine that used it keeps it: on the first start after the update, on a host with a Docker socket where the plugin was not switched off, the daemon installs the marketplace version into `/var/lib/ervisio/plugins` (catalog signature, checksum and plugin signature are all checked; it retries every hour while offline). Until then, Plugins › Installed shows a "Docker moved to the marketplace" card with an Install button.
+- Plugins › Browse reads the marketplace catalog by default (`plugins.catalog_url`, `https://ervisio.github.io/plugins/catalog.json`). A remote catalog must be signed (`catalog.sig`, ed25519, by the team key or `plugins.catalog_key`); an unsigned or tampered one is ignored with a warning. `/etc/ervisio/plugins-catalog.url` still overrides the address, `plugins.catalog_url = ""` turns the remote catalog off. Updates of installed plugins are offered from the remote catalog too.
+- The plugin SDK documentation moved to [Ervisio/plugin-sdk](https://github.com/Ervisio/plugin-sdk), with the TypeScript types, the Vite build preset and a plugin template.
+
+### Added
+- `plugins.catalog_url` and `plugins.catalog_key` settings.
+- `ervisiod --install-plugin ID` installs a plugin from the signed catalog; `ervisiod --skip-moved-plugins` keeps the daemon from adding the Docker plugin by itself.
+- The installer offers the Docker plugin when Docker is installed (`--with-docker-plugin`, `--no-plugins`).
+- `plugin-sign -catalog catalog.json` signs and verifies catalogs.
+
 ## [0.3.0] - 2026-10-02
 
 The first version named Ervisio.

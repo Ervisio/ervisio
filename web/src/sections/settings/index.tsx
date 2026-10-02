@@ -213,6 +213,7 @@ export default function SettingsPage() {
         rows: [
           { id: 'unsigned', title: t('plugpol.unsigned'), desc: t('plugpol.unsignedDesc', { name: Name }), cfgKey: 'plugins.allow_unsigned = ' + String(server.get('plugins.allow_unsigned', false)), control: <Switch aria-label={t('plugpol.unsigned')} disabled={srvDisabled} checked={server.get('plugins.allow_unsigned', false)} onChange={(v) => void sv('plugins.allow_unsigned', v, t('plugpol.unsigned'))} /> },
           { id: 'dev', title: t('plugpol.dev'), desc: t('plugpol.devDesc'), cfgKey: 'plugins.dev = ' + String(server.get('plugins.dev', false)), control: <Switch aria-label={t('plugpol.dev')} disabled={srvDisabled} checked={server.get('plugins.dev', false)} onChange={(v) => void sv('plugins.dev', v, t('plugpol.dev'))} /> },
+          { id: 'catalog', title: t('plugpol.catalog'), desc: t('plugpol.catalogDesc'), cfgKey: `plugins.catalog_url = "${server.get('plugins.catalog_url', '')}"`, control: <CommitInput disabled={srvDisabled} allowEmpty value={server.get('plugins.catalog_url', '')} label={t('plugpol.catalog')} onCommit={(v) => void sv('plugins.catalog_url', v, t('plugpol.catalog'))} /> },
         ],
       },
       {

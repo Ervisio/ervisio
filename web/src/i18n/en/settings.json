@@ -198,7 +198,9 @@
     "unsigned": "Allow community plugins",
     "unsignedDesc": "Plugins not signed by the {name} team.",
     "dev": "Developer mode",
-    "devDesc": "Load plugins from a folder and reload them on save."
+    "devDesc": "Load plugins from a folder and reload them on save.",
+    "catalog": "Marketplace catalog",
+    "catalogDesc": "Where Browse finds plugins. The catalog must be signed by the Ervisio team (or by plugins.catalog_key); leave empty to turn it off."
   },
   "about": {
     "versionDesc": "A web console for Linux servers (formerly LinuxAdmin).",

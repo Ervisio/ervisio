@@ -200,6 +200,8 @@ Options (after `sh -s --` when piping, for example `curl ... | sudo sh -s -- --v
 | `--domain NAME` | the domain Caddy serves Ervisio on (implies `--caddy`; an existing site with that address is pointed to Ervisio) |
 | `--reconfigure` | ask the configuration questions again on an installed system |
 | `--no-enable`, `--no-start` | do not enable at boot, do not start the service |
+| `--with-docker-plugin` | install the Docker plugin from the marketplace (asked when Docker is installed; `--yes` then installs it) |
+| `--no-plugins` | install no plugin, and keep Ervisio from adding the Docker plugin by itself |
 | `--open-firewall` | open the port in ufw or firewalld when one is active (otherwise the script only tells you the command) |
 | `--dry-run` | show what would be done and change nothing |
 | `--yes` | do not ask questions; every answer is the default |
@@ -285,6 +287,8 @@ redirect = true
 [plugins]
 allow_unsigned = false
 dev = false
+# The signed marketplace catalog shown in Plugins › Browse ("" turns it off).
+catalog_url = "https://ervisio.github.io/plugins/catalog.json"
 
 [updates]
 channel = "stable"
@@ -346,11 +350,12 @@ Contributor notes: [server/README.md](server/README.md), [docs/DESIGN-RULES.md](
 
 A plugin is a folder with `manifest.json` and one ES module. The manifest declares pages, widgets, snippets, the commands the plugin may run, and the files and sockets it may touch. Plugin code runs in a sandboxed frame and talks to the app through a small SDK.
 
-- SDK and examples: [web/PLUGIN-SDK.md](web/PLUGIN-SDK.md)
-- Manifest, API and isolation: [docs/api/plugins.md](docs/api/plugins.md)
-- Signing: [docs/PLUGIN-SIGNING.md](docs/PLUGIN-SIGNING.md)
+Ervisio ships no plugins. They come from the marketplace in Plugins › Browse: a catalog built by the registry [Ervisio/plugins](https://github.com/Ervisio/plugins), where every plugin is reviewed and then signed with the Ervisio team key. Ervisio checks the signature of the catalog and of every plugin it installs.
 
-The Docker plugin in `plugins/docker` is a working example.
+- The Docker plugin (containers, compose stacks, images, volumes, logs, shell, templates, auto-update): [Ervisio/plugin-docker](https://github.com/Ervisio/plugin-docker). Up to 0.3.0 it was part of Ervisio; on a machine that used it, Ervisio installs the marketplace version by itself after the update, and `install.sh` offers it when Docker is installed (`--with-docker-plugin`, `--no-plugins`).
+- Write a plugin: [Ervisio/plugin-sdk](https://github.com/Ervisio/plugin-sdk) (types, Vite preset, template, guide), then publish it through the registry ([CONTRIBUTING](https://github.com/Ervisio/plugins/blob/main/CONTRIBUTING.md)).
+- Manifest, API, isolation and the marketplace: [docs/api/plugins.md](docs/api/plugins.md)
+- Signing: [docs/PLUGIN-SIGNING.md](docs/PLUGIN-SIGNING.md)
 
 ## Project layout
 
@@ -361,7 +366,7 @@ server/            Go module: daemon, bridge, modules for each section
   tools/           devclient
 web/               React and TypeScript app (Vite)
   src/sections/    one folder per section
-plugins/           first-party plugins and the plugin catalog
+plugins/           dev folder for plugins under --dev (plugins live in their own repositories)
 packaging/         systemd unit, PAM files, install scripts, .deb/.rpm (nfpm) and AUR packaging
 docs/              architecture, API notes, design rules, security review
 ```

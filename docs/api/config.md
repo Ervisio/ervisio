@@ -23,6 +23,8 @@ after a change; keys marked `restart` need a daemon restart.
 | `tls.cert`, `tls.key` | absolute path | `""` | for `custom`; restart |
 | `plugins.allow_unsigned` | bool | `false` | unsigned plugins are blocked (dev folders still run in developer mode, marked "Unsigned, dev") |
 | `plugins.dev` | bool | `false` | |
+| `plugins.catalog_url` | string, `""` or an `https://` URL | `https://ervisio.github.io/plugins/catalog.json` | the marketplace catalog of Plugins › Browse; its signature is at the same address with `.sig` instead of `.json`, and an unsigned catalog is ignored (`docs/api/plugins.md`); `""` = no remote catalog |
+| `plugins.catalog_key` | string, `""` or a base64 ed25519 public key | `""` | an extra key trusted for catalog signatures (a private catalog); plugins still need the team signature |
 | `updates.channel` | enum `stable`/`prerelease` | `stable` | which GitHub releases are offered (`docs/RELEASING.md`) |
 | `updates.auto_check` | bool | `true` | the daemon checks every 6 h; admins get a bell notice |
 | `updates.auto_install` | bool | `false` | the daemon installs a newer version every day at `auto_install_at` |
@@ -92,6 +94,7 @@ service and puts the previous file back when it fails.
  "values":{"listen":"0.0.0.0:9090","allow_root":false,"login.show_ip":true,"login.max_failures":5,"auth.ssh_keys":true,"auth.allow_users":[],"auth.allow_groups":[],"auth.admins_only":false,
            "session.timeout":"12h","session.admin_unlock":"5m","tls.mode":"self-signed","tls.redirect":true,
            "tls.cert":"","tls.key":"","plugins.allow_unsigned":false,"plugins.dev":false,
+           "plugins.catalog_url":"https://ervisio.github.io/plugins/catalog.json","plugins.catalog_key":"",
            "updates.channel":"stable","updates.auto_check":true,"updates.auto_install":false,"updates.auto_install_at":"03:30"},
  "defaults":{…same shape…},
  "keys":[{"key":"listen","type":"string","restart":true},{"key":"tls.mode","type":"enum","values":["self-signed","letsencrypt","custom"],"restart":true},…],

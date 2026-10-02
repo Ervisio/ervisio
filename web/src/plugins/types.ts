@@ -55,7 +55,8 @@ export interface PluginSnippet {
 }
 
 /* ------------------------------------------------------------------------------------------------
- * The SDK object a plugin module receives inside its frame (contract version 3). See web/PLUGIN-SDK.md.
+ * The SDK object a plugin module receives inside its frame (contract version 3). Documented, with TypeScript
+ * types for plugin authors, in https://github.com/Ervisio/plugin-sdk (keep both in step).
  * Kept here as the reference typing for plugin authors; the implementation is web/src/plugins/frame/runtime.tsx.
  * ---------------------------------------------------------------------------------------------- */
 

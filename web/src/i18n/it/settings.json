@@ -198,7 +198,9 @@
     "unsigned": "Consenti i plugin della community",
     "unsignedDesc": "Plugin non firmati dal team di {name}.",
     "dev": "Modalità sviluppatore",
-    "devDesc": "Carica i plugin da una cartella e ricaricali al salvataggio."
+    "devDesc": "Carica i plugin da una cartella e ricaricali al salvataggio.",
+    "catalog": "Catalogo del marketplace",
+    "catalogDesc": "Dove Sfoglia trova i plugin. Il catalogo deve essere firmato dal team di Ervisio (o da plugins.catalog_key); lascia vuoto per disattivarlo."
   },
   "about": {
     "versionDesc": "Una console web per server Linux (in precedenza LinuxAdmin).",

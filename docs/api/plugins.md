@@ -1,7 +1,50 @@
 # plugins.* (plugin management and execution)
 
 Package `server/internal/modules/plugins`. Web side: `web/src/sections/plugins` (the sandboxed frames and the broker are
-in `web/src/plugins`, SDK in `web/PLUGIN-SDK.md`). Error codes follow `docs/ARCHITECTURE.md`.
+in `web/src/plugins`). The SDK for plugin authors (types, build preset, template, guide) is
+[Ervisio/plugin-sdk](https://github.com/Ervisio/plugin-sdk). Error codes follow `docs/ARCHITECTURE.md`.
+
+## Marketplace
+
+Ervisio ships no plugins. They come from the marketplace:
+
+```
+plugin repo (e.g. Ervisio/plugin-docker)      registry Ervisio/plugins                       Ervisio
+  tag vX.Y.Z -> release workflow:               sync (every 6 h, or by hand): PR with the       plugins.catalog:
+  <id>-X.Y.Z.tar.gz (unsigned manifest)  ─────▶  new version and its permission diff  ───▶     catalog.json + catalog.sig
+  + .sha256, no secrets                         maintainers review and merge                    from GitHub Pages, signature
+                                                publish: plugin-sign with the team key,         checked; Install downloads the
+                                                release <id>-X.Y.Z, catalog.json signed,        signed tarball and verifies it
+                                                GitHub Pages                                    again (plugins.install)
+```
+
+* Plugin repositories hold no secrets: the registry polls their releases. The release contract (asset names, one
+  top-level folder `<id>/`, manifest version = tag) is in the SDK's `docs/publishing.md`.
+* Only registry maintainers merge, and every listed plugin, first-party or third-party, is reviewed and then signed by
+  the team key in the registry's CI, so it is `verified` in the catalog. The private key is only in the registry's
+  secret `PLUGIN_SIGNING_KEY` and on the release maintainer's machine (`docs/PLUGIN-SIGNING.md`).
+* The catalog is `https://ervisio.github.io/plugins/catalog.json`, its signature `catalog.sig` next to it.
+
+### Plugins that left the core
+
+The Docker plugin shipped in the packaged location up to 0.3.0, enabled by default; it is now
+[Ervisio/plugin-docker](https://github.com/Ervisio/plugin-docker). After an update the packaged copy is gone (the new
+version folder or package has none), so on start the daemon (root, not in `--dev`) runs `plugins.MigrateMoved`
+(`moved.go`), once per machine:
+
+| Situation | What happens | `/var/lib/ervisio/plugins-moved.json` |
+|---|---|---|
+| A `docker` plugin is present anywhere (installed, dev) | nothing | `installed` |
+| `plugins-state.json` has it switched off | nothing | `skipped` |
+| No Docker socket (`/var/run/docker.sock`, `/run/docker.sock`) | nothing | `not-needed` |
+| Otherwise | installs it from the signed remote catalog into `/var/lib/ervisio/plugins/docker`, as `plugins.install` with the entry's `sha256` and `capabilities` as consent: the catalog signature, the checksum and the plugin signature (team key) are all checked | `installed`, or `pending` on failure (retried every hour) |
+
+Automatic installation is limited to this case because the same plugin, with the same permissions, was already
+installed and enabled on that machine. Everywhere else it is a normal Browse install with the consent dialog. While the
+plugin is missing, the host has Docker and the outcome is not `skipped`, `plugins.catalog` lists it in `moved` and
+Plugins › Installed shows a "moved to the marketplace" card with an Install button. `install.sh` records `skipped` with
+`--no-plugins` (`ervisiod --skip-moved-plugins`) and installs it with `--with-docker-plugin` or when the user says yes
+(`ervisiod --install-plugin docker`).
 
 ## Isolation
 
@@ -45,7 +88,7 @@ when the frame fails, navigates away or is removed.
 
 | Location (`location`) | Folder | Notes |
 |---|---|---|
-| `system` | `/usr/share/ervisio/plugins/<id>` | packaged, removed by the package manager |
+| `system` | `/usr/share/ervisio/plugins/<id>` (versioned installs: `/usr/lib/ervisio/versions/<v>/plugins/<id>`) | packaged; empty since the Docker plugin moved to the marketplace |
 | `installed` | `/var/lib/ervisio/plugins/<id>` | from Browse / `plugins.install`, removable |
 | `dev` | `./plugins` of the daemon's working directory (daemon `--dev` only, passed to the bridge as `--dev --dev-plugins <dir>`), plus folders from `plugins.loadDev` | loaded folders only when `plugins.dev = true` or the daemon runs in `--dev` |
 
@@ -133,14 +176,25 @@ when a listed file is missing, or when the folder holds a file that is not liste
 
 The trusted key is `plugins.TeamPublicKey` in `sign.go`, the public half of the Ervisio team key. The private key
 is never in the repository: where it lives, who may use it and how to rotate it is in `docs/PLUGIN-SIGNING.md`.
-The first-party `plugins/docker` is signed with it (`TestShippedDockerSigned` checks this).
+Marketplace plugins are signed with it by the registry's CI.
 
 ```sh
 go build -o plugin-sign ./server/internal/modules/plugins/cmd/plugin-sign
 plugin-sign -genkey team.key                  # prints the public key to embed
-plugin-sign -key team.key plugins/docker      # writes "files" into manifest.json and manifest.sig
-plugin-sign -verify plugins/docker            # against the embedded key (or -pub <base64>)
+plugin-sign -key team.key dist/docker         # writes "files" into manifest.json and manifest.sig
+plugin-sign -verify dist/docker               # against the embedded key (or -pub <base64>)
+plugin-sign -key team.key -catalog catalog.json        # writes catalog.sig
+plugin-sign -verify -catalog catalog.json              # checks catalog.sig (or -pub <base64>)
 ```
+
+### Catalog signature
+
+`catalog.sig` holds the base64 ed25519 signature of `"ervisio-catalog-v1\n" + canonical(catalog.json)` (the same
+canonical form as manifests). The different prefix means a plugin signature can never pass for a catalog signature or
+the other way round. Its address is the catalog's with a final `.json` replaced by `.sig` (`.sig` appended otherwise;
+query and fragment dropped). Trusted keys: the team keys plus `plugins.catalog_key` (config, base64 ed25519 public key,
+for a private catalog). A catalog key only makes a catalog's *listing* trusted: the plugins it lists still need a team
+signature to install, unless `plugins.allow_unsigned` is on.
 
 `plugins.allow_unsigned = false` (config, **the default**): only plugins with a valid signature are listed as enabled, run
 commands, are served or install. Exception: plugins in the dev location (the repository's `./plugins` under `ervisiod
@@ -183,11 +237,23 @@ moved atomically into place (an existing installed version is replaced = update)
 Errors: `invalid` (bad source, archive, manifest, checksum), `forbidden`, `conflict`, `not_found`, `unavailable` (download).
 
 ### `plugins.catalog` (user)
-Params `{}` → `{"categories":[{id,name,icon,color}], "plugins":[{id,name,version,author,description,icon,color,category,verified,installs,featured?,notes?,source,sha256?,capabilities,contributes,visibleTo,installed,installedVersion?}], "warning"?}`.
-Sources: the first existing `catalog.json` of `./plugins` (dev), `/var/lib/ervisio/plugins`, `/usr/share/ervisio/plugins`
-(the repo ships a sample in `plugins/catalog.json`), then, optionally, the https URL on the first line of
-`/etc/ervisio/plugins-catalog.url` (5 s timeout, 2 MiB, cached 5 min; entries override local ones by id; a failure only sets `warning`).
-Malformed entries are skipped.
+Params `{}` → `{"categories":[{id,name,icon,color}], "plugins":[{id,name,version,author,description,icon,color,category,verified,installs,featured?,notes?,source,sha256?,capabilities,contributes,visibleTo,installed,installedVersion?}], "warning"?, "moved":[{id,name,version}]}`.
+Sources:
+
+1. Local: the first existing `catalog.json` of `./plugins` (dev), `/var/lib/ervisio/plugins`, the packaged folder.
+   Local files are trusted as they are (only root writes there). A sample is in
+   `server/internal/modules/plugins/testdata/catalog-sample.json`.
+2. Remote: the https URL on the first line of `/etc/ervisio/plugins-catalog.url` when that file exists and the line is
+   not empty, else `plugins.catalog_url` (default `https://ervisio.github.io/plugins/catalog.json`; `""` = no remote
+   catalog). Fetched with its `catalog.sig` (10 s each, 2 MiB / 1 KiB, https only, redirects only to https). It is used
+   only when the signature verifies (see "Catalog signature"); otherwise it is ignored and `warning` says why. Results
+   and failures are cached for 5 minutes per bridge. Remote entries replace local ones with the same id; the remote
+   categories replace the local ones when it has any.
+
+Malformed entries are skipped. `moved` lists plugins that left the core and are not installed although the host uses
+them ("Plugins that left the core"). `plugins.list` computes `updateAvailable` from the same merged catalog, with the
+remote part taken from the cache only (a stale cache is refreshed in the background), so listing never waits for the
+network.
 
 ### `plugins.exec` (user; admin commands need the root bridge)
 Params `{"plugin","command","args":[…]}` → `{"stdout","stderr","exitCode","truncated"?}`. A non-zero exit is a normal result.

@@ -14,7 +14,7 @@ interface DevInfo {
   note?: string;
 }
 
-export const DOCS_URL = 'https://github.com/ervisio/ervisio/blob/main/web/PLUGIN-SDK.md';
+export const DOCS_URL = 'https://github.com/Ervisio/plugin-sdk/blob/main/docs/sdk.md';
 
 export function Developer({ plugins, refresh }: { plugins: PluginInfo[]; refresh(reloadLoader?: boolean): Promise<void> }) {
   const t = useT('plugins');

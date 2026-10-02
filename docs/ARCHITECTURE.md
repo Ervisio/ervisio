@@ -164,6 +164,8 @@ key = ""
 [plugins]
 allow_unsigned = false
 dev = false
+catalog_url = "https://ervisio.github.io/plugins/catalog.json"   # signed marketplace catalog; "" = none
+catalog_key = ""       # extra ed25519 public key trusted for catalog.sig (private catalogs)
 [updates]
 channel = "stable"     # stable | prerelease
 auto_check = true
@@ -175,7 +177,12 @@ Key table, types and the `config.*` methods: `docs/api/config.md`.
 ## Plugins
 
 A plugin is a folder with `manifest.json`, a frontend ES module and optional assets, installed in
-`/usr/share/ervisio/plugins/<id>` (packaged) or `/var/lib/ervisio/plugins/<id>` (from Browse).
+`/var/lib/ervisio/plugins/<id>` from the marketplace (Plugins › Browse), or in the packaged folder
+(`/usr/share/ervisio/plugins/<id>`, empty since 0.4.0). Ervisio ships no plugins: they are built in their own
+repositories with the SDK (https://github.com/Ervisio/plugin-sdk), reviewed and signed by the registry
+https://github.com/Ervisio/plugins, whose signed catalog (`catalog.json` + `catalog.sig` on GitHub Pages) is what
+Browse shows (`docs/api/plugins.md`, "Marketplace"). The Docker plugin, part of the core up to 0.3.0, is
+https://github.com/Ervisio/plugin-docker; the daemon installs it once on machines that used it.
 
 ```json
 {
@@ -199,8 +206,9 @@ lets a plugin call an HTTP API on a unix socket for declared methods, paths and 
 (`plugins.http` / `plugins.httpStream`; the bridge connects as the user, or as root for `admin`
 entries), and folders may be declared `admin` or `create` (`docs/api/plugins.md`). Their frontend never runs in the app either: each page or widget
 runs in an `<iframe sandbox="allow-scripts allow-forms">` (opaque origin, strict CSP) and talks to the app only through a
-`postMessage` broker that allows the declared commands and folders (`web/PLUGIN-SDK.md`). Signed plugins
-carry `manifest.sig` (ed25519, team key: `docs/PLUGIN-SIGNING.md`); unsigned ones are blocked by default.
+`postMessage` broker that allows the declared commands and folders (`web/src/plugins`; plugin-facing docs in the
+SDK repository). Signed plugins carry `manifest.sig` (ed25519, team key: `docs/PLUGIN-SIGNING.md`); unsigned ones are
+blocked by default. The remote catalog must be signed by the same key (`catalog.sig`), or it is ignored.
 
 ## Releases and self-update
 
@@ -211,7 +219,7 @@ off to `ervisiod --apply-update` in a transient systemd unit, which switches `cu
 rolls back if `/api/health` does not report the new version within 30 s. Details: `docs/RELEASING.md`,
 `docs/api/updates.md`. New machines are installed by `install.sh` into that layout. Distribution packages (`.deb`,
 `.rpm`, AUR) use a flat layout instead (`/usr/bin/ervisiod`, `/usr/lib/ervisio/ervisio-bridge`,
-`/usr/share/ervisio/{web,plugins}`) and write `/usr/lib/ervisio/managed`, which turns self-update off:
+`/usr/share/ervisio/web`, an empty `/usr/share/ervisio/plugins`) and write `/usr/lib/ervisio/managed`, which turns self-update off:
 `docs/PACKAGING.md`.
 
 ## Repository layout
@@ -219,7 +227,7 @@ rolls back if `/api/health` does not report the new version within 30 s. Details
 ```
 server/            Go: cmd/ervisiod, cmd/ervisio-bridge, internal/…
 web/               React app
-plugins/           first-party example plugins
+plugins/           dev folder for plugins under --dev (empty; plugins live in their own repositories)
 docs/              ARCHITECTURE.md, DESIGN-RULES.md, api/<module>.md, design/
 packaging/         systemd unit, PAM files per distribution, install scripts, build-release.sh, nfpm (.deb/.rpm), AUR
 .github/workflows/ ci.yml (vet/test/lint/build), release.yml (tag → signed GitHub release)

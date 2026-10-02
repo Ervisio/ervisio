@@ -85,6 +85,8 @@ const cfg: Record<string, unknown> = rd('config', {
   'tls.redirect': true,
   'plugins.allow_unsigned': true,
   'plugins.dev': false,
+  'plugins.catalog_url': 'https://ervisio.github.io/plugins/catalog.json',
+  'plugins.catalog_key': '',
   'tls.cert': '',
   'tls.key': '',
   'updates.channel': 'stable',
@@ -99,6 +101,7 @@ const MOCK_KEYS = [
   { key: 'tls.mode', type: 'enum', values: ['self-signed', 'letsencrypt', 'custom', 'http'], restart: true }, { key: 'tls.redirect', type: 'bool', restart: true },
   { key: 'tls.cert', type: 'path', restart: true }, { key: 'tls.key', type: 'path', restart: true },
   { key: 'plugins.allow_unsigned', type: 'bool' }, { key: 'plugins.dev', type: 'bool' },
+  { key: 'plugins.catalog_url', type: 'string' }, { key: 'plugins.catalog_key', type: 'string' },
   { key: 'updates.channel', type: 'enum', values: ['stable', 'prerelease'] }, { key: 'updates.auto_check', type: 'bool' },
   { key: 'updates.auto_install', type: 'bool' }, { key: 'updates.auto_install_at', type: 'string' },
 ];

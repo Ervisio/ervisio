@@ -37,7 +37,7 @@ Flat (packages):
 
 ```
 /usr/bin/ervisiod                         /usr/lib/ervisio/ervisio-bridge
-/usr/share/ervisio/{web,plugins}          /usr/lib/ervisio/package-service
+/usr/share/ervisio/{web,plugins}          /usr/lib/ervisio/package-service   (plugins/ is empty)
 /usr/lib/ervisio/managed                  /usr/lib/systemd/system/ervisio.service
 /etc/pam.d/ervisio                        /etc/ervisio/, /var/lib/ervisio/ (state)
 ```
@@ -45,6 +45,27 @@ Flat (packages):
 The daemon finds its files either way: in a version folder it uses the bridge, web app and plugins of that folder;
 otherwise the bridge next to itself or `/usr/lib/ervisio/ervisio-bridge`, the web app in
 `/usr/share/ervisio/web` and plugins in `/usr/share/ervisio/plugins`.
+
+### Plugins (the Docker plugin moved to the marketplace)
+
+Releases and packages contain no plugins since 0.4.0: the packaged plugin folder is empty, and plugins are installed
+from the signed marketplace catalog into `/var/lib/ervisio/plugins/` (`docs/api/plugins.md`, "Marketplace").
+Up to 0.3.0 the Docker plugin was part of every release; updating removes that copy (a new version folder, or the
+package manager removing the old files). So that a machine that used it keeps it:
+
+- **Every layout** (install.sh, self-update, `.deb`/`.rpm`, AUR): on its first start the new daemon installs the
+  marketplace version into `/var/lib/ervisio/plugins/docker` when the host has a Docker socket and the plugin was not
+  switched off (`plugins-state.json`). It uses only the signed catalog, the catalog's checksum and permissions, and a
+  package signed with the team key, exactly as an install from Browse. While it cannot (offline, catalog not reachable)
+  it retries every hour and Plugins › Installed shows a "Docker moved to the marketplace" card with an Install button.
+  The outcome is kept in `/var/lib/ervisio/plugins-moved.json` (`installed`, `skipped`, `not-needed`, `pending`), so it
+  happens once: an admin who uninstalls the plugin afterwards does not get it back.
+- **install.sh**: when Docker is found and the plugin is not there yet, it asks whether to install it (default yes;
+  `--yes` answers yes), and runs `ervisiod --install-plugin docker` with the new binary before the service starts.
+  `--with-docker-plugin` installs it without asking (Docker or not); `--no-plugins` runs
+  `ervisiod --skip-moved-plugins` (records `skipped`), so neither the installer nor the daemon adds it.
+- **Packages** have no questions: the daemon's first start does it as described. To opt out before the first start,
+  run `ervisiod --skip-moved-plugins` as root, or switch the plugin off / uninstall it afterwards.
 
 ### Managed installs
 
