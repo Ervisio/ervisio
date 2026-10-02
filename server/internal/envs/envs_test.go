@@ -402,7 +402,7 @@ func TestTunnelLifecycleTCPTLS(t *testing.T) {
 	if err != nil || fi.Mode().Perm() != 0o600 || fi.Mode()&os.ModeSocket == 0 {
 		t.Fatalf("tunnel socket: %v %v", fi, err)
 	}
-	if di, _ := os.Stat(filepath.Dir(path)); di.Mode().Perm() != 0o700 {
+	if di, _ := os.Stat(filepath.Dir(path)); di.Mode().Perm() != 0o711 {
 		t.Errorf("tunnel folder mode %v", di.Mode().Perm())
 	}
 	// A second request for the same user reuses it.

@@ -21,9 +21,13 @@ browser ── /api/rpc, /api/ws ──▶ ervisiod (root)
   password to unlock with.
 * For **tcp-tls, ssh and portainer-agent** the daemon creates, per user and environment, a unix socket
   `<tunnel dir>/<uid>/<env id>.sock` (`/run/ervisio/tunnels` by default, `--tunnel-dir`; at most 100 characters). The
-  folder is `0700` and the socket `0600`, both owned by the user, so only that user's processes (and root) can connect.
+  socket is `0600` and owned by the user, so only that user's processes (and root) can connect. The folders are root's,
+  `0711`: the user reaches its socket but cannot list, add or replace anything there, so it can never slip a symlink
+  under the daemon (the socket is bound in a root-only staging folder, given its owner and mode there, renamed into
+  place and checked with `lstat`). A folder left by an older version (the user's own) is removed and made again.
   The daemon puts the path in the `envSocket` param of the call it forwards to the user's bridge (it removes any
-  `envSocket` the browser sent), and the bridge uses it instead of the capability's socket, or puts `unix://<path>` in
+  `envSocket` the browser sent, in any spelling: `EnvSocket` and `ENV` count, as JSON field names match without regard
+  to case; `via` too), and the bridge uses it instead of the capability's socket, or puts `unix://<path>` in
   the command's `{env}` argv item. Whatever connects speaks the Docker HTTP API (including connection upgrades, so
   `docker exec`, `attach` and `compose` work); the daemon carries the bytes. A tunnel is closed after 10 minutes without
   connections, when the environment changes or is removed. The Docker CLI sees errors as a `502` with a JSON message.
