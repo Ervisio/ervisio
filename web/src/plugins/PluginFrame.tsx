@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ApiError, call, stream, useSession, type StreamHandle } from '../api';
+import { ApiError, call, fromBase64, stream, toBase64, useSession, type StreamHandle } from '../api';
 import { apiUrl, FETCH_CREDENTIALS } from '../api/base';
 import { useI18n, useT } from '../i18n';
 import { themeVars, useTheme } from '../theme';
 import { EmptyState, Skeleton, toast } from '../ui';
-import { authorize, authorizeStream, type BrokerUser } from './broker';
-import { isFrameMessage, type FrameError, type FrameTheme, type FrameToHost, type FrameView, type HostToFrame } from './protocol';
+import { authorize, authorizeHttpStream, authorizePty, authorizeStream, type BrokerUser, type Plan } from './broker';
+import { isFrameMessage, type FrameError, type FrameHttpResult, type FrameTheme, type FrameToHost, type FrameView, type HostToFrame } from './protocol';
 import { usePlugins } from './PluginsProvider';
 import type { PluginManifest } from './types';
 
-const MAX_STREAMS = 8;
+// Per frame. A page may follow many containers' stats at once; the app's WebSocket allows 128 channels per session.
+const MAX_STREAMS = 32;
 const MAX_PENDING = 32;
 const WIDGET_MIN = 48;
 const WIDGET_MAX = 720;
@@ -19,6 +20,10 @@ const toFrameError = (e: unknown): FrameError =>
   e instanceof ApiError ? { code: String(e.code), message: e.message } : { code: 'internal', message: e instanceof Error ? e.message : String(e) };
 
 const encodeAsset = (p: string) => p.split('/').map(encodeURIComponent).join('/');
+
+/** plugins.http result → what the frame gets: text for UTF-8 bodies, a Uint8Array for binary ones. */
+const toHttpResult = (r: { status: number; headers?: Record<string, string>; body?: string; b64?: boolean }): FrameHttpResult =>
+  r.b64 ? { status: r.status, headers: r.headers ?? {}, bytes: fromBase64(r.body ?? '') } : { status: r.status, headers: r.headers ?? {}, text: r.body ?? '' };
 
 /**
  * Hosts one view (page or widget) of a plugin in an <iframe sandbox="allow-scripts"> served by the daemon at
@@ -70,19 +75,20 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
     nav,
   };
 
-  const post = useCallback((m: HostToFrame) => frameRef.current?.contentWindow?.postMessage(m, '*'), []);
+  const post = useCallback((m: HostToFrame, transfer?: Transferable[]) => frameRef.current?.contentWindow?.postMessage(m, '*', transfer ?? []), []);
 
   // Runs once: FrameSession is keyed on plugin, view and generation.
   useEffect(() => {
     let dead = false;
     let started = false;
     let pending = 0;
-    const streams = new Map<number, StreamHandle>();
+    // Every stream the frame opened; all are closed when the frame fails or goes away.
+    const streams = new Map<number, { h: StreamHandle; kind: 'exec' | 'http' | 'pty' }>();
 
     const fail = (msg: string) => {
       if (dead) return;
       dead = true;
-      for (const s of streams.values()) s.close();
+      for (const s of streams.values()) s.h.close();
       streams.clear();
       setFailure(msg);
       setPhase('failed');
@@ -107,7 +113,11 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
     const reply = (id: number, p: Promise<unknown>) => {
       pending++;
       p.then(
-        (value) => !dead && post({ la: 'plugin', t: 'res', id, ok: true, value }),
+        (value) => {
+          if (dead) return;
+          const bytes = (value as FrameHttpResult | null)?.bytes;
+          post({ la: 'plugin', t: 'res', id, ok: true, value }, bytes instanceof Uint8Array ? [bytes.buffer] : undefined);
+        },
         (e) => !dead && post({ la: 'plugin', t: 'res', id, ok: false, error: toFrameError(e) }),
       ).finally(() => pending--);
     };
@@ -125,7 +135,12 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
           reply(m.id, Promise.reject(new ApiError(plan.code, plan.message)));
           return;
         case 'call':
-          reply(m.id, call(plan.method, plan.params, { admin: plan.admin }));
+          reply(
+            m.id,
+            plan.method === 'plugins.http'
+              ? call<{ status: number; headers?: Record<string, string>; body?: string; b64?: boolean }>(plan.method, plan.params, { admin: plan.admin }).then(toHttpResult)
+              : call(plan.method, plan.params, { admin: plan.admin }),
+          );
           return;
         case 'asset':
           reply(
@@ -155,15 +170,32 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
       const err = (e: FrameError) => post({ la: 'plugin', t: 'stream', sid, ev: 'error', error: e });
       if (streams.size >= MAX_STREAMS) return err({ code: 'unavailable', message: 'Too many streams open.' });
       const { user, plugin: p } = live.current;
-      const plan = authorizeStream(p, m.command, m.args, user);
+      const kind = m.kind === 'http' || m.kind === 'pty' ? m.kind : 'exec';
+      let plan: Plan;
+      if (m.kind === 'http') plan = authorizeHttpStream(p, m.req, user);
+      else if (m.kind === 'pty') plan = authorizePty(p, m.command, m.args, m.cols, m.rows, user);
+      else plan = authorizeStream(p, m.command, m.args, user);
       if (plan.kind !== 'stream') return err(plan.kind === 'deny' ? { code: plan.code, message: plan.message } : { code: 'invalid', message: 'bad stream' });
-      const h = stream<{ stream?: 'stdout' | 'stderr'; line?: string; exit?: number }>(plan.method, plan.params, {
+      const onData = (d: unknown) => {
+        if (dead || !d || typeof d !== 'object') return;
+        if (d instanceof Uint8Array) {
+          // httpStream body chunks and pty output arrive as bytes; handed over, not copied.
+          if (kind !== 'exec') post({ la: 'plugin', t: 'stream', sid, ev: 'data', chunk: d }, [d.buffer]);
+          return;
+        }
+        const e = d as { stream?: string; line?: string; exit?: number; type?: string; code?: number; status?: number; headers?: Record<string, string> };
+        if (kind === 'exec') {
+          if (typeof e.exit === 'number') post({ la: 'plugin', t: 'stream', sid, ev: 'exit', code: e.exit });
+          else if (typeof e.line === 'string') post({ la: 'plugin', t: 'stream', sid, ev: 'line', stream: e.stream === 'stderr' ? 'stderr' : 'stdout', line: e.line });
+        } else if (kind === 'pty') {
+          if (e.type === 'exit' && typeof e.code === 'number') post({ la: 'plugin', t: 'stream', sid, ev: 'exit', code: e.code });
+        } else if (typeof e.status === 'number') {
+          post({ la: 'plugin', t: 'stream', sid, ev: 'start', status: e.status, headers: e.headers ?? {} });
+        }
+      };
+      const h = stream(plan.method, plan.params, {
         admin: plan.admin,
-        onData: (d) => {
-          if (dead || !d || typeof d !== 'object') return;
-          if (typeof d.exit === 'number') post({ la: 'plugin', t: 'stream', sid, ev: 'exit', code: d.exit });
-          else if (typeof d.line === 'string') post({ la: 'plugin', t: 'stream', sid, ev: 'line', stream: d.stream === 'stderr' ? 'stderr' : 'stdout', line: d.line });
-        },
+        onData,
         onEnd: () => {
           streams.delete(sid);
           if (!dead) post({ la: 'plugin', t: 'stream', sid, ev: 'end' });
@@ -173,7 +205,17 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
           if (!dead) err(toFrameError(e));
         },
       });
-      streams.set(sid, h);
+      streams.set(sid, { h, kind });
+    };
+
+    const onStreamInput = (m: Extract<FrameToHost, { t: 'stream-input' }>) => {
+      const s = streams.get(m.sid);
+      if (!s || s.kind !== 'pty') return;
+      if (m.data instanceof Uint8Array && m.data.length > 0 && m.data.length <= 256 << 10) s.h.send({ type: 'input', data: toBase64(m.data) });
+      const r = m.resize;
+      if (r && Number.isInteger(r.cols) && Number.isInteger(r.rows) && r.cols >= 1 && r.rows >= 1 && r.cols <= 1000 && r.rows <= 1000) {
+        s.h.send({ type: 'resize', cols: r.cols, rows: r.rows });
+      }
     };
 
     const onMessage = (ev: MessageEvent) => {
@@ -200,10 +242,13 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
         case 'stream-open':
           onStreamOpen(m);
           break;
+        case 'stream-input':
+          onStreamInput(m);
+          break;
         case 'stream-close': {
           const s = streams.get(m.sid);
           streams.delete(m.sid);
-          s?.close();
+          s?.h.close();
           break;
         }
       }
@@ -222,7 +267,7 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
       dead = true;
       window.removeEventListener('message', onMessage);
       el?.removeEventListener('load', onLoad);
-      for (const s of streams.values()) s.close();
+      for (const s of streams.values()) s.h.close();
       streams.clear();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

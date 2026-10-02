@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"net/http"
 	"os"
 	"path"
 	"path/filepath"
@@ -19,6 +20,10 @@ const (
 	maxCommands      = 64
 	maxArgs          = 16
 	maxListItems     = 64
+	maxHTTPAPIs      = 16
+	maxHTTPRules     = 256
+	maxHTTPHeaders   = 32
+	maxHTTPBodyLimit = 64 << 20
 )
 
 var (
@@ -28,8 +33,12 @@ var (
 	iconRe    = regexp.MustCompile(`^[a-z0-9-]{1,32}$`)
 	groupRe   = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
 	slotRe    = regexp.MustCompile(`\{(\d+)\}`)
-	shaRe     = regexp.MustCompile(`^[0-9a-f]{64}$`)
-	hues      = map[string]bool{"ov": true, "term": true, "file": true, "log": true, "svc": true, "sw": true, "usr": true, "plg": true}
+	// httpNameRe is the name of a capabilities.http entry.
+	httpNameRe   = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
+	headerNameRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9-]{0,63}$`)
+	httpMethods  = map[string]bool{"GET": true, "HEAD": true, "POST": true, "PUT": true, "PATCH": true, "DELETE": true, "OPTIONS": true}
+	shaRe        = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	hues         = map[string]bool{"ov": true, "term": true, "file": true, "log": true, "svc": true, "sw": true, "usr": true, "plg": true}
 )
 
 // Manifest is manifest.json. Unknown fields are rejected.
@@ -51,16 +60,88 @@ type Manifest struct {
 
 // Capabilities is everything a plugin may ask the host to do.
 type Capabilities struct {
-	Commands []Command  `json:"commands"`
-	Files    FileAccess `json:"files"`
-	Sockets  []string   `json:"sockets"`
-	Network  []string   `json:"network"`
+	Commands []Command `json:"commands"`
+	// HTTP lists the HTTP APIs on unix sockets the plugin may call (SDK v3).
+	HTTP    []HTTPAPI  `json:"http"`
+	Files   FileAccess `json:"files"`
+	Sockets []string   `json:"sockets"`
+	Network []string   `json:"network"`
 }
 
 // FileAccess lists folders the plugin reads or edits.
 type FileAccess struct {
-	Read  []string `json:"read"`
-	Write []string `json:"write"`
+	Read  []Folder `json:"read"`
+	Write []Folder `json:"write"`
+}
+
+// Folder is one capabilities.files entry. In the manifest it is either a
+// path string (SDK v2) or an object {path, admin, adminUnlessGroup, create}.
+type Folder struct {
+	Path string `json:"path"`
+	// Admin folders are accessed on the root bridge, unless the user is in
+	// AdminUnlessGroup.
+	Admin            bool   `json:"admin,omitempty"`
+	AdminUnlessGroup string `json:"adminUnlessGroup,omitempty"`
+	// Create makes the daemon create the folder when a write targets it.
+	Create bool `json:"create,omitempty"`
+}
+
+// plain reports whether the entry is a bare path (written as a string).
+func (f Folder) plain() bool { return !f.Admin && f.AdminUnlessGroup == "" && !f.Create }
+
+// UnmarshalJSON accepts a path string or a strict object.
+func (f *Folder) UnmarshalJSON(b []byte) error {
+	b = bytes.TrimSpace(b)
+	if len(b) > 0 && b[0] == '"' {
+		*f = Folder{}
+		return json.Unmarshal(b, &f.Path)
+	}
+	type folder Folder
+	var v folder
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&v); err != nil {
+		return fmt.Errorf("a files entry is a path or {path, admin, adminUnlessGroup, create}: %v", err)
+	}
+	*f = Folder(v)
+	return nil
+}
+
+// MarshalJSON writes plain entries back as strings, so v2 manifests and
+// consents keep their shape.
+func (f Folder) MarshalJSON() ([]byte, error) {
+	if f.plain() {
+		return json.Marshal(f.Path)
+	}
+	type folder Folder
+	return json.Marshal(folder(f))
+}
+
+// HTTPAPI is one capabilities.http entry: an HTTP API on a unix socket,
+// reachable through plugins.http / plugins.httpStream for the declared
+// rules only.
+type HTTPAPI struct {
+	Name   string `json:"name"`
+	Socket string `json:"socket"`
+	// Admin means the socket is reached from the root bridge.
+	Admin            bool   `json:"admin"`
+	AdminUnlessGroup string `json:"adminUnlessGroup,omitempty"`
+	// Headers are the only request headers the plugin may set.
+	Headers []string   `json:"headers"`
+	Rules   []HTTPRule `json:"rules"`
+	// MaxBody caps request and response bodies (default 8 MiB, max 64 MiB).
+	MaxBody int64 `json:"maxBody,omitempty"`
+	// TimeoutSec bounds plugins.http, and the wait for the response
+	// headers of plugins.httpStream (default 30, max 600).
+	TimeoutSec int `json:"timeoutSec,omitempty"`
+}
+
+// HTTPRule allows Methods on the URL paths matching Path (a regexp that
+// must match the whole decoded path).
+type HTTPRule struct {
+	Methods []string `json:"methods"`
+	Path    string   `json:"path"`
+	re      *regexp.Regexp
 }
 
 // Command is one argv the plugin may run through plugins.exec.
@@ -75,6 +156,8 @@ type Command struct {
 	AdminUnlessGroup string `json:"adminUnlessGroup,omitempty"`
 	// TimeoutSec bounds plugins.exec (default 30, max 600).
 	TimeoutSec int `json:"timeoutSec,omitempty"`
+	// PTY commands run only through plugins.pty, in a pseudo-terminal.
+	PTY bool `json:"pty,omitempty"`
 }
 
 // ArgSpec constrains one {N} slot of argv.
@@ -139,11 +222,22 @@ func (m *Manifest) normalise() {
 	if c.Commands == nil {
 		c.Commands = []Command{}
 	}
+	if c.HTTP == nil {
+		c.HTTP = []HTTPAPI{}
+	}
+	for i := range c.HTTP {
+		if c.HTTP[i].Headers == nil {
+			c.HTTP[i].Headers = []string{}
+		}
+		if c.HTTP[i].Rules == nil {
+			c.HTTP[i].Rules = []HTTPRule{}
+		}
+	}
 	if c.Files.Read == nil {
-		c.Files.Read = []string{}
+		c.Files.Read = []Folder{}
 	}
 	if c.Files.Write == nil {
-		c.Files.Write = []string{}
+		c.Files.Write = []Folder{}
 	}
 	if c.Sockets == nil {
 		c.Sockets = []string{}
@@ -327,18 +421,39 @@ func (c *Capabilities) validate() error {
 		}
 		seen[cmd.Name] = true
 	}
+	if len(c.HTTP) > maxHTTPAPIs {
+		return fmt.Errorf("capabilities.http: at most %d entries", maxHTTPAPIs)
+	}
+	seen = map[string]bool{}
+	for i := range c.HTTP {
+		h := &c.HTTP[i]
+		if err := h.validate(); err != nil {
+			return fmt.Errorf("http %q: %v", h.Name, err)
+		}
+		if seen[h.Name] {
+			return fmt.Errorf("http %q is declared twice", h.Name)
+		}
+		seen[h.Name] = true
+	}
 	for _, l := range []struct {
 		what string
-		list []string
-		home bool
-	}{{"files.read", c.Files.Read, true}, {"files.write", c.Files.Write, true}, {"sockets", c.Sockets, false}} {
+		list []Folder
+	}{{"files.read", c.Files.Read}, {"files.write", c.Files.Write}} {
 		if len(l.list) > maxListItems {
 			return fmt.Errorf("capabilities.%s has too many entries", l.what)
 		}
-		for _, p := range l.list {
-			if !validAbs(p, l.home) {
-				return fmt.Errorf("capabilities.%s: %q must be a clean absolute path", l.what, p)
+		for _, f := range l.list {
+			if err := f.validate(); err != nil {
+				return fmt.Errorf("capabilities.%s: %v", l.what, err)
 			}
+		}
+	}
+	if len(c.Sockets) > maxListItems {
+		return fmt.Errorf("capabilities.sockets has too many entries")
+	}
+	for _, p := range c.Sockets {
+		if !validAbs(p, false) {
+			return fmt.Errorf("capabilities.sockets: %q must be a clean absolute path", p)
 		}
 	}
 	if len(c.Network) > maxListItems {
@@ -414,6 +529,89 @@ func (c *Command) validate() error {
 	return nil
 }
 
+func (f Folder) validate() error {
+	if !validAbs(f.Path, true) {
+		return fmt.Errorf("%q must be a clean absolute path (or one starting with ~/)", f.Path)
+	}
+	if f.AdminUnlessGroup != "" {
+		if !f.Admin {
+			return fmt.Errorf("%q: adminUnlessGroup only makes sense with admin: true", f.Path)
+		}
+		if !groupRe.MatchString(f.AdminUnlessGroup) {
+			return fmt.Errorf("%q: adminUnlessGroup %q is not a group name", f.Path, f.AdminUnlessGroup)
+		}
+	}
+	// ~ is the signed-in user's home; on the root bridge it would be root's.
+	if f.Admin && strings.HasPrefix(f.Path, "~") {
+		return fmt.Errorf("%q: an admin folder must be an absolute path, not under ~", f.Path)
+	}
+	return nil
+}
+
+func (h *HTTPAPI) validate() error {
+	if !httpNameRe.MatchString(h.Name) {
+		return fmt.Errorf("name must be lowercase letters, digits or - (max 32), starting with a letter")
+	}
+	// 107 bytes: the size of sun_path without its NUL.
+	if !validAbs(h.Socket, false) || h.Socket == "/" || len(h.Socket) > 107 {
+		return fmt.Errorf("socket %q must be a clean absolute path of at most 107 bytes", h.Socket)
+	}
+	if h.AdminUnlessGroup != "" {
+		if !h.Admin {
+			return fmt.Errorf("adminUnlessGroup only makes sense with admin: true")
+		}
+		if !groupRe.MatchString(h.AdminUnlessGroup) {
+			return fmt.Errorf("adminUnlessGroup %q is not a group name", h.AdminUnlessGroup)
+		}
+	}
+	if len(h.Headers) > maxHTTPHeaders {
+		return fmt.Errorf("at most %d headers", maxHTTPHeaders)
+	}
+	seen := map[string]bool{}
+	for _, name := range h.Headers {
+		if !headerNameRe.MatchString(name) {
+			return fmt.Errorf("%q is not a header name", name)
+		}
+		if !safeHeader(name) {
+			return fmt.Errorf("header %q may not be set by a plugin", name)
+		}
+		k := http.CanonicalHeaderKey(name)
+		if seen[k] {
+			return fmt.Errorf("header %q is listed twice", name)
+		}
+		seen[k] = true
+	}
+	if len(h.Rules) == 0 || len(h.Rules) > maxHTTPRules {
+		return fmt.Errorf("rules must hold between 1 and %d entries", maxHTTPRules)
+	}
+	for i := range h.Rules {
+		r := &h.Rules[i]
+		if len(r.Methods) == 0 || len(r.Methods) > len(httpMethods) {
+			return fmt.Errorf("rules[%d] needs methods", i)
+		}
+		for _, m := range r.Methods {
+			if !httpMethods[m] {
+				return fmt.Errorf("rules[%d]: method %q must be one of GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS", i, m)
+			}
+		}
+		if r.Path == "" || len(r.Path) > 512 {
+			return fmt.Errorf("rules[%d] needs a path (a regular expression the whole URL path must match)", i)
+		}
+		re, err := compileSpec(r.Path)
+		if err != nil {
+			return fmt.Errorf("rules[%d] path: %v", i, err)
+		}
+		r.re = re
+	}
+	if h.MaxBody < 0 || h.MaxBody > maxHTTPBodyLimit {
+		return fmt.Errorf("maxBody must be between 0 and %d", maxHTTPBodyLimit)
+	}
+	if h.TimeoutSec < 0 || h.TimeoutSec > 600 {
+		return fmt.Errorf("timeoutSec must be between 0 and 600")
+	}
+	return nil
+}
+
 func (c *Contributes) validate() error {
 	for _, l := range []struct {
 		what string
@@ -447,11 +645,25 @@ func (c *Contributes) validate() error {
 	return nil
 }
 
-// RunsRoot reports whether any command may run as root.
+// RunsRoot reports whether any command, HTTP API or folder may be used
+// with administrator rights.
 func (m *Manifest) RunsRoot() bool {
-	for _, c := range m.Capabilities.Commands {
-		if c.Admin {
+	c := &m.Capabilities
+	for _, x := range c.Commands {
+		if x.Admin {
 			return true
+		}
+	}
+	for _, x := range c.HTTP {
+		if x.Admin {
+			return true
+		}
+	}
+	for _, l := range [][]Folder{c.Files.Read, c.Files.Write} {
+		for _, f := range l {
+			if f.Admin {
+				return true
+			}
 		}
 	}
 	return false

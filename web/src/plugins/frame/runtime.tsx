@@ -12,8 +12,8 @@ import { createRoot } from 'react-dom/client';
 import tokensCss from '../../styles/tokens.css?inline';
 import uiCss from '../../ui/ui.css?inline';
 import frameCss from './frame.css?inline';
-import type { FrameTheme, FrameView, HostToFrame } from '../protocol';
-import { handleReply, openStream, PluginError, request, send } from './channel';
+import type { FrameHttpRequest, FrameHttpResult, FrameTheme, FrameView, HostToFrame } from '../protocol';
+import { handleReply, openHttpStream, openPty, openStream, PluginError, request, send, type HttpStreamCallbacks, type PtyCallbacks } from './channel';
 import { getLang, setLang, subscribeLang } from './i18n-shim';
 import * as kit from './kit';
 
@@ -43,6 +43,49 @@ function bytesToB64(u: Uint8Array): string {
   return btoa(s);
 }
 
+/* ---------- HTTP (SDK v3) ---------- */
+interface HttpOptions {
+  method: string;
+  path: string;
+  query?: Record<string, string | string[]> | string;
+  headers?: Record<string, string>;
+  body?: string | Uint8Array | object;
+}
+
+function httpRequest(name: string, o: HttpOptions): FrameHttpRequest {
+  if (!o || typeof o !== 'object') throw new PluginError({ code: 'invalid', message: 'Give {method, path}.' });
+  let query = '';
+  if (typeof o.query === 'string') query = o.query.replace(/^\?/, '');
+  else if (o.query && typeof o.query === 'object') {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(o.query)) for (const x of Array.isArray(v) ? v : [v]) q.append(k, String(x));
+    query = q.toString();
+  }
+  const req: FrameHttpRequest = { name, method: String(o.method ?? 'GET').toUpperCase(), path: String(o.path ?? '') };
+  if (query) req.query = query;
+  if (o.headers) req.headers = { ...o.headers };
+  const b = o.body;
+  if (typeof b === 'string' || b instanceof Uint8Array) req.body = b;
+  else if (b !== undefined && b !== null) {
+    req.body = JSON.stringify(b);
+    req.json = true;
+  }
+  return req;
+}
+
+const textDecoder = new TextDecoder();
+const textEncoder = new TextEncoder();
+function httpResponse(r: FrameHttpResult) {
+  const body = r.text ?? textDecoder.decode(r.bytes ?? new Uint8Array());
+  return {
+    status: r.status,
+    headers: r.headers ?? {},
+    body,
+    json: () => JSON.parse(body),
+    bytes: () => (r.bytes ? r.bytes.slice() : textEncoder.encode(body)),
+  };
+}
+
 /* ---------- SDK ---------- */
 function makeSdk(plugin: { id: string; name: string; version: string }, view: FrameView) {
   const pages = new Map<string, ViewDef<unknown>>();
@@ -50,7 +93,7 @@ function makeSdk(plugin: { id: string; name: string; version: string }, view: Fr
   const strings: Record<string, Record<string, string>> = {};
   const assets = new Map<string, Promise<string>>();
   const sdk = {
-    version: 2 as const,
+    version: 3 as const,
     plugin,
     view,
     react: React,
@@ -58,9 +101,15 @@ function makeSdk(plugin: { id: string; name: string; version: string }, view: Fr
     api: {
       exec: (command: string, args: string[] = []) => request<{ stdout: string; stderr: string; exitCode: number; truncated?: boolean }>('exec', { command, args }),
       execStream: (command: string, args: string[], h: Parameters<typeof openStream>[2]) => openStream(command, args ?? [], h ?? {}),
-      call: () => Promise.reject(new PluginError({ code: 'forbidden', message: 'sdk.api.call is not available to plugins (SDK v2): use sdk.api.exec with a declared command.' })),
+      async http(name: string, o: HttpOptions) {
+        return httpResponse(await request<FrameHttpResult>('http', httpRequest(name, o) as unknown as Record<string, unknown>));
+      },
+      httpStream: (name: string, o: HttpOptions, h: HttpStreamCallbacks) => openHttpStream(httpRequest(name, o), h ?? {}),
+      pty: (command: string, args: string[], o: { cols?: number; rows?: number } & PtyCallbacks) =>
+        openPty(command, args ?? [], Math.floor(o?.cols ?? 80), Math.floor(o?.rows ?? 24), o ?? {}),
+      call: () => Promise.reject(new PluginError({ code: 'forbidden', message: 'sdk.api.call is not available to plugins (SDK v2+): use sdk.api.exec with a declared command.' })),
       stream: () => {
-        throw new PluginError({ code: 'forbidden', message: 'sdk.api.stream is not available to plugins (SDK v2): use sdk.api.execStream.' });
+        throw new PluginError({ code: 'forbidden', message: 'sdk.api.stream is not available to plugins (SDK v2+): use sdk.api.execStream.' });
       },
     },
     files: {
@@ -78,6 +127,12 @@ function makeSdk(plugin: { id: string; name: string; version: string }, view: Fr
       async list(path: string) {
         const r = await request<{ entries: { name: string; type: string; size: number; mtime: number }[] }>('listDir', { path });
         return r.entries ?? [];
+      },
+      async mkdir(path: string): Promise<void> {
+        await request('mkdir', { path });
+      },
+      async remove(path: string): Promise<void> {
+        await request('remove', { path });
       },
     },
     asset(path: string): Promise<string> {

@@ -25,16 +25,20 @@ maps each request to exactly one daemon call, using the manifest from `plugins.l
 
 | Frame request | Daemon call | Allowed when |
 |---|---|---|
-| `exec {command, args}` | `plugins.exec` | `command` is declared; `admin:true` only when the command is declared `admin` and the user is neither root nor in `adminUnlessGroup` (the app's unlock dialog then appears) |
+| `exec {command, args}` | `plugins.exec` | `command` is declared and not `pty`; `admin:true` only when the command is declared `admin` and the user is neither root nor in `adminUnlessGroup` (the app's unlock dialog then appears) |
 | `stream-open {command, args}` | `plugins.execStream` (stream) | same |
-| `readFile` / `listDir {path}` | `plugins.readFile` / `plugins.listDir` | `path` inside `files.read` or `files.write`; never admin |
-| `writeFile {path, data, b64?}` | `plugins.writeFile` | `path` inside `files.write`; never admin |
+| `stream-open {kind:"pty", command, args, cols, rows}`, then `stream-input {data \| resize}` | `plugins.pty` (stream) | `command` is declared `pty: true`; admin as for `exec` |
+| `http {name, method, path, query?, headers?, body?, json?}` | `plugins.http` | `name` is a `capabilities.http` entry, a rule allows the method on the cleaned path, every header is in its `headers`; admin as for `exec` |
+| `stream-open {kind:"http", req}` | `plugins.httpStream` (stream) | same |
+| `readFile` / `listDir {path}` | `plugins.readFile` / `plugins.listDir` | `path` inside `files.read` or `files.write`; admin only for a folder declared `admin` (as for commands) |
+| `writeFile {path, data, b64?}`, `mkdir {path}`, `remove {path}` | `plugins.writeFile` / `plugins.mkdir` / `plugins.remove` | `path` inside `files.write`; admin as above |
 | `asset {path}` | `GET /plugins/<id>/<path>` | relative path inside the plugin folder |
 | `toast {tone, title, detail?}` | none (app toast, prefixed with the plugin name) | |
 | `open {page}` | none (navigates to `/p/<id>/<page>`) | `page` is one of the plugin's pages |
 
-Anything else is refused. The daemon repeats every check that matters (commands, levels, folders, enabled, signature,
-visibility), so the broker is a first gate, not the only one.
+Anything else is refused. The daemon repeats every check that matters (commands, HTTP rules and headers, levels, folders, enabled, signature,
+visibility), so the broker is a first gate, not the only one. A frame has at most 32 streams open; all of them are closed
+when the frame fails, navigates away or is removed.
 
 ## Where plugins live
 
@@ -59,8 +63,16 @@ Strict: unknown fields are rejected.
   "capabilities": {
     "commands": [{"name":"stop","argv":["docker","stop","{0}"],
                   "args":[{"pattern":"[a-zA-Z0-9][a-zA-Z0-9_.-]*","maxLen":128}],
-                  "admin":true,"adminUnlessGroup":"docker","timeoutSec":60}],
-    "files": {"read": ["/srv","~/projects"], "write": []},
+                  "admin":true,"adminUnlessGroup":"docker","timeoutSec":60},
+                 {"name":"shell","pty":true,"argv":["docker","exec","-it","{0}","/bin/sh"],
+                  "args":[{"pattern":"[a-zA-Z0-9][a-zA-Z0-9_.-]*"}],"admin":true,"adminUnlessGroup":"docker"}],
+    "http": [{"name":"docker","socket":"/var/run/docker.sock","admin":true,"adminUnlessGroup":"docker",
+              "headers":["Content-Type","X-Registry-Auth"],
+              "rules":[{"methods":["GET"],"path":"/v1\\.[0-9]+/containers/json"}],
+              "maxBody":8388608,"timeoutSec":60}],
+    "files": {"read": ["/srv","~/projects"],
+              "write": [{"path":"/opt/stacks","admin":true,"adminUnlessGroup":"docker"},
+                        {"path":"~/.config/linuxadmin/plugins/docker","create":true}]},
     "sockets": ["/var/run/docker.sock"],
     "network": ["example.org"]
   },
@@ -78,13 +90,35 @@ Strict: unknown fields are rejected.
   item, like `--name={0}`) take the Nth call argument. Every slot needs an `args[N]` with a `pattern`: a regular expression
   that must match the **whole** value. Values starting with `-` are refused unless `allowDash`; default `maxLen` 256.
   Every declared arg must be used. `admin: true` needs the root bridge; `adminUnlessGroup` lets members of that group
-  run it as themselves. `timeoutSec` default 30, max 600.
+  run it as themselves. `timeoutSec` default 30, max 600. `pty: true` (SDK v3): the command runs only through
+  `plugins.pty`, in a pseudo-terminal; `plugins.exec` / `plugins.execStream` refuse it, and `plugins.pty` refuses other
+  commands.
 * `visibleTo.groups` empty = everyone. Admins (root bridge, root, or members of `sudo`/`wheel`/`admin`) always see everything.
 * `capabilities.files`: absolute paths or `~/…` (the user's home). The plugin may read inside `read` and `write` folders
-  and write inside `write` folders through `plugins.readFile` / `plugins.writeFile` / `plugins.listDir`, with the
-  user's own rights. Nothing else in the app gives a plugin file access.
-* `capabilities.sockets`: informational. A plugin reaches a socket only through its declared commands (for example
-  `docker` talking to `/var/run/docker.sock`); there is no API that opens a socket.
+  and write inside `write` folders through `plugins.readFile` / `plugins.writeFile` / `plugins.listDir` /
+  `plugins.mkdir` / `plugins.remove`, with the user's own rights. Nothing else in the app gives a plugin file access.
+  An entry is a path string, or (SDK v3) an object `{"path", "admin"?, "adminUnlessGroup"?, "create"?}` (unknown fields
+  are rejected; entries without options are written back as strings, so v2 manifests and their signatures do not change).
+  `admin: true`: the folder is used on the root bridge (with administrator rights, after the unlock dialog) unless the
+  caller is root or in `adminUnlessGroup`; it must be an absolute path, not under `~`. A plain folder is never used on
+  the root bridge. When a path falls in several entries the longest folder wins, and on a tie the entry without `admin`.
+  `create: true`: a write (`writeFile`, `mkdir`) into the folder creates it first when it is missing (0700 under `~`,
+  else 0755, with missing parents).
+* `capabilities.http` (SDK v3): HTTP APIs on unix sockets, at most 16 entries:
+  * `name` `^[a-z][a-z0-9-]{0,31}$`, unique. `socket`: a clean absolute path (at most 107 bytes, the `sun_path` size).
+  * `rules` (1 to 256): `{"methods": […], "path": "<regexp>"}`. Methods are upper case, from `GET HEAD POST PUT PATCH
+    DELETE OPTIONS`. `path` is a Go regular expression (at most 512 characters) that must match the **whole** decoded URL
+    path (it is compiled as `^(?:…)$`).
+  * `headers` (at most 32): the only request headers the plugin may set. Names are `^[A-Za-z][A-Za-z0-9-]{0,63}$`, and
+    never `Host`, `Cookie`, `Authorization`, `Proxy-Authorization`, hop-by-hop or framing headers (`Connection`,
+    `Upgrade`, `Transfer-Encoding`, `Content-Length`, `Keep-Alive`, `TE`, `Trailer`, `Expect`), `Forwarded`, `Via`,
+    `Origin`, `Referer`, or `Proxy-*`, `Sec-*`, `X-Forwarded-*`.
+  * `admin` / `adminUnlessGroup` as for commands: the socket is opened by the bridge process, so as the user, or as root
+    on the root bridge. An entry not declared `admin` is never used on the root bridge.
+  * `maxBody` caps the request and the response body (default 8 MiB, max 64 MiB). `timeoutSec` (default 30, max 600)
+    bounds `plugins.http`, and the wait for the response headers of `plugins.httpStream`.
+* `capabilities.sockets`: informational. It lists the sockets the plugin's commands talk to (for example `docker`
+  talking to `/var/run/docker.sock`). A plugin opens a socket itself only through `capabilities.http`.
 * `capabilities.network`: host names (`api.example.org`, `*.example.org`, `host:8443`; nothing else, the entries go into
   a CSP header). The plugin frame may connect to them over https/wss; the user's session cookie is never sent from the
   frame.
@@ -165,17 +199,65 @@ Errors: `not_found` (plugin or command), `forbidden` (disabled, blocked, not vis
 ### `plugins.execStream` (stream, user)
 Same params and checks. Events: `{"stream":"stdout"|"stderr","line":"…"}` per line, then `{"exit":<code>}`; closing the stream kills the process.
 
+### `plugins.pty` (stream, user; admin commands need the root bridge)
+Params `{"plugin","command","args":[…],"cols","rows"}` (size 1 to 1000, default 80×24). Only commands declared
+`pty: true`, with the same checks as `plugins.exec`; the process gets a new pseudo-terminal (terminal module code),
+`TERM=xterm-256color`, the safe PATH and no persistent session. Events: the terminal output as binary chunks
+(`b64`), then `{"type":"exit","code"}`. Input (as for `terminal.attach`): `{"type":"input","data":"<base64>"}` and
+`{"type":"resize","cols","rows"}`. Closing the stream hangs up and then kills the process group.
+
+### `plugins.http` (user; admin APIs need the root bridge)
+Params `{"plugin","name","method","path","query"?,"headers"?:{…},"body"?,"b64"?,"json"?}` →
+`{"status","headers":{…},"body","b64"?}`. A non-2xx status is a normal result.
+* `path` is the URL path as sent (percent-encoded), without a query. It must start with a single `/` and hold no
+  control characters, spaces, `?`, `#`, `\`; no encoded `/`, `\`, NUL, CR or LF (`%2f %5c %00 %0d %0a`); after
+  decoding, no empty, `.` or `..` segment and no trailing `/`. The rules are matched against the **decoded** path. The
+  request goes out with that path, so the API sees what the rule matched.
+* `query` is the raw query string without `?`: printable ASCII without spaces or `#`, at most 8 KiB, passed through as is.
+* `headers`: only names listed in the entry's `headers` (case-insensitive); values at most 8 KiB, no CR, LF or NUL.
+  `Host` is always `localhost`; nothing else is forwarded (no cookies, no client headers). `json:true` adds
+  `Content-Type: application/json` unless the plugin set a Content-Type.
+* `body`: text, or base64 with `b64:true`; at most `maxBody` bytes.
+* The bridge connects to `socket` with a dedicated transport: no proxy, no keep-alive, no compression, redirects are
+  returned and never followed, 64 KiB of response headers at most.
+* The result: response headers with repeated values joined by `, ` (`Set-Cookie` dropped); `body` is text, or base64 with
+  `b64:true` when it is not UTF-8. The response body is capped at `maxBody` and at 11 MiB (the result travels in one
+  protocol line); a larger response is `unavailable`: use `plugins.httpStream`.
+* Transport limits: a `/api/rpc` request is at most 1 MiB, so a request body sent with `plugins.http` is at most about
+  750 KiB (base64) or 1 MiB (text); the WebSocket frame that opens `plugins.httpStream` is at most 512 KiB.
+
+Errors: `not_found` (plugin or API), `forbidden` (disabled, blocked, not visible, user API on the root bridge, socket
+permission denied), `invalid` (method, path, query, header or body not allowed), `needs_admin` (admin API from the user
+bridge, unless the user is in `adminUnlessGroup`), `unavailable` (nothing listening, timeout, response too large).
+
+### `plugins.httpStream` (stream, user)
+Same params and checks. Events: `{"status","headers"}` when the response starts, then the body as binary chunks as
+they arrive (chunked and endless responses included), then `end`. No total timeout (`timeoutSec` bounds the wait for
+the headers); closing the stream closes the connection.
+
 ### `plugins.readFile` (user)
 Params `{"plugin","path","b64"?}` → `{"path","size","data","b64"?}`. `path` is absolute or `~/…` and must be inside a folder of
 `capabilities.files.read` or `files.write` (longest match). The file is opened through `os.Root` of that folder, so `..` and
 symlinks cannot leave it. 4 MiB max. `data` is text, or base64 with `b64:true` (binary content, or asked for). Always with the
-user's own rights: on the root bridge → `forbidden`. Errors: `forbidden` (not declared, outside the folder, disabled/blocked/
-hidden plugin, permission denied), `not_found`, `invalid` (not a regular file, too large).
+user's own rights (on the root bridge → `forbidden`), except in folders declared `admin`: those run on the root bridge, or as
+the user when the user is root or in `adminUnlessGroup`, and answer `needs_admin` otherwise. Errors: `forbidden` (not
+declared, outside the folder, disabled/blocked/hidden plugin, permission denied, plain folder on the root bridge),
+`needs_admin`, `not_found`, `invalid` (not a regular file, too large).
 
 ### `plugins.writeFile` (user)
 Params `{"plugin","path","data","b64"?}` → `{path,size}`. `path` must be inside `capabilities.files.write`. Writes a temporary file
 in the same folder and renames it over the target (relative to the folder's descriptor: a symlink at the target is replaced, not
-followed); keeps the mode of an existing file, else 0644. 4 MiB max. Same errors as `readFile`.
+followed); keeps the mode of an existing file, else 0644. 4 MiB max (and the 1 MiB `/api/rpc` request limit). A folder declared
+`create: true` is created first when missing. Same errors as `readFile`.
+
+### `plugins.mkdir` (user; SDK v3)
+Params `{"plugin","path"}` → `{path}`. Creates the folder and missing parents (0755) inside a `files.write` folder, one
+component at a time through `os.Root`; an existing folder is fine, an existing file is `invalid`. Same rules and errors as
+`writeFile`.
+
+### `plugins.remove` (user; SDK v3)
+Params `{"plugin","path"}` → `{path}`. Removes a file, a symlink (not its target) or an empty folder inside a `files.write`
+folder; never the declared folder itself. A folder that is not empty is `invalid`. Same rules and errors as `writeFile`.
 
 ### `plugins.listDir` (user)
 Params `{"plugin","path"}` → `{"path","entries":[{"name","type":"file|dir|link|other","size","mtime"}]}` (at most 2000, sorted by

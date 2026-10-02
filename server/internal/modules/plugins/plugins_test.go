@@ -384,30 +384,30 @@ func TestResolveLevels(t *testing.T) {
 	system, _ := setup(t)
 	writePlugin(t, filepath.Join(system, "demo"), strings.Replace(goodManifest, `"visibleTo": {"groups": ["docker"]}`, `"visibleTo": {"groups": []}`, 1), map[string]string{"index.js": "x"})
 	user := &rpc.Call{}
-	if _, err := resolve(user, ExecParams{Plugin: "demo", Command: "ps"}); err != nil {
+	if _, err := resolve(user, ExecParams{Plugin: "demo", Command: "ps"}, false); err != nil {
 		t.Fatalf("user command: %v", err)
 	}
 	if os.Geteuid() != 0 && !currentCaller(false).Groups["docker"] {
-		if _, err := resolve(user, ExecParams{Plugin: "demo", Command: "stop", Args: []string{"x"}}); !rpc.IsCode(err, rpc.NeedsAdmin) {
+		if _, err := resolve(user, ExecParams{Plugin: "demo", Command: "stop", Args: []string{"x"}}, false); !rpc.IsCode(err, rpc.NeedsAdmin) {
 			t.Fatalf("admin command from the user bridge must ask for admin, got %v", err)
 		}
 	}
-	if _, err := resolve(&rpc.Call{Admin: true}, ExecParams{Plugin: "demo", Command: "stop", Args: []string{"x"}}); err != nil {
+	if _, err := resolve(&rpc.Call{Admin: true}, ExecParams{Plugin: "demo", Command: "stop", Args: []string{"x"}}, false); err != nil {
 		t.Fatalf("admin bridge: %v", err)
 	}
-	if _, err := resolve(user, ExecParams{Plugin: "demo", Command: "nope"}); !rpc.IsCode(err, rpc.NotFound) {
+	if _, err := resolve(user, ExecParams{Plugin: "demo", Command: "nope"}, false); !rpc.IsCode(err, rpc.NotFound) {
 		t.Fatalf("unknown command: %v", err)
 	}
-	if _, err := resolve(user, ExecParams{Plugin: "ghost", Command: "ps"}); !rpc.IsCode(err, rpc.NotFound) {
+	if _, err := resolve(user, ExecParams{Plugin: "ghost", Command: "ps"}, false); !rpc.IsCode(err, rpc.NotFound) {
 		t.Fatalf("unknown plugin: %v", err)
 	}
-	if _, err := resolve(&rpc.Call{Admin: true}, ExecParams{Plugin: "demo", Command: "stop", Args: []string{"-bad"}}); !rpc.IsCode(err, rpc.Invalid) {
+	if _, err := resolve(&rpc.Call{Admin: true}, ExecParams{Plugin: "demo", Command: "stop", Args: []string{"-bad"}}, false); !rpc.IsCode(err, rpc.Invalid) {
 		t.Fatalf("bad arg: %v", err)
 	}
 	st := readState()
 	st.Enabled["demo"] = false
 	writeState(st)
-	if _, err := resolve(user, ExecParams{Plugin: "demo", Command: "ps"}); !rpc.IsCode(err, rpc.Forbidden) {
+	if _, err := resolve(user, ExecParams{Plugin: "demo", Command: "ps"}, false); !rpc.IsCode(err, rpc.Forbidden) {
 		t.Fatalf("disabled plugin must not run: %v", err)
 	}
 }

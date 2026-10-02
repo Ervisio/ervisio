@@ -190,7 +190,11 @@ A plugin is a folder with `manifest.json`, a frontend ES module and optional ass
 
 Plugins never run arbitrary code on the server: they call `plugins.exec {plugin, command, args}`,
 which runs only the `argv` declared in the manifest (with `{0}`-style argument slots validated by
-pattern), as user or admin as declared. Their frontend never runs in the app either: each page or widget
+pattern), as user or admin as declared. Since SDK v3 a command may be declared `pty` (run in a
+pseudo-terminal through `plugins.pty`, reusing the terminal module's pty code), `capabilities.http`
+lets a plugin call an HTTP API on a unix socket for declared methods, paths and headers only
+(`plugins.http` / `plugins.httpStream`; the bridge connects as the user, or as root for `admin`
+entries), and folders may be declared `admin` or `create` (`docs/api/plugins.md`). Their frontend never runs in the app either: each page or widget
 runs in an `<iframe sandbox="allow-scripts">` (opaque origin, strict CSP) and talks to the app only through a
 `postMessage` broker that allows the declared commands and folders (`web/PLUGIN-SDK.md`). Signed plugins
 carry `manifest.sig` (ed25519, team key: `docs/PLUGIN-SIGNING.md`); unsigned ones are blocked by default.

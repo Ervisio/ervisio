@@ -53,18 +53,20 @@ type DirEntry struct {
 
 // capRoot is a declared folder (capabilities.files) a request falls in.
 type capRoot struct {
-	dir string // absolute, ~ expanded, cleaned
-	rel string // path below dir, "." for the folder itself
+	dir    string // absolute, ~ expanded, cleaned
+	rel    string // path below dir, "." for the folder itself
+	folder Folder // the manifest entry
 }
 
 // matchCap finds the longest declared folder that contains path and returns
 // it with the relative rest. The relative part is opened through os.Root,
-// so symlinks (or "..") inside it cannot leave the declared folder.
-func matchCap(declared []string, path string) (capRoot, bool) {
+// so symlinks (or "..") inside it cannot leave the declared folder. On a
+// tie the entry without admin wins, so the less privileged reading holds.
+func matchCap(declared []Folder, path string) (capRoot, bool) {
 	var best capRoot
 	found := false
 	for _, d := range declared {
-		dir := filepath.Clean(expandHome(d))
+		dir := filepath.Clean(expandHome(d.Path))
 		if !filepath.IsAbs(dir) || strings.HasPrefix(dir, "~") {
 			continue // ~ without a home directory: never matches
 		}
@@ -79,8 +81,8 @@ func matchCap(declared []string, path string) (capRoot, bool) {
 		default:
 			continue
 		}
-		if !found || len(dir) > len(best.dir) {
-			best, found = capRoot{dir: dir, rel: rel}, true
+		if !found || len(dir) > len(best.dir) || (len(dir) == len(best.dir) && best.folder.Admin && !d.Admin) {
+			best, found = capRoot{dir: dir, rel: rel, folder: d}, true
 		}
 	}
 	return best, found
@@ -88,13 +90,11 @@ func matchCap(declared []string, path string) (capRoot, bool) {
 
 // pluginPath checks a path from a plugin and resolves it against the
 // declared folders for the operation (read: files.read and files.write,
-// write: files.write only).
+// write: files.write only). Plain folders are used with the user's own
+// rights, never on the root bridge. Admin folders run on the root bridge,
+// or as the user when the user is root or in adminUnlessGroup.
 func pluginPath(c *rpc.Call, p FileParams, write bool) (*Found, capRoot, error) {
-	if c.Admin {
-		// File capabilities always use the signed-in user's own rights.
-		return nil, capRoot{}, rpc.Errorf(rpc.Forbidden, "Plugin file access runs with your own rights, not as administrator.")
-	}
-	f, _, err := authorize(c, p.Plugin)
+	f, who, err := authorize(c, p.Plugin)
 	if err != nil {
 		return nil, capRoot{}, err
 	}
@@ -109,7 +109,7 @@ func pluginPath(c *rpc.Call, p FileParams, write bool) (*Found, capRoot, error) 
 	caps := f.M.Capabilities.Files
 	declared := caps.Write
 	if !write {
-		declared = append(append([]string{}, caps.Read...), caps.Write...)
+		declared = append(append([]Folder{}, caps.Read...), caps.Write...)
 	}
 	r, ok := matchCap(declared, path)
 	if !ok {
@@ -119,7 +119,35 @@ func pluginPath(c *rpc.Call, p FileParams, write bool) (*Found, capRoot, error) 
 		}
 		return nil, capRoot{}, rpc.Errorf(rpc.Forbidden, "%s did not declare that it may %s %s.", f.M.Name, verb, path)
 	}
+	if c.Admin && !r.folder.Admin {
+		// File capabilities use the signed-in user's own rights unless the
+		// folder is declared admin.
+		return nil, capRoot{}, rpc.Errorf(rpc.Forbidden, "Plugin file access runs with your own rights, not as administrator.")
+	}
+	root := c.Admin || os.Geteuid() == 0
+	if r.folder.Admin && !root && !(r.folder.AdminUnlessGroup != "" && who.Groups[r.folder.AdminUnlessGroup]) {
+		return nil, capRoot{}, rpc.Errorf(rpc.NeedsAdmin, "%s needs administrator rights to use %s.", f.M.Name, r.dir)
+	}
 	return f, r, nil
+}
+
+// ensureFolder creates a declared folder marked create:true when it is
+// missing (0700 under ~, else 0755), before a write.
+func ensureFolder(r capRoot) error {
+	if !r.folder.Create {
+		return nil
+	}
+	if _, err := os.Lstat(r.dir); !errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	mode := fs.FileMode(0o755)
+	if strings.HasPrefix(r.folder.Path, "~") {
+		mode = 0o700
+	}
+	if err := os.MkdirAll(r.dir, mode); err != nil {
+		return fileErr(err, r.dir)
+	}
+	return nil
 }
 
 func fileErr(err error, path string) error {
@@ -189,6 +217,9 @@ func writePluginFile(_ context.Context, c *rpc.Call) (any, error) {
 	}
 	if r.rel == "." {
 		return nil, rpc.Errorf(rpc.Invalid, "%s is a declared folder, not a file.", p.Path)
+	}
+	if err := ensureFolder(r); err != nil {
+		return nil, err
 	}
 	data := []byte(p.Data)
 	if p.B64 {
@@ -287,4 +318,77 @@ func listPluginDir(_ context.Context, c *rpc.Call) (any, error) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return map[string]any{"path": filepath.Join(r.dir, r.rel), "entries": out}, nil
+}
+
+// mkdirPlugin implements plugins.mkdir: creates a folder (and missing
+// parents) inside a files.write folder.
+func mkdirPlugin(_ context.Context, c *rpc.Call) (any, error) {
+	var p FileParams
+	if err := c.Bind(&p); err != nil {
+		return nil, err
+	}
+	_, r, err := pluginPath(c, p, true)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureFolder(r); err != nil {
+		return nil, err
+	}
+	root, err := os.OpenRoot(r.dir)
+	if err != nil {
+		return nil, fileErr(err, p.Path)
+	}
+	defer root.Close()
+	// One component at a time through os.Root (no MkdirAll before Go 1.25),
+	// so a symlink on the way cannot lead out of the folder.
+	cur := ""
+	for _, part := range strings.Split(r.rel, "/") {
+		if part == "." || part == "" {
+			continue
+		}
+		cur = filepath.Join(cur, part)
+		err := root.Mkdir(cur, 0o755)
+		if err == nil {
+			continue
+		}
+		if !errors.Is(err, fs.ErrExist) {
+			return nil, fileErr(err, p.Path)
+		}
+		fi, serr := root.Stat(cur)
+		if serr != nil {
+			return nil, fileErr(serr, p.Path)
+		}
+		if !fi.IsDir() {
+			return nil, rpc.Errorf(rpc.Invalid, "%s exists and is not a folder.", filepath.Join(r.dir, cur))
+		}
+	}
+	return map[string]any{"path": filepath.Join(r.dir, r.rel)}, nil
+}
+
+// removePlugin implements plugins.remove: deletes a file, a symlink or an
+// empty folder inside a files.write folder (never the declared folder).
+func removePlugin(_ context.Context, c *rpc.Call) (any, error) {
+	var p FileParams
+	if err := c.Bind(&p); err != nil {
+		return nil, err
+	}
+	_, r, err := pluginPath(c, p, true)
+	if err != nil {
+		return nil, err
+	}
+	if r.rel == "." {
+		return nil, rpc.Errorf(rpc.Invalid, "%s is a declared folder; it cannot be removed.", p.Path)
+	}
+	root, err := os.OpenRoot(r.dir)
+	if err != nil {
+		return nil, fileErr(err, p.Path)
+	}
+	defer root.Close()
+	if err := root.Remove(r.rel); err != nil {
+		if errors.Is(err, syscall.ENOTEMPTY) || errors.Is(err, syscall.EEXIST) {
+			return nil, rpc.Errorf(rpc.Invalid, "%s is a folder that is not empty.", p.Path)
+		}
+		return nil, fileErr(err, p.Path)
+	}
+	return map[string]any{"path": filepath.Join(r.dir, r.rel)}, nil
 }

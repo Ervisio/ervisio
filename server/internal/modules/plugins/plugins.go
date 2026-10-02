@@ -79,11 +79,38 @@ func Register(r *rpc.Registry) {
 		return runStream(ctx, c, s, p)
 	})
 
+	r.Stream("plugins.pty", rpc.User, func(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
+		var p PTYParams
+		if err := c.Bind(&p); err != nil {
+			return err
+		}
+		return runPTY(ctx, c, s, p)
+	})
+
+	// HTTP APIs on unix sockets, only for the declared rules (see http.go).
+	r.Handle("plugins.http", rpc.User, func(ctx context.Context, c *rpc.Call) (any, error) {
+		var p HTTPParams
+		if err := c.Bind(&p); err != nil {
+			return nil, err
+		}
+		return runHTTP(ctx, c, p)
+	})
+	r.Stream("plugins.httpStream", rpc.User, func(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
+		var p HTTPParams
+		if err := c.Bind(&p); err != nil {
+			return err
+		}
+		return runHTTPStream(ctx, c, s, p)
+	})
+
 	// Plugin-scoped file access: only inside capabilities.files, with the
-	// user's own rights (see files.go).
+	// user's own rights, or on the root bridge for folders declared admin
+	// (see files.go).
 	r.Handle("plugins.readFile", rpc.User, readPluginFile)
 	r.Handle("plugins.writeFile", rpc.User, writePluginFile)
 	r.Handle("plugins.listDir", rpc.User, listPluginDir)
+	r.Handle("plugins.mkdir", rpc.User, mkdirPlugin)
+	r.Handle("plugins.remove", rpc.User, removePlugin)
 
 	// Used by the daemon before serving plugin assets or the plugin frame.
 	r.Handle("plugins.access", rpc.User, access)

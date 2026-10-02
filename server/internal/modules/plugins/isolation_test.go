@@ -166,15 +166,23 @@ func TestPluginWriteAndList(t *testing.T) {
 	}
 }
 
+func folders(paths ...string) []Folder {
+	out := make([]Folder, len(paths))
+	for i, p := range paths {
+		out[i] = Folder{Path: p}
+	}
+	return out
+}
+
 func TestMatchCapLongestPrefix(t *testing.T) {
-	r, ok := matchCap([]string{"/srv", "/srv/www"}, "/srv/www/a")
+	r, ok := matchCap(folders("/srv", "/srv/www"), "/srv/www/a")
 	if !ok || r.dir != "/srv/www" || r.rel != "a" {
 		t.Fatalf("%+v", r)
 	}
-	if _, ok := matchCap([]string{"/srv"}, "/srvx/a"); ok {
+	if _, ok := matchCap(folders("/srv"), "/srvx/a"); ok {
 		t.Fatal("prefix without a separator matched")
 	}
-	if r, ok := matchCap([]string{"/"}, "/etc/x"); !ok || r.rel != "etc/x" {
+	if r, ok := matchCap(folders("/"), "/etc/x"); !ok || r.rel != "etc/x" {
 		t.Fatalf("%+v", r)
 	}
 }
@@ -183,7 +191,7 @@ func TestMatchCapLongestPrefix(t *testing.T) {
 func TestUserCommandNotOnAdminBridge(t *testing.T) {
 	system, _ := setup(t)
 	writePlugin(t, filepath.Join(system, "demo"), strings.Replace(goodManifest, `"visibleTo": {"groups": ["docker"]}`, `"visibleTo": {"groups": []}`, 1), map[string]string{"index.js": "x"})
-	if _, err := resolve(&rpc.Call{Admin: true}, ExecParams{Plugin: "demo", Command: "ps"}); !rpc.IsCode(err, rpc.Forbidden) {
+	if _, err := resolve(&rpc.Call{Admin: true}, ExecParams{Plugin: "demo", Command: "ps"}, false); !rpc.IsCode(err, rpc.Forbidden) {
 		t.Fatalf("user command on the root bridge: %v", err)
 	}
 }
@@ -208,10 +216,10 @@ func TestTrustPolicy(t *testing.T) {
 	if d := got["devdemo"]; d.Blocked || !d.Enabled || !d.DevUnsigned {
 		t.Fatalf("unsigned dev plugin must run marked as such: %+v", d)
 	}
-	if _, err := resolve(&rpc.Call{}, ExecParams{Plugin: "demo", Command: "ps"}); !rpc.IsCode(err, rpc.Forbidden) {
+	if _, err := resolve(&rpc.Call{}, ExecParams{Plugin: "demo", Command: "ps"}, false); !rpc.IsCode(err, rpc.Forbidden) {
 		t.Fatalf("blocked plugin ran: %v", err)
 	}
-	if _, err := resolve(&rpc.Call{}, ExecParams{Plugin: "devdemo", Command: "ps"}); err != nil {
+	if _, err := resolve(&rpc.Call{}, ExecParams{Plugin: "devdemo", Command: "ps"}, false); err != nil {
 		t.Fatalf("dev plugin: %v", err)
 	}
 	// plugins.access mirrors it: the daemon serves nothing of a blocked plugin.

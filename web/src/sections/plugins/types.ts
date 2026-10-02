@@ -6,10 +6,27 @@ export interface Command {
   admin: boolean;
   adminUnlessGroup?: string;
   timeoutSec?: number;
+  /** Runs only in a terminal (sdk.api.pty). */
+  pty?: boolean;
 }
+/** An HTTP API on a unix socket (capabilities.http, SDK v3). */
+export interface HttpApi {
+  name: string;
+  socket: string;
+  admin: boolean;
+  adminUnlessGroup?: string;
+  headers: string[];
+  rules: { methods: string[]; path: string }[];
+  maxBody?: number;
+  timeoutSec?: number;
+}
+/** A capabilities.files entry: a path, or an object with admin / create (SDK v3). */
+export type Folder = string | { path: string; admin?: boolean; adminUnlessGroup?: string; create?: boolean };
 export interface Capabilities {
   commands: Command[];
-  files: { read: string[]; write: string[] };
+  /** Missing from older daemons and catalogs. */
+  http?: HttpApi[];
+  files: { read: Folder[]; write: Folder[] };
   sockets: string[];
   network: string[];
 }

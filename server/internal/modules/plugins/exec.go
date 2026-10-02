@@ -87,7 +87,8 @@ type resolved struct {
 }
 
 // resolve finds the plugin and command, checks enabled/visible/level and substitutes the arguments.
-func resolve(c *rpc.Call, p ExecParams) (*resolved, error) {
+// pty commands run only through plugins.pty (wantPTY), and plugins.pty runs only pty commands.
+func resolve(c *rpc.Call, p ExecParams, wantPTY bool) (*resolved, error) {
 	if !idRe.MatchString(p.Plugin) || !cmdNameRe.MatchString(p.Command) {
 		return nil, rpc.Errorf(rpc.Invalid, "Give a plugin id and the name of one of its commands.")
 	}
@@ -104,6 +105,12 @@ func resolve(c *rpc.Call, p ExecParams) (*resolved, error) {
 	}
 	if cmd == nil {
 		return nil, rpc.Errorf(rpc.NotFound, "%s does not declare a command %q.", m.Name, p.Command)
+	}
+	if cmd.PTY != wantPTY {
+		if cmd.PTY {
+			return nil, rpc.Errorf(rpc.Invalid, "%s declares %q as a terminal command; open it with sdk.api.pty.", m.Name, p.Command)
+		}
+		return nil, rpc.Errorf(rpc.Invalid, "%s does not declare %q as a terminal (pty) command.", m.Name, p.Command)
 	}
 	// A command declared as user-level never runs on the root bridge: the
 	// plugin cannot raise its own rights by asking for admin.
@@ -126,7 +133,7 @@ func resolve(c *rpc.Call, p ExecParams) (*resolved, error) {
 }
 
 func runExec(ctx context.Context, c *rpc.Call, p ExecParams) (*ExecResult, error) {
-	r, err := resolve(c, p)
+	r, err := resolve(c, p, false)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +186,7 @@ func (b *limitBuf) Write(p []byte) (int, error) {
 // runStream runs the command and sends {"stream":"stdout"|"stderr","line":…} per
 // line, then {"exit":code}. There is no timeout; the client closes the stream.
 func runStream(ctx context.Context, c *rpc.Call, s rpc.Stream, p ExecParams) error {
-	r, err := resolve(c, p)
+	r, err := resolve(c, p, false)
 	if err != nil {
 		return err
 	}

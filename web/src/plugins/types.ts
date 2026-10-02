@@ -15,8 +15,10 @@ export interface PluginManifest {
   devUnsigned?: boolean;
   location?: string;
   capabilities?: {
-    commands?: { name: string; admin?: boolean; adminUnlessGroup?: string; args?: unknown[] }[];
-    files?: { read?: string[]; write?: string[] };
+    commands?: { name: string; admin?: boolean; adminUnlessGroup?: string; args?: unknown[]; pty?: boolean }[];
+    http?: { name: string; socket: string; admin?: boolean; adminUnlessGroup?: string; headers?: string[]; rules?: { methods: string[]; path: string }[]; maxBody?: number; timeoutSec?: number }[];
+    /** A path (SDK v2) or {path, admin, adminUnlessGroup, create} (SDK v3). */
+    files?: { read?: PluginFolder[]; write?: PluginFolder[] };
     sockets?: string[];
     network?: string[];
   };
@@ -26,6 +28,8 @@ export interface PluginManifest {
     snippets?: { name: string; command: string }[];
   };
 }
+
+export type PluginFolder = string | { path: string; admin?: boolean; adminUnlessGroup?: string; create?: boolean };
 
 /** A page contributed by a plugin (from its manifest). It renders in the plugin's sandboxed frame. */
 export interface PluginPageInfo {
@@ -51,7 +55,7 @@ export interface PluginSnippet {
 }
 
 /* ------------------------------------------------------------------------------------------------
- * The SDK object a plugin module receives inside its frame (contract version 2). See web/PLUGIN-SDK.md.
+ * The SDK object a plugin module receives inside its frame (contract version 3). See web/PLUGIN-SDK.md.
  * Kept here as the reference typing for plugin authors; the implementation is web/src/plugins/frame/runtime.tsx.
  * ---------------------------------------------------------------------------------------------- */
 
@@ -66,10 +70,28 @@ export interface PluginError extends Error {
   code: string;
 }
 
+/** Request of sdk.api.http / httpStream. An object body is sent as JSON. */
+export interface HttpRequestOptions {
+  method: string;
+  /** URL path, matched against the manifest's rules; no query string. */
+  path: string;
+  query?: Record<string, string | string[]> | string;
+  headers?: Record<string, string>;
+  body?: string | Uint8Array | object;
+}
+
+export interface HttpResponse {
+  status: number;
+  headers: Record<string, string>;
+  body: string;
+  json(): any;
+  bytes(): Uint8Array;
+}
+
 export type PluginViewDef<S = PluginSDK> = ComponentType<{ sdk: S }> | { render(container: HTMLElement, sdk: S): void | (() => void) };
 
 export interface PluginSDK {
-  version: 2;
+  version: 3;
   plugin: { id: string; name: string; version: string };
   /** What this frame shows: one page or one widget of the plugin. */
   view: { kind: 'page' | 'widget'; id: string };
@@ -85,13 +107,31 @@ export interface PluginSDK {
       args: string[],
       h: { onLine?(stream: 'stdout' | 'stderr', line: string): void; onExit?(code: number): void; onError?(e: PluginError): void },
     ): { close(): void };
+    /** SDK v3: an HTTP request to a capabilities.http entry. A non-2xx status is a normal result. */
+    http(name: string, req: HttpRequestOptions): Promise<HttpResponse>;
+    /** SDK v3: same, with the body streamed as it arrives. Closing ends the connection. */
+    httpStream(
+      name: string,
+      req: HttpRequestOptions,
+      h: { onStart?(status: number, headers: Record<string, string>): void; onData(chunk: Uint8Array): void; onEnd(): void; onError(e: PluginError): void },
+    ): { close(): void };
+    /** SDK v3: runs a command declared `pty: true` in a terminal. Closing kills it. */
+    pty(
+      command: string,
+      args: string[],
+      o: { cols: number; rows: number; onData(chunk: Uint8Array): void; onExit(code: number): void; onError(e: PluginError): void },
+    ): { write(data: string | Uint8Array): void; resize(cols: number, rows: number): void; close(): void };
   };
-  /** Only inside capabilities.files (read: read+write folders; write: write folders), with the user's own rights. */
+  /** Only inside capabilities.files (read: read+write folders; write: write folders), with the user's own rights (admin folders: administrator rights when needed). */
   files: {
     read(path: string): Promise<string>;
     readBytes(path: string): Promise<Uint8Array>;
     write(path: string, data: string | Uint8Array): Promise<void>;
     list(path: string): Promise<{ name: string; type: 'file' | 'dir' | 'link' | 'other'; size: number; mtime: number }[]>;
+    /** SDK v3: creates a folder (and missing parents) inside a write folder. */
+    mkdir(path: string): Promise<void>;
+    /** SDK v3: removes a file or an empty folder inside a write folder. */
+    remove(path: string): Promise<void>;
   };
   /** A blob: URL for a file of the plugin's own folder (images, CSS...). */
   asset(path: string): Promise<string>;
