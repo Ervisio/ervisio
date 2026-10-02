@@ -520,11 +520,11 @@ func (s *Server) transferRecordFor(user, ip string, q *transferRequest) *auditRe
 		return nil
 	}
 	rec := &auditRec{s: s, kind: q.Kind}
-	rec.e = audit.Entry{Time: time.Now(), User: user, IP: ip, Source: audit.SourcePlugin, Plugin: q.Plugin, Action: q.Kind, Admin: q.Admin, Env: q.Env}
+	rec.e = audit.Entry{Time: time.Now(), User: user, IP: ip, Source: audit.SourcePlugin, Plugin: auditName(q.Plugin), Action: q.Kind, Admin: q.Admin, Env: auditName(q.Env)}
 	if q.Command != "" {
 		rec.e.Target = audit.CommandTarget(q.Command, q.Args)
 	} else {
-		rec.e.Via = q.Name
+		rec.e.Via = auditName(q.Name)
 		rec.e.Target = audit.HTTPTarget(q.Method, q.Path, q.Query)
 	}
 	return rec

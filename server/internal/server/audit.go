@@ -6,6 +6,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"net/http"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -60,10 +61,33 @@ func auditKind(method string) string {
 	return ""
 }
 
+// auditNameRe is what a plugin id, a capability or command name and an
+// environment id look like.
+var auditNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
+
+// auditName is a name taken from a request for the activity log: the
+// value when it looks like a plugin id or a capability name, else "?" (the
+// bridge refuses such a call anyway; the log must not hold the caller's
+// text, security review L2).
+func auditName(s string) string {
+	if s == "" || auditNameRe.MatchString(s) {
+		return s
+	}
+	return "?"
+}
+
 // auditBegin returns the record for a call, or nil when the call is not
 // logged (reads, other methods, the log is off).
+//
+// A browser's call never comes "via" a paired server: whatever the params
+// say, its origin stays empty (only the pairing relay, auditBeginFor after
+// addVia, sets one).
 func (s *Server) auditBegin(sess *Session, ip, method string, params json.RawMessage, admin bool) *auditRec {
-	return s.auditBeginFor(sess.Account.Name, ip, method, params, admin)
+	r := s.auditBeginFor(sess.Account.Name, ip, method, params, admin)
+	if r != nil {
+		r.e.Origin = ""
+	}
+	return r
 }
 
 // auditBeginFor is auditBegin for a user name: the pairing relay has no session.
@@ -97,7 +121,7 @@ func (s *Server) auditBeginFor(user, ip, method string, params json.RawMessage, 
 	}
 	_ = json.Unmarshal(params, &p)
 	r := &auditRec{s: s, kind: kind}
-	r.e = audit.Entry{Time: time.Now(), User: user, IP: ip, Source: audit.SourcePlugin, Plugin: p.Plugin, Action: kind, Admin: admin, Env: p.Env, Origin: p.Via}
+	r.e = audit.Entry{Time: time.Now(), User: user, IP: ip, Source: audit.SourcePlugin, Plugin: auditName(p.Plugin), Action: kind, Admin: admin, Env: auditName(p.Env), Origin: p.Via}
 	switch kind {
 	case "command", "pty":
 		r.e.Target = audit.CommandTarget(p.Command, p.Args)
@@ -105,7 +129,7 @@ func (s *Server) auditBeginFor(user, ip, method string, params json.RawMessage, 
 		if p.Method == http.MethodGet || p.Method == http.MethodHead {
 			return nil
 		}
-		r.e.Via = p.Name
+		r.e.Via = auditName(p.Name)
 		r.e.Target = audit.HTTPTarget(p.Method, p.Path, p.Query)
 		if len(p.Data) > 0 {
 			r.size = int64(len(p.Data))

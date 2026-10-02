@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -482,8 +483,22 @@ func clip(s string, max int) string {
 // that carry secrets.
 var secretName = regexp.MustCompile(`(?i)(pass(word|wd|phrase)?|secret|token|auth|credential|api[-_]?key|private[-_]?key|access[-_]?key|bearer|cookie|session|registry[-_]?config|build[-_]?args)`)
 
-// userInfo matches user:password@ in a URL.
-var userInfo = regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*://[^/\s:@]*):[^/\s@]*@`)
+// userInfo matches user:password@ in a URL. The password may hold a "/"
+// (some tools take "https://u:pa/ss@host" as user u, password pa/ss), so it
+// runs to the "@"; a URL with a port and an "@" later in its path is
+// over-redacted, which is the safe side.
+var userInfo = regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*://[^/\s:@]*):[^\s@]*@`)
+
+// bearer matches "Bearer x" and authHeader "Authorization: <scheme> x" (or
+// "Authorization: x") written into an argument (curl -H ...).
+var (
+	bearer     = regexp.MustCompile(`(?i)\b(bearer\s+)[^\s'"]+`)
+	authHeader = regexp.MustCompile(`(?i)\b((?:proxy-)?authorization\s*:\s*(?:[a-z0-9-]+\s+)?)[^\s'"]+`)
+)
+
+// portMapping is what follows a short -p that is not a password: a port
+// mapping like 8080:80 or 127.0.0.1:8080:80/tcp (docker run -p).
+var portMapping = regexp.MustCompile(`^([0-9.]+:)?[0-9]{1,5}(-[0-9]{1,5})?:[0-9]{1,5}(-[0-9]{1,5})?(/(tcp|udp|sctp))?$`)
 
 // Redacted replaces a secret.
 const Redacted = "***"
@@ -504,9 +519,12 @@ func RedactURL(u string) string {
 // SecretName reports whether a parameter or flag name looks like a secret.
 func SecretName(name string) bool { return secretName.MatchString(name) }
 
-// redactValue removes a password from URLs inside s.
+// redactValue removes a password from URLs inside s and the credentials
+// of an authorization scheme ("Bearer x").
 func redactValue(s string) string {
-	return userInfo.ReplaceAllString(s, "$1:"+Redacted+"@")
+	s = userInfo.ReplaceAllString(s, "$1:"+Redacted+"@")
+	s = bearer.ReplaceAllString(s, "${1}"+Redacted)
+	return authHeader.ReplaceAllString(s, "${1}"+Redacted)
 }
 
 // RedactQuery redacts the values of a raw query string whose keys look like
@@ -518,7 +536,11 @@ func RedactQuery(raw string) string {
 	parts := strings.Split(raw, "&")
 	for i, p := range parts {
 		k, v, hasV := strings.Cut(p, "=")
-		if SecretName(k) && hasV && v != "" {
+		name := k
+		if u, err := url.QueryUnescape(k); err == nil {
+			name = u // "access%5Ftoken" is access_token
+		}
+		if SecretName(name) && hasV && v != "" {
 			parts[i] = k + "=" + Redacted
 		} else if hasV {
 			parts[i] = k + "=" + redactValue(v)
@@ -538,8 +560,11 @@ func HTTPTarget(method, path, query string) string {
 }
 
 // CommandTarget is "command arg arg…" with secrets removed: the value of
-// --password=x or KEY=x pairs whose name looks like a secret, the word
-// after --password / --token style flags, and passwords inside URLs.
+// --password=x or KEY=x pairs whose name looks like a secret (also inside a
+// flag value: --env=DB_PASSWORD=x, --build-arg=NPM_TOKEN=x), the word after
+// --password / --token style flags and after a short -p (docker login -p,
+// mysql -p; a port mapping such as 8080:80 is kept), passwords inside URLs
+// and the credentials of "Bearer x" / "Basic x".
 func CommandTarget(command string, args []string) string {
 	var b strings.Builder
 	b.WriteString(command)
@@ -549,7 +574,15 @@ func CommandTarget(command string, args []string) string {
 		switch {
 		case hide:
 			hide = false
-			b.WriteString(Redacted)
+			if portMapping.MatchString(a) {
+				b.WriteString(a)
+			} else {
+				b.WriteString(Redacted)
+			}
+			continue
+		case a == "-p":
+			hide = true
+			b.WriteString(a)
 			continue
 		case strings.HasPrefix(a, "-"):
 			name, val, hasV := strings.Cut(strings.TrimLeft(a, "-"), "=")
@@ -562,9 +595,15 @@ func CommandTarget(command string, args []string) string {
 				}
 				continue
 			}
+			if hasV {
+				if k, v, ok := strings.Cut(val, "="); ok && v != "" && SecretName(k) {
+					b.WriteString(clip(a[:len(a)-len(val)]+k+"="+Redacted, maxArg))
+					continue
+				}
+			}
 		default:
 			if k, v, ok := strings.Cut(a, "="); ok && v != "" && SecretName(k) && !strings.ContainsAny(k, " /") {
-				b.WriteString(k + "=" + Redacted)
+				b.WriteString(clip(k, maxArg) + "=" + Redacted)
 				continue
 			}
 		}
@@ -582,18 +621,24 @@ func CSVRecord(e Entry) []string {
 	if e.Bytes != nil {
 		size = strconv.FormatInt(*e.Bytes, 10)
 	}
+	// Every text column goes through csvSafe: user names, plugin ids and
+	// the rest can come from a request. time, code, bytes and admin are
+	// written here (a negative exit code stays a number).
 	return []string{
-		e.Time.UTC().Format(time.RFC3339), e.User, e.IP, e.Source, e.Plugin, e.Action, e.Via,
-		csvSafe(e.Target), e.Result, code, size, strconv.FormatBool(e.Admin), csvSafe(e.Detail), csvSafe(e.Env), csvSafe(e.Origin),
+		e.Time.UTC().Format(time.RFC3339), csvSafe(e.User), csvSafe(e.IP), csvSafe(e.Source), csvSafe(e.Plugin), csvSafe(e.Action), csvSafe(e.Via),
+		csvSafe(e.Target), csvSafe(e.Result), code, size, strconv.FormatBool(e.Admin), csvSafe(e.Detail), csvSafe(e.Env), csvSafe(e.Origin),
 	}
 }
 
 // CSVHeader are the columns of CSVRecord.
 var CSVHeader = []string{"time", "user", "ip", "source", "plugin", "action", "via", "target", "result", "code", "bytes", "admin", "detail", "env", "origin"}
 
-// csvSafe stops a spreadsheet from running a value as a formula.
+// csvSafe stops a spreadsheet from running a value as a formula: a value
+// that starts (after any spaces) with = + - @, a tab, CR or LF gets a
+// leading quote.
 func csvSafe(s string) string {
-	if s != "" && strings.ContainsRune("=+-@\t\r", rune(s[0])) {
+	t := strings.TrimLeft(s, " ")
+	if t != "" && strings.ContainsRune("=+-@\t\r\n", rune(t[0])) {
 		return "'" + s
 	}
 	return s
