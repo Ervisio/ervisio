@@ -11,7 +11,8 @@
 #   sudo sh install.sh [options]
 #
 # It downloads a release from GitHub, checks its ed25519 signature (with
-# openssl, against the release key below) and its sha256, installs it into
+# openssl 3, or a built-in Python verifier on older systems such as Amazon
+# Linux 2, against the release key below) and its sha256, installs it into
 # the versioned layout that self-update uses (docs/RELEASING.md):
 #
 #   /usr/lib/linuxadmin/versions/<version>/{bin,web,plugins,packaging,VERSION}
@@ -20,8 +21,12 @@
 #   /usr/bin/linuxadmind         -> /usr/lib/linuxadmin/current/bin/linuxadmind
 #
 # writes the PAM service for this distribution and the systemd unit, makes
-# sure sudo is installed, and starts linuxadmin.service. Running it again
-# upgrades or repairs the installation. LinuxAdmin installed this way
+# sure sudo is installed, and starts linuxadmin.service. On a first install it
+# asks a few questions (port, who can reach it, root sign-in, admin unlock time,
+# TLS, Caddy) and writes /etc/linuxadmin/linuxadmin.conf; answers come from the
+# terminal even when the script is piped, and --yes or no terminal means the
+# defaults. Running it again upgrades or repairs the installation and keeps the
+# configuration. LinuxAdmin installed this way
 # updates itself from Settings > About. Installs made by a distribution
 # package (.deb, .rpm, AUR) are left alone: update those with the package
 # manager.
@@ -36,13 +41,28 @@
 #   --purge                    with --uninstall: also remove /etc/linuxadmin and /var/lib/linuxadmin
 #   --open-firewall            open the port in ufw or firewalld when one of them is active
 #   --dry-run                  show what would be done, change nothing (can run without root)
-#   -y, --yes                  do not ask questions (the firewall is only opened with --open-firewall)
-#   --insecure-skip-signature  install even when this openssl cannot verify ed25519 signatures
+#   -y, --yes                  do not ask questions: every answer is the default (the firewall is
+#                              only opened with --open-firewall, Caddy only changed with --caddy)
+#   --insecure-skip-signature  install even when no tool here can verify ed25519 signatures
 #                              (the sha256 is still checked, but against an unverified list)
+#   --port N                   port to listen on (default 9090; asked when it is in use)
+#   --listen all|local|IP      listen on all interfaces (default), on 127.0.0.1 only, or on one address
+#   --allow-root               allow signing in as root (default: no); --no-allow-root
+#   --admin-unlock D           how long administrator rights stay unlocked: 5m (default), 15m, 1h,
+#                              any 30s-24h, or signout (until sign-out)
+#   --tls-cert F --tls-key F   use your own certificate instead of the self-signed one
+#   --behind-proxy             a reverse proxy on this machine fronts LinuxAdmin (listens on 127.0.0.1)
+#   --origin URL               browser origin to accept (web.allowed_origins), e.g. https://admin.example.org
+#   --trusted-proxy ADDR       address or CIDR of a reverse proxy to trust (web.trusted_proxies)
+#   --caddy | --no-caddy       set up (or never touch) a Caddy found on this machine or in Docker
+#   --domain NAME              the (sub)domain Caddy serves LinuxAdmin on; implies --caddy
+#   --reconfigure              ask the configuration questions again on an installed system
+#   --no-enable, --no-start    do not enable at boot / do not start the service
 #   -h, --help                 show this help
 #
 # The script never runs downloaded code other than the verified release
-# binaries (`linuxadmind --version`), and never turns off TLS verification.
+# binaries (`linuxadmind --version`), and never turns off TLS verification of
+# its downloads.
 
 REPO="Fonlogen/LinuxAdmin"
 LIB=/usr/lib/linuxadmin
@@ -95,21 +115,135 @@ run() {
 	fi
 }
 
-# ask QUESTION DEFAULT(y|n): yes/no question. Without a terminal on stdin,
-# or with --yes, the default answer is taken without asking.
+# ---------------------------------------------------------------- questions
+#
+# The script is usually read from a pipe (curl | sh), so stdin is the script
+# itself: answers are read from the terminal (/dev/tty), never from stdin.
+# With --yes, or when there is no terminal, nothing is asked and every
+# question takes its default; nothing here can hang.
+
+tty_check() {
+	TTY_OK=0
+	[ "$YES" = 1 ] && return 0
+	if ( : </dev/tty ) 2>/dev/null; then TTY_OK=1; fi
+	return 0
+}
+
+# read_tty: reads one trimmed line from the terminal into REPLY. At end of
+# input (Ctrl-D) it returns 1 and stops asking further questions.
+read_tty() {
+	REPLY=
+	if [ "$TTY_OK" = 1 ] && IFS= read -r REPLY </dev/tty; then
+		REPLY="$(printf '%s\n' "$REPLY" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+		return 0
+	fi
+	TTY_OK=0
+	REPLY=
+	return 1
+}
+
+# ask QUESTION DEFAULT(y|n): yes/no question.
 ask() {
-	if [ "$YES" = 1 ] || [ ! -t 0 ]; then
+	if [ "$TTY_OK" = 0 ]; then
 		[ "$2" = y ]
 		return
 	fi
 	printf '%s ' "$1"
-	ask_answer=
-	read -r ask_answer || ask_answer=
-	case $ask_answer in
+	if ! read_tty; then
+		printf '\n'
+		[ "$2" = y ]
+		return
+	fi
+	case $REPLY in
 	[Yy]*) return 0 ;;
 	[Nn]*) return 1 ;;
 	'') [ "$2" = y ] ;;
 	*) return 1 ;;
+	esac
+}
+
+# ask_value PROMPT DEFAULT: sets REPLY (the default for an empty answer).
+ask_value() {
+	if [ "$TTY_OK" = 0 ]; then
+		REPLY=$2
+		return 0
+	fi
+	printf '%s [%s]: ' "$1" "$2"
+	if ! read_tty; then
+		printf '\n'
+		REPLY=$2
+		return 0
+	fi
+	[ -n "$REPLY" ] || REPLY=$2
+	return 0
+}
+
+# ask_choice QUESTION DEFAULT_NUMBER OPTION...: numbered menu, sets CHOICE.
+ask_choice() {
+	ac_q=$1
+	ac_def=$2
+	shift 2
+	ac_n=$#
+	while :; do
+		say "$ac_q"
+		ac_i=1
+		for ac_o in "$@"; do
+			if [ "$ac_i" = "$ac_def" ]; then say "  $ac_i) $ac_o (default)"; else say "  $ac_i) $ac_o"; fi
+			ac_i=$((ac_i + 1))
+		done
+		ask_value "Choice" "$ac_def"
+		case $REPLY in
+		'' | *[!0-9]*) ;;
+		*)
+			if [ "$REPLY" -ge 1 ] && [ "$REPLY" -le "$ac_n" ]; then
+				CHOICE=$REPLY
+				return 0
+			fi
+			;;
+		esac
+		say "Type a number from 1 to $ac_n."
+	done
+}
+
+# opt_set OPTION VALUE: checks a configuration option; a value given on the
+# command line is an answer, so its question is not asked.
+opt_set() {
+	CFG_REQUESTED=1
+	case $1 in
+	--port)
+		valid_port "$2" || die "--port must be a number from 1 to 65535."
+		F_PORT=$2
+		;;
+	--listen)
+		case $2 in
+		all | local) F_LISTEN=$2 ;;
+		*) printf '%s\n' "$2" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}$|^[0-9A-Fa-f:]*:[0-9A-Fa-f:]+$' || die "--listen is all, local or an IP address."
+			F_LISTEN=$2
+			;;
+		esac
+		;;
+	--admin-unlock)
+		case $2 in
+		signout | until-signout | off | 0) F_UNLOCK=0s ;;
+		*) valid_unlock "$2" || die "--admin-unlock is 30s to 24h (5m, 15m, 1h...) or 'signout'."
+			F_UNLOCK=$2
+			;;
+		esac
+		;;
+	--tls-cert) F_CERT=$2 ;;
+	--tls-key) F_KEY=$2 ;;
+	--origin)
+		valid_origin "$2" || die "--origin must look like https://host or https://host:port."
+		F_ORIGINS="$(list_add "$F_ORIGINS" "$2")"
+		;;
+	--trusted-proxy)
+		valid_proxy_addr "$2" || die "--trusted-proxy is an IP address or a CIDR such as 172.17.0.0/16."
+		F_TRUSTED="$(list_add "$F_TRUSTED" "$2")"
+		;;
+	--domain)
+		valid_domain "$2" || die "--domain must be a domain name such as linuxadmin.example.org."
+		F_DOMAIN=$2
+		;;
 	esac
 }
 
@@ -128,9 +262,24 @@ Options:
   --purge                    with --uninstall: also remove /etc/linuxadmin and /var/lib/linuxadmin
   --open-firewall            open the port in ufw or firewalld when one of them is active
   --dry-run                  show what would be done, change nothing (can run without root)
-  -y, --yes                  do not ask questions (the firewall is only opened with --open-firewall)
-  --insecure-skip-signature  install even when this openssl cannot verify ed25519 signatures
+  -y, --yes                  do not ask questions: every answer is the default
+                             (the firewall is only opened with --open-firewall, Caddy only changed with --caddy)
+  --insecure-skip-signature  install even when no tool here can verify ed25519 signatures
   -h, --help                 show this help
+
+Configuration (first install; asked unless given here, --yes takes the defaults):
+  --port N                   port to listen on (default 9090; asked again when it is in use)
+  --listen all|local|IP      all interfaces (default), 127.0.0.1 only, or one address
+  --allow-root               allow signing in as root (default: no); --no-allow-root
+  --admin-unlock D           5m (default), 15m, 1h, any 30s-24h, or signout (until sign-out)
+  --tls-cert F --tls-key F   use your own certificate instead of the self-signed one
+  --behind-proxy             a reverse proxy on this machine fronts LinuxAdmin (listens on 127.0.0.1)
+  --origin URL               browser origin to accept (web.allowed_origins)
+  --trusted-proxy ADDR       address or CIDR of a reverse proxy to trust (web.trusted_proxies)
+  --caddy | --no-caddy       set up (or never touch) a Caddy found on this machine or in Docker
+  --domain NAME              the (sub)domain Caddy serves LinuxAdmin on (implies --caddy)
+  --reconfigure              ask the configuration questions again on an installed system
+  --no-enable, --no-start    do not enable at boot / do not start the service
 USAGE
 }
 
@@ -301,22 +450,128 @@ sha256_of() {
 	fi
 }
 
-# ed25519_verify PEM_FILE MESSAGE_FILE BASE64_SIGNATURE_FILE
-ed25519_verify() {
-	openssl base64 -d -A -in "$3" -out "$3.bin" 2>/dev/null || return 1
-	openssl pkeyutl -verify -pubin -inkey "$1" -rawin -in "$2" -sigfile "$3.bin" >/dev/null 2>&1
+# The signature check. openssl 3 verifies ed25519 itself (pkeyutl -rawin).
+# OpenSSL 1.0.2 and 1.1.1 (Amazon Linux 2, CentOS 7) cannot, so a small Python
+# verifier (Python 2.7 or 3, no modules to install) is the fallback.
+write_pyverify() {
+	cat >"$TMPD/ed25519.py" <<'PY'
+# Ed25519 signature check after RFC 8032 section 6 (reference implementation),
+# for Python 2.7 and 3. usage: ed25519.py PUBLIC_KEY_PEM MESSAGE_FILE BASE64_SIGNATURE_FILE
+import base64, hashlib, sys
+p = 2 ** 255 - 19
+q = 2 ** 252 + 27742317777372353535851937790883648493
+d = -121665 * pow(121666, p - 2, p) % p
+sqrt_m1 = pow(2, (p - 1) // 4, p)
+def le(b):
+    return sum(int(x) << (8 * i) for i, x in enumerate(bytearray(b)))
+def add(P, Q):
+    A = (P[1] - P[0]) * (Q[1] - Q[0]) % p
+    B = (P[1] + P[0]) * (Q[1] + Q[0]) % p
+    C = 2 * P[3] * Q[3] * d % p
+    D = 2 * P[2] * Q[2] % p
+    E, F, G, H = B - A, D - C, D + C, B + A
+    return (E * F % p, G * H % p, F * G % p, E * H % p)
+def mul(s, P):
+    Q = (0, 1, 1, 0)
+    while s > 0:
+        if s & 1:
+            Q = add(Q, P)
+        P = add(P, P)
+        s >>= 1
+    return Q
+def equal(P, Q):
+    return (P[0] * Q[2] - Q[0] * P[2]) % p == 0 and (P[1] * Q[2] - Q[1] * P[2]) % p == 0
+def recover_x(y, sign):
+    if y >= p:
+        return None
+    x2 = (y * y - 1) * pow(d * y * y + 1, p - 2, p) % p
+    if x2 == 0:
+        return None if sign else 0
+    x = pow(x2, (p + 3) // 8, p)
+    if (x * x - x2) % p != 0:
+        x = x * sqrt_m1 % p
+    if (x * x - x2) % p != 0:
+        return None
+    if (x & 1) != sign:
+        x = p - x
+    return x
+def decompress(s):
+    if len(s) != 32:
+        return None
+    y = le(s)
+    sign = y >> 255
+    y &= (1 << 255) - 1
+    x = recover_x(y, sign)
+    if x is None:
+        return None
+    return (x, y, 1, x * y % p)
+gy = 4 * pow(5, p - 2, p) % p
+gx = recover_x(gy, 0)
+G = (gx, gy, 1, gx * gy % p)
+def verify(public, msg, sig):
+    if len(public) != 32 or len(sig) != 64:
+        return False
+    A = decompress(public)
+    R = decompress(sig[:32])
+    if A is None or R is None:
+        return False
+    s = le(sig[32:])
+    if s >= q:
+        return False
+    h = le(hashlib.sha512(sig[:32] + public + msg).digest()) % q
+    return equal(mul(s, G), add(R, mul(h, A)))
+def main():
+    pem = open(sys.argv[1], 'rb').read().decode('ascii').split('\n')
+    der = base64.b64decode(''.join(l for l in pem if l and not l.startswith('-----')))
+    msg = open(sys.argv[2], 'rb').read()
+    sig = base64.b64decode(open(sys.argv[3], 'rb').read().strip())
+    sys.exit(0 if verify(der[-32:], msg, sig) else 1)
+try:
+    main()
+except SystemExit:
+    raise
+except Exception:
+    sys.exit(2)
+PY
 }
 
-# Sets CAN_VERIFY=1 when this openssl verifies ed25519 (OpenSSL 3 or newer).
-openssl_selftest() {
+# ed25519_verify PEM_FILE MESSAGE_FILE BASE64_SIGNATURE_FILE (uses VERIFIER, VBIN)
+ed25519_verify() {
+	case $VERIFIER in
+	openssl)
+		"$VBIN" base64 -d -A -in "$3" -out "$3.bin" 2>/dev/null || return 1
+		"$VBIN" pkeyutl -verify -pubin -inkey "$1" -rawin -in "$2" -sigfile "$3.bin" >/dev/null 2>&1
+		;;
+	python) "$VBIN" "$TMPD/ed25519.py" "$1" "$2" "$3" >/dev/null 2>&1 ;;
+	*) return 1 ;;
+	esac
+}
+
+# Sets CAN_VERIFY=1, VERIFIER (openssl or python) and VBIN to the first tool
+# that passes the RFC 8032 test vector (and refuses a wrong message):
+# openssl (3 or newer), an openssl3 binary, python3, python, python2.
+verifier_selftest() {
 	CAN_VERIFY=0
-	have openssl || return 0
+	VERIFIER=
+	VBIN=
 	printf '%s\n' "$SELFTEST_KEY_PEM" >"$TMPD/selftest.pem"
 	printf 'r' >"$TMPD/selftest.msg"
-	printf '%s\n' "$SELFTEST_SIG" >"$TMPD/selftest.sig"
-	if ed25519_verify "$TMPD/selftest.pem" "$TMPD/selftest.msg" "$TMPD/selftest.sig"; then
+	printf 'x' >"$TMPD/selftest.bad"
+	write_pyverify
+	for vs_c in openssl openssl3 python3 python python2; do
+		have "$vs_c" || continue
+		case $vs_c in openssl*) VERIFIER=openssl ;; *) VERIFIER=python ;; esac
+		VBIN=$vs_c
+		printf '%s\n' "$SELFTEST_SIG" >"$TMPD/selftest.sig"
+		ed25519_verify "$TMPD/selftest.pem" "$TMPD/selftest.msg" "$TMPD/selftest.sig" || continue
+		if ed25519_verify "$TMPD/selftest.pem" "$TMPD/selftest.bad" "$TMPD/selftest.sig"; then
+			continue
+		fi
 		CAN_VERIFY=1
-	fi
+		return 0
+	done
+	VERIFIER=
+	VBIN=
 }
 
 # ---------------------------------------------------------------- state of this machine
@@ -342,12 +597,11 @@ refuse_managed() {
 	fi
 }
 
-# Reads the listen address from the configuration (default 0.0.0.0:9090).
+# Sets LISTEN, LISTEN_HOST and PORT: what was decided in this run, else the
+# configuration file, else the default (0.0.0.0:9090).
 read_listen() {
-	LISTEN=
-	if [ -r "$CONF_FILE" ]; then
-		LISTEN="$(awk '/^[[:space:]]*\[/ { exit } /^[[:space:]]*listen[[:space:]]*=/ { sub(/^[^=]*=[[:space:]]*/, ""); gsub(/["'\'']/, ""); sub(/[[:space:]]*(#.*)?$/, ""); print; exit }' "$CONF_FILE")"
-	fi
+	LISTEN="${C_LISTEN:-}"
+	[ -n "$LISTEN" ] || LISTEN="$(conf_get '' listen | tr -d "\"'")"
 	[ -n "$LISTEN" ] || LISTEN="0.0.0.0:9090"
 	PORT="${LISTEN##*:}"
 	LISTEN_HOST="${LISTEN%:*}"
@@ -355,10 +609,11 @@ read_listen() {
 }
 
 tls_mode() {
-	tm=
-	if [ -r "$CONF_FILE" ]; then
-		tm="$(awk '/^[[:space:]]*\[tls\]/ { s = 1; next } /^[[:space:]]*\[/ { s = 0 } s && /^[[:space:]]*mode[[:space:]]*=/ { sub(/^[^=]*=[[:space:]]*/, ""); gsub(/["'\'']/, ""); sub(/[[:space:]]*(#.*)?$/, ""); print; exit }' "$CONF_FILE")"
+	if [ -n "${C_TLS:-}" ]; then
+		printf '%s\n' "$C_TLS"
+		return 0
 	fi
+	tm="$(conf_get tls mode | tr -d "\"'")"
 	printf '%s\n' "${tm:-self-signed}"
 }
 
@@ -509,6 +764,10 @@ report_admin_group() {
 firewall() {
 	read_listen
 	case $LISTEN_HOST in 127.* | localhost | '[::1]') return 0 ;; esac
+	if [ -n "$PROXY" ]; then
+		say "LinuxAdmin sits behind a reverse proxy: the firewall is not changed for port $PORT."
+		return 0
+	fi
 	fw=
 	if have ufw && ufw status 2>/dev/null | grep -q '^Status: active'; then
 		fw=ufw
@@ -558,6 +817,916 @@ close_firewall() {
 	return 0
 }
 
+# ---------------------------------------------------------------- port
+
+# port_in_use PORT: returns 0 when a process listens on the TCP port and sets
+# PORT_OWNER to what it is ("" when it cannot be told). A running linuxadmind
+# does not count (re-running the installer keeps the port).
+port_in_use() {
+	pi_p=$1
+	PORT_OWNER=
+	pi_line=
+	pi_found=0
+	if have ss && ss -ltn >/dev/null 2>&1; then
+		pi_line="$(ss -ltnp 2>/dev/null | awk -v p=":$pi_p" '{ n = length($4); if (n >= length(p) && substr($4, n - length(p) + 1) == p) { print; exit } }')"
+		[ -n "$pi_line" ] && pi_found=1 && PORT_OWNER="$(printf '%s\n' "$pi_line" | sed -n 's/.*users:(("\([^"]*\)".*/\1/p')"
+	elif have netstat && netstat -ltn >/dev/null 2>&1; then
+		pi_line="$(netstat -ltnp 2>/dev/null | awk -v p=":$pi_p" '{ n = length($4); if (n >= length(p) && substr($4, n - length(p) + 1) == p) { print; exit } }')"
+		[ -n "$pi_line" ] && pi_found=1 && PORT_OWNER="$(printf '%s\n' "$pi_line" | awk '{ print $NF }' | sed -n 's|^[0-9][0-9]*/||p')"
+	elif [ -r /proc/net/tcp ]; then
+		pi_hex="$(printf '%04X' "$pi_p")"
+		pi_inode="$(cat /proc/net/tcp /proc/net/tcp6 2>/dev/null | awk -v hp="$pi_hex" '$4 == "0A" { n = split($2, a, ":"); if (a[n] == hp) { print $10; exit } }')"
+		if [ -n "$pi_inode" ]; then
+			pi_found=1
+			for pi_fd in /proc/[0-9]*/fd/*; do
+				if [ "$(readlink "$pi_fd" 2>/dev/null)" = "socket:[$pi_inode]" ]; then
+					pi_pid="${pi_fd#/proc/}"
+					pi_pid="${pi_pid%%/*}"
+					PORT_OWNER="$(cat "/proc/$pi_pid/comm" 2>/dev/null)"
+					break
+				fi
+			done
+		fi
+	fi
+	[ "$pi_found" = 1 ] || return 1
+	case $PORT_OWNER in
+	linuxadmind) return 1 ;;
+	systemd | init)
+		# socket activation: name the socket unit that owns the port
+		pi_unit=
+		have systemctl && pi_unit="$(systemctl list-sockets --no-legend --no-pager 2>/dev/null | awk -v p=":$pi_p" '{ n = length($1); if (substr($1, n - length(p) + 1) == p) { print $2; exit } }')"
+		PORT_OWNER="systemd socket ${pi_unit:-unit}"
+		;;
+	docker-proxy) PORT_OWNER="Docker (a published container port)" ;;
+	esac
+	case $PORT_OWNER in
+	*cockpit*) PORT_OWNER="Cockpit ($PORT_OWNER)" ;;
+	esac
+	if [ -z "$PORT_OWNER" ] && [ "$pi_p" = 9090 ] && have systemctl && systemctl is-active --quiet cockpit.socket 2>/dev/null; then
+		PORT_OWNER="Cockpit (cockpit.socket)"
+	fi
+	return 0
+}
+
+# next_free_port START: prints the first port from START on that nothing listens on.
+next_free_port() {
+	nf_p=$1
+	while [ "$nf_p" -lt 65535 ] && port_in_use "$nf_p"; do
+		nf_p=$((nf_p + 1))
+	done
+	printf '%s\n' "$nf_p"
+}
+
+valid_port() {
+	case $1 in '' | *[!0-9]*) return 1 ;; esac
+	[ "${#1}" -le 5 ] && [ "$1" -ge 1 ] && [ "$1" -le 65535 ]
+}
+
+# choose_port: sets C_PORT (asks; --port is the first answer).
+choose_port() {
+	cp_try=$C_PORT
+	cp_ask=1
+	[ -n "$F_PORT" ] && cp_try=$F_PORT && cp_ask=0
+	while :; do
+		if [ "$cp_ask" = 1 ]; then
+			ask_value "Port" "$cp_try"
+			cp_try=$REPLY
+		fi
+		cp_ask=1
+		if ! valid_port "$cp_try"; then
+			[ "$TTY_OK" = 1 ] || die "'$cp_try' is not a valid port."
+			say "'$cp_try' is not a port number (1-65535)."
+			cp_try=$C_PORT
+			continue
+		fi
+		if port_in_use "$cp_try"; then
+			cp_next="$(next_free_port $((cp_try + 1)))"
+			if [ "$TTY_OK" = 1 ]; then
+				say "Port $cp_try is in use${PORT_OWNER:+ by $PORT_OWNER}."
+				if ask "Use it anyway (free it before the service starts, or LinuxAdmin will not start)? [y/N]" n; then
+					break
+				fi
+				say "Pick another one; $cp_next is free."
+				cp_try=$cp_next
+				continue
+			elif [ -n "$F_PORT" ]; then
+				die "Port $cp_try is in use${PORT_OWNER:+ by $PORT_OWNER}. Pick another with --port."
+			fi
+			say "Port $cp_try is in use${PORT_OWNER:+ by $PORT_OWNER}; using $cp_next instead (change it with --port)."
+			cp_try=$cp_next
+		fi
+		break
+	done
+	C_PORT=$cp_try
+}
+
+# ---------------------------------------------------------------- configuration file
+
+TAB="$(printf '\t')"
+
+# conf_get SECTION KEY: the raw value of a key in the configuration file.
+conf_get() {
+	[ -r "$CONF_FILE" ] || return 0
+	awk -v sec="$1" -v key="$2" '
+	BEGIN { insec = (sec == "") }
+	/^[[:space:]]*\[/ { h = $0; sub(/^[[:space:]]*\[/, "", h); sub(/\].*$/, "", h); insec = (h == sec); next }
+	insec && $0 ~ "^[[:space:]]*" key "[[:space:]]*=" { sub(/^[^=]*=[[:space:]]*/, ""); sub(/[[:space:]]+#.*$/, ""); sub(/[[:space:]]+$/, ""); print; exit }
+	' "$CONF_FILE"
+}
+
+# conf_set SECTION KEY RAWVALUE: sets "KEY = RAWVALUE" in [SECTION] ("" is the
+# top of the file) and leaves everything else, comments included, as it is.
+conf_set() {
+	CS_VAL="$3" awk -v sec="$1" -v key="$2" '
+	BEGIN { insec = (sec == ""); seen = insec; done = 0; val = ENVIRON["CS_VAL"] }
+	/^[[:space:]]*\[/ {
+		if (insec && !done) { print key " = " val; done = 1 }
+		h = $0; sub(/^[[:space:]]*\[/, "", h); sub(/\].*$/, "", h)
+		insec = (h == sec); if (insec) seen = 1
+		print; next
+	}
+	insec && !done && $0 ~ "^[[:space:]]*" key "[[:space:]]*=" { print key " = " val; done = 1; next }
+	{ print }
+	END { if (!done) { if (!seen) { print ""; print "[" sec "]" } print key " = " val } }
+	' "$CONF_FILE" >"$CONF_FILE.new.$$" && mv -f "$CONF_FILE.new.$$" "$CONF_FILE"
+}
+
+# list_add "a b" c: prints the list with c appended unless it is there.
+list_add() {
+	case " $1 " in
+	*" $2 "*) printf '%s\n' "$1" ;;
+	*) printf '%s\n' "${1:+$1 }$2" ;;
+	esac
+}
+
+# toml_list a b c: prints ["a", "b", "c"].
+toml_list() {
+	tl_out=
+	for tl_i in "$@"; do tl_out="${tl_out:+$tl_out, }\"$tl_i\""; done
+	printf '[%s]\n' "$tl_out"
+}
+
+# Defaults for the questions: the built-in ones, or what the existing file says.
+load_current() {
+	D_PORT=9090 D_HOST=0.0.0.0 D_ROOT=false D_UNLOCK=5m D_TLS=self-signed D_CERT='' D_KEY='' D_ORIGINS='' D_PROXIES=''
+	CFG_EXISTS=0
+	[ -f "$CONF_FILE" ] || return 0
+	CFG_EXISTS=1
+	lc_l="$(conf_get '' listen | tr -d "\"'")"
+	if [ -n "$lc_l" ]; then
+		D_PORT="${lc_l##*:}"
+		D_HOST="${lc_l%:*}"
+	fi
+	case $D_PORT in '' | *[!0-9]*) D_PORT=9090 ;; esac
+	[ -n "$D_HOST" ] || D_HOST=0.0.0.0
+	[ "$(conf_get '' allow_root)" = true ] && D_ROOT=true
+	lc_v="$(conf_get session admin_unlock | tr -d "\"'")"
+	[ -n "$lc_v" ] && D_UNLOCK=$lc_v
+	lc_v="$(conf_get tls mode | tr -d "\"'")"
+	[ -n "$lc_v" ] && D_TLS=$lc_v
+	D_CERT="$(conf_get tls cert | tr -d "\"'")"
+	D_KEY="$(conf_get tls key | tr -d "\"'")"
+	D_ORIGINS="$(conf_get web allowed_origins | tr -d '[]"' | tr ',' ' ' | tr -s ' ' | sed 's/^ //;s/ $//')"
+	D_PROXIES="$(conf_get web trusted_proxies | tr -d '[]"' | tr ',' ' ' | tr -s ' ' | sed 's/^ //;s/ $//')"
+	return 0
+}
+
+# Seconds in "90s", "5m", "12h"; 0 for anything else.
+duration_seconds() {
+	case $1 in
+	*[!0-9smh]* | '') echo 0 ;;
+	*s) echo "${1%s}" ;;
+	*m) echo $((${1%m} * 60)) ;;
+	*h) echo $((${1%h} * 3600)) ;;
+	*) echo 0 ;;
+	esac
+}
+
+valid_unlock() {
+	[ "$1" = 0s ] && return 0
+	case $1 in [0-9]*[smh]) ;; *) return 1 ;; esac
+	vu_n="$(duration_seconds "$1")"
+	[ "$vu_n" -ge 30 ] && [ "$vu_n" -le 86400 ]
+}
+
+valid_path() {
+	case $1 in /*) ;; *) return 1 ;; esac
+	printf '%s\n' "$1" | grep -Eq '^/[A-Za-z0-9._/+@:-]*$'
+}
+
+valid_origin() {
+	printf '%s\n' "$1" | grep -Eq '^https?://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?$'
+}
+
+valid_proxy_addr() {
+	printf '%s\n' "$1" | grep -Eq '^[0-9A-Fa-f:.]+(/[0-9]{1,3})?$'
+}
+
+valid_domain() {
+	printf '%s\n' "$1" | grep -Eq '^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$'
+}
+
+# Writes the commented configuration file (stdout) for a first install.
+render_config() {
+	cat <<CONF
+# LinuxAdmin server configuration, written by the installer on $(date +%Y-%m-%d).
+# Every key and its default is described in docs/api/config.md. Settings that
+# say "restart" need: systemctl restart linuxadmin. Saving from Settings in the
+# web interface rewrites this file without the comments (a backup stays next
+# to it as linuxadmin.conf.bak).
+
+# Address and port to listen on. 0.0.0.0 means every network interface,
+# 127.0.0.1 only this machine (use that behind a reverse proxy). Restart.
+listen = "$C_HOST:$C_PORT"
+
+# Allow signing in as root. Default false: sign in as a normal user and unlock
+# administrator rights with that user's password (sudo).
+allow_root = $C_ROOT
+
+[login]
+# show_ip = true
+# Failed sign-ins per client address in 15 minutes before it is blocked.
+# max_failures = 5
+
+[session]
+# Idle time before a session ends.
+# timeout = "12h"
+# How long administrator rights stay unlocked while in use: "30s" to "24h",
+# or "0s" to keep them until sign-out.
+admin_unlock = "$C_UNLOCK"
+
+[tls]
+# "self-signed": a certificate is created on first start (/etc/linuxadmin/tls).
+# "custom": use cert and key below. LinuxAdmin always speaks HTTPS, also
+# behind a reverse proxy. Restart.
+mode = "$C_TLS"
+# Plain HTTP on the same port is redirected to HTTPS.
+# redirect = true
+CONF
+	if [ "$C_TLS" = custom ]; then
+		printf 'cert = "%s"\nkey = "%s"\n' "$C_CERT" "$C_KEY"
+	else
+		printf '# cert = "/etc/ssl/certs/linuxadmin.pem"\n# key = "/etc/ssl/private/linuxadmin.key"\n'
+	fi
+	cat <<CONF
+
+[web]
+# Browser origins accepted besides the address in the Host header, for
+# reaching LinuxAdmin through a reverse proxy.
+CONF
+	if [ -n "$C_ORIGINS" ]; then
+		# shellcheck disable=SC2086
+		printf 'allowed_origins = %s\n' "$(toml_list $C_ORIGINS)"
+	else
+		printf '# allowed_origins = ["https://linuxadmin.example.org"]\n'
+	fi
+	printf '# Addresses whose X-Forwarded-* headers are believed (the reverse proxy).\n'
+	if [ -n "$C_PROXIES" ]; then
+		# shellcheck disable=SC2086
+		printf 'trusted_proxies = %s\n' "$(toml_list $C_PROXIES)"
+	else
+		printf '# trusted_proxies = ["127.0.0.0/8", "::1/128"]\n'
+	fi
+	cat <<'CONF'
+
+[plugins]
+# Run plugins that are not signed by a trusted key.
+# allow_unsigned = false
+
+[updates]
+# "stable" or "prerelease"
+# channel = "stable"
+# auto_check = true
+# auto_install = false
+# auto_install_at = "03:30"
+CONF
+}
+
+# write_config: first install writes the commented file; with an existing file
+# only the keys the questions cover are changed (the rest stays, comments too).
+write_config() {
+	[ "$CFG_MODE" = keep ] && return 0
+	if [ "$CFG_MODE" = new ]; then
+		step "Writing $CONF_FILE"
+		render_config >"$TMPD/linuxadmin.conf"
+		if [ "$DRY" = 1 ]; then
+			say "  [dry-run] would write:"
+			sed 's/^/    | /' "$TMPD/linuxadmin.conf"
+		else
+			install -D -m 644 "$TMPD/linuxadmin.conf" "$CONF_FILE"
+		fi
+		return 0
+	fi
+	step "Updating $CONF_FILE"
+	if [ "$DRY" = 1 ]; then
+		say "  [dry-run] listen = \"$C_HOST:$C_PORT\", allow_root = $C_ROOT, session.admin_unlock = \"$C_UNLOCK\", tls.mode = \"$C_TLS\""
+		[ -n "$C_ORIGINS" ] && say "  [dry-run] web.allowed_origins = $C_ORIGINS"
+		[ -n "$C_PROXIES" ] && say "  [dry-run] web.trusted_proxies = $C_PROXIES"
+		return 0
+	fi
+	wc_bak="$CONF_FILE.linuxadmin-backup-$(date +%Y%m%d-%H%M%S)"
+	cp -p "$CONF_FILE" "$wc_bak"
+	say "Backup: $wc_bak"
+	conf_set '' listen "\"$C_HOST:$C_PORT\""
+	conf_set '' allow_root "$C_ROOT"
+	conf_set session admin_unlock "\"$C_UNLOCK\""
+	conf_set tls mode "\"$C_TLS\""
+	if [ "$C_TLS" = custom ]; then
+		conf_set tls cert "\"$C_CERT\""
+		conf_set tls key "\"$C_KEY\""
+	fi
+	# shellcheck disable=SC2086
+	[ -n "$C_ORIGINS" ] && conf_set web allowed_origins "$(toml_list $C_ORIGINS)"
+	# shellcheck disable=SC2086
+	[ -n "$C_PROXIES" ] && conf_set web trusted_proxies "$(toml_list $C_PROXIES)"
+	return 0
+}
+
+# ---------------------------------------------------------------- Caddy
+#
+# LinuxAdmin only serves HTTPS (self-signed by default); there is no plain
+# HTTP mode. Behind Caddy the proxy therefore connects with HTTPS and does not
+# check the certificate (tls_insecure_skip_verify): the hop is on this machine
+# (or on the Docker bridge), and the browser sees Caddy's own certificate.
+
+dk() { DOCKER_HOST='' DOCKER_CONTEXT='' docker -H unix:///var/run/docker.sock "$@"; }
+
+# caddy_detect: sets CADDY_KIND (native, docker or empty) and, for it, CADDY_CF
+# (the Caddyfile on this machine, empty when it is not reachable), CADDY_CTR
+# and CADDY_CF_IN (container name and the Caddyfile path inside it).
+caddy_detect() {
+	CADDY_KIND='' CADDY_CF='' CADDY_CTR='' CADDY_CF_IN=''
+	CD_HOSTNET=0 CD_GW='' CD_SUBNET='' CD_EXTRAHOST=0 CD_NOTE=''
+	[ "$CADDY_MODE" = no ] && return 0
+	cd_unit=
+	for cd_u in /etc/systemd/system/caddy.service /usr/lib/systemd/system/caddy.service /lib/systemd/system/caddy.service; do
+		[ -f "$cd_u" ] && cd_unit=$cd_u && break
+	done
+	cd_native=
+	if [ -n "$cd_unit" ] || have caddy; then
+		cd_cf=
+		[ -n "$cd_unit" ] && cd_cf="$(sed -n 's/.*--config[= ]\([^ ]*\).*/\1/p' "$cd_unit" | head -n 1)"
+		[ -n "$cd_cf" ] || cd_cf=/etc/caddy/Caddyfile
+		[ -f "$cd_cf" ] && cd_native=$cd_cf
+	fi
+	cd_ctrs=
+	if have docker && [ -S /var/run/docker.sock ]; then
+		cd_ctrs="$(dk ps --format '{{.Names}} {{.Image}}' 2>/dev/null | awk 'tolower($2) ~ /caddy/ { print $1 }')"
+	fi
+	if [ -n "$cd_native" ] && [ -n "$cd_ctrs" ] && [ "$TTY_OK" = 1 ]; then
+		cd_first="$(printf '%s\n' "$cd_ctrs" | head -n 1)"
+		ask_choice "Caddy runs here and in Docker. Which one should serve LinuxAdmin?" 1 "Caddy on this machine ($cd_native)" "Caddy in the container $cd_first"
+		[ "$CHOICE" = 2 ] && cd_native=
+	fi
+	if [ -n "$cd_native" ]; then
+		CADDY_KIND=native
+		CADDY_CF=$cd_native
+		return 0
+	fi
+	[ -n "$cd_ctrs" ] || return 0
+	cd_n="$(printf '%s\n' "$cd_ctrs" | wc -l)"
+	CADDY_CTR="$(printf '%s\n' "$cd_ctrs" | head -n 1)"
+	if [ "$cd_n" -gt 1 ] && [ "$TTY_OK" = 1 ]; then
+		# shellcheck disable=SC2086
+		set -- $cd_ctrs
+		ask_choice "Several Caddy containers are running. Which one?" 1 "$@"
+		CADDY_CTR="$(printf '%s\n' "$cd_ctrs" | sed -n "${CHOICE}p")"
+	fi
+	CADDY_KIND=docker
+	caddy_docker_inspect
+}
+
+caddy_docker_inspect() {
+	ci_cmd="$(dk inspect -f '{{range .Config.Entrypoint}}{{.}} {{end}}{{range .Config.Cmd}}{{.}} {{end}}' "$CADDY_CTR" 2>/dev/null)"
+	CADDY_CF_IN="$(printf '%s\n' "$ci_cmd" | sed -n 's/.*--config[= ]\([^ ]*\).*/\1/p' | head -n 1)"
+	[ -n "$CADDY_CF_IN" ] || CADDY_CF_IN=/etc/caddy/Caddyfile
+	# The Caddyfile on this machine: the mount that holds that path.
+	CADDY_CF="$(dk inspect -f '{{range .Mounts}}{{.Destination}}|{{.Source}}{{"\n"}}{{end}}' "$CADDY_CTR" 2>/dev/null |
+		awk -F'|' -v f="$CADDY_CF_IN" '
+			$1 == f { print $2; exit }
+			index(f, $1 "/") == 1 && length($1) > best { best = length($1); src = $2 substr(f, length($1) + 1) }
+			END { if (src != "") print src }')"
+	[ -n "$CADDY_CF" ] && [ ! -f "$CADDY_CF" ] && CADDY_CF=''
+	ci_mode="$(dk inspect -f '{{.HostConfig.NetworkMode}}' "$CADDY_CTR" 2>/dev/null)"
+	if [ "$ci_mode" = host ]; then
+		CD_HOSTNET=1
+		return 0
+	fi
+	case $(dk inspect -f '{{range .HostConfig.ExtraHosts}}{{.}} {{end}}' "$CADDY_CTR" 2>/dev/null) in
+	*host.docker.internal:*) CD_EXTRAHOST=1 ;;
+	esac
+	# shellcheck disable=SC2016
+	ci_net="$(dk inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{$v.Gateway}}{{"\n"}}{{end}}' "$CADDY_CTR" 2>/dev/null | awk 'NF == 2 { print; exit }')"
+	if [ -n "$ci_net" ]; then
+		CD_GW="${ci_net#* }"
+		ci_netname="${ci_net%% *}"
+		CD_SUBNET="$(dk network inspect -f '{{range .IPAM.Config}}{{.Subnet}}{{"\n"}}{{end}}' "$ci_netname" 2>/dev/null | grep -v ':' | head -n 1)"
+	else
+		CD_NOTE="The container has no bridge network with a gateway address (network mode '$ci_mode')."
+	fi
+	return 0
+}
+
+# caddy_scan FILE: writes one "BLOCK<TAB>first<TAB>last<TAB>addresses" line per
+# top-level block of a Caddyfile, or "UNSURE<TAB>reason" when the file uses
+# something this parser does not follow (then nothing is edited).
+caddy_scan() {
+	awk '
+	function unsure(why) { if (!bad) print "UNSURE\t" why; bad = 1 }
+	function clean(s,   out, i, c, q, n) {
+		out = ""; q = ""; n = length(s)
+		for (i = 1; i <= n; i++) {
+			c = substr(s, i, 1)
+			if (q != "") { if (c == "\\" && q == "\"") i++; else if (c == q) q = ""; continue }
+			if (c == "\"" || c == "`") { q = c; continue }
+			if (c == "#" && (i == 1 || substr(s, i - 1, 1) ~ /[ \t]/)) break
+			out = out c
+		}
+		if (q != "") unsure("a quoted string runs over several lines")
+		return out
+	}
+	{
+		line = clean($0)
+		if (line ~ /<</) unsure("heredoc")
+		gsub(/^[ \t]+|[ \t\r]+$/, "", line)
+		if (line == "") next
+		t = line
+		gsub(/[{][A-Za-z$%][^{} \t]*[}]/, "", t)
+		open = 0; close_ = 0
+		if (t ~ /(^|[ \t])[{]$/) { open = 1; sub(/[ \t]*[{]$/, "", t) }
+		else if (t == "}") close_ = 1
+		if (!close_ && t ~ /[{}]/) { unsure("unusual braces on line " NR); next }
+		if (close_) {
+			depth--
+			if (depth < 0) { unsure("unbalanced braces"); depth = 0; next }
+			if (depth == 0 && start) { print "BLOCK\t" start "\t" NR "\t" addrs; start = 0 }
+			next
+		}
+		if (depth == 0) {
+			if (open) { start = NR; addrs = (t == "" ? "(global options)" : t); if (t ~ /^[(]/) addrs = "(snippet) " t; depth = 1 }
+			else if (t ~ /^import[ \t]/) next
+			else unsure("a directive outside any block (a Caddyfile with a single site and no braces)")
+		} else if (open) depth++
+	}
+	END { if (depth != 0) unsure("unbalanced braces") }
+	' "$1"
+}
+
+# caddy_find_proxy FILE FIRST LAST: prints "RP first last" for the one
+# reverse_proxy directive directly inside the block, or NONE, MANY, MATCHER.
+caddy_find_proxy() {
+	awk -v s="$2" -v e="$3" '
+	function clean(x,   out, i, c, q, n) {
+		out = ""; q = ""; n = length(x)
+		for (i = 1; i <= n; i++) {
+			c = substr(x, i, 1)
+			if (q != "") { if (c == "\\" && q == "\"") i++; else if (c == q) q = ""; continue }
+			if (c == "\"" || c == "`") { q = c; continue }
+			if (c == "#" && (i == 1 || substr(x, i - 1, 1) ~ /[ \t]/)) break
+			out = out c
+		}
+		return out
+	}
+	NR <= s || NR >= e { next }
+	{
+		line = clean($0); gsub(/^[ \t]+|[ \t\r]+$/, "", line)
+		if (line == "") next
+		t = line; gsub(/[{][A-Za-z$%][^{} \t]*[}]/, "", t)
+		open = 0; close_ = 0
+		if (t ~ /(^|[ \t])[{]$/) { open = 1; sub(/[ \t]*[{]$/, "", t) } else if (t == "}") close_ = 1
+		if (close_) { depth--; if (inrp && depth == 0) { rpend = NR; inrp = 0 } next }
+		split(t, w, /[ \t]+/)
+		if (w[1] == "reverse_proxy") {
+			if (depth == 0) {
+				n++; rpstart = NR; rpend = NR
+				if (w[2] ~ /^[\/@*]/) matcher = 1
+				if (open) inrp = 1
+			} else many = 1
+		}
+		if (open) depth++
+	}
+	END {
+		if (matcher) print "MATCHER"
+		else if (many || n > 1) print "MANY"
+		else if (n == 1) print "RP " rpstart " " rpend
+		else print "NONE"
+	}' "$1"
+}
+
+# caddy_directive: the reverse_proxy directive for LinuxAdmin.
+caddy_directive() {
+	printf 'reverse_proxy https://%s:%s {\n\ttransport http {\n\t\ttls_insecure_skip_verify\n\t}\n}\n' "$UPHOST" "$C_PORT"
+}
+
+# caddy_plan: decides what to do with Caddy. Sets C_HOST, C_ORIGINS,
+# C_PROXIES, CADDY_ACTION (repoint, append, manual or none), CADDY_DOMAIN.
+caddy_plan() {
+	CADDY_ACTION=manual CADDY_DOMAIN='' CADDY_ORIGIN='' CB_FIRST='' CB_LAST='' CADDY_WHY=''
+	C_TLS=self-signed
+	case $CADDY_KIND in
+	native)
+		UPHOST=127.0.0.1
+		C_HOST=127.0.0.1
+		;;
+	docker)
+		if [ "$CD_HOSTNET" = 1 ]; then
+			UPHOST=127.0.0.1
+			C_HOST=127.0.0.1
+		elif [ -n "$CD_GW" ]; then
+			# Inside the container 127.0.0.1 is the container itself: Caddy has to
+			# reach the host through the Docker bridge, so LinuxAdmin must listen
+			# on that address or on all of them (the bridge may not exist yet when
+			# linuxadmin.service starts, so all of them).
+			C_HOST=0.0.0.0
+			if [ "$CD_EXTRAHOST" = 1 ]; then UPHOST=host.docker.internal; else UPHOST=$CD_GW; fi
+			[ -n "$CD_SUBNET" ] && C_PROXIES="$(list_add "$C_PROXIES" "$CD_SUBNET")"
+		else
+			UPHOST=HOST_ADDRESS
+			CADDY_WHY="$CD_NOTE"
+		fi
+		;;
+	esac
+	if [ "$CADDY_KIND" = native ] && ! have caddy; then
+		CADDY_WHY="The caddy binary is not in PATH, so the Caddyfile cannot be validated."
+	fi
+	C_PROXIES="$(list_add "${C_PROXIES:-127.0.0.0/8}" 127.0.0.0/8)"
+	C_PROXIES="$(list_add "$C_PROXIES" ::1/128)"
+
+	cp_blocks="$TMPD/caddy.blocks"
+	: >"$cp_blocks"
+	if [ -n "$CADDY_CF" ]; then
+		caddy_scan "$CADDY_CF" >"$cp_blocks"
+		if grep -q '^UNSURE' "$cp_blocks"; then
+			CADDY_WHY="This Caddyfile has something I do not parse safely ($(sed -n 's/^UNSURE.//p' "$cp_blocks" | head -n 1))."
+			: >"$cp_blocks"
+		fi
+	elif [ -z "$CADDY_WHY" ]; then
+		CADDY_WHY="The Caddyfile of the container is not a file on this machine (no bind mount for $CADDY_CF_IN)."
+	fi
+
+	cp_addr=
+	cp_hit=
+	if [ -n "$F_DOMAIN" ]; then
+		cp_addr=$F_DOMAIN
+		cp_hit="$(awk -F'\t' -v d="$F_DOMAIN" '$1 == "BLOCK" && ($4 == d || $4 == "https://" d || $4 == "http://" d) { print; exit }' "$cp_blocks")"
+	else
+		cp_hit="$(awk -F'\t' '$1 == "BLOCK" && tolower($4) ~ /cockpit/ && $4 !~ /[ ,]/ { print; exit }' "$cp_blocks")"
+		if [ -n "$cp_hit" ]; then
+			cp_addr="$(printf '%s\n' "$cp_hit" | cut -f4)"
+			say "The Caddyfile has a site for Cockpit: $cp_addr (Cockpit listens on port 9090 by default)."
+			if [ "$TTY_OK" = 1 ]; then
+				ask "Point $cp_addr to LinuxAdmin (port $C_PORT) instead? [Y/n]" y || {
+					cp_hit=
+					cp_addr=
+				}
+			elif [ "$YES" = 0 ] && [ "$CADDY_MODE" != yes ]; then
+				cp_hit=
+				cp_addr=
+			fi
+		fi
+	fi
+	if [ -z "$cp_addr" ]; then
+		cp_base="$(awk -F'\t' '$1 == "BLOCK" { a = $4; sub(/^https?:\/\//, "", a); sub(/[:,\/ ].*$/, "", a); n = split(a, p, "."); if (n >= 2 && a !~ /^[0-9.]+$/ && a !~ /[*]/) { print p[n-1] "." p[n]; exit } }' "$cp_blocks")"
+		cp_def=
+		[ -n "$cp_base" ] && cp_def="linuxadmin.$cp_base"
+		if [ "$TTY_OK" = 1 ]; then
+			while :; do
+				ask_value "Domain for LinuxAdmin, such as linuxadmin.example.org (it must point to this Caddy)" "${cp_def:-linuxadmin.example.org}"
+				valid_domain "$REPLY" && break
+				say "'$REPLY' is not a domain name."
+			done
+			cp_addr=$REPLY
+		else
+			say "Caddy: no domain given. Use --domain NAME to set it up; the snippet is printed instead."
+			CADDY_ACTION=manual
+			CADDY_DOMAIN=linuxadmin.example.org
+			CADDY_ORIGIN=https://$CADDY_DOMAIN
+			C_ORIGINS="$(list_add "$C_ORIGINS" "$CADDY_ORIGIN")"
+			return 0
+		fi
+		cp_hit="$(awk -F'\t' -v d="$cp_addr" '$1 == "BLOCK" && ($4 == d || $4 == "https://" d || $4 == "http://" d) { print; exit }' "$cp_blocks")"
+		if [ -n "$cp_hit" ] && [ "$TTY_OK" = 1 ]; then
+			ask "The Caddyfile already has a site $cp_addr. Point it to LinuxAdmin? [y/N]" n || cp_hit=skip
+		fi
+	fi
+	case $cp_addr in
+	http://*) CADDY_ORIGIN=$cp_addr CADDY_DOMAIN="${cp_addr#http://}" ;;
+	https://*) CADDY_ORIGIN=$cp_addr CADDY_DOMAIN="${cp_addr#https://}" ;;
+	*) CADDY_DOMAIN=$cp_addr CADDY_ORIGIN="https://$cp_addr" ;;
+	esac
+	CADDY_DOMAIN="${CADDY_DOMAIN%:443}"
+	CADDY_ORIGIN="${CADDY_ORIGIN%:443}"
+	C_ORIGINS="$(list_add "$C_ORIGINS" "$CADDY_ORIGIN")"
+	[ -n "$CADDY_WHY" ] && return 0
+	[ -n "$CADDY_CF" ] || return 0
+	if [ "$cp_hit" = skip ]; then
+		CADDY_WHY="Left as it is."
+		return 0
+	fi
+	if [ -n "$cp_hit" ]; then
+		CB_FIRST="$(printf '%s\n' "$cp_hit" | cut -f2)"
+		CB_LAST="$(printf '%s\n' "$cp_hit" | cut -f3)"
+		cp_rp="$(caddy_find_proxy "$CADDY_CF" "$CB_FIRST" "$CB_LAST")"
+		case $cp_rp in
+		RP*)
+			CADDY_ACTION=repoint
+			# shellcheck disable=SC2086
+			set -- $cp_rp
+			RP_FIRST=$2 RP_LAST=$3
+			;;
+		*) CADDY_WHY="The site block of $cp_addr has no single plain reverse_proxy line I can replace ($cp_rp)." ;;
+		esac
+	else
+		CADDY_ACTION=append
+	fi
+	return 0
+}
+
+# caddy_err: the error line of the last failed check.
+caddy_err() {
+	grep -i 'error' "$TMPD/caddy.err" 2>/dev/null | tail -n 1 | cut -c1-240
+}
+
+# caddy_check: validates the Caddyfile (as Caddy sees it).
+caddy_check() {
+	case $CADDY_KIND in
+	native)
+		if have caddy; then
+			caddy validate --config "$CADDY_CF" --adapter caddyfile >/dev/null 2>"$TMPD/caddy.err"
+		else
+			return 0
+		fi
+		;;
+	docker) dk exec "$CADDY_CTR" caddy validate --config "$CADDY_CF_IN" --adapter caddyfile >/dev/null 2>"$TMPD/caddy.err" ;;
+	esac
+}
+
+caddy_reload() {
+	case $CADDY_KIND in
+	native)
+		if systemctl is-active --quiet caddy 2>/dev/null; then
+			systemctl reload caddy
+		else
+			say "caddy.service is not running: it will use the new Caddyfile when you start it ('systemctl enable --now caddy')."
+			return 1
+		fi
+		;;
+	docker)
+		if ! dk exec "$CADDY_CTR" caddy reload --config "$CADDY_CF_IN" --adapter caddyfile >"$TMPD/caddy.err" 2>&1; then
+			say "caddy reload failed: $(caddy_err)"
+			return 1
+		fi
+		;;
+	esac
+}
+
+caddy_print_manual() {
+	say "Add this to the Caddyfile${CADDY_CF:+ ($CADDY_CF)}, then reload Caddy:"
+	say ""
+	say "$CADDY_DOMAIN {"
+	caddy_directive | sed "s/^/$TAB/"
+	say "}"
+	say ""
+	case $CADDY_KIND in
+	native) say "Reload: caddy validate --config ${CADDY_CF:-/etc/caddy/Caddyfile} --adapter caddyfile && systemctl reload caddy" ;;
+	docker) say "Reload: docker exec $CADDY_CTR caddy reload --config $CADDY_CF_IN --adapter caddyfile" ;;
+	esac
+}
+
+# caddy_apply: edits the Caddyfile (after the LinuxAdmin side is in place).
+caddy_apply() {
+	[ -n "$CADDY_KIND" ] && [ "$PROXY" = caddy ] || return 0
+	step "Caddy"
+	if [ "$CADDY_ACTION" = manual ]; then
+		[ -n "$CADDY_WHY" ] && say "$CADDY_WHY Nothing was edited."
+		caddy_print_manual
+		return 0
+	fi
+	if [ "$DRY" = 1 ]; then
+		say "  [dry-run] $CADDY_ACTION in $CADDY_CF for $CADDY_DOMAIN:"
+		caddy_directive | sed "s/^/    | /"
+		return 0
+	fi
+	if ! caddy_check; then
+		say "The Caddyfile does not validate even before the edit ($(caddy_err)). Nothing was edited."
+		caddy_print_manual
+		return 0
+	fi
+	ca_bak="$CADDY_CF.linuxadmin-backup-$(date +%Y%m%d-%H%M%S)"
+	cp -p "$CADDY_CF" "$ca_bak" || {
+		say "Could not make a backup next to the Caddyfile. Nothing was edited."
+		caddy_print_manual
+		return 0
+	}
+	say "Backup: $ca_bak"
+	caddy_directive >"$TMPD/caddy.directive"
+	if [ "$CADDY_ACTION" = repoint ]; then
+		awk -v s="$RP_FIRST" -v e="$RP_LAST" -v rf="$TMPD/caddy.directive" '
+		NR == s { match($0, /^[ \t]*/); ind = substr($0, 1, RLENGTH); while ((getline l < rf) > 0) print ind l }
+		NR >= s && NR <= e { next }
+		{ print }' "$ca_bak" >"$TMPD/caddy.new"
+	else
+		{
+			cat "$ca_bak"
+			[ -n "$(tail -c 1 "$ca_bak")" ] && printf '\n'
+			printf '\n# LinuxAdmin (added by install.sh)\n%s {\n' "$CADDY_DOMAIN"
+			sed "s/^/$TAB/" "$TMPD/caddy.directive"
+			printf '}\n'
+		} >"$TMPD/caddy.new"
+	fi
+	# In place, not rename: a single file mounted into a container must keep its inode.
+	cat "$TMPD/caddy.new" >"$CADDY_CF"
+	if ! caddy_check; then
+		cat "$ca_bak" >"$CADDY_CF"
+		say "Caddy rejected the edited Caddyfile ($(caddy_err)); the original is back in place."
+		caddy_print_manual
+		return 0
+	fi
+	if caddy_reload; then
+		say "Caddy reloaded: https://$CADDY_DOMAIN now goes to LinuxAdmin."
+		CADDY_DONE=1
+	else
+		say "The Caddyfile is edited and valid, but Caddy was not reloaded. https://$CADDY_DOMAIN works once Caddy runs with it."
+	fi
+	if [ "$CADDY_KIND" = docker ] && [ -n "$CD_SUBNET" ]; then
+		say "Caddy reaches LinuxAdmin at $UPHOST:$C_PORT from the Docker network $CD_SUBNET. If a firewall blocks that"
+		say "(ufw does by default), allow it: ufw allow from $CD_SUBNET to any port $C_PORT proto tcp"
+	fi
+	say "The domain $CADDY_DOMAIN must point to this machine for Caddy to get its certificate."
+}
+
+# ---------------------------------------------------------------- questions about the configuration
+
+# decide_config: sets CFG_MODE (new, keep or change) and the C_* choices.
+decide_config() {
+	load_current
+	CFG_MODE=new
+	PROXY='' CADDY_KIND='' CADDY_ACTION=none
+	C_PORT=$D_PORT C_HOST=$D_HOST C_ROOT=$D_ROOT C_UNLOCK=$D_UNLOCK C_TLS=$D_TLS C_CERT=$D_CERT C_KEY=$D_KEY
+	C_ORIGINS=$D_ORIGINS C_PROXIES=$D_PROXIES
+	ENABLE=1 START=1
+	[ "$NO_ENABLE" = 1 ] && ENABLE=0
+	[ "$NO_START" = 1 ] && START=0
+	if [ "$CFG_EXISTS" = 1 ]; then
+		CFG_MODE=keep
+		if [ "$CFG_REQUESTED" = 1 ] || [ "$RECONF" = 1 ]; then
+			CFG_MODE=change
+		elif [ "$TTY_OK" = 1 ]; then
+			say "LinuxAdmin is configured already ($CONF_FILE, listening on $D_HOST:$D_PORT); the configuration is kept."
+			ask "Change settings now? [y/N]" n && CFG_MODE=change
+		fi
+		if [ "$CFG_MODE" = keep ]; then
+			C_LISTEN="$D_HOST:$D_PORT"
+			return 0
+		fi
+	fi
+
+	step "Configuration"
+	if [ "$TTY_OK" = 1 ]; then
+		say "Press Enter to take the value in [brackets]."
+	else
+		say "Nothing is asked (no terminal, or --yes): defaults, plus the options given."
+	fi
+
+	choose_port
+
+	# Reverse proxy
+	caddy_detect
+	if [ "$CADDY_MODE" = yes ] && [ -z "$CADDY_KIND" ]; then
+		die "--caddy: no Caddy found (no /etc/caddy/Caddyfile with the caddy binary or caddy.service, and no running container whose image name contains 'caddy')."
+	fi
+	if [ -n "$CADDY_KIND" ]; then
+		case $CADDY_KIND in
+		native) cd_what="Caddy on this machine (Caddyfile: $CADDY_CF)" ;;
+		docker) cd_what="Caddy in the Docker container '$CADDY_CTR' (Caddyfile: ${CADDY_CF:-not a file on this machine})" ;;
+		esac
+		say "Found $cd_what."
+		if [ "$CADDY_MODE" = yes ]; then
+			PROXY=caddy
+		elif [ "$TTY_OK" = 1 ]; then
+			ask "Put LinuxAdmin behind it, with its own (sub)domain? [Y/n]" y && PROXY=caddy
+		else
+			say "Caddy is not changed unless you pass --caddy."
+		fi
+	fi
+	if [ "$PROXY" = caddy ]; then
+		caddy_plan
+	elif [ "$F_PROXY" = 1 ] || { [ "$TTY_OK" = 1 ] && [ -z "$F_LISTEN" ] && ask "Will LinuxAdmin sit behind another reverse proxy (nginx, Apache, Traefik...)? [y/N]" n; }; then
+		PROXY=other
+		C_TLS=self-signed
+		C_HOST=127.0.0.1
+		if [ "$TTY_OK" = 1 ] && ! ask "Does the proxy run on this machine? [Y/n]" y; then
+			C_HOST=0.0.0.0
+			ask_value "Address of the proxy (for trusted_proxies, e.g. 10.0.0.5 or 10.0.0.0/24)" "10.0.0.1"
+			valid_proxy_addr "$REPLY" && C_PROXIES="$(list_add "${C_PROXIES:-127.0.0.0/8 ::1/128}" "$REPLY")"
+		fi
+		if [ "$TTY_OK" = 1 ] && [ -z "$F_ORIGINS" ]; then
+			while :; do
+				ask_value "Public address of LinuxAdmin, as typed in the browser" "https://linuxadmin.example.org"
+				valid_origin "$REPLY" && break
+				say "'$REPLY' must look like https://host or https://host:port."
+			done
+			C_ORIGINS="$(list_add "$C_ORIGINS" "$REPLY")"
+		fi
+	fi
+	# Flags add to what was decided.
+	for co_o in $F_ORIGINS; do C_ORIGINS="$(list_add "$C_ORIGINS" "$co_o")"; done
+	for co_o in $F_TRUSTED; do C_PROXIES="$(list_add "${C_PROXIES:-127.0.0.0/8 ::1/128}" "$co_o")"; done
+
+	# Listen address and TLS (a proxy decides both)
+	if [ -z "$PROXY" ]; then
+		case $F_LISTEN in
+		all) C_HOST=0.0.0.0 ;;
+		local) C_HOST=127.0.0.1 ;;
+		'')
+			if [ "$TTY_OK" = 1 ]; then
+				if [ "$C_HOST" = 127.0.0.1 ]; then cl_def=2; else cl_def=1; fi
+				ask_choice "Who can reach LinuxAdmin?" "$cl_def" "every machine that can reach this one (all interfaces, 0.0.0.0)" "only this machine (127.0.0.1: for an SSH tunnel or a proxy)"
+				if [ "$CHOICE" = 1 ]; then C_HOST=0.0.0.0; else C_HOST=127.0.0.1; fi
+			fi
+			;;
+		*) C_HOST=$F_LISTEN ;;
+		esac
+		if [ -n "$F_CERT" ]; then
+			C_TLS=custom C_CERT=$F_CERT C_KEY=$F_KEY
+		elif [ "$TTY_OK" = 1 ]; then
+			if [ "$C_TLS" = custom ]; then ct_def=2; else ct_def=1; fi
+			ask_choice "TLS certificate:" "$ct_def" "self-signed, created on first start (the browser warns once; the installer shows the fingerprint)" "my own certificate and key files"
+			if [ "$CHOICE" = 2 ]; then
+				C_TLS=custom
+				while :; do
+					ask_value "Certificate file (PEM, full chain)" "${C_CERT:-/etc/ssl/certs/linuxadmin.pem}"
+					C_CERT=$REPLY
+					ask_value "Private key file" "${C_KEY:-/etc/ssl/private/linuxadmin.key}"
+					C_KEY=$REPLY
+					valid_path "$C_CERT" && valid_path "$C_KEY" && [ -r "$C_CERT" ] && [ -r "$C_KEY" ] && break
+					say "Both files must exist and have plain absolute paths."
+				done
+			else
+				C_TLS=self-signed
+			fi
+		fi
+	fi
+	if [ "$C_TLS" = custom ]; then
+		if ! valid_path "$C_CERT" || ! valid_path "$C_KEY"; then die "--tls-cert and --tls-key need plain absolute paths."; fi
+		{ [ -r "$C_CERT" ] && [ -r "$C_KEY" ]; } || [ "$DRY" = 1 ] || die "Cannot read $C_CERT or $C_KEY."
+	fi
+	C_LISTEN="$C_HOST:$C_PORT"
+
+	# Sign-in
+	if [ "$TTY_OK" = 1 ]; then
+		say ""
+		say "Sign-in: any local account with a real login shell can sign in (nologin and restricted"
+		say "shells are refused). Administrator rights come from sudo, with the user's own password."
+	fi
+	if [ -n "$F_ROOT" ]; then
+		C_ROOT=$F_ROOT
+	elif [ "$TTY_OK" = 1 ]; then
+		if [ "$C_ROOT" = true ]; then ar_def=y; else ar_def=n; fi
+		if ask "Allow signing in as root? [$(if [ $ar_def = y ]; then echo Y/n; else echo y/N; fi)]" "$ar_def"; then C_ROOT=true; else C_ROOT=false; fi
+	fi
+	if [ -n "$F_UNLOCK" ]; then
+		C_UNLOCK=$F_UNLOCK
+	elif [ "$TTY_OK" = 1 ]; then
+		cu_keep=
+		case $C_UNLOCK in 5m | 15m | 1h | 0s) ;; *) cu_keep=$C_UNLOCK ;; esac
+		case $C_UNLOCK in 15m) cu_def=2 ;; 1h) cu_def=3 ;; 0s) cu_def=4 ;; 5m) cu_def=1 ;; *) cu_def=5 ;; esac
+		if [ -n "$cu_keep" ]; then
+			ask_choice "How long do administrator rights stay unlocked after the last use?" "$cu_def" "5 minutes" "15 minutes" "1 hour" "until sign-out" "keep $cu_keep"
+		else
+			ask_choice "How long do administrator rights stay unlocked after the last use?" "$cu_def" "5 minutes" "15 minutes" "1 hour" "until sign-out"
+		fi
+		case $CHOICE in 1) C_UNLOCK=5m ;; 2) C_UNLOCK=15m ;; 3) C_UNLOCK=1h ;; 4) C_UNLOCK=0s ;; 5) C_UNLOCK=$cu_keep ;; esac
+	fi
+
+	if [ "$TTY_OK" = 1 ]; then
+		[ "$NO_ENABLE" = 1 ] || { ask "Start LinuxAdmin at boot? [Y/n]" y || ENABLE=0; }
+		[ "$NO_START" = 1 ] || { ask "Start it now? [Y/n]" y || START=0; }
+	fi
+
+	# Summary
+	step "Summary"
+	say "  Listen:            $C_HOST:$C_PORT$(if [ "$C_HOST" = 0.0.0.0 ]; then echo ' (all interfaces)'; elif [ "$C_HOST" = 127.0.0.1 ]; then echo ' (this machine only)'; fi)"
+	say "  Sign in as root:   $(if [ "$C_ROOT" = true ]; then echo yes; else echo no; fi)"
+	say "  Admin unlock:      $(if [ "$C_UNLOCK" = 0s ]; then echo 'until sign-out'; else echo "$C_UNLOCK of inactivity"; fi)"
+	say "  TLS:               $C_TLS$(if [ "$C_TLS" = custom ]; then echo " ($C_CERT)"; fi)"
+	if [ "$PROXY" = caddy ]; then
+		say "  Caddy:             $CADDY_ACTION $CADDY_DOMAIN -> https://$UPHOST:$C_PORT (certificate not checked: it is this machine)"
+		case $CADDY_ACTION in manual) say "                     (the Caddyfile is not edited: ${CADDY_WHY:-the snippet is printed})" ;; *) say "                     ($CADDY_CF is backed up, validated, rolled back on errors, then Caddy is reloaded)" ;; esac
+		[ "$CADDY_KIND" = docker ] && [ "$C_HOST" = 0.0.0.0 ] && say "                     (Caddy is in Docker: LinuxAdmin listens on all interfaces so the container can reach it)"
+	elif [ "$PROXY" = other ]; then
+		say "  Reverse proxy:     yes; point it at https://127.0.0.1:$C_PORT and let it skip certificate checks (self-signed)"
+	fi
+	[ -n "$C_ORIGINS" ] && say "  Allowed origins:   $C_ORIGINS"
+	[ -n "$PROXY" ] && say "  Trusted proxies:   ${C_PROXIES:-127.0.0.0/8 ::1/128}"
+	say "  At boot / now:     $(if [ "$ENABLE" = 1 ]; then echo yes; else echo no; fi) / $(if [ "$START" = 1 ]; then echo yes; else echo no; fi)"
+	if [ "$TTY_OK" = 1 ] && ! ask "Apply these settings? [Y/n]" y; then
+		say "Nothing changed."
+		exit 0
+	fi
+	return 0
+}
+
 # ---------------------------------------------------------------- install
 
 # Downloads and verifies the release; sets SRC to the extracted folder.
@@ -578,9 +1747,13 @@ download_release() {
 		if ! ed25519_verify "$TMPD/release.pem" "$TMPD/signed.msg" "$TMPD/SHA256SUMS.sig"; then
 			die "The signature of SHA256SUMS does not match the LinuxAdmin release key. The download was corrupted or tampered with; nothing was installed."
 		fi
-		say "Signature of SHA256SUMS: good (LinuxAdmin release key)."
+		if [ "$VERIFIER" = python ]; then
+			say "Signature of SHA256SUMS: good (LinuxAdmin release key; checked with the built-in Ed25519 verifier on $VBIN, because this openssl is older than 3)."
+		else
+			say "Signature of SHA256SUMS: good (LinuxAdmin release key, checked with $VBIN)."
+		fi
 	else
-		warn "This openssl cannot verify ed25519 signatures (OpenSSL 3 or newer is needed): SHA256SUMS is NOT verified. Continuing because of --insecure-skip-signature."
+		warn "No tool here can verify ed25519 signatures (OpenSSL 3, python3 or python2 is needed): SHA256SUMS is NOT verified. Continuing because of --insecure-skip-signature."
 	fi
 	dl_want="$(awk -v n="$ASSET" '$2 == n || $2 == "*" n { print $1; exit }' "$TMPD/SHA256SUMS")"
 	printf '%s\n' "$dl_want" | grep -Eq '^[0-9a-f]{64}$' || die "$ASSET is not listed in SHA256SUMS."
@@ -707,7 +1880,15 @@ install_unit() {
 start_service() {
 	step "Starting $UNIT"
 	run systemctl daemon-reload
-	run systemctl enable --quiet "$UNIT"
+	if [ "$ENABLE" = 1 ]; then
+		run systemctl enable --quiet "$UNIT"
+	else
+		say "Not enabled at boot: systemctl enable $UNIT"
+	fi
+	if [ "$START" = 0 ]; then
+		say "Not started: systemctl start $UNIT (restart it if it was running, to use the new files)."
+		return 0
+	fi
 	run systemctl restart "$UNIT"
 	[ "$DRY" = 1 ] && return 0
 	ss_i=0
@@ -726,7 +1907,13 @@ start_service() {
 print_access() {
 	read_listen
 	step "Open LinuxAdmin"
+	[ "$START" = 0 ] && say "(after you start the service)"
+	if [ "$CADDY_DONE" = 1 ]; then
+		say "  https://$CADDY_DOMAIN"
+		[ "$LISTEN_HOST" = 127.0.0.1 ] && LISTEN_HOST=local
+	fi
 	case $LISTEN_HOST in
+	local) ;;
 	'' | 0.0.0.0 | '[::]' | '::')
 		say "  https://$(uname -n):$PORT"
 		if have ip; then
@@ -787,17 +1974,20 @@ do_install() {
 		exit 0
 	fi
 
+	decide_config
+
 	if [ -z "$FROM" ]; then
-		if ! have openssl; then
+		verifier_selftest
+		if [ "$CAN_VERIFY" = 0 ] && ! have openssl && [ "$DRY" = 0 ]; then
 			say "openssl is needed to verify the release signature. Installing it."
-			[ "$DRY" = 1 ] || pkg_install openssl || true
+			pkg_install openssl || true
+			verifier_selftest
 		fi
-		openssl_selftest
 		if [ "$CAN_VERIFY" = 0 ] && [ "$SKIP_SIG" = 0 ]; then
-			if [ "$DRY" = 1 ] && ! have openssl; then
+			if [ "$DRY" = 1 ] && ! have openssl && ! have python3 && ! have python2 && ! have python; then
 				warn "openssl is missing; a real run installs it first."
 			else
-				die "This system's openssl cannot verify ed25519 signatures (OpenSSL 3 or newer is needed), so the download cannot be checked. Update openssl, or pass --insecure-skip-signature to install without the signature check."
+				die "Cannot check the release signature: this system's openssl is older than 3 (it cannot verify ed25519) and neither python3 nor python2 is installed. Install python3 (or OpenSSL 3), or pass --insecure-skip-signature to install with the sha256 check only."
 			fi
 		fi
 		download_release
@@ -811,10 +2001,12 @@ do_install() {
 	install_layout "$SRC"
 	step "System files"
 	install_pam "$SRC"
+	write_config
 	install_unit "$SRC"
 	start_service
 	report_admin_group
 	firewall
+	caddy_apply
 	print_access
 	say ""
 	if [ "$DRY" = 1 ]; then
@@ -877,6 +2069,10 @@ main() {
 	set -u
 	WANT_VERSION='' PRERELEASE=0 FROM='' UNINSTALL=0 PURGE=0 OPEN_FW=0 DRY=0 YES=0 SKIP_SIG=0
 	PARTIAL='' TMPD='' PREVIOUS='' VERSION=''
+	F_PORT='' F_LISTEN='' F_ROOT='' F_UNLOCK='' F_CERT='' F_KEY='' F_PROXY=0 F_ORIGINS='' F_TRUSTED='' F_DOMAIN=''
+	CADDY_MODE=auto NO_ENABLE=0 NO_START=0 RECONF=0 CFG_REQUESTED=0
+	TTY_OK=0 C_LISTEN='' C_TLS='' PROXY='' CADDY_DOMAIN='' CADDY_DONE=0 ENABLE=1 START=1
+	CADDY_KIND='' CADDY_ACTION=none CFG_MODE=keep
 	while [ $# -gt 0 ]; do
 		case $1 in
 		--version)
@@ -898,6 +2094,22 @@ main() {
 		--dry-run) DRY=1 ;;
 		-y | --yes) YES=1 ;;
 		--insecure-skip-signature) SKIP_SIG=1 ;;
+		--port | --listen | --admin-unlock | --tls-cert | --tls-key | --origin | --trusted-proxy | --domain)
+			[ $# -ge 2 ] || die "$1 needs a value."
+			opt_set "$1" "$2"
+			shift
+			;;
+		--port=* | --listen=* | --admin-unlock=* | --tls-cert=* | --tls-key=* | --origin=* | --trusted-proxy=* | --domain=*)
+			opt_set "${1%%=*}" "${1#*=}"
+			;;
+		--allow-root) F_ROOT=true CFG_REQUESTED=1 ;;
+		--no-allow-root) F_ROOT=false CFG_REQUESTED=1 ;;
+		--behind-proxy) F_PROXY=1 CFG_REQUESTED=1 ;;
+		--caddy) CADDY_MODE=yes CFG_REQUESTED=1 ;;
+		--no-caddy) CADDY_MODE=no ;;
+		--reconfigure) RECONF=1 ;;
+		--no-enable) NO_ENABLE=1 ;;
+		--no-start) NO_START=1 ;;
 		-h | --help)
 			usage
 			exit 0
@@ -907,6 +2119,10 @@ main() {
 		shift
 	done
 	[ "$PURGE" = 1 ] && [ "$UNINSTALL" = 0 ] && die "--purge only goes with --uninstall."
+	[ -n "$F_CERT" ] || [ -n "$F_KEY" ] && { [ -n "$F_CERT" ] && [ -n "$F_KEY" ] || die "--tls-cert and --tls-key go together."; }
+	[ "$CADDY_MODE" = yes ] && [ "$F_PROXY" = 1 ] && die "--caddy and --behind-proxy exclude each other (--caddy already sets up the proxy case)."
+	[ -n "$F_DOMAIN" ] && [ "$CADDY_MODE" = no ] && die "--domain only goes with Caddy."
+	[ -n "$F_DOMAIN" ] && [ "$CADDY_MODE" = auto ] && CADDY_MODE=yes
 	[ -n "$FROM" ] && { [ -n "$WANT_VERSION" ] || [ "$PRERELEASE" = 1 ]; } && die "--from cannot be combined with --version or --prerelease."
 
 	if [ "$(id -u)" != 0 ]; then
@@ -936,6 +2152,7 @@ main() {
 		die "Neither curl nor wget is installed."
 	fi
 	umask 022
+	tty_check
 	TMPD="$(mktemp -d)" || die "mktemp failed."
 	trap cleanup EXIT
 	trap 'exit 130' INT TERM
@@ -948,4 +2165,5 @@ main() {
 }
 
 # Everything above only defines functions: a truncated download runs nothing.
-main "$@"
+# stdin is closed for main: the script may be arriving on it (curl | sh).
+main "$@" </dev/null

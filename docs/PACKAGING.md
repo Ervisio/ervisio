@@ -68,6 +68,43 @@ runs as a descendant of `linuxadmind`, and a restart would kill it halfway. `/us
 (from `packaging/package-service.sh`) checks the process tree: in that case it hands the restart to a transient
 systemd unit that waits until the package manager has exited. Everyone signs in again afterwards.
 
+### What install.sh asks and writes
+
+`install.sh` reads the questions' answers from `/dev/tty`, so they work under `curl | sh` (stdin is the script).
+`--yes`, or no terminal, means defaults and no questions; nothing in the script waits for input then. The README
+install section lists the options. In short:
+
+- **First install** (no `/etc/linuxadmin/linuxadmin.conf`): asks for the port (default 9090, checked with
+  `ss`, `netstat` or `/proc/net/tcp`; a systemd socket such as `cockpit.socket` is named), the proxy setup (Caddy or
+  another reverse proxy), who can reach the console (`listen`), TLS (`tls.mode`, `tls.cert`, `tls.key`),
+  `allow_root`, `session.admin_unlock` (5m, 15m, 1h or `0s` = until sign-out), and whether to enable and start the
+  service. It prints a summary, asks for confirmation, and writes a fully commented config file.
+- **Installed already**: the config file is kept. `--reconfigure` or any configuration option sets only the keys the
+  questions cover (an awk edit that keeps everything else, comments included) after copying the file to
+  `linuxadmin.conf.linuxadmin-backup-<date>`.
+- Not asked, because the daemon has no key for it: who may sign in. Every account with a login shell in
+  `/etc/shells` can (`nologin`, `false`, `git-shell`, `rbash` are refused); `allow_root` is the only switch.
+- The daemon serves HTTPS only (`tls.mode` is `self-signed`, `letsencrypt` (not implemented) or `custom`), so behind
+  a reverse proxy the proxy has to speak HTTPS to it and skip verification of the self-signed certificate.
+
+**Signature check.** In order: `openssl` (3 or newer), an `openssl3` binary, `python3`, `python`, `python2`. Each
+candidate must verify the RFC 8032 test 2 vector and refuse a wrong message before it is trusted. OpenSSL 1.0.2 and
+1.1.1 (Amazon Linux 2, CentOS 7) have no `pkeyutl -rawin`, so on those systems the embedded pure-Python verifier
+(`write_pyverify` in `install.sh`, after the RFC 8032 section 6 reference code, Python 2.7 and 3) does the check;
+Amazon Linux 2 always has Python 2 because yum needs it. If nothing works the script stops before downloading, unless
+`--insecure-skip-signature` is given.
+
+**Caddy.** Detection: a `caddy` binary or `caddy.service` plus a Caddyfile (the `--config` of the unit, else
+`/etc/caddy/Caddyfile`), or a running container whose image name contains `caddy`, found with
+`docker -H unix:///var/run/docker.sock` (the default socket; `DOCKER_HOST` and contexts are ignored on purpose). For a
+container the Caddyfile path comes from its `--config` argument (default `/etc/caddy/Caddyfile`) and is mapped to the
+host path through `docker inspect` mounts. The edit is done by a small awk block parser: it follows top-level blocks
+by brace depth (placeholders like `{http.request.host}` and quoted strings are skipped) and gives up, printing the
+snippet instead, on anything else. A site block whose address contains `cockpit` gets its single `reverse_proxy`
+line (or block) replaced; otherwise a new site block is appended. The file is written in place (`cat > file`), not
+renamed, because a single file mounted into a container must keep its inode. The same checks run before and after:
+`caddy validate` (or `docker exec ... caddy validate`); a failure after the edit restores the backup.
+
 ### Switching between install.sh and a package
 
 - From install.sh to a `.deb` or `.rpm`: install the package. Its post-install script removes the versioned layout
@@ -104,13 +141,14 @@ Administrator rights go through sudo with the user's own password:
 | Fedora, RHEL | `wheel` | `%wheel ALL=(ALL) ALL` active |
 | openSUSE | `wheel` (may need `groupadd wheel`) | `Defaults targetpw` asks for root's password: install `sudo-policy-wheel-auth-self` |
 
-The binaries need glibc 2.34 or newer: Debian 12, Ubuntu 22.04, RHEL 9 and their successors, current Fedora and
-openSUSE Tumbleweed. Older systems such as Debian 11 or Ubuntu 20.04 cannot run them. They are built with cgo
-against libpam on Ubuntu 24.04 runners but only reference glibc symbols up to 2.34; check with
-`objdump -T bin/linuxadmind | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1` when changing the build.
+The release binaries need glibc 2.17 or newer, so they also run on older systems such as Amazon Linux 2, RHEL 8,
+Debian 10/11 and Ubuntu 20.04. They are built with cgo against libpam in a manylinux2014 container
+(`packaging/build-compat.sh`, used by the release workflow), which refuses binaries that reference newer glibc symbols.
+A plain `make build-server` links against the build machine's glibc instead.
 
 Tested in containers (systemd as PID 1) on Arch Linux, Debian 12, Ubuntu 24.04, Fedora 44 and openSUSE Tumbleweed:
-`install.sh` from GitHub (signature check with the distribution's openssl), upgrade, repair, uninstall, PAM sign-in,
+`install.sh` from GitHub (signature check with the distribution's openssl; on Amazon Linux 2 with the Python verifier,
+dry run only), upgrade, repair, uninstall, PAM sign-in,
 admin unlock through sudo, the `.deb`/`.rpm`/pacman package install, upgrade, deferred restart and removal.
 ARM64 was not tested.
 

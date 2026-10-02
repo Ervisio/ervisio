@@ -123,7 +123,7 @@ Run it only on networks you trust until it has had more review. A binary that ru
 
 To run:
 
-- Linux with systemd, PAM and `sudo`, x86-64 or ARM64, glibc 2.34 or newer
+- Linux with systemd, PAM and `sudo`, x86-64 or ARM64, glibc 2.17 or newer
 - A user in a sudoers rule that allows running the bridge (on Arch, `%wheel ALL=(ALL) ALL`)
 
 To build:
@@ -134,7 +134,7 @@ To build:
 
 ## Install
 
-LinuxAdmin needs Linux with systemd on x86-64 or ARM64, and glibc 2.34 or newer (Debian 12, Ubuntu 22.04, Fedora, RHEL 9, openSUSE Tumbleweed, Arch, or newer).
+LinuxAdmin needs Linux with systemd on x86-64 or ARM64, and glibc 2.17 or newer (Amazon Linux 2, RHEL 8, Debian 10, Ubuntu 20.04, or newer).
 
 ### One-line install
 
@@ -142,7 +142,7 @@ LinuxAdmin needs Linux with systemd on x86-64 or ARM64, and glibc 2.34 or newer 
 curl -fsSL https://raw.githubusercontent.com/Fonlogen/LinuxAdmin/main/install.sh | sudo sh
 ```
 
-The script downloads the latest release from GitHub, checks its signature and checksum, installs it in `/usr/lib/linuxadmin`, writes the PAM file for your distribution and the systemd unit, installs `sudo` if it is missing, and starts the service. At the end it prints the addresses to open and the SHA-256 fingerprint of the certificate, so you can compare it with what the browser shows before you accept the warning. LinuxAdmin installed this way updates itself from Settings > About. Running the script again repairs or upgrades the installation.
+The script downloads the latest release from GitHub, checks its signature and checksum, installs it in `/usr/lib/linuxadmin`, writes the PAM file for your distribution and the systemd unit, installs `sudo` if it is missing, and starts the service. At the end it prints the addresses to open and the SHA-256 fingerprint of the certificate, so you can compare it with what the browser shows before you accept the warning. LinuxAdmin installed this way updates itself from Settings > About. Running the script again repairs or upgrades the installation and keeps your configuration.
 
 To read the script before running it:
 
@@ -152,18 +152,55 @@ less install.sh
 sudo sh install.sh
 ```
 
+**Questions.** On a first install the script asks a few things and shows the default in brackets; press Enter to accept it. The questions are read from the terminal, so they also work when the script is piped into `sh`. With `--yes`, or when there is no terminal (a provisioning script), nothing is asked and every default is used.
+
+1. Port (default 9090). If something already listens there, the script says what (Cockpit's `cockpit.socket` uses 9090 too) and asks for another port, suggesting the next free one.
+2. Caddy, if it finds one (see below), or whether LinuxAdmin sits behind another reverse proxy.
+3. Who can reach LinuxAdmin: all interfaces (default) or only this machine (`127.0.0.1`). A reverse proxy decides this by itself.
+4. TLS: a self-signed certificate (default) or your own certificate and key files.
+5. Allow signing in as root (default: no).
+6. How long administrator rights stay unlocked: 5 minutes (default), 15 minutes, 1 hour, or until sign-out.
+7. Start at boot and start now (default: yes to both).
+
+Then it prints a summary and asks for confirmation before it changes anything, and writes `/etc/linuxadmin/linuxadmin.conf` with a comment for each setting. Any local account with a real login shell can sign in; there is no list of allowed users in the configuration yet. Administrator rights come from sudo (the `wheel` or `sudo` group).
+
+On a machine that is already configured, the existing file is kept as it is. `--reconfigure` (or any configuration option below) changes the keys the questions cover, keeps the rest of the file, and saves a backup next to it first.
+
+**Caddy.** If the script finds Caddy, either installed on this machine (`caddy` or `caddy.service`, with `/etc/caddy/Caddyfile`) or in a running Docker container whose image name contains `caddy`, it asks whether to put LinuxAdmin behind it:
+
+- If the Caddyfile has a site whose address contains `cockpit` (for example `cockpit.example.org { reverse_proxy localhost:9090 }`), it offers to point that site to LinuxAdmin.
+- Otherwise it asks for a (sub)domain, suggesting `linuxadmin.` plus the domain of your other sites, and adds a new site block at the end of the Caddyfile.
+- The block is `reverse_proxy https://127.0.0.1:PORT` with `transport http { tls_insecure_skip_verify }`. LinuxAdmin only serves HTTPS, so Caddy connects with HTTPS and skips the check of the self-signed certificate on that local hop. Browsers see Caddy's own certificate. WebSockets work through `reverse_proxy` without extra settings. LinuxAdmin then listens on `127.0.0.1` only.
+- Caddy in Docker cannot reach `127.0.0.1` of the host. The script then uses `host.docker.internal` if the container has it in `extra_hosts`, otherwise the gateway address of the container's network (for example `172.17.0.1`), and LinuxAdmin listens on all interfaces so the container can connect. With `network_mode: host` the loopback address is used. Allow the Docker subnet in your firewall if it blocks container-to-host traffic (ufw does by default); the script prints the command. The container's Caddyfile has to be a bind mount from this machine, so the script can edit it.
+- `web.allowed_origins` is set to `https://<domain>` and `web.trusted_proxies` to loopback (plus the Docker subnet for Caddy in Docker).
+- Before editing, the script validates the Caddyfile, saves a copy as `Caddyfile.linuxadmin-backup-<date>` next to it, edits it in place, validates again and restores the copy if Caddy rejects the result. Then it reloads Caddy (`systemctl reload caddy`, or `docker exec ... caddy reload`). If the Caddyfile has something its small parser does not follow (a heredoc, a single-site file without braces, several `reverse_proxy` lines in the Cockpit block, unusual braces), nothing is edited and the block to paste is printed.
+- With `--yes` Caddy is only changed when you pass `--caddy`.
+- The domain has to point to this machine so Caddy can get a certificate.
+
 Options (after `sh -s --` when piping, for example `curl ... | sudo sh -s -- --version 0.1.1`):
 
 | Option | Effect |
 |---|---|
 | `--version X.Y.Z` | install that release instead of the latest stable one |
 | `--prerelease` | install the newest release, pre-releases included |
+| `--port N` | port to listen on (default 9090) |
+| `--listen all\|local\|IP` | all interfaces (default), `127.0.0.1` only, or one address |
+| `--allow-root`, `--no-allow-root` | allow signing in as root (default: no) |
+| `--admin-unlock D` | `5m` (default), `15m`, `1h`, any time from `30s` to `24h`, or `signout` |
+| `--tls-cert FILE --tls-key FILE` | use your own certificate instead of the self-signed one |
+| `--behind-proxy` | another reverse proxy on this machine fronts LinuxAdmin: listen on `127.0.0.1` |
+| `--origin URL` | add a browser origin to `web.allowed_origins` (repeatable) |
+| `--trusted-proxy ADDR` | add an address or CIDR to `web.trusted_proxies` (repeatable) |
+| `--caddy`, `--no-caddy` | set up, or never touch, a Caddy found on this machine or in Docker |
+| `--domain NAME` | the domain Caddy serves LinuxAdmin on (implies `--caddy`; an existing site with that address is pointed to LinuxAdmin) |
+| `--reconfigure` | ask the configuration questions again on an installed system |
+| `--no-enable`, `--no-start` | do not enable at boot, do not start the service |
 | `--open-firewall` | open the port in ufw or firewalld when one is active (otherwise the script only tells you the command) |
 | `--dry-run` | show what would be done and change nothing |
-| `--yes` | do not ask questions |
+| `--yes` | do not ask questions; every answer is the default |
 | `--uninstall` | remove LinuxAdmin, keeping `/etc/linuxadmin` and installed plugins (`--purge` removes those too) |
 
-The signature check needs OpenSSL 3 or newer. On an older system the script stops; `--insecure-skip-signature` installs anyway, checking only the checksum.
+The signature check uses OpenSSL 3 when the system has it. Older systems (Amazon Linux 2, CentOS 7: OpenSSL 1.0.2 or 1.1.1, which cannot verify Ed25519) use a small Python 2.7 or 3 verifier that the script carries; both of those systems have Python. It has to pass the RFC 8032 test vector before it is used. If neither is available the script stops; `--insecure-skip-signature` installs anyway, checking only the checksum.
 
 ### Packages
 

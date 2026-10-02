@@ -22,7 +22,7 @@ Files here:
 
 | File | What it does |
 |---|---|
-| `../install.sh` | The installer: downloads a release, verifies `SHA256SUMS.sig` (ed25519, openssl) and the sha256, installs the versioned layout, PAM file, unit, starts the service. `--from DIR` installs a release folder already on disk. `--uninstall [--purge]`, `--dry-run`, `--open-firewall`. |
+| `../install.sh` | The installer: downloads a release, verifies `SHA256SUMS.sig` (ed25519: openssl 3, or a built-in Python verifier on old systems) and the sha256, installs the versioned layout, PAM file, unit, starts the service. `--from DIR` installs a release folder already on disk. `--uninstall [--purge]`, `--dry-run`, `--open-firewall`, and the configuration options and questions (port, listen address, root sign-in, admin unlock time, TLS, Caddy), see `docs/PACKAGING.md`. |
 | `install.sh` | Shipped in each release archive: runs the archive's own `install.sh --from <archive folder>`. |
 | `install-dev.sh` | Stages a local `make build` as a release folder and runs `install.sh --from` on it; `--remove` uninstalls. |
 | `build-release.sh VERSION ARCH OUTDIR` | Packs a built tree into `linuxadmin-VERSION-linux-ARCH.tar.gz` (release workflow, `make dist`). |
