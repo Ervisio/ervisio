@@ -21,7 +21,8 @@ const (
 	maxJobs         = 16
 	maxJobSteps     = 16
 	maxJobParams    = 8
-	maxJobTimeout   = 3600
+	maxJobTimeout   = 6 * 3600 // a whole run (a big volume backup runs for hours)
+	maxStepTimeout  = 6 * 3600 // one command step
 	defaultJobTime  = 300
 	maxParamLen     = 1024
 	defaultParamLen = 256
@@ -45,7 +46,7 @@ type JobDef struct {
 	Description string     `json:"description,omitempty"`
 	Params      []JobParam `json:"params,omitempty"`
 	Steps       []JobStep  `json:"steps"`
-	// TimeoutSec bounds the whole run (default 300, max 3600).
+	// TimeoutSec bounds the whole run (default 300, max 21600 = 6 h).
 	TimeoutSec int `json:"timeoutSec,omitempty"`
 	// Webhook lists the params a webhook call may set (from its JSON body
 	// or query string). Everything else in the call is ignored.
@@ -86,6 +87,10 @@ type JobStep struct {
 	// If runs the step only when the condition holds; otherwise it is
 	// skipped.
 	If *JobCond `json:"if,omitempty"`
+	// TimeoutSec (command steps) replaces the command's own timeout
+	// (capabilities.commands[].timeoutSec: default 30, max 600) for this
+	// step, up to 21600 s (6 h). It cannot exceed the job's timeoutSec.
+	TimeoutSec int `json:"timeoutSec,omitempty"`
 	// ContinueOnError keeps the job going when this step fails, and the
 	// failure does not fail the run: a later step can handle it (an
 	// `if: {step, when: "failed"}` notify step). Without it a failed step
@@ -165,6 +170,23 @@ func (m *Manifest) Command(name string) *Command {
 		}
 	}
 	return nil
+}
+
+// jobStepAllows reports whether a job step runs the command with a
+// timeoutSec of at least sec.
+func (m *Manifest) jobStepAllows(command string, sec int) bool {
+	if sec < 0 || sec > maxStepTimeout {
+		return false
+	}
+	for i := range m.Capabilities.Jobs {
+		for k := range m.Capabilities.Jobs[i].Steps {
+			s := &m.Capabilities.Jobs[i].Steps[k]
+			if s.Command == command && s.TimeoutSec >= sec {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // API returns the declared HTTP API called name, or nil.
@@ -459,6 +481,16 @@ func (m *Manifest) validateJob(j *JobDef) error {
 		}
 		if err := m.validateStep(s, pnames, earlier); err != nil {
 			return fmt.Errorf("step %q: %v", s.ID, err)
+		}
+		if s.TimeoutSec != 0 {
+			switch {
+			case s.Kind() != "command":
+				return fmt.Errorf("step %q: timeoutSec is only for command steps", s.ID)
+			case s.TimeoutSec < 0 || s.TimeoutSec > maxStepTimeout:
+				return fmt.Errorf("step %q: timeoutSec must be between 0 and %d", s.ID, maxStepTimeout)
+			case s.TimeoutSec > j.Timeout():
+				return fmt.Errorf("step %q: timeoutSec %d is longer than the job's timeoutSec (%d); raise the job's too", s.ID, s.TimeoutSec, j.Timeout())
+			}
 		}
 		if cnd := s.If; cnd != nil {
 			ref := earlier[cnd.Step]

@@ -58,7 +58,7 @@ run                              one execution: step logs, status; the last 20 a
 Strict like the rest of the manifest (unknown fields are rejected). At most 16 jobs, 16 steps and 8 params each.
 
 **Job**: `name` (like a command name, unique), `description?`, `params?`, `steps`, `timeoutSec?` (whole run; default 300,
-max 3600), `webhook?` (`{"params":[names]}`: the params a webhook call may set, see "Webhooks").
+max 21600, i.e. 6 h), `webhook?` (`{"params":[names]}`: the params a webhook call may set, see "Webhooks").
 
 **Param**: `name` (`^[a-z][a-z0-9_]{0,23}$`), `pattern` (a regular expression the **whole** value must match, as for
 command args), `maxLen?` (default 256, max 1024), `default?` (must match the pattern; a param without a default is
@@ -78,7 +78,10 @@ when it is changed and at every run (a plugin update may have tightened it).
 * `notify`: `{"title", "body"?, "level"?, "link"?}`, needs `capabilities.notify: true`. Sends a notification to the
   channels (`docs/api/notify.md`), counted against the plugin's rate limit.
 
-Other step fields: `if` (below), `continueOnError` (the failure is recorded as handled and does not fail the run, so
+Other step fields: `timeoutSec` (command steps only: replaces the command's own `timeoutSec`, which is default 30 and at
+most 600, for this step, up to 21600; it may not exceed the job's `timeoutSec`, so a long step needs both; the bridge
+honours it only for a command that a step of the manifest declares with at least that value; use it for work such as a
+volume backup that runs for hours), `if` (below), `continueOnError` (the failure is recorded as handled and does not fail the run, so
 a later step can react to it; without it a failed step ends the run as failed).
 
 **Placeholders**: `{param.name}`, `{step.id.stdout}`, `{step.id.stderr}`, `{step.id.exitCode}` (command steps),
@@ -116,7 +119,7 @@ each step's last output (for `changed`).
   `conflict`. A webhook call while it runs is queued: one run starts when the current one ends; further calls meanwhile
   get the id of the queued run. At most 4 runs execute at once on the server; the others wait (status `queued`).
 * **Timeout.** The whole run is cancelled after the job's `timeoutSec` (status `timeout`); each command and HTTP call
-  also keeps its own timeout.
+  also keeps its own timeout (a command step may raise it with the step's `timeoutSec`).
 * **History.** The last 20 runs per instance are kept, with logs: per step the last 8 KiB of stdout, 4 KiB of stderr
   (`truncated` is set), and at most 64 KiB for the whole run. Logs may hold anything a command printed, so only the
   owner and administrators can read them.

@@ -137,8 +137,8 @@ type transferStore struct {
 	issued map[*Session][]time.Time
 	// results are the outcomes of started transfers, by token hash.
 	results map[string]*xferResult
-	now    func() time.Time
-	ttl    time.Duration
+	now     func() time.Time
+	ttl     time.Duration
 }
 
 func newTransferStore() *transferStore {

@@ -33,6 +33,12 @@ type ExecParams struct {
 	// "remote") gets the tunnel in its {env} argv item.
 	Env       string `json:"env,omitempty"`
 	EnvSocket string `json:"envSocket,omitempty"`
+	// TimeoutSec is set by the job runner for a step that declares
+	// timeoutSec. It is honoured only when some job of the plugin's manifest
+	// has a step running this command with a timeoutSec of at least this
+	// value (so a caller cannot lengthen a command beyond what the manifest
+	// declared).
+	TimeoutSec int `json:"timeoutSec,omitempty"`
 }
 
 // ExecResult is the result of plugins.exec.
@@ -144,6 +150,12 @@ func resolve(c *rpc.Call, p ExecParams, wantPTY bool) (*resolved, error) {
 	to := defaultTimeout
 	if cmd.TimeoutSec > 0 {
 		to = time.Duration(cmd.TimeoutSec) * time.Second
+	}
+	if p.TimeoutSec != 0 {
+		if !m.jobStepAllows(cmd.Name, p.TimeoutSec) {
+			return nil, rpc.Errorf(rpc.Forbidden, "%s declares no job step that lets %q run for %d seconds.", m.Name, p.Command, p.TimeoutSec)
+		}
+		to = time.Duration(p.TimeoutSec) * time.Second
 	}
 	return &resolved{argv: argv, timeout: to}, nil
 }

@@ -300,7 +300,7 @@ func (m *Manager) doStep(ctx context.Context, ex Executor, man *plugins.Manifest
 		admin := cmd.Admin && !root && !(cmd.AdminUnlessGroup != "" && groups[cmd.AdminUnlessGroup])
 		sr.Admin = admin
 		target := audit.CommandTarget(s.Command, args)
-		r, err := ex.Exec(ctx, admin, plugins.ExecParams{Plugin: in.Plugin, Command: s.Command, Args: args})
+		r, err := ex.Exec(ctx, admin, plugins.ExecParams{Plugin: in.Plugin, Command: s.Command, Args: args, TimeoutSec: s.TimeoutSec})
 		if err != nil {
 			m.auditStep(in, tr, "command", "", target, admin, nil, false, errText(err))
 			return nil, errText(err)

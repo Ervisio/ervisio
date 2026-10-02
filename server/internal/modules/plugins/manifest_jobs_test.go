@@ -154,3 +154,36 @@ func TestRenderTemplate(t *testing.T) {
 		t.Fatal("a malformed placeholder must be an error")
 	}
 }
+
+func TestJobStepTimeout(t *testing.T) {
+	job := func(jobSec, stepSec string, step string) string {
+		return `[{"name": "backup", ` + jobSec + ` "steps": [{"id": "s", "command": "git-fetch", "args": ["/opt/stacks/a"], ` + stepSec + ` "continueOnError": false}` + step + `]}]`
+	}
+	m, err := ParseManifest([]byte(jobsManifest(job(`"timeoutSec": 21600,`, `"timeoutSec": 14400,`, ""), false)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !m.jobStepAllows("git-fetch", 14400) || !m.jobStepAllows("git-fetch", 600) {
+		t.Fatal("the declared step timeout was not allowed")
+	}
+	if m.jobStepAllows("git-fetch", 14401) || m.jobStepAllows("git-rev", 60) || m.jobStepAllows("git-fetch", -1) {
+		t.Fatal("a longer timeout or another command was allowed")
+	}
+	// Default unchanged: a step without timeoutSec asks for nothing.
+	m2, _ := ParseManifest([]byte(jobsManifest(job("", "", ""), false)))
+	if m2.jobStepAllows("git-fetch", 31) || m2.Job("backup").Timeout() != 300 {
+		t.Fatal("the default changed")
+	}
+	for what, doc := range map[string]string{
+		"over 6 h":                job(`"timeoutSec": 21600,`, `"timeoutSec": 21601,`, ""),
+		"longer than the job":     job(`"timeoutSec": 600,`, `"timeoutSec": 900,`, ""),
+		"longer than the default": job("", `"timeoutSec": 400,`, ""),
+		"negative":                job(`"timeoutSec": 600,`, `"timeoutSec": -5,`, ""),
+		"job over 6 h":            job(`"timeoutSec": 21601,`, "", ""),
+		"on a notify step":        job(`"timeoutSec": 600,`, "", `, {"id": "n", "timeoutSec": 60, "notify": {"title": "x"}}`),
+	} {
+		if _, err := ParseManifest([]byte(jobsManifest(doc, true))); err == nil {
+			t.Errorf("%s: accepted", what)
+		}
+	}
+}
