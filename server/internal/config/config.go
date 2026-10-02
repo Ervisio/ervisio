@@ -1,5 +1,5 @@
 // Package config loads and saves the daemon configuration
-// (/etc/linuxadmin/linuxadmin.conf, TOML).
+// (/etc/ervisio/ervisio.conf, TOML).
 package config
 
 import (
@@ -237,7 +237,7 @@ func readLimited(r io.Reader, limit int64) ([]byte, error) {
 // Encode renders cfg as TOML.
 func Encode(cfg *Config) ([]byte, error) {
 	var buf bytes.Buffer
-	buf.WriteString("# LinuxAdmin server configuration. Edited from Settings; a backup of the\n# previous version is kept next to this file with the .bak suffix.\n\n")
+	buf.WriteString("# Ervisio server configuration. Edited from Settings; a backup of the\n# previous version is kept next to this file with the .bak suffix.\n\n")
 	enc := toml.NewEncoder(&buf)
 	enc.Indent = ""
 	if err := enc.Encode(cfg); err != nil {
@@ -295,7 +295,7 @@ func writeAtomic(path string, data []byte, mode os.FileMode) error {
 	return os.Rename(name, path)
 }
 
-// Check is what `linuxadmind --check-config` runs: it parses and validates
+// Check is what `ervisiod --check-config` runs: it parses and validates
 // the file at path (which must exist) plus the rules that only matter when
 // the daemon starts (a custom certificate must be configured and present).
 // Nothing is started or written.

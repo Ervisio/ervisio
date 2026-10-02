@@ -644,9 +644,9 @@ embedded_pam() {
 arch)
 		cat <<'PAM'
 #%PAM-1.0
-# PAM service for LinuxAdmin sign-in (/etc/pam.d/linuxadmin): Arch Linux and
+# PAM service for Ervisio sign-in (/etc/pam.d/ervisio): Arch Linux and
 # derivatives. The session stack runs around every user bridge (pam_limits,
-# pam_loginuid, pam_systemd...), opened by linuxadmind's root session helper.
+# pam_loginuid, pam_systemd...), opened by ervisiod's root session helper.
 auth      include   system-login
 account   include   system-login
 session   include   system-login
@@ -655,9 +655,9 @@ PAM
 debian)
 		cat <<'PAM'
 #%PAM-1.0
-# PAM service for LinuxAdmin sign-in (/etc/pam.d/linuxadmin): Debian, Ubuntu
+# PAM service for Ervisio sign-in (/etc/pam.d/ervisio): Debian, Ubuntu
 # and derivatives. The session stack runs around every user bridge, opened by
-# linuxadmind's root session helper.
+# ervisiod's root session helper.
 auth      requisite pam_nologin.so
 @include common-auth
 @include common-account
@@ -670,9 +670,9 @@ PAM
 fedora)
 		cat <<'PAM'
 #%PAM-1.0
-# PAM service for LinuxAdmin sign-in (/etc/pam.d/linuxadmin): Fedora, RHEL,
+# PAM service for Ervisio sign-in (/etc/pam.d/ervisio): Fedora, RHEL,
 # CentOS Stream, Rocky, AlmaLinux. The session stack runs around every user
-# bridge, opened by linuxadmind's root session helper.
+# bridge, opened by ervisiod's root session helper.
 auth      substack  password-auth
 auth      include   postlogin
 account   required  pam_nologin.so
@@ -686,9 +686,9 @@ PAM
 suse)
 		cat <<'PAM'
 #%PAM-1.0
-# PAM service for LinuxAdmin sign-in (/etc/pam.d/linuxadmin): openSUSE and
+# PAM service for Ervisio sign-in (/etc/pam.d/ervisio): openSUSE and
 # SLES. The session stack runs around every user bridge, opened by
-# linuxadmind's root session helper.
+# ervisiod's root session helper.
 auth      requisite pam_nologin.so
 auth      include   common-auth
 account   include   common-account

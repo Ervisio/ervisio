@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/brand"
+	"github.com/ervisio/ervisio/server/internal/brand"
 )
 
 // Channels.
@@ -104,7 +104,7 @@ type cached struct {
 	release *Release // nil: no release published yet
 }
 
-// NewChecker returns a checker for the LinuxAdmin repository.
+// NewChecker returns a checker for the Ervisio repository.
 func NewChecker() *Checker {
 	return &Checker{API: "https://api.github.com", Repo: brand.GitHubRepo,
 		Client: &http.Client{Timeout: apiTimeout}}

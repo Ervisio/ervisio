@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/account"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/bridge"
+	"github.com/ervisio/ervisio/server/internal/account"
+	"github.com/ervisio/ervisio/server/internal/bridge"
 	"golang.org/x/crypto/ssh"
 )
 

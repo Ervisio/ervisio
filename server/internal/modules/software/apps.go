@@ -12,7 +12,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
 // App is an installed desktop application (from a .desktop file).

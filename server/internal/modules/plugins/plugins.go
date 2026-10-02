@@ -9,7 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
 // Register adds the plugins.* methods to the registry.

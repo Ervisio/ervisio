@@ -11,10 +11,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/account"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/pam"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/sshauth"
+	"github.com/ervisio/ervisio/server/internal/account"
+	"github.com/ervisio/ervisio/server/internal/pam"
+	"github.com/ervisio/ervisio/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/sshauth"
 	"golang.org/x/crypto/ssh"
 )
 

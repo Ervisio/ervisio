@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
 // appCSP is the Content-Security-Policy of the built web app. Everything is
@@ -87,7 +87,7 @@ func newViteProxy(target *url.URL, lg *log.Logger) http.Handler {
 	p.ErrorLog = lg
 	p.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 		http.Error(w, "Vite dev server not reachable at "+target.String()+
-			" — run `npm --prefix web run dev`, or start linuxadmind with --web web/dist", http.StatusBadGateway)
+			" — run `npm --prefix web run dev`, or start ervisiod with --web web/dist", http.StatusBadGateway)
 	}
 	return p
 }

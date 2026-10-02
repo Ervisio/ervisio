@@ -1,4 +1,4 @@
-// Package server is linuxadmind's HTTP side: sign-in with PAM, sessions,
+// Package server is ervisiod's HTTP side: sign-in with PAM, sessions,
 // routing of API calls and streams to per-user bridges, file transfer,
 // plugin assets and the web app.
 package server
@@ -16,9 +16,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/account"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/config"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/sshauth"
+	"github.com/ervisio/ervisio/server/internal/account"
+	"github.com/ervisio/ervisio/server/internal/config"
+	"github.com/ervisio/ervisio/server/internal/sshauth"
 )
 
 // Options configure the daemon.
@@ -35,7 +35,7 @@ type Options struct {
 	WebDir string
 	// ViteURL is the Vite dev server.
 	ViteURL string
-	// Bridge is the absolute path of linuxadmin-bridge.
+	// Bridge is the absolute path of ervisio-bridge.
 	Bridge string
 	// PluginDirs are searched in order for /plugins/<id>/<file>; then the
 	// folders the user loaded with plugins.loadDev (through their bridge).
@@ -94,7 +94,7 @@ func New(opts Options) (*Server, error) {
 		return nil, errors.New("--dev-insecure-noauth refuses to run as root")
 	}
 	if !opts.Dev && os.Geteuid() != 0 {
-		return nil, errors.New("linuxadmind must run as root (use --dev for development)")
+		return nil, errors.New("ervisiod must run as root (use --dev for development)")
 	}
 	if fi, err := os.Stat(opts.Bridge); err != nil || !fi.Mode().IsRegular() {
 		return nil, fmt.Errorf("bridge binary %q not found (use --bridge)", opts.Bridge)

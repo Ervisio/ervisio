@@ -17,7 +17,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
 // SafePath is the PATH used to resolve and run commands.

@@ -4,9 +4,9 @@ import (
 	"context"
 	"os/exec"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/terminal"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/sys"
+	"github.com/ervisio/ervisio/server/internal/modules/terminal"
+	"github.com/ervisio/ervisio/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/sys"
 )
 
 // PTYParams are the params of plugins.pty.

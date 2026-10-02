@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/sys"
+	"github.com/ervisio/ervisio/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/sys"
 )
 
 // jstr decodes a journald JSON field: a string, an array of byte values

@@ -17,7 +17,7 @@ import (
 	"strings"
 )
 
-// TeamPublicKey is the ed25519 public key (base64) of the LinuxAdmin team key
+// TeamPublicKey is the ed25519 public key (base64) of the Ervisio team key
 // that signs first-party plugins. The private key never lives in the
 // repository; see docs/PLUGIN-SIGNING.md for where it is kept and how to
 // rotate it.
@@ -25,6 +25,11 @@ const TeamPublicKey = "reTBt4sr4E7AYindYYzscF4oUSPzf1hSQ7d8f/R2BfU="
 
 // signaturePrefix is prepended to the canonical manifest before signing, so
 // a signature cannot be replayed for another purpose.
+//
+// Historical constant: it keeps the product's former name (LinuxAdmin) on
+// purpose. Every plugin signed so far (manifest.sig) and the signed catalog
+// were made over it, and consoles still running LinuxAdmin verify new
+// signatures with it; changing it would invalidate all of them at once.
 const signaturePrefix = "linuxadmin-plugin-v1\n"
 
 // TrustedKeys are the keys a signature may verify against.

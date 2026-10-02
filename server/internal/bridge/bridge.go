@@ -1,4 +1,4 @@
-// Package bridge starts linuxadmin-bridge processes for a user: the user
+// Package bridge starts ervisio-bridge processes for a user: the user
 // bridge (with the user's uid/gid/groups) and the root bridge (through
 // `sudo -S`, after the user typed their password).
 package bridge
@@ -20,9 +20,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/account"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/sys"
+	"github.com/ervisio/ervisio/server/internal/account"
+	"github.com/ervisio/ervisio/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/sys"
 )
 
 // HelloTimeout bounds how long we wait for a bridge to say hello.
@@ -30,7 +30,7 @@ const HelloTimeout = 10 * time.Second
 
 // Spec describes how to start bridges for one account.
 type Spec struct {
-	// Bridge is the absolute path of the linuxadmin-bridge binary.
+	// Bridge is the absolute path of the ervisio-bridge binary.
 	Bridge string
 	// Config is passed to the bridge with --config.
 	Config string
@@ -293,7 +293,7 @@ func StartAdmin(ctx context.Context, s *Spec, password string) (*Proc, error) {
 	args := append(sudoArgs, s.bridgeArgs(true)...)
 	cmd := s.command(sudo, args...)
 	// The root bridge must not start in the user's home (it also does
-	// chdir("/") itself, see linuxadmin-bridge --admin).
+	// chdir("/") itself, see ervisio-bridge --admin).
 	cmd.Dir = "/"
 	// English messages so failures can be classified.
 	cmd.Env = append(cmd.Env, "LC_ALL=C")

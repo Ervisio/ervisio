@@ -15,9 +15,9 @@ import (
 )
 
 // Prefix starts every signed message (domain separation: a signature made
-// for LinuxAdmin can never be a valid SSH user-auth or SSHSIG signature,
+// for Ervisio can never be a valid SSH user-auth or SSHSIG signature,
 // whose first bytes are a length or "SSHSIG").
-const Prefix = "linuxadmin-ssh-auth-v1"
+const Prefix = "ervisio-ssh-auth-v1"
 
 // ChallengeTTL is how long a challenge may be answered.
 const ChallengeTTL = 60 * time.Second

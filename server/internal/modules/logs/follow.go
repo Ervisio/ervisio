@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/sys"
+	"github.com/ervisio/ervisio/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/sys"
 )
 
 // follow streams new entries (batched every ~150 ms as arrays) until the

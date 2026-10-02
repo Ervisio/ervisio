@@ -1,4 +1,4 @@
-module github.com/Fonlogen/LinuxAdmin/server
+module github.com/ervisio/ervisio/server
 
 go 1.24.0
 

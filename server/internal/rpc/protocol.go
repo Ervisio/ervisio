@@ -1,5 +1,5 @@
 // Package rpc implements the newline-delimited JSON protocol spoken between
-// linuxadmind and linuxadmin-bridge: the bridge-side Registry and Serve loop,
+// ervisiod and ervisio-bridge: the bridge-side Registry and Serve loop,
 // and the daemon-side Client.
 //
 // Wire format (one JSON object per line):

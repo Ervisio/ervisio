@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
 const trashDateLayout = "2006-01-02T15:04:05"

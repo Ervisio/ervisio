@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/brand"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/config"
+	"github.com/ervisio/ervisio/server/internal/brand"
+	"github.com/ervisio/ervisio/server/internal/config"
 )
 
 // Service restarts the daemon.
@@ -37,7 +37,7 @@ const HealthTimeout = 30 * time.Second
 
 // Switcher moves `current` to another installed version, restarts the
 // daemon and rolls back when the new version does not become healthy. It
-// runs outside linuxadmin.service (a transient systemd unit), since
+// runs outside ervisio.service (a transient systemd unit), since
 // restarting the service kills everything in it.
 type Switcher struct {
 	Layout  *Layout
@@ -284,7 +284,7 @@ func (h *HTTPHealth) once(ctx context.Context, want string) error {
 
 // HelperFlag starts the switch helper:
 //
-//	linuxadmind --apply-update <version> [--kind update|rollback] [--auto]
+//	ervisiod --apply-update <version> [--kind update|rollback] [--auto]
 //
 // It is started by updates.apply / updates.rollback (and the automatic
 // install) in a transient systemd unit, never by hand.

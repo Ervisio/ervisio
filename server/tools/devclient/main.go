@@ -1,11 +1,11 @@
-// Command devclient is a tiny development client for linuxadmind: it makes
+// Command devclient is a tiny development client for ervisiod: it makes
 // /api/rpc calls and opens WebSocket streams, printing the JSON it gets.
-// Against `linuxadmind --dev --dev-insecure-noauth`, redeem the one-time
+// Against `ervisiod --dev --dev-insecure-noauth`, redeem the one-time
 // URL the daemon prints once with `login`, then pass the printed token with
-// -cookie (or in $LA_SESSION):
+// -cookie (or in $ERVISIO_SESSION):
 //
 //	go run ./tools/devclient login 'http://127.0.0.1:9090/api/dev/noauth?token=…'
-//	export LA_SESSION=<printed token>
+//	export ERVISIO_SESSION=<printed token>
 //	go run ./tools/devclient rpc system.host
 //	go run ./tools/devclient rpc prefs.set '{"key":"theme","value":"oled"}'
 //	go run ./tools/devclient -n 3 stream system.metricsStream '{"interval":500}'
@@ -30,7 +30,7 @@ import (
 
 func main() {
 	base := flag.String("url", "http://127.0.0.1:9090", "daemon base URL")
-	cookie := flag.String("cookie", os.Getenv("LA_SESSION"), "la_session token (default $LA_SESSION; get one with `login <noauth-url>`)")
+	cookie := flag.String("cookie", os.Getenv("ERVISIO_SESSION"), "ervisio_session token (default $ERVISIO_SESSION; get one with `login <noauth-url>`)")
 	admin := flag.Bool("admin", false, "send admin:true")
 	n := flag.Int("n", 0, "stream: stop after n data frames (0 = until end / Ctrl+C)")
 	timeout := flag.Duration("timeout", 30*time.Second, "overall timeout")
@@ -58,9 +58,9 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
 	hdr := http.Header{}
-	hdr.Set("X-Requested-With", "linuxadmin")
+	hdr.Set("X-Requested-With", "ervisio")
 	if *cookie != "" {
-		hdr.Set("Cookie", "la_session="+*cookie)
+		hdr.Set("Cookie", "ervisio_session="+*cookie)
 	}
 	switch mode {
 	case "rpc":
@@ -123,7 +123,7 @@ func login(u string) {
 	}
 	resp.Body.Close()
 	for _, ck := range resp.Cookies() {
-		if ck.Name == "la_session" && ck.Value != "" {
+		if ck.Name == "ervisio_session" && ck.Value != "" {
 			fmt.Println(ck.Value)
 			return
 		}

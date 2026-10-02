@@ -1,7 +1,7 @@
-// Package update implements LinuxAdmin's self-update: finding the latest
+// Package update implements Ervisio's self-update: finding the latest
 // GitHub release, downloading and verifying it (ed25519 signature over
 // SHA256SUMS + sha256 of the archive), extracting it safely into
-// /usr/lib/linuxadmin/versions/<v>, and switching the `current` symlink
+// /usr/lib/ervisio/versions/<v>, and switching the `current` symlink
 // from a transient systemd unit that restarts the daemon and rolls back
 // when the new version does not answer. See docs/RELEASING.md.
 package update
@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/brand"
+	"github.com/ervisio/ervisio/server/internal/brand"
 )
 
 // Event is one progress step of Apply, streamed to the UI.
@@ -37,12 +37,12 @@ type Event struct {
 var (
 	ErrBusy         = errors.New("an update is already in progress")
 	ErrPackages     = errors.New("a package transaction is running; try again when it has finished")
-	ErrUpToDate     = errors.New("LinuxAdmin is already up to date")
+	ErrUpToDate     = errors.New("Ervisio is already up to date")
 	ErrChanged      = errors.New("the latest release changed since it was shown; check again")
 	ErrNoPrevious   = errors.New("there is no previous version to roll back to")
-	ErrNotInstalled = errors.New("this copy of LinuxAdmin was not installed in " + brand.LibDir + "; update it the way it was installed")
+	ErrNotInstalled = errors.New("this copy of Ervisio was not installed in " + brand.LibDir + "; update it the way it was installed")
 	ErrNoBuild      = errors.New("the release has no build for this architecture")
-	ErrManaged      = errors.New("LinuxAdmin was installed by a package manager, which installs its updates")
+	ErrManaged      = errors.New("Ervisio was installed by a package manager, which installs its updates")
 )
 
 // managedErr names the package manager in ErrManaged.

@@ -8,9 +8,9 @@ import (
 	"encoding/json"
 	"sort"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/brand"
-	cfg "github.com/Fonlogen/LinuxAdmin/server/internal/config"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/brand"
+	cfg "github.com/ervisio/ervisio/server/internal/config"
+	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
 // Path is the configuration file. The bridge sets it from --config before

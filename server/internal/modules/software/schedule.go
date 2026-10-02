@@ -8,15 +8,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/brand"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/sys"
+	"github.com/ervisio/ervisio/server/internal/brand"
+	"github.com/ervisio/ervisio/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/sys"
 )
 
 // The scheduled update is a systemd timer pair written to /etc/systemd/system:
 //
-//	linuxadmin-update.timer    OnCalendar=*-*-* HH:MM:00, Persistent=true
-//	linuxadmin-update.service  oneshot, runs the same commands as "Update all"
+//	ervisio-update.timer    OnCalendar=*-*-* HH:MM:00, Persistent=true
+//	ervisio-update.service  oneshot, runs the same commands as "Update all"
 const (
 	timerName   = brand.Slug + "-update.timer"
 	serviceName = brand.Slug + "-update.service"

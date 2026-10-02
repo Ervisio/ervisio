@@ -7,7 +7,7 @@ package logs
 import (
 	"context"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
 // Register adds the logs.* methods to the registry. Everything is user

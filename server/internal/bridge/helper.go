@@ -14,11 +14,11 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/account"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/pam"
+	"github.com/ervisio/ervisio/server/internal/account"
+	"github.com/ervisio/ervisio/server/internal/pam"
 )
 
-// HelperFlag is the first argument that turns linuxadmind into the PAM
+// HelperFlag is the first argument that turns ervisiod into the PAM
 // session helper (see RunSessionHelper).
 const HelperFlag = "--pam-session-helper"
 
@@ -71,7 +71,7 @@ func mergeEnv(base, pamEnv []string) []string {
 	return out
 }
 
-// RunSessionHelper is the main function of `linuxadmind --pam-session-helper`.
+// RunSessionHelper is the main function of `ervisiod --pam-session-helper`.
 // Started as root by the daemon (stdin/stdout are the bridge protocol), it
 // opens a PAM session for the account (pam_acct_mgmt, pam_setcred,
 // pam_open_session: pam_limits, pam_loginuid, pam_systemd apply), starts

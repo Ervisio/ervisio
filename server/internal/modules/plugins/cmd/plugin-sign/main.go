@@ -1,4 +1,4 @@
-// Command plugin-sign signs a LinuxAdmin plugin folder.
+// Command plugin-sign signs an Ervisio plugin folder.
 //
 //	plugin-sign -genkey key.pem            create a new ed25519 key (prints the public key to embed)
 //	plugin-sign -key key.pem <folder>      hash every file into manifest.json "files" and write manifest.sig
@@ -15,8 +15,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/plugins"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/signkey"
+	"github.com/ervisio/ervisio/server/internal/modules/plugins"
+	"github.com/ervisio/ervisio/server/internal/signkey"
 )
 
 func main() {

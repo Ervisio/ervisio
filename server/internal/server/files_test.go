@@ -39,7 +39,7 @@ func TestFileTransfer(t *testing.T) {
 
 	upload := func(overwrite string) (int, string) {
 		req, _ := http.NewRequest("POST", ts.URL+"/api/files/upload?path="+url.QueryEscape(dst)+"&overwrite="+overwrite, bytes.NewReader(payload))
-		req.Header.Set("X-Requested-With", "linuxadmin")
+		req.Header.Set("X-Requested-With", "ervisio")
 		resp, err := cl.Do(req)
 		if err != nil {
 			t.Fatal(err)

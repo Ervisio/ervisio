@@ -1,4 +1,4 @@
-// Package updates exposes LinuxAdmin's self-update to the Settings section:
+// Package updates exposes Ervisio's self-update to the Settings section:
 // updates.check and updates.status (any user), updates.apply (admin,
 // stream) and updates.rollback (admin). The work is done by
 // internal/update; see docs/api/updates.md.
@@ -11,11 +11,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/brand"
-	cfg "github.com/Fonlogen/LinuxAdmin/server/internal/config"
-	configmod "github.com/Fonlogen/LinuxAdmin/server/internal/modules/config"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/update"
+	"github.com/ervisio/ervisio/server/internal/brand"
+	cfg "github.com/ervisio/ervisio/server/internal/config"
+	configmod "github.com/ervisio/ervisio/server/internal/modules/config"
+	"github.com/ervisio/ervisio/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/update"
 )
 
 // DaemonDev is set by the bridge's --dev flag: a daemon in --dev never
@@ -113,7 +113,7 @@ type CheckResult struct {
 	Newer     bool    `json:"newer"`
 	Arch      string  `json:"arch"`
 	// ManagedBy names the package manager that installs updates of a
-	// packaged LinuxAdmin ("" = self-update).
+	// packaged Ervisio ("" = self-update).
 	ManagedBy string `json:"managedBy,omitempty"`
 }
 

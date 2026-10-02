@@ -2,19 +2,19 @@
 package modules
 
 import (
-	configmod "github.com/Fonlogen/LinuxAdmin/server/internal/modules/config"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/files"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/logs"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/overview"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/plugins"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/prefs"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/services"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/software"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/system"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/terminal"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/updates"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/users"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
+	configmod "github.com/ervisio/ervisio/server/internal/modules/config"
+	"github.com/ervisio/ervisio/server/internal/modules/files"
+	"github.com/ervisio/ervisio/server/internal/modules/logs"
+	"github.com/ervisio/ervisio/server/internal/modules/overview"
+	"github.com/ervisio/ervisio/server/internal/modules/plugins"
+	"github.com/ervisio/ervisio/server/internal/modules/prefs"
+	"github.com/ervisio/ervisio/server/internal/modules/services"
+	"github.com/ervisio/ervisio/server/internal/modules/software"
+	"github.com/ervisio/ervisio/server/internal/modules/system"
+	"github.com/ervisio/ervisio/server/internal/modules/terminal"
+	"github.com/ervisio/ervisio/server/internal/modules/updates"
+	"github.com/ervisio/ervisio/server/internal/modules/users"
+	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
 // RegisterAll registers every module. Each section owns one line.

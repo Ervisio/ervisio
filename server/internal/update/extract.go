@@ -20,13 +20,13 @@ type Limits struct {
 	MaxTotal   int64 // bytes of all files
 }
 
-// DefaultLimits fit a LinuxAdmin release (two ~20 MB binaries, a few MB of
+// DefaultLimits fit an Ervisio release (two ~20 MB binaries, a few MB of
 // web assets) with a wide margin.
 var DefaultLimits = Limits{MaxEntries: 20000, MaxFile: 256 << 20, MaxTotal: 1 << 30}
 
 // ExtractTarGz extracts the gzip tar at archive into dst (which must not
 // exist; it is created 0755). Every entry must live under the single
-// top-level folder prefix ("linuxadmin-1.2.0-linux-amd64/"), which is
+// top-level folder prefix ("ervisio-1.2.0-linux-amd64/"), which is
 // stripped. Only regular files and folders are accepted: symlinks, hard
 // links, devices, FIFOs, absolute names, ".." components and duplicates are
 // errors. Files get mode 0755 when any execute bit is set, else 0644;

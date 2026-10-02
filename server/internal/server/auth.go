@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/account"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/brand"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/bridge"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/config"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/pam"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/account"
+	"github.com/ervisio/ervisio/server/internal/brand"
+	"github.com/ervisio/ervisio/server/internal/bridge"
+	"github.com/ervisio/ervisio/server/internal/config"
+	"github.com/ervisio/ervisio/server/internal/pam"
+	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
 var (
@@ -27,7 +27,7 @@ var (
 	// signature verified and authorized_keys lists the key: whoever sees it
 	// holds a key of the account. Password sign-ins get errBadCredentials (no
 	// password oracle, like the other refusals after PAM accepted it).
-	errNotAllowed = rpc.Errorf(rpc.Forbidden, "This account may not sign in to LinuxAdmin").
+	errNotAllowed = rpc.Errorf(rpc.Forbidden, "This account may not sign in to "+brand.Name).
 			WithData(map[string]string{"reason": "not_allowed"})
 )
 
@@ -57,7 +57,9 @@ func (s *Server) csrfS(next sessionHandler) sessionHandler {
 }
 
 func (s *Server) checkCSRF(r *http.Request) *rpc.Error {
-	if r.Header.Get(brand.CSRFHeader) != brand.CSRFValue {
+	// The LinuxAdmin value is still accepted: a tab that loaded the web app
+	// before the rename keeps working until it reloads.
+	if v := r.Header.Get(brand.CSRFHeader); v != brand.CSRFValue && v != brand.LegacyCSRFValue {
 		return rpc.Errorf(rpc.Forbidden, "missing %s: %s header", brand.CSRFHeader, brand.CSRFValue)
 	}
 	if o := r.Header.Get("Origin"); o != "" && !s.originAllowed(o, r) {

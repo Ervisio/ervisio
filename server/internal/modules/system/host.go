@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/sys"
+	"github.com/ervisio/ervisio/server/internal/sys"
 )
 
 // Distro is the distribution summary.

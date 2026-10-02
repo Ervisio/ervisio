@@ -42,7 +42,7 @@ func TestInstallScriptReleaseKey(t *testing.T) {
 // do not ship them (0.1.0); they must not drift.
 func TestInstallScriptPAMCopies(t *testing.T) {
 	script := readInstallScript(t)
-	files, _ := filepath.Glob(filepath.Join(repoRoot(t), "packaging", "pam.d", "linuxadmin.*"))
+	files, _ := filepath.Glob(filepath.Join(repoRoot(t), "packaging", "pam.d", "ervisio.*"))
 	if len(files) < 4 {
 		t.Fatalf("packaging/pam.d has %d variants", len(files))
 	}

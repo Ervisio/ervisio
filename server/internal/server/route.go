@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/bridge"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/bridge"
+	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
 // userBridge returns the session's user bridge, restarting it if it died.

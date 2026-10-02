@@ -1,6 +1,6 @@
-// Command linuxadmind is the LinuxAdmin web console daemon. It runs as
+// Command ervisiod is the Ervisio web console daemon. It runs as
 // root, signs users in with PAM, and routes their requests to per-user
-// linuxadmin-bridge processes. See docs/ARCHITECTURE.md.
+// ervisio-bridge processes. See docs/ARCHITECTURE.md.
 package main
 
 import (
@@ -13,11 +13,11 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/brand"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/bridge"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/config"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/server"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/update"
+	"github.com/ervisio/ervisio/server/internal/brand"
+	"github.com/ervisio/ervisio/server/internal/bridge"
+	"github.com/ervisio/ervisio/server/internal/config"
+	"github.com/ervisio/ervisio/server/internal/server"
+	"github.com/ervisio/ervisio/server/internal/update"
 )
 
 // hiddenFlags are omitted from -help.
@@ -86,8 +86,8 @@ func main() {
 			log.Fatal(err)
 		}
 		bp = filepath.Join(filepath.Dir(exe), brand.BridgeBinary)
-		// Packages (flat layout) install the daemon as /usr/bin/linuxadmind
-		// and the bridge as /usr/lib/linuxadmin/linuxadmin-bridge.
+		// Packages (flat layout) install the daemon as /usr/bin/ervisiod
+		// and the bridge as /usr/lib/ervisio/ervisio-bridge.
 		if _, err := os.Stat(bp); err != nil {
 			if alt := filepath.Join(brand.LibDir, brand.BridgeBinary); isFile(alt) {
 				bp = alt
@@ -102,7 +102,7 @@ func main() {
 	if r, err := filepath.EvalSymlinks(bp); err == nil {
 		bp = r
 	}
-	// A versioned install (/usr/lib/linuxadmin/versions/<v>/bin) serves the
+	// A versioned install (/usr/lib/ervisio/versions/<v>/bin) serves the
 	// web app and packaged plugins of its own version.
 	versionDir, versioned := update.RunningVersionDir()
 	webDir := *web

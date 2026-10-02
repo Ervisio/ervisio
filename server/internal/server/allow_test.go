@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/account"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/config"
+	"github.com/ervisio/ervisio/server/internal/account"
+	"github.com/ervisio/ervisio/server/internal/config"
 	"golang.org/x/crypto/ssh"
 )
 

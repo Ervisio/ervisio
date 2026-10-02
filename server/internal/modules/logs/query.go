@@ -12,8 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/sys"
+	"github.com/ervisio/ervisio/server/internal/brand"
+	"github.com/ervisio/ervisio/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/sys"
 )
 
 const (
@@ -62,7 +63,7 @@ func watchersOrPrefs(w []Watcher) []Watcher {
 	if err != nil {
 		return nil
 	}
-	b, err := os.ReadFile(filepath.Join(home, ".config", "linuxadmin", "prefs.json"))
+	b, err := os.ReadFile(filepath.Join(home, brand.UserDataDir, brand.PrefsFile))
 	if err != nil {
 		return nil
 	}

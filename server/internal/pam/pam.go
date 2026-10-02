@@ -183,7 +183,7 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/brand"
+	"github.com/ervisio/ervisio/server/internal/brand"
 )
 
 // Errors returned by Authenticate.
@@ -204,8 +204,8 @@ type Error struct {
 func (e *Error) Error() string { return e.Kind.Error() + ": " + e.Msg }
 func (e *Error) Unwrap() error { return e.Kind }
 
-// Service returns the PAM service to use: "linuxadmin" when
-// /etc/pam.d/linuxadmin exists, otherwise "login".
+// Service returns the PAM service to use: "ervisio" when
+// /etc/pam.d/ervisio exists, otherwise "login".
 func Service() string {
 	if _, err := os.Stat("/etc/pam.d/" + brand.PAMService); err == nil {
 		return brand.PAMService

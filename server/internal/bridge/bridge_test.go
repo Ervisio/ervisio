@@ -10,14 +10,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/account"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/account"
+	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
 func buildBridge(t *testing.T) string {
 	t.Helper()
-	out := filepath.Join(t.TempDir(), "linuxadmin-bridge")
-	cmd := exec.Command("go", "build", "-o", out, "github.com/Fonlogen/LinuxAdmin/server/cmd/linuxadmin-bridge")
+	out := filepath.Join(t.TempDir(), "ervisio-bridge")
+	cmd := exec.Command("go", "build", "-o", out, "github.com/ervisio/ervisio/server/cmd/ervisio-bridge")
 	if b, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("build bridge: %v\n%s", err, b)
 	}
@@ -29,7 +29,7 @@ func spec(t *testing.T, bridge string) *Spec {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &Spec{Bridge: bridge, Config: "/nonexistent/linuxadmin.conf", Account: a, Logger: log.New(io.Discard, "", 0)}
+	return &Spec{Bridge: bridge, Config: "/nonexistent/ervisio.conf", Account: a, Logger: log.New(io.Discard, "", 0)}
 }
 
 // fakeSudo writes a shell script standing in for sudo.

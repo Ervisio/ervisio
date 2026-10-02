@@ -13,19 +13,19 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/brand"
+	"github.com/ervisio/ervisio/server/internal/brand"
 )
 
-// Layout describes where LinuxAdmin is installed:
+// Layout describes where Ervisio is installed:
 //
-//	LibDir/versions/<v>/{bin/linuxadmind, bin/linuxadmin-bridge, web/, plugins/, packaging/, VERSION}
+//	LibDir/versions/<v>/{bin/ervisiod, bin/ervisio-bridge, web/, plugins/, packaging/, VERSION}
 //	LibDir/current  -> versions/<v>   (the running version)
 //	LibDir/previous -> versions/<v>   (kept for rollback)
-//	LibDir/linuxadmin-bridge -> current/bin/linuxadmin-bridge   (compatibility with old unit files)
-//	BinLink (/usr/bin/linuxadmind) -> LibDir/current/bin/linuxadmind
+//	LibDir/ervisio-bridge -> current/bin/ervisio-bridge   (compatibility with old unit files)
+//	BinLink (/usr/bin/ervisiod) -> LibDir/current/bin/ervisiod
 //
-// The flat layout of earlier installs (a real /usr/bin/linuxadmind,
-// LibDir/linuxadmin-bridge, /usr/share/linuxadmin/{web,plugins}) is
+// The flat layout of earlier installs (a real /usr/bin/ervisiod,
+// LibDir/ervisio-bridge, /usr/share/ervisio/{web,plugins}) is
 // migrated by Migrate before the first update.
 type Layout struct {
 	LibDir  string
@@ -46,7 +46,7 @@ func DefaultLayout() *Layout {
 
 var managerRe = regexp.MustCompile(`^[a-z][a-z0-9._+-]{0,31}$`)
 
-// ManagedBy returns the package manager that installed LinuxAdmin, read
+// ManagedBy returns the package manager that installed Ervisio, read
 // from the marker file ("" when there is none: an install.sh or source
 // install that updates itself). A marker whose content is not a plain name
 // still counts and reads as "unknown".
@@ -224,7 +224,7 @@ func (l *Layout) ensureEntryLinks() error {
 // what runs: the flat binaries, web app and packaged plugins are copied
 // into versions/<name>, `current` points there and the entry points become
 // symlinks. name is the running version's folder name. The flat
-// /usr/share/linuxadmin folders stay (an old binary rolled back to still
+// /usr/share/ervisio folders stay (an old binary rolled back to still
 // reads them). Migrating a versioned install only repairs the entry links.
 func (l *Layout) Migrate(name string) (string, error) {
 	switch l.Kind() {
@@ -232,7 +232,7 @@ func (l *Layout) Migrate(name string) (string, error) {
 		cur, _ := l.Current()
 		return cur, l.ensureEntryLinks()
 	case KindNone:
-		return "", errors.New("LinuxAdmin is not installed in " + l.LibDir)
+		return "", errors.New("Ervisio is not installed in " + l.LibDir)
 	}
 	if !ValidDirName(name) {
 		name = "legacy"

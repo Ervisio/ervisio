@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
 // These tests play the attacker of docs/SECURITY-REVIEW.md H1: a user who owns

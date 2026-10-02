@@ -1,5 +1,5 @@
 // Package prefs stores per-user preferences (theme, language, layout…) in
-// ~/.config/linuxadmin/prefs.json. It runs in the user bridge, so each Linux
+// ~/.config/ervisio/prefs.json. It runs in the user bridge, so each Linux
 // account has its own file.
 package prefs
 
@@ -15,8 +15,8 @@ import (
 	"regexp"
 	"sync"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/brand"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/brand"
+	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
 // Limits.

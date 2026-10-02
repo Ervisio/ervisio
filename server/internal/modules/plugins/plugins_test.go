@@ -13,8 +13,8 @@ import (
 	"strings"
 	"testing"
 
-	configmod "github.com/Fonlogen/LinuxAdmin/server/internal/modules/config"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
+	configmod "github.com/ervisio/ervisio/server/internal/modules/config"
+	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
 const goodManifest = `{
@@ -315,7 +315,7 @@ func setup(t *testing.T) (system, installed string) {
 	StatePath = filepath.Join(root, "state.json")
 	CatalogURLFile = filepath.Join(root, "none.url")
 	DevDirs = []string{}
-	configmod.Path = filepath.Join(root, "linuxadmin.conf")
+	configmod.Path = filepath.Join(root, "ervisio.conf")
 	os.MkdirAll(SystemDir, 0o755)
 	os.MkdirAll(InstalledDir, 0o755)
 	// Most tests use unsigned fixtures; the default (signed only) is tested in TestTrustPolicy.

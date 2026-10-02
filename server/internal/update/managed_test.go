@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/config"
+	"github.com/ervisio/ervisio/server/internal/config"
 )
 
 func TestManagedBy(t *testing.T) {
@@ -38,7 +38,7 @@ func TestManagedBy(t *testing.T) {
 }
 
 // A packaged install (flat layout + marker) never updates itself: the
-// package manager owns /usr/bin/linuxadmind and the other files.
+// package manager owns /usr/bin/ervisiod and the other files.
 func TestManagedInstallRefusesSelfUpdate(t *testing.T) {
 	h := newHarness(t, "1.0.0")
 	l := h.u.Layout
@@ -46,7 +46,7 @@ func TestManagedInstallRefusesSelfUpdate(t *testing.T) {
 	os.Remove(filepath.Join(l.LibDir, "current"))
 	os.MkdirAll(filepath.Dir(l.BinLink), 0o755)
 	os.WriteFile(l.BinLink, []byte("daemon 1.0.0"), 0o755)
-	os.WriteFile(filepath.Join(l.LibDir, "linuxadmin-bridge"), []byte("bridge 1.0.0"), 0o755)
+	os.WriteFile(filepath.Join(l.LibDir, "ervisio-bridge"), []byte("bridge 1.0.0"), 0o755)
 	l.Managed = filepath.Join(l.LibDir, "managed")
 	os.WriteFile(l.Managed, []byte("apt\n"), 0o644)
 	h.gh.publish("1.1.0", h.sk, nil)

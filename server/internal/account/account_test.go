@@ -75,7 +75,7 @@ func TestCurrentShell(t *testing.T) {
 	if a.Shell == "" {
 		t.Fatalf("no shell for %s from NSS", a.Name)
 	}
-	if nssShell("no-such-user-linuxadmin-test") != "" {
+	if nssShell("no-such-user-ervisio-test") != "" {
 		t.Fatal("unknown user has a shell")
 	}
 }

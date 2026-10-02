@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"github.com/ervisio/ervisio/server/internal/brand"
 )
 
 // Result is the outcome of the last update or rollback, kept in
@@ -43,7 +45,7 @@ const (
 
 // State keeps the update state folder.
 type State struct {
-	Dir string // e.g. /var/lib/linuxadmin/updates (0755)
+	Dir string // e.g. /var/lib/ervisio/updates (0755)
 	// Owner is the uid that must own last.json for readers to trust it.
 	Owner int
 	// TxFile is the software module's public transaction state; while it
@@ -55,7 +57,7 @@ type State struct {
 
 // DefaultState is the system state folder.
 func DefaultState(dir string) *State {
-	return &State{Dir: dir, Owner: 0, TxFile: "/run/linuxadmin/software-transaction.public.json"}
+	return &State{Dir: dir, Owner: 0, TxFile: brand.RunDir + "/software-transaction.public.json"}
 }
 
 func (s *State) lastPath() string { return filepath.Join(s.Dir, "last.json") }

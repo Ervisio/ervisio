@@ -1,7 +1,7 @@
 #%PAM-1.0
-# PAM service for LinuxAdmin sign-in (/etc/pam.d/linuxadmin): Fedora, RHEL,
+# PAM service for Ervisio sign-in (/etc/pam.d/ervisio): Fedora, RHEL,
 # CentOS Stream, Rocky, AlmaLinux. The session stack runs around every user
-# bridge, opened by linuxadmind's root session helper.
+# bridge, opened by ervisiod's root session helper.
 auth      substack  password-auth
 auth      include   postlogin
 account   required  pam_nologin.so

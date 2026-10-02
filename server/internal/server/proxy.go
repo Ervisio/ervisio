@@ -6,7 +6,7 @@ import (
 	"net/netip"
 	"strings"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/config"
+	"github.com/ervisio/ervisio/server/internal/config"
 )
 
 // fromTrustedProxy reports whether the TCP peer is listed in

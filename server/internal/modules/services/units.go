@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
 // unitNameRe matches systemd unit names: characters allowed by systemd.unit(5)
@@ -63,7 +63,7 @@ var purposeTable = []struct {
 		"nginx*", "apache*", "httpd*", "caddy*", "lighttpd*", "haproxy*", "traefik*", "varnish*", "php*-fpm*",
 		"php-fpm*", "uwsgi*", "gunicorn*", "tomcat*", "postgresql*", "postgres*", "mysql*", "mariadb*",
 		"redis*", "valkey*", "memcached*", "mongod*", "mongodb*", "elasticsearch*", "opensearch*", "grafana*",
-		"prometheus*", "linuxadmin*", "node-red*", "php*",
+		"prometheus*", "ervisio*", "linuxadmin*", "node-red*", "php*",
 	}},
 }
 

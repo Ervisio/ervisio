@@ -36,7 +36,7 @@ func TestPluginFrameAndAssets(t *testing.T) {
 	web := t.TempDir()
 	os.WriteFile(filepath.Join(web, "index.html"), []byte("<!doctype html>app"), 0o644)
 	srv, err := New(Options{
-		ConfigPath:    filepath.Join(t.TempDir(), "linuxadmin.conf"),
+		ConfigPath:    filepath.Join(t.TempDir(), "ervisio.conf"),
 		Dev:           true,
 		NoAuth:        true,
 		WebDir:        web,

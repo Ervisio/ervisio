@@ -17,9 +17,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/brand"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/config"
 	"github.com/coder/websocket"
+	"github.com/ervisio/ervisio/server/internal/brand"
+	"github.com/ervisio/ervisio/server/internal/config"
 )
 
 func TestLimiter(t *testing.T) {
@@ -218,8 +218,8 @@ func TestSessionLifetime(t *testing.T) {
 
 func buildBridge(t *testing.T) string {
 	t.Helper()
-	out := filepath.Join(t.TempDir(), "linuxadmin-bridge")
-	if b, err := exec.Command("go", "build", "-o", out, "github.com/Fonlogen/LinuxAdmin/server/cmd/linuxadmin-bridge").CombinedOutput(); err != nil {
+	out := filepath.Join(t.TempDir(), "ervisio-bridge")
+	if b, err := exec.Command("go", "build", "-o", out, "github.com/ervisio/ervisio/server/cmd/ervisio-bridge").CombinedOutput(); err != nil {
 		t.Fatalf("build bridge: %v\n%s", err, b)
 	}
 	return out
@@ -232,7 +232,7 @@ func newTestServer(t *testing.T, noAuth bool) (*httptest.Server, *Server) {
 	os.MkdirAll(filepath.Join(web, "assets"), 0o755)
 	os.WriteFile(filepath.Join(web, "assets", "app.js"), []byte("console.log(1)"), 0o644)
 	srv, err := New(Options{
-		ConfigPath: filepath.Join(t.TempDir(), "linuxadmin.conf"),
+		ConfigPath: filepath.Join(t.TempDir(), "ervisio.conf"),
 		Dev:        true,
 		NoAuth:     noAuth,
 		WebDir:     web,
@@ -300,7 +300,7 @@ func doc(t *testing.T, client *http.Client, method, url, body string, csrf bool)
 	t.Helper()
 	req, _ := http.NewRequest(method, url, strings.NewReader(body))
 	if csrf {
-		req.Header.Set("X-Requested-With", "linuxadmin")
+		req.Header.Set("X-Requested-With", "ervisio")
 	}
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")

@@ -4,7 +4,7 @@ import (
 	"context"
 	"regexp"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
 // trustLevel says whether a plugin's signature lets it run.

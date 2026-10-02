@@ -1,6 +1,6 @@
-// Command linuxadmin-bridge does the system work for one signed-in user. It
+// Command ervisio-bridge does the system work for one signed-in user. It
 // speaks newline-delimited JSON on stdin/stdout (see internal/rpc) and is
-// started by linuxadmind: once per session as the user, and once as root
+// started by ervisiod: once per session as the user, and once as root
 // through sudo when the user unlocks administrator rights (--admin).
 package main
 
@@ -16,20 +16,20 @@ import (
 	"strconv"
 	"syscall"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/brand"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/modules"
-	configmod "github.com/Fonlogen/LinuxAdmin/server/internal/modules/config"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/plugins"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/modules/updates"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/sys"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/update"
+	"github.com/ervisio/ervisio/server/internal/brand"
+	"github.com/ervisio/ervisio/server/internal/modules"
+	configmod "github.com/ervisio/ervisio/server/internal/modules/config"
+	"github.com/ervisio/ervisio/server/internal/modules/plugins"
+	"github.com/ervisio/ervisio/server/internal/modules/updates"
+	"github.com/ervisio/ervisio/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/sys"
+	"github.com/ervisio/ervisio/server/internal/update"
 )
 
 func main() {
 	admin := flag.Bool("admin", false, "run as the root bridge (must be started as root)")
 	configPath := flag.String("config", brand.ConfigPath, "daemon configuration file")
-	dev := flag.Bool("dev", false, "the daemon runs in --dev (passed by linuxadmind)")
+	dev := flag.Bool("dev", false, "the daemon runs in --dev (passed by ervisiod)")
 	devPlugins := flag.String("dev-plugins", "", "with --dev: the daemon's ./plugins folder")
 	version := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()

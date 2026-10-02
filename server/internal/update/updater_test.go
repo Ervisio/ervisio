@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/config"
+	"github.com/ervisio/ervisio/server/internal/config"
 )
 
 // fakeGitHub serves the releases API and the release files.
@@ -43,7 +43,7 @@ func (f *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 	defer f.mu.Unlock()
 	f.hits[r.URL.Path]++
 	switch {
-	case strings.HasPrefix(r.URL.Path, "/repos/Fonlogen/LinuxAdmin/releases"):
+	case strings.HasPrefix(r.URL.Path, "/repos/ervisio/ervisio/releases"):
 		if f.status != 0 {
 			w.WriteHeader(f.status)
 			return
@@ -83,8 +83,8 @@ func (f *fakeGitHub) publish(v string, sk ed25519.PrivateKey, mutate func(files 
 	arc := filepath.Join(dir, arcName)
 	writeTarGz(f.t, arc, []tarEntry{
 		{name: pfx + "/", typ: tar.TypeDir, mode: 0o755},
-		{name: pfx + "/bin/linuxadmind", body: "daemon " + v, mode: 0o755},
-		{name: pfx + "/bin/linuxadmin-bridge", body: "bridge " + v, mode: 0o755},
+		{name: pfx + "/bin/ervisiod", body: "daemon " + v, mode: 0o755},
+		{name: pfx + "/bin/ervisio-bridge", body: "bridge " + v, mode: 0o755},
 		{name: pfx + "/web/index.html", body: "<html>"},
 		{name: pfx + "/plugins/docker/manifest.json", body: "{}"},
 		{name: pfx + "/VERSION", body: v + "\n"},
@@ -97,7 +97,7 @@ func (f *fakeGitHub) publish(v string, sk ed25519.PrivateKey, mutate func(files 
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	rel := Release{Tag: "v" + v, Name: "LinuxAdmin " + v, Body: "## Changes\n- things", PublishedAt: time.Unix(1700000000, 0).UTC()}
+	rel := Release{Tag: "v" + v, Name: "Ervisio " + v, Body: "## Changes\n- things", PublishedAt: time.Unix(1700000000, 0).UTC()}
 	for name, b := range files {
 		f.files[name] = b
 		rel.Assets = append(rel.Assets, Asset{Name: name, Size: int64(len(b)), URL: f.srv.URL + "/dl/" + name})
@@ -126,7 +126,7 @@ func newHarness(t *testing.T, current string) *harness {
 	h.u = &Updater{
 		Layout:   l,
 		State:    st,
-		Checker:  &Checker{API: gh.srv.URL, Repo: "Fonlogen/LinuxAdmin", Client: gh.srv.Client()},
+		Checker:  &Checker{API: gh.srv.URL, Repo: "ervisio/ervisio", Client: gh.srv.Client()},
 		Download: dl,
 		Keys:     []ed25519.PublicKey{pk},
 		Arch:     "amd64",
@@ -286,7 +286,7 @@ func TestApplyMigratesFlatInstall(t *testing.T) {
 	os.Remove(filepath.Join(l.LibDir, "current"))
 	os.MkdirAll(filepath.Dir(l.BinLink), 0o755)
 	os.WriteFile(l.BinLink, []byte("daemon 1.0.0"), 0o755)
-	os.WriteFile(filepath.Join(l.LibDir, "linuxadmin-bridge"), []byte("bridge 1.0.0"), 0o755)
+	os.WriteFile(filepath.Join(l.LibDir, "ervisio-bridge"), []byte("bridge 1.0.0"), 0o755)
 	if l.Kind() != KindFlat {
 		t.Fatal("not flat")
 	}
@@ -328,7 +328,7 @@ func TestCheckerCacheAndETag(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0)
 	c.Now = func() time.Time { return now }
 	ctx := context.Background()
-	api := "/repos/Fonlogen/LinuxAdmin/releases/latest"
+	api := "/repos/ervisio/ervisio/releases/latest"
 
 	rel, _, err := c.Latest(ctx, ChannelStable, false)
 	if err != nil || rel.Version() != "1.1.0" {
@@ -364,7 +364,7 @@ func TestCheckerCacheAndETag(t *testing.T) {
 	}
 
 	// Errors.
-	c2 := &Checker{API: h.gh.srv.URL, Repo: "Fonlogen/LinuxAdmin", Client: h.gh.srv.Client()}
+	c2 := &Checker{API: h.gh.srv.URL, Repo: "ervisio/ervisio", Client: h.gh.srv.Client()}
 	h.gh.mu.Lock()
 	h.gh.status = http.StatusForbidden
 	h.gh.mu.Unlock()
@@ -400,7 +400,7 @@ func TestDownloaderRefusesForeignHostsAndBigFiles(t *testing.T) {
 			t.Errorf("%s allowed", raw)
 		}
 	}
-	for _, raw := range []string{"https://github.com/Fonlogen/LinuxAdmin/releases/download/v1/x", "https://objects.githubusercontent.com/x", "https://release-assets.githubusercontent.com/x"} {
+	for _, raw := range []string{"https://github.com/ervisio/ervisio/releases/download/v1/x", "https://objects.githubusercontent.com/x", "https://release-assets.githubusercontent.com/x"} {
 		u, _ := url.Parse(raw)
 		if !DefaultAllowURL(u) {
 			t.Errorf("%s refused", raw)

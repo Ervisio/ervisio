@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/account"
+	"github.com/ervisio/ervisio/server/internal/account"
 )
 
 func TestMergeEnv(t *testing.T) {
@@ -18,11 +18,11 @@ func TestMergeEnv(t *testing.T) {
 
 func TestHelperCommand(t *testing.T) {
 	a := &account.Account{Name: "alice", UID: 1000, GID: 1000, Home: "/home/alice", Shell: "/bin/bash"}
-	s := &Spec{Bridge: "/usr/lib/linuxadmin/linuxadmin-bridge", Config: "/etc/linuxadmin/linuxadmin.conf", Account: a,
-		SwitchUser: true, SessionHelper: "/usr/bin/linuxadmind", PAMService: "linuxadmin", RHost: "192.0.2.1"}
+	s := &Spec{Bridge: "/usr/lib/ervisio/ervisio-bridge", Config: "/etc/ervisio/ervisio.conf", Account: a,
+		SwitchUser: true, SessionHelper: "/usr/bin/ervisiod", PAMService: "ervisio", RHost: "192.0.2.1"}
 	cmd := s.helperCommand()
-	want := []string{"/usr/bin/linuxadmind", HelperFlag, "--user", "alice", "--uid", "1000", "--service", "linuxadmin",
-		"--rhost", "192.0.2.1", "--", "/usr/lib/linuxadmin/linuxadmin-bridge", "--config", "/etc/linuxadmin/linuxadmin.conf"}
+	want := []string{"/usr/bin/ervisiod", HelperFlag, "--user", "alice", "--uid", "1000", "--service", "ervisio",
+		"--rhost", "192.0.2.1", "--", "/usr/lib/ervisio/ervisio-bridge", "--config", "/etc/ervisio/ervisio.conf"}
 	if !slices.Equal(cmd.Args, want) {
 		t.Fatalf("args %q", cmd.Args)
 	}

@@ -5,11 +5,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
 func TestConfigModule(t *testing.T) {
-	Path = filepath.Join(t.TempDir(), "linuxadmin.conf")
+	Path = filepath.Join(t.TempDir(), "ervisio.conf")
 	st, err := get()
 	if err != nil || st.Exists || st.Values["login.max_failures"] != 5 {
 		t.Fatalf("%+v %v", st, err)
@@ -34,7 +34,7 @@ func TestConfigModule(t *testing.T) {
 }
 
 func TestSetCrossKeyAndLists(t *testing.T) {
-	Path = filepath.Join(t.TempDir(), "linuxadmin.conf")
+	Path = filepath.Join(t.TempDir(), "ervisio.conf")
 	// Plain HTTP on the default public listen address is refused as invalid.
 	if _, err := set("tls.mode", "http"); !rpc.IsCode(err, rpc.Invalid) || !strings.Contains(err.Error(), "loopback") {
 		t.Fatal(err)

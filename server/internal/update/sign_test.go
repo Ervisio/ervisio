@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/signkey"
+	"github.com/ervisio/ervisio/server/internal/signkey"
 )
 
 func testKey(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey) {
@@ -37,7 +37,7 @@ func TestEmbeddedKeyParses(t *testing.T) {
 func TestSignVerify(t *testing.T) {
 	pk, sk := testKey(t)
 	otherPK, _ := testKey(t)
-	sums := []byte(sumLine([]byte("a"), "linuxadmin-1.0.0-linux-amd64.tar.gz") + sumLine([]byte("b"), "linuxadmin-1.0.0-linux-arm64.tar.gz"))
+	sums := []byte(sumLine([]byte("a"), "ervisio-1.0.0-linux-amd64.tar.gz") + sumLine([]byte("b"), "ervisio-1.0.0-linux-arm64.tar.gz"))
 	sig := SignSums(sums, sk)
 
 	if err := VerifySums(sums, sig, []ed25519.PublicKey{pk}); err != nil {

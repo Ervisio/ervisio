@@ -26,7 +26,7 @@ func TestPurpose(t *testing.T) {
 	cases := map[string]string{
 		"nginx.service": PurposeWeb, "php-fpm.service": PurposeWeb, "php8.2-fpm.service": PurposeWeb, "postgresql@15-main.service": PurposeWeb, "mariadb.service": PurposeWeb,
 		"redis.service": PurposeWeb, "docker.service": PurposeContainers, "docker.socket": PurposeContainers, "containerd.service": PurposeContainers,
-		"libvirtd.service": PurposeContainers, "sshd.service": PurposeSystem, "NetworkManager.service": PurposeSystem, "linuxadmin.service": PurposeWeb,
+		"libvirtd.service": PurposeContainers, "sshd.service": PurposeSystem, "NetworkManager.service": PurposeSystem, "ervisio.service": PurposeWeb,
 	}
 	for n, want := range cases {
 		if got := PurposeOf(n); got != want {

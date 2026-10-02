@@ -11,10 +11,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/brand"
-	configmod "github.com/Fonlogen/LinuxAdmin/server/internal/modules/config"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/update"
+	"github.com/ervisio/ervisio/server/internal/brand"
+	configmod "github.com/ervisio/ervisio/server/internal/modules/config"
+	"github.com/ervisio/ervisio/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/update"
 )
 
 func TestCheck(t *testing.T) {
@@ -40,7 +40,7 @@ func TestCheck(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if path != "/repos/Fonlogen/LinuxAdmin/releases" || res.Channel != "prerelease" {
+	if path != "/repos/ervisio/ervisio/releases" || res.Channel != "prerelease" {
 		t.Fatalf("path %s channel %s", path, res.Channel)
 	}
 	if res.Latest == nil || res.Latest.Version != "99.0.0-rc.1" || res.Latest.Size != 1234 || !res.Newer || res.Latest.Notes != "# RC" {

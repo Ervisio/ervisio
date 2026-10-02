@@ -16,10 +16,10 @@ func testLayout(t *testing.T) *Layout {
 	t.Helper()
 	root := t.TempDir()
 	l := &Layout{
-		LibDir:      filepath.Join(root, "usr/lib/linuxadmin"),
-		BinLink:     filepath.Join(root, "usr/bin/linuxadmind"),
-		FlatWeb:     filepath.Join(root, "usr/share/linuxadmin/web"),
-		FlatPlugins: filepath.Join(root, "usr/share/linuxadmin/plugins"),
+		LibDir:      filepath.Join(root, "usr/lib/ervisio"),
+		BinLink:     filepath.Join(root, "usr/bin/ervisiod"),
+		FlatWeb:     filepath.Join(root, "usr/share/ervisio/web"),
+		FlatPlugins: filepath.Join(root, "usr/share/ervisio/plugins"),
 	}
 	os.MkdirAll(l.LibDir, 0o755)
 	return l
@@ -32,8 +32,8 @@ func addVersion(t *testing.T, l *Layout, v string) {
 	d := l.VersionDir(v)
 	os.MkdirAll(filepath.Join(d, "bin"), 0o755)
 	os.MkdirAll(filepath.Join(d, "web"), 0o755)
-	os.WriteFile(filepath.Join(d, "bin", "linuxadmind"), []byte("daemon "+v), 0o755)
-	os.WriteFile(filepath.Join(d, "bin", "linuxadmin-bridge"), []byte("bridge "+v), 0o755)
+	os.WriteFile(filepath.Join(d, "bin", "ervisiod"), []byte("daemon "+v), 0o755)
+	os.WriteFile(filepath.Join(d, "bin", "ervisio-bridge"), []byte("bridge "+v), 0o755)
 	os.WriteFile(filepath.Join(d, "web", "index.html"), []byte("<html>"), 0o644)
 	os.WriteFile(filepath.Join(d, "VERSION"), []byte(v+"\n"), 0o644)
 }
@@ -241,7 +241,7 @@ func TestMigrateFlat(t *testing.T) {
 	l := testLayout(t)
 	os.MkdirAll(filepath.Dir(l.BinLink), 0o755)
 	os.WriteFile(l.BinLink, []byte("old daemon"), 0o755)
-	os.WriteFile(filepath.Join(l.LibDir, "linuxadmin-bridge"), []byte("old bridge"), 0o755)
+	os.WriteFile(filepath.Join(l.LibDir, "ervisio-bridge"), []byte("old bridge"), 0o755)
 	os.MkdirAll(filepath.Join(l.FlatWeb, "assets"), 0o755)
 	os.WriteFile(filepath.Join(l.FlatWeb, "index.html"), []byte("<old>"), 0o644)
 	os.MkdirAll(filepath.Join(l.FlatPlugins, "docker"), 0o755)
@@ -259,7 +259,7 @@ func TestMigrateFlat(t *testing.T) {
 	mustCurrent(t, l, "0.1.0")
 	for link, want := range map[string]string{
 		l.BinLink: "old daemon",
-		filepath.Join(l.LibDir, "linuxadmin-bridge"):                         "old bridge",
+		filepath.Join(l.LibDir, "ervisio-bridge"):                            "old bridge",
 		filepath.Join(l.VersionDir("0.1.0"), "web", "index.html"):            "<old>",
 		filepath.Join(l.VersionDir("0.1.0"), "plugins/docker/manifest.json"): "{}",
 	} {
@@ -271,7 +271,7 @@ func TestMigrateFlat(t *testing.T) {
 	if fi, _ := os.Lstat(l.BinLink); fi.Mode()&os.ModeSymlink == 0 {
 		t.Fatal("BinLink is not a symlink after migration")
 	}
-	if tgt, _ := os.Readlink(l.BinLink); tgt != filepath.Join(l.LibDir, "current/bin/linuxadmind") {
+	if tgt, _ := os.Readlink(l.BinLink); tgt != filepath.Join(l.LibDir, "current/bin/ervisiod") {
 		t.Fatalf("BinLink -> %s", tgt)
 	}
 	// The flat web folder is kept for an old binary that would be rolled back to.
@@ -306,11 +306,11 @@ func TestLayoutKindNone(t *testing.T) {
 }
 
 func TestVersionDirOf(t *testing.T) {
-	if d, ok := versionDirOf("/usr/lib/linuxadmin/versions/1.2.0/bin/linuxadmind", "/usr/lib/linuxadmin"); !ok || d != "/usr/lib/linuxadmin/versions/1.2.0" {
+	if d, ok := versionDirOf("/usr/lib/ervisio/versions/1.2.0/bin/ervisiod", "/usr/lib/ervisio"); !ok || d != "/usr/lib/ervisio/versions/1.2.0" {
 		t.Fatalf("got %q %v", d, ok)
 	}
-	for _, exe := range []string{"/usr/bin/linuxadmind", "/home/u/LinuxAdmin/server/bin/linuxadmind", "/usr/lib/linuxadmin/linuxadmin-bridge", "/usr/lib/linuxadmin/versions/.x/bin/linuxadmind"} {
-		if _, ok := versionDirOf(exe, "/usr/lib/linuxadmin"); ok {
+	for _, exe := range []string{"/usr/bin/ervisiod", "/home/u/Ervisio/server/bin/ervisiod", "/usr/lib/ervisio/ervisio-bridge", "/usr/lib/ervisio/versions/.x/bin/ervisiod"} {
+		if _, ok := versionDirOf(exe, "/usr/lib/ervisio"); ok {
 			t.Errorf("%s detected as versioned", exe)
 		}
 	}

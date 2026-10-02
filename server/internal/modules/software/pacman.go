@@ -15,8 +15,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/sys"
+	"github.com/ervisio/ervisio/server/internal/brand"
+	"github.com/ervisio/ervisio/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/sys"
 )
 
 // pacman is the Arch Linux package manager. Reading the installed list goes
@@ -136,14 +137,14 @@ func (p *pacman) ListInstalled(ctx context.Context) ([]Package, error) {
 // ---- updates ----
 
 // checkDBBase returns the folder that holds the private sync copy: root's
-// /var/cache/linuxadmin, or the user's own cache folder. Never a shared
+// /var/cache/ervisio, or the user's own cache folder. Never a shared
 // directory such as /tmp, where another user could plant it first.
 var checkDBBase = func() (string, error) {
 	if isRoot() {
-		return "/var/cache/linuxadmin", nil
+		return brand.CacheDir, nil
 	}
 	if d := os.Getenv("XDG_CACHE_HOME"); filepath.IsAbs(d) {
-		return filepath.Join(d, "linuxadmin"), nil
+		return filepath.Join(d, brand.Slug), nil
 	}
 	home := ""
 	if u, err := user.Current(); err == nil {
@@ -155,7 +156,7 @@ var checkDBBase = func() (string, error) {
 	if !filepath.IsAbs(home) {
 		return "", errors.New("no home folder for the private package database")
 	}
-	return filepath.Join(home, ".cache", "linuxadmin"), nil
+	return filepath.Join(home, ".cache", brand.Slug), nil
 }
 
 // checkDir returns the private sync copy's folder (it may not exist yet).

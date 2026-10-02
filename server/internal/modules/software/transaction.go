@@ -14,8 +14,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/sys"
+	"github.com/ervisio/ervisio/server/internal/brand"
+	"github.com/ervisio/ervisio/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/sys"
 )
 
 // TxParams are the parameters of software.transaction.
@@ -60,8 +61,8 @@ var (
 	// stateRoot is where the root bridge keeps the full transaction state
 	// (0600: the log may show package names, paths and errors), and
 	// stateRootPublic a summary without the log (0644) for the user bridges.
-	stateRoot       = "/run/linuxadmin/software-transaction.json"
-	stateRootPublic = "/run/linuxadmin/software-transaction.public.json"
+	stateRoot       = brand.RunDir + "/software-transaction.json"
+	stateRootPublic = brand.RunDir + "/software-transaction.public.json"
 	// stateRootOwner owns the root state files; readers ignore any other file.
 	stateRootOwner = 0
 )
@@ -77,7 +78,7 @@ func userStatePath() string {
 	if !filepath.IsAbs(dir) || checkTrustedDir(dir, os.Geteuid()) != nil {
 		return ""
 	}
-	return filepath.Join(dir, fmt.Sprintf("linuxadmin-software-%d.json", os.Getuid()))
+	return filepath.Join(dir, fmt.Sprintf("%s-software-%d.json", brand.Slug, os.Getuid()))
 }
 
 // statePaths returns where a transaction's state goes: the full file and, for

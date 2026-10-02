@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/brand"
+	"github.com/ervisio/ervisio/server/internal/brand"
 )
 
 // devFile holds the plugin folders the user loaded with plugins.loadDev.

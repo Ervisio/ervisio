@@ -17,8 +17,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/account"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/config"
+	"github.com/ervisio/ervisio/server/internal/account"
+	"github.com/ervisio/ervisio/server/internal/config"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -132,7 +132,7 @@ func keyLoginHdr(t *testing.T, c *http.Client, url, user string, signer ssh.Sign
 		"nonce":     ch.Nonce,
 	})
 	req, _ := http.NewRequest("POST", url+"/api/auth/login-key", strings.NewReader(string(body)))
-	req.Header.Set("X-Requested-With", "linuxadmin")
+	req.Header.Set("X-Requested-With", "ervisio")
 	req.Header.Set("Content-Type", "application/json")
 	for k, v := range hdr {
 		req.Header.Set(k, v)
@@ -162,7 +162,7 @@ func TestKeyLoginFromBehindProxy(t *testing.T) {
 	challenge := func(xff string) challengeResp {
 		t.Helper()
 		req, _ := http.NewRequest("POST", ts.URL+"/api/auth/challenge", strings.NewReader(`{"user":"`+me+`","host":"`+strings.TrimPrefix(ts.URL, "http://")+`"}`))
-		req.Header.Set("X-Requested-With", "linuxadmin")
+		req.Header.Set("X-Requested-With", "ervisio")
 		req.Header.Set("Content-Type", "application/json")
 		if xff != "" {
 			req.Header.Set("X-Forwarded-For", xff)

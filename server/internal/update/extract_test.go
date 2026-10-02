@@ -54,7 +54,7 @@ func writeTarGz(t *testing.T, path string, entries []tarEntry) {
 	}
 }
 
-const pfx = "linuxadmin-1.2.0-linux-amd64"
+const pfx = "ervisio-1.2.0-linux-amd64"
 
 func TestExtractGood(t *testing.T) {
 	dir := t.TempDir()
@@ -62,7 +62,7 @@ func TestExtractGood(t *testing.T) {
 	writeTarGz(t, arc, []tarEntry{
 		{name: pfx + "/", typ: tar.TypeDir, mode: 0o755},
 		{name: pfx + "/bin/", typ: tar.TypeDir, mode: 0o777},
-		{name: pfx + "/bin/linuxadmind", body: "#!bin", mode: 0o4755}, // setuid dropped
+		{name: pfx + "/bin/ervisiod", body: "#!bin", mode: 0o4755}, // setuid dropped
 		{name: "./" + pfx + "/web/assets/app.js", body: "js", mode: 0o666},
 		{name: pfx + "/VERSION", body: "1.2.0\n"},
 		{typ: tar.TypeXGlobalHeader, name: "pax_global_header"},
@@ -86,7 +86,7 @@ func TestExtractGood(t *testing.T) {
 			}
 		}
 	}
-	check("bin/linuxadmind", 0o755, "#!bin")
+	check("bin/ervisiod", 0o755, "#!bin")
 	check("web/assets/app.js", 0o644, "js")
 	check("VERSION", 0o644, "1.2.0\n")
 	check("bin", os.ModeDir|0o755, "")

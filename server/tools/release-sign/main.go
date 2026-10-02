@@ -1,5 +1,5 @@
 // Command release-sign signs and verifies the SHA256SUMS file of a
-// LinuxAdmin release (see docs/RELEASING.md).
+// Ervisio release (see docs/RELEASING.md).
 //
 //	release-sign -genkey FILE                 create a release key (prints the public key to embed)
 //	release-sign -key FILE [-out SIG] SUMS    write SUMS.sig (or SIG)
@@ -21,8 +21,8 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/signkey"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/update"
+	"github.com/ervisio/ervisio/server/internal/signkey"
+	"github.com/ervisio/ervisio/server/internal/update"
 )
 
 func main() {

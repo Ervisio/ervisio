@@ -12,15 +12,15 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/brand"
-	cfg "github.com/Fonlogen/LinuxAdmin/server/internal/config"
-	configmod "github.com/Fonlogen/LinuxAdmin/server/internal/modules/config"
+	"github.com/ervisio/ervisio/server/internal/brand"
+	cfg "github.com/ervisio/ervisio/server/internal/config"
+	configmod "github.com/ervisio/ervisio/server/internal/modules/config"
 )
 
 // Locations a plugin can be found in.
 const (
-	LocSystem    = "system"    // /usr/share/linuxadmin/plugins (packaged)
-	LocInstalled = "installed" // /var/lib/linuxadmin/plugins (from Browse)
+	LocSystem    = "system"    // /usr/share/ervisio/plugins (packaged)
+	LocInstalled = "installed" // /var/lib/ervisio/plugins (from Browse)
 	LocDev       = "dev"       // ./plugins of the repo, or a folder loaded with plugins.loadDev
 )
 
@@ -28,7 +28,7 @@ const (
 var (
 	SystemDir      = brand.PackagedPluginsDir
 	InstalledDir   = brand.InstalledPluginsDir
-	StatePath      = "/var/lib/" + brand.Slug + "/plugins-state.json"
+	StatePath      = brand.StateDir + "/plugins-state.json"
 	CatalogURLFile = brand.ConfigDir + "/plugins-catalog.url"
 	// DevDirs overrides the dev folder list (tests).
 	DevDirs []string

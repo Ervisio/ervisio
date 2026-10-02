@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	configmod "github.com/Fonlogen/LinuxAdmin/server/internal/modules/config"
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
+	configmod "github.com/ervisio/ervisio/server/internal/modules/config"
+	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
 // Server-side enforcement of the plugin manifest (security review H2): the

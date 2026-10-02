@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/sshauth"
+	"github.com/ervisio/ervisio/server/internal/sshauth"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -25,7 +25,7 @@ func newKeyTestServer(t *testing.T, keysFile string) (*httptest.Server, *Server)
 	web := t.TempDir()
 	os.WriteFile(filepath.Join(web, "index.html"), []byte("<!doctype html>app"), 0o644)
 	srv, err := New(Options{
-		ConfigPath:        filepath.Join(t.TempDir(), "linuxadmin.conf"),
+		ConfigPath:        filepath.Join(t.TempDir(), "ervisio.conf"),
 		Dev:               true,
 		WebDir:            web,
 		Bridge:            buildBridge(t),
@@ -96,7 +96,7 @@ func TestKeyLogin(t *testing.T) {
 
 	// The challenge is the exact message to sign.
 	ch := getChallenge(t, cl, ts, me)
-	if ch.Challenge != string(sshauth.Message(ch.Host, me, ch.Nonce)) || !strings.HasPrefix(ch.Challenge, "linuxadmin-ssh-auth-v1\n127.0.0.1:") {
+	if ch.Challenge != string(sshauth.Message(ch.Host, me, ch.Nonce)) || !strings.HasPrefix(ch.Challenge, "ervisio-ssh-auth-v1\n127.0.0.1:") {
 		t.Fatalf("challenge %q", ch.Challenge)
 	}
 	// Unknown users get the same kind of answer (no enumeration).

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Fonlogen/LinuxAdmin/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
 // rpmInstalled lists installed packages through rpm (Fedora and openSUSE).
