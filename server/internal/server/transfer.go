@@ -374,6 +374,17 @@ func (s *Server) handleTransferStart(w http.ResponseWriter, r *http.Request, ses
 			cancel()
 		}
 	}()
+	// When the session ends (sign-out, expiry, revalidation), its transfers
+	// end too: a running one is cancelled, a waiting one-time URL dropped
+	// (security review L6).
+	go func() {
+		select {
+		case <-sess.Done():
+			cancel()
+			s.transfers.closeSession(sess)
+		case <-sctx.Done():
+		}
+	}()
 	st, err := b.Stream(sctx, method, json.RawMessage(rawParams))
 	if err != nil {
 		fail(rpc.ToError(err, false))
