@@ -1,0 +1,29 @@
+{
+  "title": "Docker: compose stack",
+  "question": "Which stack page do you prefer?",
+  "kind": "page",
+  "parent": "026-docker-container",
+  "head": [],
+  "variants": [
+    {
+      "id": "a",
+      "label": "Editor first",
+      "notes": "Compose editor fills the page (compose.yml, .env and Diff tabs, validation on every keystroke, changed lines highlighted). Services with quick actions and the output of the last deploy on the right. Header in all: path of the compose file, running count, Pull, Down, Restart, Deploy changes."
+    },
+    {
+      "id": "b",
+      "label": "Tabs like a container",
+      "notes": "Same tab pattern as the container page: Services (with a simple map of what depends on what), Logs of all services together, Compose (editor + .env). Header in all: path of the compose file, running count, Pull, Down, Restart, Deploy changes."
+    },
+    {
+      "id": "c",
+      "label": "Review before deploy",
+      "notes": "Editing leads to a review step: what will be recreated, what stays, which images will be pulled, then Deploy now with live output. Safer for stacks that matter. Header in all: path of the compose file, running count, Pull, Down, Restart, Deploy changes."
+    }
+  ],
+  "created": "2026-10-02T07:15:11.751Z",
+  "viewports": [
+    "laptop",
+    "mobile"
+  ]
+}

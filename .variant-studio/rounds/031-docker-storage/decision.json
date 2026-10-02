@@ -1,0 +1,24 @@
+{
+  "round": "031-docker-storage",
+  "action": "choose",
+  "selected": [
+    "a"
+  ],
+  "note": "",
+  "variants": {},
+  "viewed_at": {
+    "viewport": "desktop",
+    "theme": "dark",
+    "layout": "focus"
+  },
+  "id": "67891c8bcc55",
+  "at": "2026-10-02T07:32:39.720Z",
+  "consumed": true,
+  "files": {
+    "a": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/031-docker-storage/a.html",
+    "b": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/031-docker-storage/b.html",
+    "c": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/031-docker-storage/c.html"
+  },
+  "round_dir": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/031-docker-storage",
+  "consumed_at": "2026-10-02T07:33:42.680Z"
+}

@@ -1,0 +1,24 @@
+{
+  "round": "027-docker-stack",
+  "action": "choose",
+  "selected": [
+    "a"
+  ],
+  "note": "",
+  "variants": {},
+  "viewed_at": {
+    "viewport": "desktop",
+    "theme": "dark",
+    "layout": "focus"
+  },
+  "id": "cfb7ff012f66",
+  "at": "2026-10-02T07:18:13.844Z",
+  "consumed": true,
+  "files": {
+    "a": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/027-docker-stack/a.html",
+    "b": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/027-docker-stack/b.html",
+    "c": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/027-docker-stack/c.html"
+  },
+  "round_dir": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/027-docker-stack",
+  "consumed_at": "2026-10-02T07:18:14.402Z"
+}

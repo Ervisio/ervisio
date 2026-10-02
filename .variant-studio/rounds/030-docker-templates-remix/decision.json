@@ -1,0 +1,23 @@
+{
+  "round": "030-docker-templates-remix",
+  "action": "choose",
+  "selected": [
+    "b"
+  ],
+  "note": "",
+  "variants": {},
+  "viewed_at": {
+    "viewport": "desktop",
+    "theme": "dark",
+    "layout": "side"
+  },
+  "id": "b54a21859451",
+  "at": "2026-10-02T07:31:05.398Z",
+  "consumed": true,
+  "files": {
+    "a": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/030-docker-templates-remix/a.html",
+    "b": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/030-docker-templates-remix/b.html"
+  },
+  "round_dir": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/030-docker-templates-remix",
+  "consumed_at": "2026-10-02T07:31:06.040Z"
+}

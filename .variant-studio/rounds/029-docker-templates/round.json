@@ -1,0 +1,29 @@
+{
+  "title": "Docker: templates",
+  "question": "Which template catalog do you prefer?",
+  "kind": "page",
+  "parent": "028-docker-create",
+  "head": [],
+  "variants": [
+    {
+      "id": "a",
+      "label": "App store",
+      "notes": "Search, categories, a featured app, cards with a short description, install count and Install or Installed. Letter tiles stand in for the real app icons, which come from the catalog. Installing uses the same steps as New container, pre-filled."
+    },
+    {
+      "id": "b",
+      "label": "List + install panel",
+      "notes": "App list on the left; picking one shows what it needs (ports, folders, secrets) and a short form to install it right there, with passwords generated for you. Letter tiles stand in for the real app icons, which come from the catalog. Installing uses the same steps as New container, pre-filled."
+    },
+    {
+      "id": "c",
+      "label": "Sources on top",
+      "notes": "Catalog sources are visible and switchable at the top (LinuxAdmin signed catalog, Portainer lists you add), then a compact grid of app tiles. Letter tiles stand in for the real app icons, which come from the catalog. Installing uses the same steps as New container, pre-filled."
+    }
+  ],
+  "created": "2026-10-02T07:20:32.645Z",
+  "viewports": [
+    "laptop",
+    "mobile"
+  ]
+}

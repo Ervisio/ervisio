@@ -1,0 +1,24 @@
+{
+  "round": "028-docker-create",
+  "action": "choose",
+  "selected": [
+    "b"
+  ],
+  "note": "",
+  "variants": {},
+  "viewed_at": {
+    "viewport": "desktop",
+    "theme": "dark",
+    "layout": "focus"
+  },
+  "id": "6ea038c38d9f",
+  "at": "2026-10-02T07:19:53.943Z",
+  "consumed": true,
+  "files": {
+    "a": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/028-docker-create/a.html",
+    "b": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/028-docker-create/b.html",
+    "c": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/028-docker-create/c.html"
+  },
+  "round_dir": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/028-docker-create",
+  "consumed_at": "2026-10-02T07:20:05.155Z"
+}

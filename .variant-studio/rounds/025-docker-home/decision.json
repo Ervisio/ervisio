@@ -1,0 +1,24 @@
+{
+  "round": "025-docker-home",
+  "action": "choose",
+  "selected": [
+    "b"
+  ],
+  "note": "",
+  "variants": {},
+  "viewed_at": {
+    "viewport": "desktop",
+    "theme": "dark",
+    "layout": "focus"
+  },
+  "id": "9e4cdd5e8424",
+  "at": "2026-10-02T07:11:49.293Z",
+  "consumed": true,
+  "files": {
+    "a": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/025-docker-home/a.html",
+    "b": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/025-docker-home/b.html",
+    "c": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/025-docker-home/c.html"
+  },
+  "round_dir": "/home/fonlogen/Documenti/LinuxAdmin/.variant-studio/rounds/025-docker-home",
+  "consumed_at": "2026-10-02T07:11:49.928Z"
+}

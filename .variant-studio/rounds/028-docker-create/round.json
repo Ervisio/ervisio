@@ -1,0 +1,29 @@
+{
+  "title": "Docker: new container",
+  "question": "Which way of creating a container do you prefer?",
+  "kind": "page",
+  "parent": "027-docker-stack",
+  "head": [],
+  "variants": [
+    {
+      "id": "a",
+      "label": "One page + preview",
+      "notes": "Every section on one page (image, basics, ports, storage, environment, network, limits, advanced). A sticky panel shows the exact docker run or compose that will run. All check the image on the registry, warn about port conflicts with running containers, hide secrets, and can save the result as a stack instead of a single container."
+    },
+    {
+      "id": "b",
+      "label": "Step by step",
+      "notes": "Five steps: image, ports and storage, environment, network and limits, review. A summary of what you chose stays on the right. All check the image on the registry, warn about port conflicts with running containers, hide secrets, and can save the result as a stack instead of a single container."
+    },
+    {
+      "id": "c",
+      "label": "Form and compose side by side",
+      "notes": "The form on the left writes a compose.yml on the right, and editing the YAML updates the form. It deploys as a stack in /opt/stacks. All check the image on the registry, warn about port conflicts with running containers, hide secrets, and can save the result as a stack instead of a single container."
+    }
+  ],
+  "created": "2026-10-02T07:18:28.995Z",
+  "viewports": [
+    "laptop",
+    "mobile"
+  ]
+}

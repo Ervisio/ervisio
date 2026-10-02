@@ -1,0 +1,24 @@
+{
+  "title": "Docker: templates, store + install panel",
+  "question": "Store plus install form: panel or full page? (Click an app)",
+  "kind": "page",
+  "parent": "029-docker-templates",
+  "head": [],
+  "variants": [
+    {
+      "id": "a",
+      "label": "Store + side panel",
+      "notes": "The app store grid from A. Clicking an app opens the install panel from B on the right, the grid stays visible next to it. Close it with the X. Shown with Vaultwarden open; clicking any card opens it."
+    },
+    {
+      "id": "b",
+      "label": "Store + app page",
+      "notes": "The app store grid from A. Clicking an app opens a full app page with what it needs, the install form and more about the app. The arrow goes back to all apps. Shown with Vaultwarden open; clicking any card opens it."
+    }
+  ],
+  "created": "2026-10-02T07:29:59.188Z",
+  "viewports": [
+    "laptop",
+    "mobile"
+  ]
+}

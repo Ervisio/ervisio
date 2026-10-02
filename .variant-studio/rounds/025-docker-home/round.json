@@ -1,0 +1,29 @@
+{
+  "title": "Docker: main layout",
+  "question": "Which layout should the Docker plugin use?",
+  "kind": "page",
+  "parent": "024-mobile",
+  "head": [],
+  "variants": [
+    {
+      "id": "a",
+      "label": "Tabs + grouped table",
+      "notes": "Resource tabs on top (Containers, Stacks, Images, Volumes, Networks, Templates, Registries, Cleanup). Containers in a table grouped by stack, with live CPU sparkline, ports, update badges, quick actions, stack-level Restart and Edit compose, multi-select bar. Shown on real-looking data: 3 compose stacks plus standalone containers, one unhealthy, one in a restart loop, image updates available."
+    },
+    {
+      "id": "b",
+      "label": "Sidebar + stack cards",
+      "notes": "A second sidebar inside the plugin groups Workloads, Resources and Tools. Containers as cards per stack with CPU, memory, uptime and a live chart. More visual, less dense. Shown on real-looking data: 3 compose stacks plus standalone containers, one unhealthy, one in a restart loop, image updates available."
+    },
+    {
+      "id": "c",
+      "label": "Health first + list",
+      "notes": "Summary cards on top (containers, total CPU and memory, things that need attention, disk you can free), resource tabs as a segmented bar, then a flat list with a coloured state strip and the stack as a tag. Shown on real-looking data: 3 compose stacks plus standalone containers, one unhealthy, one in a restart loop, image updates available."
+    }
+  ],
+  "created": "2026-10-02T07:07:38.345Z",
+  "viewports": [
+    "laptop",
+    "mobile"
+  ]
+}
