@@ -1,9 +1,11 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -156,26 +158,34 @@ func (wc *wsConn) sendError(ch int64, e *rpc.Error) {
 
 func (wc *wsConn) readLoop() error {
 	for {
-		typ, data, err := wc.c.Read(wc.ctx)
+		typ, data, release, err := wc.readFrame()
 		if err != nil {
 			return err
 		}
 		if typ != websocket.MessageText {
+			release()
 			continue
 		}
 		var f wsFrame
 		if err := json.Unmarshal(data, &f); err != nil || f.Ch <= 0 {
+			release()
 			wc.sendError(0, rpc.Errorf(rpc.Invalid, "invalid frame"))
 			continue
 		}
-		if len(data) > wsReadLimit && f.Op != "open" {
-			wc.c.Close(websocket.StatusMessageTooBig, "frame too large")
-			return errors.New("frame too large")
+		large := len(data) > wsReadLimit
+		data = nil
+		if f.Op != "open" {
+			release()
+			if large { // a frame that repeated "op" to pass opensStream
+				wc.c.Close(websocket.StatusMessageTooBig, "frame too large")
+				return errFrameTooBig
+			}
 		}
 		switch f.Op {
 		case "open":
 			wc.sess.touch(time.Now())
 			wc.open(&f)
+			release()
 		case "input":
 			wc.input(&f)
 		case "close":
@@ -184,6 +194,78 @@ func (wc *wsConn) readLoop() error {
 			wc.sendError(f.Ch, rpc.Errorf(rpc.Invalid, "unknown op %q", f.Op))
 		}
 	}
+}
+
+// errFrameTooBig ends a connection that sent a frame over its limit.
+var errFrameTooBig = errors.New("frame too large")
+
+// readFrame reads one client message. A frame may be up to wsReadLimit,
+// except the "open" of a stream, which may be up to wsOpenLimit: the first
+// wsReadLimit bytes are read, and only a frame whose "op" (before its
+// params) is "open" is read further, so other frames never make the daemon
+// buffer more than wsReadLimit (security review M3). A large open frame
+// takes one of the session's large-body slots; release gives it back (it is
+// a no-op for the others).
+func (wc *wsConn) readFrame() (websocket.MessageType, []byte, func(), error) {
+	noop := func() {}
+	typ, r, err := wc.c.Reader(wc.ctx)
+	if err != nil {
+		return 0, nil, noop, err
+	}
+	head, err := io.ReadAll(io.LimitReader(r, wsReadLimit+1))
+	if err != nil {
+		return 0, nil, noop, err
+	}
+	if len(head) <= wsReadLimit {
+		return typ, head, noop, nil
+	}
+	if typ != websocket.MessageText || !opensStream(head) {
+		wc.c.Close(websocket.StatusMessageTooBig, "frame too large")
+		return 0, nil, noop, errFrameTooBig
+	}
+	release, e := wc.sess.acquireBig(wc.ctx)
+	if e != nil {
+		wc.c.Close(websocket.StatusTryAgainLater, "too many large requests")
+		return 0, nil, noop, errors.New(e.Message)
+	}
+	rest, err := io.ReadAll(io.LimitReader(r, wsOpenLimit-int64(len(head))+1))
+	if err != nil {
+		release()
+		return 0, nil, noop, err
+	}
+	if len(head)+len(rest) > wsOpenLimit {
+		release()
+		wc.c.Close(websocket.StatusMessageTooBig, "frame too large")
+		return 0, nil, noop, errFrameTooBig
+	}
+	return typ, append(head, rest...), release, nil
+}
+
+// opensStream reports whether the start of a frame is an object whose
+// top-level "op" is "open", found before the end of head (the SDK writes
+// ch and op first). A frame that repeats "op" is caught again after the
+// whole frame is parsed (readLoop: only "open" may be large).
+func opensStream(head []byte) bool {
+	dec := json.NewDecoder(bytes.NewReader(head))
+	if t, err := dec.Token(); err != nil || t != json.Delim('{') {
+		return false
+	}
+	for dec.More() {
+		k, err := dec.Token()
+		if err != nil {
+			return false
+		}
+		key, _ := k.(string)
+		if key == "op" {
+			v, err := dec.Token()
+			return err == nil && v == "open"
+		}
+		var skip json.RawMessage
+		if err := dec.Decode(&skip); err != nil {
+			return false
+		}
+	}
+	return false
 }
 
 func (wc *wsConn) open(f *wsFrame) {

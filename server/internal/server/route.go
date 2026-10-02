@@ -138,6 +138,16 @@ type rpcRequest struct {
 const MaxRPCBody = 12 << 20
 
 func (s *Server) handleRPC(w http.ResponseWriter, r *http.Request, sess *Session) {
+	// A large body (or one of unknown length) takes one of the session's
+	// large-body slots for the whole call: it stays in memory until then.
+	if r.ContentLength < 0 || r.ContentLength > bigBody {
+		release, e := sess.acquireBig(r.Context())
+		if e != nil {
+			writeError(w, e)
+			return
+		}
+		defer release()
+	}
 	var req rpcRequest
 	if e := decodeJSON(w, r, MaxRPCBody, &req); e != nil {
 		writeError(w, e)

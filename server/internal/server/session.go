@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/ervisio/ervisio/server/internal/account"
 	"github.com/ervisio/ervisio/server/internal/bridge"
+	"github.com/ervisio/ervisio/server/internal/rpc"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -50,7 +52,37 @@ type Session struct {
 	wsConns    int
 	wsChannels int
 	inputBytes int64
-	done       chan struct{}
+	// bigOnce/big: the slots for large request bodies (see acquireBig).
+	bigOnce sync.Once
+	big     chan struct{}
+	done    chan struct{}
+}
+
+// Large request bodies: a /api/rpc body or a WebSocket "open" frame larger
+// than bigBody is held in memory whole (up to 12 MiB) until the call ends, so
+// a session may have at most maxBigBodies of them at once; more wait for a
+// slot, at most bigBodyWait (security review M3).
+const (
+	bigBody      = 1 << 20
+	maxBigBodies = 2
+	bigBodyWait  = 30 * time.Second
+)
+
+// acquireBig takes one of the session's large-body slots, waiting while
+// both are in use; release gives it back.
+func (s *Session) acquireBig(ctx context.Context) (release func(), e *rpc.Error) {
+	s.bigOnce.Do(func() { s.big = make(chan struct{}, maxBigBodies) })
+	t := time.NewTimer(bigBodyWait)
+	defer t.Stop()
+	select {
+	case s.big <- struct{}{}:
+		var once sync.Once
+		return func() { once.Do(func() { <-s.big }) }, nil
+	case <-ctx.Done():
+		return nil, rpc.Errorf(rpc.Unavailable, "The request was cancelled.")
+	case <-t.C:
+		return nil, rpc.Errorf(rpc.Unavailable, "Too many large requests are running for this session. Try again when they are done.")
+	}
 }
 
 // Done is closed when the session ends (logout, expiry, shutdown).
