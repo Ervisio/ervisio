@@ -11,6 +11,13 @@ package pam
 #include <stdlib.h>
 #include <string.h>
 
+// la_wipe zeroes a buffer in a way the compiler cannot drop. explicit_bzero
+// would do, but needs glibc 2.25 and release builds target glibc 2.17.
+static void la_wipe(void *p, size_t n) {
+	volatile unsigned char *v = p;
+	while (n--) *v++ = 0;
+}
+
 typedef struct {
 	const char *user;
 	const char *password;
@@ -32,7 +39,7 @@ static int la_conv(int n, const struct pam_message **msg, struct pam_response **
 		case PAM_TEXT_INFO:       break;
 		default:
 			for (int j = 0; j < i; j++) {
-				if (r[j].resp) { explicit_bzero(r[j].resp, strlen(r[j].resp)); free(r[j].resp); }
+				if (r[j].resp) { la_wipe(r[j].resp, strlen(r[j].resp)); free(r[j].resp); }
 			}
 			free(r);
 			return PAM_CONV_ERR;
@@ -41,7 +48,7 @@ static int la_conv(int n, const struct pam_message **msg, struct pam_response **
 			r[i].resp = strdup(answer);
 			if (r[i].resp == NULL) {
 				for (int j = 0; j < i; j++) {
-					if (r[j].resp) { explicit_bzero(r[j].resp, strlen(r[j].resp)); free(r[j].resp); }
+					if (r[j].resp) { la_wipe(r[j].resp, strlen(r[j].resp)); free(r[j].resp); }
 				}
 				free(r);
 				return PAM_BUF_ERR;
@@ -218,7 +225,7 @@ func Authenticate(service, user, password, rhost string) error {
 	cPass := C.CString(password)
 	cHost := C.CString(rhost)
 	defer func() {
-		C.explicit_bzero(unsafe.Pointer(cPass), C.size_t(len(password)))
+		C.la_wipe(unsafe.Pointer(cPass), C.size_t(len(password)))
 		C.free(unsafe.Pointer(cService))
 		C.free(unsafe.Pointer(cUser))
 		C.free(unsafe.Pointer(cPass))

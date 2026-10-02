@@ -102,11 +102,10 @@ jobs:
       - name: Test
         working-directory: server
         run: go vet ./... && go test ./...
-      - name: Build binaries (brand.Version = ${{ env.VERSION }})
-        env:
-          CGO_ENABLED: '1'
+      - name: Build binaries against glibc 2.17 (brand.Version = ${{ env.VERSION }})
         run: |
-          make build-server VERSION="$VERSION"
+          # In a manylinux2014 container, so the binaries also run on old distributions.
+          GO_VERSION="$(go env GOVERSION | sed 's/^go//')" ./packaging/build-compat.sh "$VERSION" "${{ matrix.arch }}"
           test "$(server/bin/linuxadmind --version)" = "$VERSION"
           test "$(server/bin/linuxadmin-bridge --version)" = "$VERSION"
       - name: Package
