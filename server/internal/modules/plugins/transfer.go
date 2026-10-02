@@ -205,7 +205,7 @@ func runHTTPUpload(ctx context.Context, c *rpc.Call, s rpc.Stream, p UploadParam
 	} else {
 		req.Body = io.NopCloser(pr)
 	}
-	resp, err := unixClient(pl.api.Socket, pl.timeout).Do(req)
+	resp, err := unixClient(pl.socket, pl.timeout).Do(req)
 	if err != nil {
 		// A bad upload (short, too long) fails the body read: say so.
 		var re *rpc.Error

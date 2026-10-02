@@ -25,7 +25,7 @@ const envManifest = `{
     ],
     "http": [
       {"name": "docker", "socket": "%SOCK%", "admin": true, "remote": "docker",
-       "rules": [{"methods": ["GET"], "path": "/version"}]},
+       "rules": [{"methods": ["GET", "POST"], "path": "/version"}]},
       {"name": "other", "socket": "%SOCK%", "admin": false, "rules": [{"methods": ["GET"], "path": "/version"}]}
     ],
     "files": {"read": [], "write": []},
@@ -292,4 +292,14 @@ func TestUserHostApproval(t *testing.T) {
 	if _, err := netRequest(ctx, &rpc.Call{Params: b}); !rpc.IsCode(err, rpc.Forbidden) {
 		t.Fatalf("plugin without userHosts: %v", err)
 	}
+}
+
+// An upload to an environment goes to the tunnel, like every other call (it once used the API's own socket).
+func TestUploadUsesTheEnvironmentTunnel(t *testing.T) {
+	tunnel := envSetup(t)
+	last, err := upload(t, UploadParams{HTTPParams: HTTPParams{Plugin: "envp", Name: "docker", Method: "POST", Path: "/version", EnvSocket: tunnel}, Size: 3}, []byte("abc"), 10)
+	if err != nil || last["status"] != float64(200) || !strings.Contains(last["body"].(string), "/version") {
+		t.Fatalf("upload through the tunnel: %v %v", last, err)
+	}
+
 }
