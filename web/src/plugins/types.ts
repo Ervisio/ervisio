@@ -227,7 +227,7 @@ export interface PluginJobsApi {
   runNow(id: string): Promise<{ run: string }>;
   history(id: string, limit?: number): Promise<PluginJobRun[]>;
   webhooks: {
-    /** The result's `token` and `path` are shown once; build the URL as location.origin + path. */
+    /** The result's `token` and `path` are shown once; build the URL as sdk.appOrigin + path (location.origin is opaque in a sandboxed frame). */
     create(id: string, label?: string): Promise<{ id: string; label?: string; token: string; path: string }>;
     regenerate(id: string, webhook: string): Promise<{ id: string; label?: string; token: string; path: string }>;
     revoke(id: string, webhook: string): Promise<void>;
@@ -238,6 +238,8 @@ export type PluginViewDef<S = PluginSDK> = ComponentType<{ sdk: S }> | { render(
 
 export interface PluginSDK {
   version: 3;
+  /** SDK 0.2: the console's origin as the user reaches it (https://host:9090 or the proxied origin), no path. Use it to show webhook URLs (`${sdk.appOrigin}/hooks/...`): `location.origin` is opaque in a sandboxed frame. */
+  appOrigin: string;
   plugin: { id: string; name: string; version: string };
   /** What this frame shows: one page or one widget of the plugin. */
   view: { kind: 'page' | 'widget'; id: string };

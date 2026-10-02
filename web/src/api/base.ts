@@ -14,5 +14,17 @@ export function wsUrl(path: string): string {
   return base.replace(/^http/, 'ws') + path;
 }
 
+/** The console's origin as the user reaches it (also the origin of webhook URLs), without a path. */
+export function consoleOrigin(): string {
+  if (API_BASE) {
+    try {
+      return new URL(API_BASE).origin;
+    } catch {
+      /* fall through */
+    }
+  }
+  return typeof location !== 'undefined' ? location.origin : '';
+}
+
 /** Cookies must travel when the API is on another origin. */
 export const FETCH_CREDENTIALS: RequestCredentials = API_BASE ? 'include' : 'same-origin';

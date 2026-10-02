@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ApiError, call, fromBase64, stream, toBase64, useSession, type StreamHandle } from '../api';
-import { apiUrl, FETCH_CREDENTIALS } from '../api/base';
+import { apiUrl, consoleOrigin, FETCH_CREDENTIALS } from '../api/base';
 import { saveDownload, sendUpload, startTransfer, watchDownloadEnd } from '../api/transfer';
 import { useI18n, useT } from '../i18n';
 import { themeVars, useTheme } from '../theme';
@@ -116,7 +116,7 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
         const code = await r.text();
         if (dead) return;
         const { themeSnap: snap, lang: l } = live.current;
-        post({ la: 'plugin', t: 'init', plugin: { id: plugin.id, name: plugin.name, version: plugin.version }, view, lang: l, theme: snap(), code });
+        post({ la: 'plugin', t: 'init', plugin: { id: plugin.id, name: plugin.name, version: plugin.version }, view, lang: l, theme: snap(), appOrigin: consoleOrigin(), code });
       } catch (e) {
         fail(e instanceof Error ? e.message : String(e));
       }

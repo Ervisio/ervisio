@@ -100,6 +100,8 @@ export type HostToFrame =
       view: FrameView;
       lang: string;
       theme: FrameTheme;
+      /** The console's origin as the user reaches it (https://host:9090, or the proxy's): the frame's own location.origin is opaque. */
+      appOrigin: string;
       /** Source of the plugin's entry module, fetched by the host (the frame cannot reach the daemon). */
       code: string;
     }
