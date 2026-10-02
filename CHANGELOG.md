@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.2.0] - 2026-10-02
+
+### Added
+- Sign in with an SSH key. The browser decrypts the private key with its passphrase and signs a one-time challenge; the key never leaves the browser. The server checks it against the user's `~/.ssh/authorized_keys` (honouring `from=` and `expiry-time=`, refusing `command=` keys). `auth.ssh_keys` turns it off.
+- Choose who may sign in: `auth.allow_users`, `auth.allow_groups` and `auth.admins_only`, also in Settings › Sign-in & security. Removing someone ends their sessions within a minute.
+- `tls.mode = "http"` serves plain HTTP on a loopback address, for a reverse proxy on the same machine.
+- `linuxadmind --check-config [file]` validates a configuration file.
+- The installer asks for the port (and finds another one when 9090 is taken, for example by Cockpit), who may sign in, root sign-in, the admin unlock time and the listen address, and shows a summary before applying. New flags such as `--port`, `--admins-only`, `--allow-users`, `--behind-proxy`, `--reconfigure`.
+- The installer can set up Caddy, installed natively or running in Docker: it points an existing `cockpit` site at LinuxAdmin or adds a new site for a domain you choose, after a backup and validation, then reloads Caddy.
+- Docker plugin 2.0, a full container manager: container pages with live logs, stats, a shell and settings; compose stacks in `/opt/stacks` with an editor, diff and deploy output, plus stacks started elsewhere; a creation wizard that also edits containers by recreating them; app templates from our catalog and from Portainer-format lists; images with update checks, volumes, networks and registries; clean-up; auto-update through Watchtower; alerts.
+- Plugin SDK 3: plugins can call an HTTP API on a unix socket within declared method and path rules, open terminals for declared commands, use folders that need admin rights, and open links in a new tab.
+
+### Changed
+- Release binaries are built against glibc 2.17, so they also run on Amazon Linux 2, RHEL 8, Debian 10 and Ubuntu 20.04.
+- When the system's openssl cannot verify ed25519 signatures (OpenSSL older than 3), the installer verifies the release with an embedded Python verifier.
+- Self-update works with systemd older than 236.
+- Admin unlock first tries without a password, for `sudo` rules with NOPASSWD.
+- When Caddy runs in Docker, LinuxAdmin listens only on the Docker network's gateway address instead of every interface.
+
 ## [0.1.2] - 2026-10-01
 
 ### Fixed
