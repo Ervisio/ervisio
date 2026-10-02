@@ -326,3 +326,26 @@ func (f *fakeStream) event(i int) json.RawMessage {
 	}
 	return f.events[i]
 }
+
+// An upload whose data stops coming is given up after uploadIdle: the
+// request to the service is closed, not left waiting for the rest.
+func TestUploadStalledClosesTheRequest(t *testing.T) {
+	setupV3(t)
+	old := uploadIdle
+	uploadIdle = 300 * time.Millisecond
+	defer func() { uploadIdle = old }()
+	s := newFakeStream()
+	done := make(chan error, 1)
+	p := UploadParams{HTTPParams: HTTPParams{Plugin: "v3", Name: "xfer", Method: "POST", Path: "/count"}, Size: 1 << 20}
+	go func() { done <- runHTTPUpload(context.Background(), &rpc.Call{}, s, p) }()
+	s.waitFor(t, "ready", func(_ string, ev []json.RawMessage) bool { return len(ev) >= 1 })
+	s.in <- mustJSON(map[string]string{"data": base64.StdEncoding.EncodeToString(bytes.Repeat([]byte("x"), 1000))})
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "stalled") {
+			t.Fatalf("err %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a stalled upload kept its request open")
+	}
+}

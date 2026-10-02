@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"os/exec"
+	"sync/atomic"
+	"time"
 	"unicode/utf8"
 
 	"github.com/ervisio/ervisio/server/internal/rpc"
@@ -124,6 +126,10 @@ func runExecDownload(ctx context.Context, c *rpc.Call, s rpc.Stream, p ExecParam
 // Content-Length = Size). The last event is {"done":true,"status","headers",
 // "body","b64","truncated"} like plugins.http, or with Stream the response
 // body follows as chunks (see UploadParams.Stream).
+// uploadIdle is how long an upload may go without data before the bridge
+// gives up on it and closes the request to the service.
+var uploadIdle = 2 * time.Minute
+
 func runHTTPUpload(ctx context.Context, c *rpc.Call, s rpc.Stream, p UploadParams) error {
 	if p.Method != http.MethodPost && p.Method != http.MethodPut {
 		return rpc.Errorf(rpc.Invalid, "An upload uses POST or PUT, not %q.", p.Method)
@@ -153,6 +159,15 @@ func runHTTPUpload(ctx context.Context, c *rpc.Call, s rpc.Stream, p UploadParam
 
 	pr, pw := io.Pipe()
 	defer pr.Close()
+	// The request to the service ends with the stream: when the daemon
+	// cancels it (the browser went away, the session ended) or no data
+	// came for uploadIdle, the pipe fails, so the HTTP client aborts the
+	// request and closes the connection. A service left waiting for the rest
+	// of a body may hold a lock meanwhile (Docker's container lock).
+	idle := time.NewTimer(uploadIdle)
+	defer idle.Stop()
+	stalled := rpc.Errorf(rpc.Unavailable, "The upload stalled: no data came for %s.", uploadIdle)
+	var isStalled atomic.Bool
 	go func() {
 		var got int64
 		for {
@@ -160,7 +175,13 @@ func runHTTPUpload(ctx context.Context, c *rpc.Call, s rpc.Stream, p UploadParam
 			case <-ctx.Done():
 				pw.CloseWithError(ctx.Err())
 				return
+			case <-idle.C:
+				isStalled.Store(true)
+				pw.CloseWithError(stalled)
+				cancel() // also when the client is stuck writing to the service
+				return
 			case in, open := <-s.Input():
+				idle.Reset(uploadIdle)
 				if !open {
 					pw.CloseWithError(context.Canceled)
 					return
@@ -206,6 +227,9 @@ func runHTTPUpload(ctx context.Context, c *rpc.Call, s rpc.Stream, p UploadParam
 		req.Body = io.NopCloser(pr)
 	}
 	resp, err := unixClient(pl.socket, pl.timeout).Do(req)
+	if err != nil && isStalled.Load() {
+		return stalled
+	}
 	if err != nil {
 		// A bad upload (short, too long) fails the body read: say so.
 		var re *rpc.Error

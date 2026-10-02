@@ -214,19 +214,32 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request, sess *Sess
 var errStreamEnded = errors.New("stream ended")
 
 // pumpUpload sends the body as {"data":"<b64>"} inputs followed by
-// {"eof":true}.
+// {"eof":true}. When the browser goes away (ctx, the request's context,
+// ends) it returns ctx's error, never errStreamEnded, so the caller closes
+// the stream: the bridge then cancels its request to the service instead of
+// leaving it waiting for the rest of the body (Docker holds the container's
+// lock while it waits).
 func (s *Server) pumpUpload(ctx context.Context, st *rpc.ClientStream, body io.Reader, onChunk func()) error {
 	buf := make([]byte, uploadChunk)
 	for {
 		n, rerr := io.ReadFull(body, buf)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		if n > 0 {
 			msg, _ := json.Marshal(map[string]string{"data": base64.StdEncoding.EncodeToString(buf[:n])})
 			if err := st.Send(ctx, msg); err != nil {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
 				return s.streamSendErr(st, err)
 			}
 			onChunk()
 		}
 		if rerr == io.EOF || rerr == io.ErrUnexpectedEOF {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			break
 		}
 		if rerr != nil {
@@ -234,6 +247,9 @@ func (s *Server) pumpUpload(ctx context.Context, st *rpc.ClientStream, body io.R
 		}
 	}
 	if err := st.Send(ctx, json.RawMessage(`{"eof":true}`)); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		return s.streamSendErr(st, err)
 	}
 	return nil
