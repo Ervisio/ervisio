@@ -49,6 +49,9 @@ func authorize(c *rpc.Call, id string) (*Found, caller, error) {
 	if trust(pol, f) == trustBlocked {
 		return nil, caller{}, rpc.Errorf(rpc.Forbidden, "%s is not signed and this server only runs signed plugins.", m.Name)
 	}
+	if msg := m.CoreProblem(); msg != "" {
+		return nil, caller{}, rpc.Errorf(rpc.Forbidden, "%s", msg)
+	}
 	who := currentCaller(c.Admin)
 	if !who.canSee(m) {
 		return nil, caller{}, rpc.Errorf(rpc.Forbidden, "%s is not available to your account.", m.Name)

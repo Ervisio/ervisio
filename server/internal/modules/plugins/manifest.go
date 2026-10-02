@@ -45,15 +45,18 @@ var (
 
 // Manifest is manifest.json. Unknown fields are rejected.
 type Manifest struct {
-	ID           string            `json:"id"`
-	Name         string            `json:"name"`
-	Version      string            `json:"version"`
-	Author       string            `json:"author,omitempty"`
-	Description  string            `json:"description,omitempty"`
-	Homepage     string            `json:"homepage,omitempty"`
-	Icon         string            `json:"icon,omitempty"`
-	Color        string            `json:"color,omitempty"`
-	Entry        string            `json:"entry"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Version     string `json:"version"`
+	Author      string `json:"author,omitempty"`
+	Description string `json:"description,omitempty"`
+	Homepage    string `json:"homepage,omitempty"`
+	Icon        string `json:"icon,omitempty"`
+	Color       string `json:"color,omitempty"`
+	Entry       string `json:"entry"`
+	// MinCore and Requires say which Ervisio the plugin needs (corecompat.go).
+	MinCore      string            `json:"minCore,omitempty"`
+	Requires     Requires          `json:"requires,omitempty"`
 	Files        map[string]string `json:"files,omitempty"` // path -> sha256 hex; required for signed plugins
 	Capabilities Capabilities      `json:"capabilities"`
 	Contributes  Contributes       `json:"contributes"`
@@ -376,6 +379,9 @@ func (m *Manifest) validate() error {
 	}
 	if !semverRe.MatchString(m.Version) {
 		return fmt.Errorf("version %q is not a semantic version (like 1.4.0)", m.Version)
+	}
+	if err := m.validateCoreReq(); err != nil {
+		return err
 	}
 	if len(m.Author) > 80 || len(m.Description) > 300 || len(m.Homepage) > 200 {
 		return fmt.Errorf("author, description or homepage is too long")

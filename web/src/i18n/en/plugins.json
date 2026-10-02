@@ -33,6 +33,7 @@
   "signedOk": "Signed by the Ervisio team",
   "broken": "Cannot load",
   "blocked": "Blocked",
+  "incompatible": "Needs a newer Ervisio",
   "devBadge": "Dev",
   "blockedText": "This server only accepts signed plugins, so this one stays off. Turn on plugins.allow_unsigned in Settings to use it.",
   "updateBadge": "Update {version}",

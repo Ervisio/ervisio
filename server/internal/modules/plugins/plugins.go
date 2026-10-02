@@ -30,6 +30,9 @@ func Register(r *rpc.Registry) {
 		if f == nil {
 			return nil, rpc.Errorf(rpc.NotFound, "There is no plugin %q.", p.ID)
 		}
+		if msg := f.M.CoreProblem(); msg != "" && p.Enabled {
+			return nil, rpc.Errorf(rpc.Conflict, "%s", msg)
+		}
 		st := readState()
 		st.Enabled[p.ID] = p.Enabled
 		if err := writeState(st); err != nil {

@@ -186,6 +186,14 @@ Strict: unknown fields are rejected.
   `{env}` (for example `["docker", "-H", "{env}", "compose", "up", "-d"]`). The item is the whole argv entry, never part
   of one, and `{env}` without `remote` is refused. Against an environment the call runs with the user's own rights and
   never as root, so `admin` and `adminUnlessGroup` do not apply to it.
+* `minCore` / `requires` (core 0.5): the Ervisio version the plugin needs, `"minCore": "0.5.0"` or
+  `"requires": {"ervisio": ">=0.5.0"}` (the same thing; give either or both, the higher counts; only `>=` or a bare
+  `X.Y.Z` is understood, anything else is refused when the manifest is read). A core older than that refuses to install
+  the plugin (`conflict`, "<Name> needs Ervisio 0.5.0 or newer; this server runs 0.4.0. Update Ervisio first. Nothing was
+  installed."), will not enable it (`plugins.setEnabled`) and refuses every call to an already installed one (`forbidden`,
+  same text); `plugins.list` shows it off with `incompatible: "<message>"`. A `--dev` daemon built from a checkout
+  (version `vX.Y.Z-N-g<hash>`, i.e. between releases) accepts every plugin, so the next release can be tried before it
+  is tagged. Older cores do not know the fields and refuse the manifest as "unknown field", which has the same effect.
 
 ## Background jobs and notifications
 
@@ -267,7 +275,7 @@ moved atomically into place (an existing installed version is replaced = update)
 Errors: `invalid` (bad source, archive, manifest, checksum), `forbidden`, `conflict`, `not_found`, `unavailable` (download).
 
 ### `plugins.catalog` (user)
-Params `{}` → `{"categories":[{id,name,icon,color}], "plugins":[{id,name,version,author,description,icon,color,category,verified,installs,featured?,notes?,source,sha256?,capabilities,contributes,visibleTo,installed,installedVersion?}], "warning"?, "moved":[{id,name,version}]}`.
+Params `{}` → `{"categories":[{id,name,icon,color}], "plugins":[{id,name,version,author,description,icon,color,category,verified,installs,featured?,notes?,source,sha256?,capabilities,contributes,visibleTo,installed,installedVersion?,minCore?,requires?,incompatible?}], "warning"?, "moved":[{id,name,version}]}`.
 Sources:
 
 1. Local: the first existing `catalog.json` of `./plugins` (dev), `/var/lib/ervisio/plugins`, the packaged folder.
@@ -279,6 +287,12 @@ Sources:
    only when the signature verifies (see "Catalog signature"); otherwise it is ignored and `warning` says why. Results
    and failures are cached for 5 minutes per bridge. Remote entries replace local ones with the same id; the remote
    categories replace the local ones when it has any.
+
+A catalog entry may carry `minCore` and/or `requires: {"ervisio": ">=X.Y.Z"}` (as in the manifest; the registry should copy
+them from the plugin's manifest when it builds `catalog.json`). The daemon adds `incompatible` (the message) to an entry
+this core is too old for, Browse then shows "Needs a newer Ervisio" instead of an Install button, and the installer
+checks the downloaded manifest anyway. The registry (Ervisio/plugins) needs nothing else: unsigned fields are ignored by
+older cores, and the entry's `capabilities` still have to match the manifest.
 
 Malformed entries are skipped. `moved` lists plugins that left the core and are not installed although the host uses
 them ("Plugins that left the core"). `plugins.list` computes `updateAvailable` from the same merged catalog, with the

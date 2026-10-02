@@ -31,6 +31,12 @@ type CatalogEntry struct {
 	Installs    int    `json:"installs"`
 	Featured    bool   `json:"featured,omitempty"`
 	Notes       string `json:"notes,omitempty"`
+	// MinCore and Requires (as in the manifest) say which Ervisio the
+	// plugin needs; Browse shows it and the installer enforces it.
+	MinCore  string    `json:"minCore,omitempty"`
+	Requires *Requires `json:"requires,omitempty"`
+	// Incompatible is set by the daemon when this core is too old.
+	Incompatible string `json:"incompatible,omitempty"`
 	// Source is the https URL of the .tar.gz; SHA256 its checksum (optional).
 	Source string `json:"source,omitempty"`
 	SHA256 string `json:"sha256,omitempty"`
@@ -415,6 +421,9 @@ func catalogView(ctx context.Context) (*CatalogView, error) {
 		}
 	}
 	for _, e := range merged.Plugins {
+		if need, ok := highestCoreReq(e.MinCore, e.Requires.get()); ok {
+			e.Incompatible = coreProblem(e.Name, need)
+		}
 		it := CatalogItem{CatalogEntry: e}
 		it.InstalledVersion, it.Installed = installed[e.ID]
 		view.Plugins = append(view.Plugins, it)

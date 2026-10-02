@@ -33,6 +33,7 @@
   "signedOk": "Firmato dal team Ervisio",
   "broken": "Non caricabile",
   "blocked": "Bloccato",
+  "incompatible": "Serve un Ervisio più recente",
   "devBadge": "Dev",
   "blockedText": "Questo server accetta solo plugin firmati, quindi resta spento. Attiva plugins.allow_unsigned nelle Impostazioni per usarlo.",
   "updateBadge": "Aggiornamento {version}",

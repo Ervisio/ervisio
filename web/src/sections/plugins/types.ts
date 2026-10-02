@@ -74,6 +74,8 @@ export interface PluginInfo {
   dir?: string;
   updateAvailable?: UpdateInfo;
   blocked?: boolean;
+  /** The plugin needs a newer Ervisio than this one: the daemon's message says which. */
+  incompatible?: string;
   /** Unsigned dev-folder plugin running only because developer mode is on. */
   devUnsigned?: boolean;
   error?: string;
@@ -98,6 +100,8 @@ export interface CatalogEntry {
   visibleTo: { groups: string[] };
   installed: boolean;
   installedVersion?: string;
+  /** Set by the daemon when this Ervisio is older than the plugin needs (minCore / requires). */
+  incompatible?: string;
 }
 export interface CatalogCategory {
   id: string;

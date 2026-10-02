@@ -25,6 +25,9 @@ func Resolve(id string) (*Manifest, error) {
 	if trust(pol, f) == trustBlocked {
 		return nil, rpc.Errorf(rpc.Forbidden, "%s is not signed and this server only runs signed plugins.", f.M.Name)
 	}
+	if msg := f.M.CoreProblem(); msg != "" {
+		return nil, rpc.Errorf(rpc.Forbidden, "%s", msg)
+	}
 	return f.M, nil
 }
 
