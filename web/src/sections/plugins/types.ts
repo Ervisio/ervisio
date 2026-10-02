@@ -54,6 +54,8 @@ export interface PluginInfo {
   author: string;
   description: string;
   icon: string;
+  /** Logo file name in the plugin folder (logo.svg / logo.png). */
+  logo?: string;
   color: string;
   entry: string;
   enabled: boolean;
@@ -80,6 +82,8 @@ export interface CatalogEntry {
   author: string;
   description: string;
   icon: string;
+  /** Logo as a data: URL from the signed catalog. */
+  logo?: string;
   color: string;
   category: string;
   verified: boolean;

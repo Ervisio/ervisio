@@ -8,6 +8,8 @@ export interface NavEntry {
   key: string;
   to: string;
   icon: IconName;
+  /** A plugin's logo URL, drawn instead of the icon. */
+  logo?: string;
   label: string;
   /** class that sets --h / --s */
   hueClass: string;
@@ -40,6 +42,7 @@ export function useNav() {
       key: `p:${p.plugin}/${p.page}`,
       to: `/p/${p.plugin}/${p.page}`,
       icon: p.icon,
+      logo: p.logo,
       label: p.title,
       hueClass: `hue-${p.color && HUES.has(p.color) ? p.color : 'plg'}`,
       kind: 'plugin',

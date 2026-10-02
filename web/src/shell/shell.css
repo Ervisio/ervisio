@@ -134,3 +134,9 @@
   .dock a.active .pi { background: var(--s); color: var(--h); }
   .dock .n { position: absolute; top: -3px; right: 6px; min-width: 15px; height: 15px; border-radius: 8px; background: var(--err); color: #000; font-size: 9.5px; display: grid; place-items: center; font-weight: 800; padding: 0 4px; }
 }
+
+/* A plugin's own logo in the rail, dock, More sheet and palette (shell/NavIcon.tsx): drawn as is, on a neutral chip. */
+.nav-logo { width: 20px; height: 20px; object-fit: contain; display: block; }
+.rail-it .pi.has-logo, .rail-it:hover .pi.has-logo { background: var(--sunk); }
+.rail-it.active .pi.has-logo { background: var(--s); box-shadow: inset 0 0 0 2px var(--h); }
+.more-tile .t.has-logo { background: var(--sunk); }

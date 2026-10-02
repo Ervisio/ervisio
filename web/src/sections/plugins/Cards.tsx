@@ -1,3 +1,4 @@
+import { pluginLogoUrl } from '../../plugins';
 import { useT } from '../../i18n';
 import { Badge, Button, Switch } from '../../ui';
 import { hueOf, Tile, TrustBadge } from './Parts';
@@ -21,7 +22,7 @@ export function PluginCard({ p, active, onOpen, onToggle, busy }: { p: PluginInf
       }}
     >
       <div className="plugins-card-top">
-        <Tile icon={p.icon} color={p.color} off={!p.enabled} />
+        <Tile icon={p.icon} logo={pluginLogoUrl(p)} color={p.color} off={!p.enabled} />
         <div className="plugins-card-tx">
           <b>{p.name}</b>
           <small>{p.author ? `${p.author}, ` : ''}v{p.version}</small>
@@ -46,7 +47,7 @@ export function MovedCard({ entry, busy, onInstall, onDismiss }: { entry: Catalo
   const t = useT('plugins');
   return (
     <div className={`plugins-moved hue-${hueOf(entry.color)}`} role="region" aria-label={t('moved.title', { name: entry.name })}>
-      <Tile icon={entry.icon} color={entry.color} />
+      <Tile icon={entry.icon} logo={entry.logo} color={entry.color} />
       <div className="plugins-moved-tx">
         <b>{t('moved.title', { name: entry.name })}</b>
         <small>{t('moved.text', { name: entry.name })}</small>
