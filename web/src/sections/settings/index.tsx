@@ -8,7 +8,11 @@ import { BrandLockup, Button, Icon, Input, Segmented, Select, Switch, toast, typ
 import { RefreshSelect } from '../../lib/RefreshSelect';
 import { REFRESH_KEY } from '../../lib/refresh';
 import { ColourBlock, ThemeGrid } from './Appearance';
+import { EnvironmentsBlock } from './Environments';
 import { HostsBlock, type HostEntry } from './Hosts';
+import { NetworkHostsBlock } from './NetworkHosts';
+import { PairingBlock } from './Pairing';
+import type { EnvList } from './envs';
 import { NameList } from './NameList';
 import { usePrefSave, useServerConfig } from './save';
 import { UpdatesBlock } from './Updates';
@@ -46,6 +50,7 @@ const toGoDur = (v: string) => v;
 
 export default function SettingsPage() {
   const t = useT('settings');
+  const te = useT('envs');
   const { session, host, isUnlocked } = useSession();
   const { prefs } = usePrefs();
   const th = useTheme();
@@ -65,6 +70,9 @@ export default function SettingsPage() {
     };
   }, [isAdmin]);
   const [q, setQ] = useState('');
+  // Environments: the list loads itself; the pairings come with it. Bumping the revision reloads.
+  const [envData, setEnvData] = useState<EnvList | null>(null);
+  const [envRev, setEnvRev] = useState(0);
   const [active, setActive] = useState('appearance');
   const [recentOn, setRecentOn] = useState(recentUsersEnabled);
   const setRecent = (on: boolean) => {
@@ -213,7 +221,15 @@ export default function SettingsPage() {
         rows: [
           { id: 'unsigned', title: t('plugpol.unsigned'), desc: t('plugpol.unsignedDesc', { name: Name }), cfgKey: 'plugins.allow_unsigned = ' + String(server.get('plugins.allow_unsigned', false)), control: <Switch aria-label={t('plugpol.unsigned')} disabled={srvDisabled} checked={server.get('plugins.allow_unsigned', false)} onChange={(v) => void sv('plugins.allow_unsigned', v, t('plugpol.unsigned'))} /> },
           { id: 'dev', title: t('plugpol.dev'), desc: t('plugpol.devDesc'), cfgKey: 'plugins.dev = ' + String(server.get('plugins.dev', false)), control: <Switch aria-label={t('plugpol.dev')} disabled={srvDisabled} checked={server.get('plugins.dev', false)} onChange={(v) => void sv('plugins.dev', v, t('plugpol.dev'))} /> },
+          { id: 'netHosts', title: te('hosts.title'), desc: te('hosts.desc'), words: 'network hosts approved registry allow rete host approvati', block: <NetworkHostsBlock disabled={srvDisabled} /> },
           { id: 'catalog', title: t('plugpol.catalog'), desc: t('plugpol.catalogDesc'), cfgKey: `plugins.catalog_url = "${server.get('plugins.catalog_url', '')}"`, control: <CommitInput disabled={srvDisabled} allowEmpty value={server.get('plugins.catalog_url', '')} label={t('plugpol.catalog')} onCommit={(v) => void sv('plugins.catalog_url', v, t('plugpol.catalog'))} /> },
+        ],
+      },
+      {
+        id: 'envs', part: 'server', icon: 'link', hue: 'term', title: te('group'), admin: true,
+        rows: [
+          { id: 'envlist', title: te('list.title'), desc: te('list.desc'), words: 'environments docker remote host tcp tls ssh portainer agent ervisio endpoint ambienti', block: <EnvironmentsBlock key={envRev} disabled={srvDisabled} onData={setEnvData} /> },
+          { id: 'envpair', title: te('pair.title'), desc: te('pair.desc'), words: 'pairing pair token another server abbina server', block: <PairingBlock pairings={envData?.pairings ?? []} disabled={srvDisabled} onChange={() => setEnvRev((n) => n + 1)} /> },
         ],
       },
       {

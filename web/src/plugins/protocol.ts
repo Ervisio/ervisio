@@ -20,7 +20,7 @@ export interface FrameTheme {
 }
 
 /** Operations a plugin may ask for. Everything else is refused by the broker. */
-export type FrameOp = 'exec' | 'http' | 'readFile' | 'writeFile' | 'listDir' | 'mkdir' | 'remove' | 'asset' | 'toast' | 'open' | 'openUrl';
+export type FrameOp = 'exec' | 'http' | 'readFile' | 'writeFile' | 'listDir' | 'mkdir' | 'remove' | 'asset' | 'toast' | 'open' | 'openUrl' | 'envs' | 'network';
 
 /** An HTTP request to a capabilities.http entry (sdk.api.http / httpStream). Binary bodies travel as Uint8Array. */
 export interface FrameHttpRequest {
@@ -33,6 +33,8 @@ export interface FrameHttpRequest {
   body?: string | Uint8Array;
   /** The body is JSON (sent with Content-Type: application/json). */
   json?: boolean;
+  /** Id of an environment (sdk.envs.list()): the request goes to that remote Docker host. */
+  env?: string;
 }
 
 /** Result of an `http` request: `text` for UTF-8 bodies, `bytes` for binary ones. */
@@ -50,11 +52,11 @@ export type FrameToHost =
   | { la: 'plugin'; t: 'size'; height: number }
   | { la: 'plugin'; t: 'req'; id: number; op: FrameOp; args: Record<string, unknown> }
   /** plugins.execStream (no kind, SDK v2) */
-  | { la: 'plugin'; t: 'stream-open'; sid: number; kind?: 'exec'; command: string; args: unknown }
+  | { la: 'plugin'; t: 'stream-open'; sid: number; kind?: 'exec'; command: string; args: unknown; env?: string }
   /** plugins.httpStream */
   | { la: 'plugin'; t: 'stream-open'; sid: number; kind: 'http'; req: FrameHttpRequest }
   /** plugins.pty */
-  | { la: 'plugin'; t: 'stream-open'; sid: number; kind: 'pty'; command: string; args: unknown; cols: number; rows: number }
+  | { la: 'plugin'; t: 'stream-open'; sid: number; kind: 'pty'; command: string; args: unknown; cols: number; rows: number; env?: string }
   /** Input to an open pty: bytes to type, or a new size. */
   | { la: 'plugin'; t: 'stream-input'; sid: number; data?: Uint8Array; resize?: { cols: number; rows: number } }
   | { la: 'plugin'; t: 'stream-close'; sid: number };

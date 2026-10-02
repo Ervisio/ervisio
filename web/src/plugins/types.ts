@@ -15,12 +15,14 @@ export interface PluginManifest {
   devUnsigned?: boolean;
   location?: string;
   capabilities?: {
-    commands?: { name: string; admin?: boolean; adminUnlessGroup?: string; args?: unknown[]; pty?: boolean }[];
-    http?: { name: string; socket: string; admin?: boolean; adminUnlessGroup?: string; headers?: string[]; rules?: { methods: string[]; path: string }[]; maxBody?: number; timeoutSec?: number }[];
+    commands?: { name: string; admin?: boolean; adminUnlessGroup?: string; args?: unknown[]; pty?: boolean; remote?: string }[];
+    http?: { name: string; socket: string; admin?: boolean; adminUnlessGroup?: string; headers?: string[]; rules?: { methods: string[]; path: string }[]; maxBody?: number; timeoutSec?: number; remote?: string }[];
     /** A path (SDK v2) or {path, admin, adminUnlessGroup, create} (SDK v3). */
     files?: { read?: PluginFolder[]; write?: PluginFolder[] };
     sockets?: string[];
     network?: string[];
+    /** The plugin may ask an administrator to approve more hosts (sdk.network.request). */
+    userHosts?: boolean;
   };
   contributes?: {
     pages?: { id: string; title: string; icon?: string }[];
@@ -79,6 +81,16 @@ export interface HttpRequestOptions {
   query?: Record<string, string | string[]> | string;
   headers?: Record<string, string>;
   body?: string | Uint8Array | object;
+  /** Id of an environment from sdk.envs.list(); the capability must declare `remote`. */
+  env?: string;
+}
+
+/** An environment an admin configured (Settings > Environments) that the user may use. Never holds secrets. */
+export interface PluginEnv {
+  id: string;
+  name: string;
+  kind: 'tcp-tls' | 'ssh' | 'portainer-agent' | 'ervisio';
+  status?: { reachable: boolean; engineVersion?: string; apiVersion?: string; latencyMs: number; error?: string; checked: string };
 }
 
 export interface HttpResponse {
@@ -101,12 +113,13 @@ export interface PluginSDK {
   ui: Record<string, unknown>;
   api: {
     /** Run a command declared in the manifest. Admin commands open the app's unlock dialog when needed. */
-    exec(command: string, args?: string[]): Promise<ExecResult>;
+    exec(command: string, args?: string[], o?: { env?: string }): Promise<ExecResult>;
     /** Same, streamed line by line. */
     execStream(
       command: string,
       args: string[],
       h: { onLine?(stream: 'stdout' | 'stderr', line: string): void; onExit?(code: number): void; onError?(e: PluginError): void },
+      o?: { env?: string },
     ): { close(): void };
     /** SDK v3: an HTTP request to a capabilities.http entry. A non-2xx status is a normal result. */
     http(name: string, req: HttpRequestOptions): Promise<HttpResponse>;
@@ -120,7 +133,7 @@ export interface PluginSDK {
     pty(
       command: string,
       args: string[],
-      o: { cols: number; rows: number; onData(chunk: Uint8Array): void; onExit(code: number): void; onError(e: PluginError): void },
+      o: { cols: number; rows: number; env?: string; onData(chunk: Uint8Array): void; onExit(code: number): void; onError(e: PluginError): void },
     ): { write(data: string | Uint8Array): void; resize(cols: number, rows: number): void; close(): void };
   };
   /** Only inside capabilities.files (read: read+write folders; write: write folders), with the user's own rights (admin folders: administrator rights when needed). */
@@ -133,6 +146,14 @@ export interface PluginSDK {
     mkdir(path: string): Promise<void>;
     /** SDK v3: removes a file or an empty folder inside a write folder. */
     remove(path: string): Promise<void>;
+  };
+  /** Environments (remote Docker hosts) the signed-in user may use. Pass an id as `env` to http, httpStream, exec, execStream or pty. */
+  envs: { list(): Promise<PluginEnv[]> };
+  /** Hosts beyond the manifest's capabilities.network list (needs capabilities.network.userHosts). */
+  network: {
+    /** Asks an administrator once to approve `host` (exact host:port; https unless approved as http). Resolves when approved;
+     * the app then reloads the plugin's frames (the new host becomes part of their policy). Rejects with code "forbidden" when refused. */
+    request(host: string, o?: { scheme?: 'https' | 'http' }): Promise<{ host: string; approved: true; reloading: boolean }>;
   };
   /** A blob: URL for a file of the plugin's own folder (images, CSS...). */
   asset(path: string): Promise<string>;

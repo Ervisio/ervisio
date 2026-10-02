@@ -1,0 +1,45 @@
+/* Settings > Environments, pairing and approved hosts */
+.st-host.env-row { align-items: flex-start; }
+.st-host.env-row > .dot { margin-top: 6px; }
+.env-row .ui-badge { margin-top: 2px; }
+.env-row small .mono, .st-host b.mono { font-family: var(--mono); }
+.env-err { color: var(--err) !important; margin-top: 4px; overflow-wrap: anywhere; max-width: 70ch; }
+.env-empty { padding: 10px 0; color: var(--ink3); }
+.env-empty b { display: block; color: var(--ink); font-weight: 700; }
+.env-empty small { display: block; margin-top: 2px; max-width: 60ch; }
+
+.env-form { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; max-height: min(62vh, 560px); overflow: auto; padding: 2px 4px 2px 0; }
+.env-sec { margin: 8px 0 0; font-size: 13px; font-weight: 800; color: var(--ink3); }
+.env-hint { color: var(--ink3); font-size: 12.5px; }
+.env-lab { font-size: 13px; font-weight: 700; margin-top: 6px; }
+.env-names { display: flex; flex-direction: column; gap: 6px; }
+.env-check { display: flex; align-items: flex-start; gap: 8px; font-size: 13.5px; font-weight: 600; }
+.env-check input { margin-top: 3px; }
+.env-warn { padding: 10px 12px; border-radius: 12px; background: var(--warn-s); color: var(--warn); font-size: 13px; font-weight: 600; }
+.env-foot-err { flex: 1; min-width: 0; color: var(--err); font-size: 13px; font-weight: 600; text-align: left; overflow-wrap: anywhere; }
+
+.env-kinds { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; }
+.env-kinds legend { font-size: 13px; font-weight: 700; margin-bottom: 6px; padding: 0; }
+.env-kind { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 14px; background: var(--sunk); outline: 2px solid transparent; cursor: pointer; }
+.env-kind:hover { outline-color: var(--ink3); }
+.env-kind[data-on='true'] { outline-color: var(--acc); }
+.env-kind input { margin-top: 4px; }
+.env-kind b { display: block; font-weight: 700; }
+.env-kind small { display: block; color: var(--ink3); font-size: 12.5px; margin-top: 2px; }
+
+.env-probe { display: flex; flex-direction: column; gap: 10px; }
+.env-probe-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.env-fp { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 14px; background: var(--sunk); }
+.env-fp code, .env-token code { font: 600 13px var(--mono); overflow-wrap: anywhere; user-select: all; }
+.env-token { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 14px; background: var(--sunk); flex-wrap: wrap; }
+.env-token code { flex: 1; min-width: 0; font-size: 14px; }
+
+.env-pem { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.env-pem > .ui-field { align-self: stretch; }
+
+@media (max-width: 640px) {
+  .env-form { max-height: 58vh; }
+  .st-host.env-row { flex-wrap: wrap; row-gap: 6px; }
+  .st-host.env-row .grow { flex: 1 1 calc(100% - 30px); overflow-wrap: anywhere; }
+  .st-host.env-row .ui-badge { margin-left: 21px; margin-right: auto; }
+}
