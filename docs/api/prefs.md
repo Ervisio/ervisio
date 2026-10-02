@@ -1,7 +1,7 @@
 # prefs.* (per-user preferences)
 
 Package `server/internal/modules/prefs`. Stored by the **user bridge** in
-`~/.config/linuxadmin/prefs.json` (dir 0700, file 0600, atomic writes). A flat JSON object;
+`~/.config/ervisio/prefs.json` (dir 0700, file 0600, atomic writes). A flat JSON object;
 values are any JSON. Keys match `^[A-Za-z][A-Za-z0-9_.-]{0,63}$`; a value is ≤ 256 KiB and the
 whole file ≤ 1 MiB. All methods are user level.
 

@@ -1,7 +1,7 @@
 # config.* (server configuration)
 
 Package `server/internal/modules/config`. Reads/writes the daemon config file
-(`/etc/linuxadmin/linuxadmin.conf`, or `--config`). linuxadmind reloads the file within ~2 s
+(`/etc/ervisio/ervisio.conf`, or `--config`). ervisiod reloads the file within ~2 s
 after a change; keys marked `restart` need a daemon restart.
 
 ## Keys
@@ -45,13 +45,13 @@ come from LDAP).
 Refusals: password sign-in gives the generic `unauthenticated` "wrong user name or password" (no password oracle;
 the reason is in the log); SSH-key sign-in, after the signature verified and the key is listed in
 `authorized_keys`, gives `403 forbidden`, `data.reason:"not_allowed"`, "This account may not sign in to
-LinuxAdmin". Mind that you can lock yourself out: keep your own account allowed.
+Ervisio". Mind that you can lock yourself out: keep your own account allowed.
 
 ### Plain HTTP behind a reverse proxy (`tls.mode = "http"`)
 
 The daemon serves plain HTTP, with no TLS and no redirect listener, for a reverse proxy on the same machine that
 provides HTTPS. It is **only accepted when `listen` is a loopback IP address** (`127.0.0.0/8` or `[::1]`; an empty
-host, `0.0.0.0` and other addresses are rejected): `config.set` answers `invalid`, `linuxadmind` and
+host, `0.0.0.0` and other addresses are rejected): `config.set` answers `invalid`, `ervisiod` and
 `--check-config` refuse the file, and `--listen` on the command line is checked the same way. (Unix sockets are not
 supported as listen addresses.) Set `listen` first, then `tls.mode`.
 
@@ -77,9 +77,9 @@ nginx needs `proxy_set_header Host $host; proxy_set_header X-Forwarded-Proto $sc
 and the `Upgrade`/`Connection` headers for `/api/ws`. A proxy in a Docker container cannot reach the host's
 loopback: keep HTTPS there (`reverse_proxy https://HOST:PORT` with `tls_insecure_skip_verify`) or use host networking.
 
-### Checking a file: `linuxadmind --check-config [path]`
+### Checking a file: `ervisiod --check-config [path]`
 
-Parses and validates the configuration (default `--config`, `/etc/linuxadmin/linuxadmin.conf`) without starting
+Parses and validates the configuration (default `--config`, `/etc/ervisio/ervisio.conf`) without starting
 anything or needing root beyond reading the file. Prints `OK: <path>` (exit 0), or the errors on stderr (exit 1);
 unknown keys are printed as warnings. Besides the key rules it checks that `tls.mode = "custom"` has `tls.cert` and
 `tls.key` and that the files exist, and that a missing file is an error. `install.sh` runs it before restarting the
@@ -88,7 +88,7 @@ service and puts the previous file back when it fails.
 ## `config.get` (user) → State
 
 ```json
-{"path":"/etc/linuxadmin/linuxadmin.conf","exists":false,
+{"path":"/etc/ervisio/ervisio.conf","exists":false,
  "values":{"listen":"0.0.0.0:9090","allow_root":false,"login.show_ip":true,"login.max_failures":5,"auth.ssh_keys":true,"auth.allow_users":[],"auth.allow_groups":[],"auth.admins_only":false,
            "session.timeout":"12h","session.admin_unlock":"5m","tls.mode":"self-signed","tls.redirect":true,
            "tls.cert":"","tls.key":"","plugins.allow_unsigned":false,"plugins.dev":false,

@@ -1,18 +1,18 @@
 # Packaging and distribution
 
-How LinuxAdmin reaches machines, what each way installs, and how to publish it in more places. Building and
+How Ervisio reaches machines, what each way installs, and how to publish it in more places. Building and
 signing a release is in [RELEASING.md](RELEASING.md).
 
 ## Ways to install
 
 | Way | Who builds it | Layout | Updated by |
 |---|---|---|---|
-| `install.sh` (one-line install) | release workflow (archive) | versioned | LinuxAdmin itself (Settings > About) |
+| `install.sh` (one-line install) | release workflow (archive) | versioned | Ervisio itself (Settings > About) |
 | `.deb` from the release page | release workflow (nfpm) | flat, managed (`apt`) | the user, with apt/dpkg |
 | `.rpm` from the release page | release workflow (nfpm) | flat, managed (`dnf` or `zypper`) | the user, with dnf/zypper |
-| AUR `linuxadmin-bin` | `packaging/arch/linuxadmin-bin/PKGBUILD` (release archive) | flat, managed (`pacman`) | pacman / AUR helper |
-| AUR `linuxadmin` | `packaging/arch/linuxadmin/PKGBUILD` (tagged source) | flat, managed (`pacman`) | pacman / AUR helper |
-| From source | `make build` + `packaging/install-dev.sh` | versioned | LinuxAdmin itself |
+| AUR `ervisio-bin` | `packaging/arch/ervisio-bin/PKGBUILD` (release archive) | flat, managed (`pacman`) | pacman / AUR helper |
+| AUR `ervisio` | `packaging/arch/ervisio/PKGBUILD` (tagged source) | flat, managed (`pacman`) | pacman / AUR helper |
+| From source | `make build` + `packaging/install-dev.sh` | versioned | Ervisio itself |
 
 The `.deb` and `.rpm` files on the release page are not in any repository yet, so `apt upgrade` and `dnf upgrade`
 do not see new versions: users download the new package and install it over the old one. The console still checks
@@ -27,28 +27,28 @@ self-update that replaces files owned by the package manager. Publish packages f
 Versioned (install.sh, self-update, `docs/RELEASING.md`):
 
 ```
-/usr/lib/linuxadmin/versions/<v>/{bin,web,plugins,packaging,VERSION}
-/usr/lib/linuxadmin/current -> versions/<v>        previous -> versions/<v before>
-/usr/bin/linuxadmind -> /usr/lib/linuxadmin/current/bin/linuxadmind
-/etc/systemd/system/linuxadmin.service             /etc/pam.d/linuxadmin
+/usr/lib/ervisio/versions/<v>/{bin,web,plugins,packaging,VERSION}
+/usr/lib/ervisio/current -> versions/<v>        previous -> versions/<v before>
+/usr/bin/ervisiod -> /usr/lib/ervisio/current/bin/ervisiod
+/etc/systemd/system/ervisio.service             /etc/pam.d/ervisio
 ```
 
 Flat (packages):
 
 ```
-/usr/bin/linuxadmind                         /usr/lib/linuxadmin/linuxadmin-bridge
-/usr/share/linuxadmin/{web,plugins}          /usr/lib/linuxadmin/package-service
-/usr/lib/linuxadmin/managed                  /usr/lib/systemd/system/linuxadmin.service
-/etc/pam.d/linuxadmin                        /etc/linuxadmin/, /var/lib/linuxadmin/ (state)
+/usr/bin/ervisiod                         /usr/lib/ervisio/ervisio-bridge
+/usr/share/ervisio/{web,plugins}          /usr/lib/ervisio/package-service
+/usr/lib/ervisio/managed                  /usr/lib/systemd/system/ervisio.service
+/etc/pam.d/ervisio                        /etc/ervisio/, /var/lib/ervisio/ (state)
 ```
 
 The daemon finds its files either way: in a version folder it uses the bridge, web app and plugins of that folder;
-otherwise the bridge next to itself or `/usr/lib/linuxadmin/linuxadmin-bridge`, the web app in
-`/usr/share/linuxadmin/web` and plugins in `/usr/share/linuxadmin/plugins`.
+otherwise the bridge next to itself or `/usr/lib/ervisio/ervisio-bridge`, the web app in
+`/usr/share/ervisio/web` and plugins in `/usr/share/ervisio/plugins`.
 
 ### Managed installs
 
-A package writes `/usr/lib/linuxadmin/managed` containing the name of its package manager (`apt`, `dnf`, `zypper`,
+A package writes `/usr/lib/ervisio/managed` containing the name of its package manager (`apt`, `dnf`, `zypper`,
 `pacman`; the `.rpm` picks `dnf` or `zypper` in its post-install script). When the file exists:
 
 - `updates.status` and `updates.check` report `managedBy`, `canUpdate` is false, `updates.apply` and
@@ -62,9 +62,9 @@ A package writes `/usr/lib/linuxadmin/managed` containing the name of its packag
 
 ### Restarts from package scripts
 
-Upgrading the package restarts `linuxadmin.service` (deb, rpm and Arch alike), removing it stops the service. The
-package manager may have been started from LinuxAdmin itself, from its terminal or the Software section; it then
-runs as a descendant of `linuxadmind`, and a restart would kill it halfway. `/usr/lib/linuxadmin/package-service`
+Upgrading the package restarts `ervisio.service` (deb, rpm and Arch alike), removing it stops the service. The
+package manager may have been started from Ervisio itself, from its terminal or the Software section; it then
+runs as a descendant of `ervisiod`, and a restart would kill it halfway. `/usr/lib/ervisio/package-service`
 (from `packaging/package-service.sh`) checks the process tree: in that case it hands the restart to a transient
 systemd unit that waits until the package manager has exited. Everyone signs in again afterwards.
 
@@ -74,7 +74,7 @@ systemd unit that waits until the package manager has exited. Everyone signs in 
 `--yes`, or no terminal, means defaults and no questions; nothing in the script waits for input then. The README
 install section lists the options. In short:
 
-- **First install** (no `/etc/linuxadmin/linuxadmin.conf`): asks for the port (default 9090, checked with
+- **First install** (no `/etc/ervisio/ervisio.conf`): asks for the port (default 9090, checked with
   `ss`, `netstat` or `/proc/net/tcp`; a systemd socket such as `cockpit.socket` is named), the proxy setup (Caddy or
   another reverse proxy), who can reach the console (`listen`), TLS (`tls.mode`, `tls.cert`, `tls.key`),
   `allow_root`, who may sign in (`auth.allow_users`, `auth.allow_groups`, `auth.admins_only`: every local account,
@@ -83,7 +83,7 @@ install section lists the options. In short:
   service. It prints a summary, asks for confirmation, and writes a fully commented config file.
 - **Installed already**: the config file is kept. `--reconfigure` or any configuration option sets only the keys the
   questions cover (an awk edit that keeps everything else, comments included) after copying the file to
-  `linuxadmin.conf.linuxadmin-backup-<date>`.
+  `ervisio.conf.ervisio-backup-<date>`.
 - Who may sign in: with nothing set, every account with a login shell in `/etc/shells` can (`nologin`, `false`,
   `git-shell`, `rbash` are refused). The summary warns when the policy would lock out the person running the
   installer (`SUDO_USER`) or leaves no administrator.
@@ -93,7 +93,7 @@ install section lists the options. In short:
   session cookie `Secure` through `X-Forwarded-Proto`. Caddy in a bridged Docker container cannot reach the host's
   loopback, so that case keeps HTTPS and `tls_insecure_skip_verify`. A proxy on another machine also keeps HTTPS.
 - **Config check.** After writing or changing the file, and before the service is restarted, the installer runs
-  `linuxadmind --check-config /etc/linuxadmin/linuxadmin.conf`. When it fails, the backup is put back (a first
+  `ervisiod --check-config /etc/ervisio/ervisio.conf`. When it fails, the backup is put back (a first
   install removes the file), the errors are printed and the installer stops without restarting. Packages can run the
   same command in their post-install scripts or `ExecStartPre`.
 
@@ -120,10 +120,30 @@ renamed, because a single file mounted into a container must keep its inode. The
 - From install.sh to a `.deb` or `.rpm`: install the package. Its post-install script removes the versioned layout
   and the unit file that install.sh wrote, and restarts the service on the packaged files. Configuration and the
   TLS certificate stay.
-- From install.sh to the AUR package: pacman refuses to overwrite `/usr/bin/linuxadmind`, which it does not own. Run
-  `sudo sh install.sh --uninstall` first (it keeps `/etc/linuxadmin`), then install the package.
-- From a package to install.sh: remove the package (`apt remove linuxadmin`, not purge, keeps the configuration),
+- From install.sh to the AUR package: pacman refuses to overwrite `/usr/bin/ervisiod`, which it does not own. Run
+  `sudo sh install.sh --uninstall` first (it keeps `/etc/ervisio`), then install the package.
+- From a package to install.sh: remove the package (`apt remove ervisio`, not purge, keeps the configuration),
   then run install.sh.
+
+### Replacing LinuxAdmin
+
+Ervisio was called LinuxAdmin up to 0.2.0; its packages were `linuxadmin` (`.deb`, `.rpm`) and `linuxadmin-bin` /
+`linuxadmin` (AUR). The Ervisio packages take their place (`docs/RELEASING.md`, "Rename transition"):
+
+- `.deb`: `Replaces`, `Conflicts` and `Provides: linuxadmin`. `apt install ./ervisio_<v>_amd64.deb` removes
+  `linuxadmin` (not purged: `/etc/linuxadmin` and `/var/lib/linuxadmin` stay) and the post-install script copies them
+  with `ervisiod --migrate-legacy` before starting `ervisio.service`. The deb ships its own `/etc/pam.d/ervisio`, so
+  local changes to `/etc/pam.d/linuxadmin` have to be carried over by hand.
+- `.rpm`: `Obsoletes: linuxadmin < <v>` and `Provides: linuxadmin = <v>` (nfpm writes `replaces` as Obsoletes).
+  `%post` runs before the old package is erased, copies the data (the PAM file included, kept as it is when it was
+  changed), and starts `ervisio.service`, which stops `linuxadmin.service` (`Conflicts=`); the old package's `%preun`
+  then only disables a stopped unit.
+- AUR: `ervisio-bin` and `ervisio` conflict with `linuxadmin`, `linuxadmin-bin` and each other, and replace the
+  package of the same kind. pacman asks to remove the LinuxAdmin package (its `pre_remove` stops it); `post_install`
+  copies the data. Then `systemctl enable --now ervisio`.
+- A LinuxAdmin installed with its `install.sh`: the `.deb` and `.rpm` scripts also remove its programs and unit
+  (`ervisiod --remove-legacy`) once `ervisio.service` runs; Ervisio's `install.sh` does the same.
+  Ervisio's `install.sh` refuses a LinuxAdmin installed from a package: install the `ervisio` package instead.
 
 ## Distribution details
 
@@ -138,7 +158,7 @@ PAM files, one per family, in `packaging/pam.d/`:
 
 `install.sh` and `install-dev.sh` pick the file for the running system (falling back to the PAM files present on
 disk when the distribution is not listed); the `.deb` ships the `debian` file as a conffile; the `.rpm` ships the
-`fedora` and `suse` files in `/usr/share/linuxadmin/pam.d/` and copies the right one to `/etc/pam.d/linuxadmin` when
+`fedora` and `suse` files in `/usr/share/ervisio/pam.d/` and copies the right one to `/etc/pam.d/ervisio` when
 that file does not exist yet; the PKGBUILDs ship the `arch` file. `install.sh` carries copies of the four files (for
 release archives that do not include them), and `TestInstallScriptPAMCopies` keeps them equal.
 
@@ -168,9 +188,9 @@ The release workflow (`.github/workflows/release.yml`) does it for every tag, fr
 
 ```sh
 packaging/build-release.sh 1.2.0 amd64 dist                      # the archive
-tar xzf dist/linuxadmin-1.2.0-linux-amd64.tar.gz -C /tmp/rel
-NFPM=/path/to/nfpm packaging/build-packages.sh /tmp/rel/linuxadmin-1.2.0-linux-amd64 amd64 dist
-# -> dist/linuxadmin_1.2.0_amd64.deb, dist/linuxadmin-1.2.0-1.x86_64.rpm
+tar xzf dist/ervisio-1.2.0-linux-amd64.tar.gz -C /tmp/rel
+NFPM=/path/to/nfpm packaging/build-packages.sh /tmp/rel/ervisio-1.2.0-linux-amd64 amd64 dist
+# -> dist/ervisio_1.2.0_amd64.deb, dist/ervisio-1.2.0-1.x86_64.rpm
 ```
 
 nfpm is pinned in the workflow (`NFPM_VERSION`, with the sha256 of each binary from nfpm's `checksums.txt`). To bump
@@ -182,8 +202,8 @@ keeps the `-`): every console parses `SHA256SUMS`, and its name check does not a
 
 ## Publishing on the AUR
 
-Two packages: `linuxadmin-bin` (release archives, quick to install) and `linuxadmin` (built from the tag with Go and
-npm). They conflict with each other; `linuxadmin-bin` provides `linuxadmin`.
+Two packages: `ervisio-bin` (release archives, quick to install) and `ervisio` (built from the tag with Go and
+npm). They conflict with each other; `ervisio-bin` provides `ervisio`.
 
 The project is MIT licensed; the packages install the license to `/usr/share/licenses/`.
 
@@ -210,25 +230,28 @@ The project is MIT licensed; the packages install the license to `/usr/share/lic
 
 ```sh
 # in this repository, on Arch, as your user:
-packaging/arch/update-pkgbuild.sh 0.1.1      # checks the release signature, writes pkgver, checksums, .SRCINFO
-git diff -- packaging/arch && git commit -am "AUR: 0.1.1"
+packaging/arch/update-pkgbuild.sh 0.3.0      # checks the release signature, writes pkgver, checksums, .SRCINFO
+git diff -- packaging/arch && git commit -am "AUR: 0.3.0"
 
 # test-build without installing:
-cd packaging/arch/linuxadmin-bin && makepkg -f && cd -
+cd packaging/arch/ervisio-bin && makepkg -f && cd -
 
 # publish each package
 cd ~/aur
-git clone ssh://aur@aur.archlinux.org/linuxadmin-bin.git     # an empty repository the first time: that creates the package
-cd linuxadmin-bin
-cp ~/Documenti/LinuxAdmin/packaging/arch/linuxadmin-bin/{PKGBUILD,.SRCINFO,linuxadmin.install,linuxadmin.pam,package-service.sh} .
-git add PKGBUILD .SRCINFO linuxadmin.install linuxadmin.pam package-service.sh
-git commit -m "Update to 0.1.1"
+git clone ssh://aur@aur.archlinux.org/ervisio-bin.git     # an empty repository the first time: that creates the package
+cd ervisio-bin
+cp <this repository>/packaging/arch/ervisio-bin/{PKGBUILD,.SRCINFO,ervisio.install,ervisio.pam,package-service.sh} .
+git add PKGBUILD .SRCINFO ervisio.install ervisio.pam package-service.sh
+git commit -m "Update to 0.3.0"
 git push                                                    # the AUR branch is master
 ```
 
-Repeat with `linuxadmin` (`ssh://aur@aur.archlinux.org/linuxadmin.git`). Always commit `.SRCINFO` together with the
-`PKGBUILD`; the AUR rejects pushes where they disagree. Once published, users install with `yay -S linuxadmin-bin`
-(or `paru`), then `sudo systemctl enable --now linuxadmin`.
+Repeat with `ervisio` (`ssh://aur@aur.archlinux.org/ervisio.git`). The PKGBUILDs in this repository have
+`SKIP` checksums until `update-pkgbuild.sh` has run for the first Ervisio release. If `linuxadmin-bin` and
+`linuxadmin` were published, file a merge request on the AUR for each (into `ervisio-bin` and `ervisio`) once the
+new packages exist, so their users get them. Always commit `.SRCINFO` together with the
+`PKGBUILD`; the AUR rejects pushes where they disagree. Once published, users install with `yay -S ervisio-bin`
+(or `paru`), then `sudo systemctl enable --now ervisio`.
 
 ### Automatic upload from the release workflow
 
@@ -247,26 +270,26 @@ locally and commit, so the PKGBUILDs here stay current. It trusts the AUR host k
 ## Fedora COPR
 
 COPR builds RPMs from a source RPM and hosts a dnf repository, so users get updates with `dnf upgrade`:
-`sudo dnf copr enable fonlogen/linuxadmin && sudo dnf install linuxadmin`.
+`sudo dnf copr enable fonlogen/ervisio && sudo dnf install ervisio`.
 
 1. Fedora account at https://accounts.fedoraproject.org, then sign in to https://copr.fedorainfracloud.org.
 2. API token from https://copr.fedorainfracloud.org/api/ into `~/.config/copr`; `sudo dnf install copr-cli`.
-3. A spec file is still needed (`packaging/rpm/linuxadmin.spec`, not written yet): build from the tag like the
+3. A spec file is still needed (`packaging/rpm/ervisio.spec`, not written yet): build from the tag like the
    source PKGBUILD (Go with cgo + libpam, `npm ci && npm run build`), install the flat layout, write the marker
    `dnf`, use `%systemd_post`/`%systemd_preun`/`%systemd_postun_with_restart` and the Fedora PAM file. COPR chroots
    have network access when "Enable internet access during builds" is set on the project, which `npm ci` and
    `go mod download` need.
-4. `copr-cli create linuxadmin --chroot fedora-rawhide-x86_64 --chroot fedora-43-x86_64 --chroot epel-9-x86_64 --enable-net on`
-5. Per release: `rpmbuild -bs linuxadmin.spec` then `copr-cli build linuxadmin linuxadmin-<v>-1.src.rpm`, or connect
+4. `copr-cli create ervisio --chroot fedora-rawhide-x86_64 --chroot fedora-43-x86_64 --chroot epel-9-x86_64 --enable-net on`
+5. Per release: `rpmbuild -bs ervisio.spec` then `copr-cli build ervisio ervisio-<v>-1.src.rpm`, or connect
    the GitHub repository in the COPR web UI (Packit or the SCM source type) so tags build by themselves.
 
 ## Ubuntu PPA, or an apt repository of our own
 
 **PPA (Launchpad)**: Launchpad only builds from a signed Debian source package (`debian/` folder: `control`, `rules`,
-`changelog`, `linuxadmin.postinst`…) uploaded with `dput`, and builds without network access, so the Go modules
+`changelog`, `ervisio.postinst`…) uploaded with `dput`, and builds without network access, so the Go modules
 (`go mod vendor`) and the npm dependencies (or the built `web/dist`) must be inside the source package. Steps:
 Launchpad account, OpenPGP key registered on Launchpad, signed Ubuntu Code of Conduct, create the PPA, then per
-release and per Ubuntu series `debuild -S -sa` and `dput ppa:fonlogen/linuxadmin linuxadmin_<v>_source.changes`.
+release and per Ubuntu series `debuild -S -sa` and `dput ppa:fonlogen/ervisio ervisio_<v>_source.changes`.
 More work than the other options because of the offline build.
 
 **Own repository**: publish the `.deb` files the release already builds in a signed apt repository, for example on
@@ -274,12 +297,12 @@ GitHub Pages or a small server:
 
 ```sh
 # once: a signing key (keep the private half offline like the release key)
-gpg --quick-gen-key "LinuxAdmin packages <info.fonlogen@gmail.com>" ed25519 sign never
+gpg --quick-gen-key "Ervisio packages <info.fonlogen@gmail.com>" ed25519 sign never
 # per release, in the repository folder (reprepro with conf/distributions listing "stable" and the key)
-reprepro includedeb stable linuxadmin_<v>_amd64.deb linuxadmin_<v>_arm64.deb
+reprepro includedeb stable ervisio_<v>_amd64.deb ervisio_<v>_arm64.deb
 ```
 
-Users then add `/etc/apt/sources.list.d/linuxadmin.sources` with `Signed-By:` pointing to the published key and get
+Users then add `/etc/apt/sources.list.d/ervisio.sources` with `Signed-By:` pointing to the published key and get
 updates through `apt upgrade`. The same can be done for RPMs with `createrepo_c` (a signed `repomd.xml`). Hosted
 services such as Cloudsmith or packagecloud have free plans for open-source projects and do both.
 
@@ -289,7 +312,7 @@ https://build.opensuse.org builds and hosts repositories for openSUSE, SLES, Fed
 from one project, so it can replace COPR and the apt repository.
 
 1. openSUSE account, then `osc` (`zypper install osc`, or `pip install osc`).
-2. `osc checkout home:Fonlogen && cd home:Fonlogen && osc mkpac linuxadmin`.
+2. `osc checkout home:Fonlogen && cd home:Fonlogen && osc mkpac ervisio`.
 3. Add the spec file (the COPR one, with `%if 0%{?suse_version}` for the openSUSE PAM file and `zypper` marker), a
    `_service` file that fetches the tag (`obs_scm`) and vendors the Go modules (`go_modules` service); OBS builds
    offline, so the web app must be built beforehand and shipped as an extra source (e.g. a `web-dist-<v>.tar.gz`
@@ -303,7 +326,7 @@ What every distribution expects before a package enters its official repositorie
 
 - **A license** approved by OSI and acceptable to the distribution (Debian: DFSG-free). This is the first blocker.
 - **Builds from source without network access**, with every dependency either packaged in the distribution or
-  declared as bundled. For LinuxAdmin that means the Go modules (packaged as `golang-*` in Debian/Fedora, or vendored
+  declared as bundled. For Ervisio that means the Go modules (packaged as `golang-*` in Debian/Fedora, or vendored
   with a bundling declaration) and the npm dependencies of the web app, which is the hard part.
 - **No self-update**: the managed marker already turns it off.
 - **Distribution conventions**: systemd presets (services are not enabled by default on Fedora and Debian unless

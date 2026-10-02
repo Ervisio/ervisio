@@ -31,8 +31,8 @@ or `software.check` / `force: true` refreshes them.
 ## Updates without root
 
 On Arch, `software.check` copies the sync databases to a private directory
-(`/var/cache/linuxadmin/checkdb` for the root bridge, `$XDG_CACHE_HOME/linuxadmin/checkdb` or
-`~/.cache/linuxadmin/checkdb` for a user; never a shared folder such as `/tmp`). The folder must be a real 0700
+(`/var/cache/ervisio/checkdb` for the root bridge, `$XDG_CACHE_HOME/ervisio/checkdb` or
+`~/.cache/ervisio/checkdb` for a user; never a shared folder such as `/tmp`). The folder must be a real 0700
 directory of the bridge's user in a parent only that user or root can write; otherwise it is not used (the check
 fails, and `pacman -Qu` reads the system databases). Copies are created with `O_EXCL|O_NOFOLLOW`. It syncs them there with `fakeroot pacman -Sy --disable-sandbox`
 (plain `pacman -Sy` when the bridge is root) like `checkupdates`, and reads `pacman -Qu` / `pacman -Sup`
@@ -132,9 +132,9 @@ Newest first (default 300, max 3000). Sources: `/var/log/pacman.log`, `/var/log/
 `busy` is true while a transaction runs (or the pacman database lock exists). `transaction` is the running or
 last finished one (kept 1 hour):
 `{running, pid, op, source, packages, startedAt, finishedAt?, done, total, current, step, steps, ok, message?,
-hint?, rebootNeeded, log[last 300 lines]}`. The root bridge writes it to `/run/linuxadmin/software-transaction.json`
-(0600, root only) and a summary with an empty `log` to `/run/linuxadmin/software-transaction.public.json` (0644);
-user-scope Flatpak runs write `$XDG_RUNTIME_DIR/linuxadmin-software-<uid>.json` (no file when `XDG_RUNTIME_DIR` is
+hint?, rebootNeeded, log[last 300 lines]}`. The root bridge writes it to `/run/ervisio/software-transaction.json`
+(0600, root only) and a summary with an empty `log` to `/run/ervisio/software-transaction.public.json` (0644);
+user-scope Flatpak runs write `$XDG_RUNTIME_DIR/ervisio-software-<uid>.json` (no file when `XDG_RUNTIME_DIR` is
 unset or not a private folder). Files are written to a fresh `O_EXCL` name and renamed into place. Readers open them
 with `O_NOFOLLOW` and ignore anything that is not a regular file of the expected owner (root, or the user). The user
 bridge therefore shows a root transaction's progress without its log; the root bridge returns the full log.
@@ -176,8 +176,8 @@ Same events, for Flatpak apps in the user's own installation (no administrator r
 
 ### `software.schedule` {at: "03:00" | null} (admin) → {at}
 Creates (or, with `null`, removes) the systemd timer pair
-`/etc/systemd/system/linuxadmin-update.timer` (`OnCalendar=*-*-* HH:MM:00`, `Persistent=true`) and
-`linuxadmin-update.service` (oneshot: the same commands as "Update all"; Flatpak steps are prefixed `-` so
+`/etc/systemd/system/ervisio-update.timer` (`OnCalendar=*-*-* HH:MM:00`, `Persistent=true`) and
+`ervisio-update.service` (oneshot: the same commands as "Update all"; Flatpak steps are prefixed `-` so
 their failure does not fail the run), then `daemon-reload` and `enable --now`. `at` is 24-hour server time
 (`invalid` otherwise). The scheduled time shows up as `schedule.at` in `software.summary`. To inspect:
-`systemctl list-timers linuxadmin-update.timer`, `journalctl -u linuxadmin-update.service`.
+`systemctl list-timers ervisio-update.timer`, `journalctl -u ervisio-update.service`.

@@ -1,4 +1,4 @@
-# Auth & session API (linuxadmind)
+# Auth & session API (ervisiod)
 
 All responses are JSON. Errors always look like
 `{"error":{"code":"…","message":"…","data":{…}?}}` with an HTTP status derived from the code:
@@ -10,14 +10,14 @@ All responses are JSON. Errors always look like
 | `forbidden` | 403 (429 when rate limited) | | `unavailable` | 503 |
 | `not_found` | 404 | | `internal` | 500 |
 
-**Every POST** must send `X-Requested-With: linuxadmin` and `Content-Type: application/json`
+**Every POST** must send `X-Requested-With: ervisio` and `Content-Type: application/json`
 (uploads: any content type). A present `Origin` header must match the host (in `--dev` the
 Vite dev server given with `--vite` is accepted too; other local ports are not). Missing header → 403 `forbidden`.
 In `--dev` every request whose `Host` is not `localhost`, `127.x.x.x` or `[::1]` (any port) gets 421
 (DNS-rebinding protection).
 On session routes the session is checked first, so a signed-out POST gets 401.
 
-The session cookie is `la_session` (HttpOnly, SameSite=Strict, Secure except in `--dev` and, in `tls.mode = "http"`, for plain-HTTP requests as described in `docs/api/config.md`).
+The session cookie is `ervisio_session` (HttpOnly, SameSite=Strict, Secure except in `--dev` and, in `tls.mode = "http"`, for plain-HTTP requests as described in `docs/api/config.md`).
 Timestamps are **unix milliseconds**.
 
 ## `GET /api/public/host` (no auth)
@@ -63,8 +63,8 @@ knows a user name can lock that account for faillock's `unlock_time`, within the
 
 Sessions: each session has an idle timeout (`session.timeout`) and an absolute lifetime of 24 h
 (or `session.timeout` when longer and "stay signed in" was chosen). Outside `--dev`, the user
-bridge runs inside a PAM session (`pam_setcred` + `pam_open_session` of the `linuxadmin`
-service, falling back to `login`), opened by a root helper (`linuxadmind --pam-session-helper`)
+bridge runs inside a PAM session (`pam_setcred` + `pam_open_session` of the `ervisio`
+service, falling back to `login`), opened by a root helper (`ervisiod --pam-session-helper`)
 and closed when the bridge exits, so `pam_limits`, `pam_loginuid` and `pam_systemd` apply. In
 `--dev` (no root) no PAM session is opened. Every 60 s, on unlock and before a bridge restart the
 daemon checks the account again and ends the session (bridges stopped, WebSockets closed with
@@ -87,7 +87,7 @@ Request `{"user":"alice","host":"server.example:9090"}` (`host` = `location.host
 request's `Host` is used without it). 200:
 ```json
 {"nonce":"<43 chars base64url, 32 random bytes>",
- "challenge":"linuxadmin-ssh-auth-v1\nserver.example:9090\nalice\n<nonce>",
+ "challenge":"ervisio-ssh-auth-v1\nserver.example:9090\nalice\n<nonce>",
  "host":"server.example:9090","expires":1790879000000}
 ```
 The nonce is valid for 60 s, **once**, for this user name and this client address (the address the
@@ -105,7 +105,7 @@ not. At most 8 outstanding challenges per client key (older ones are dropped) an
 ### Signed message
 
 ```
-"linuxadmin-ssh-auth-v1" LF host LF user LF nonce        (UTF-8, no trailing newline)
+"ervisio-ssh-auth-v1" LF host LF user LF nonce        (UTF-8, no trailing newline)
 ```
 The client builds this text itself and refuses to sign when the server's `challenge` differs.
 Signature formats: `ssh-ed25519`; `ecdsa-sha2-nistp256/384/521` (SHA-256/384/512); for RSA keys
@@ -157,7 +157,7 @@ Failures:
 | 401 | `unauthenticated`, `data.reason:"challenge_invalid"` |
 | 400 | `invalid`, `data.reason:"unsupported_key"` |
 | 403 | `forbidden`, `data.reason:"ssh_keys_disabled"` / `"root_disabled"` / `"dev_mode_user"` |
-| 403 | `forbidden`, `data.reason:"not_allowed"`: "This account may not sign in to LinuxAdmin": the key signature verified and the key is listed, but the sign-in allowlist refuses the account. Only someone holding a key of the account sees it. |
+| 403 | `forbidden`, `data.reason:"not_allowed"`: "This account may not sign in to Ervisio": the key signature verified and the key is listed, but the sign-in allowlist refuses the account. Only someone holding a key of the account sees it. |
 | 429 / 503 | as for `/api/auth/login` (rate limit shared with password attempts, PAM slots) |
 
 Every refused key sign-in counts as a failed attempt in the same per-client limiter as passwords

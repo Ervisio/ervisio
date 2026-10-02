@@ -21,7 +21,7 @@ sources (`needsAdmin`, `journalReadable:false`).
 | `file:<abs path>` | a log file; the path must be absolute and clean (no `..`, `//`) |
 
 `watchers` (optional array on every method, `[{path,name,format,notify,keepDays}]`) gives names and formats to
-`file:` sources. When it is missing the bridge reads `logs.watchers` from `~/.config/linuxadmin/prefs.json`.
+`file:` sources. When it is missing the bridge reads `logs.watchers` from `~/.config/ervisio/prefs.json`.
 `format` is `plain` (no level detection), `auto` (default: JSON lines are recognised, other lines by keywords)
 or `json`.
 

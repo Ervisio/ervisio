@@ -1,5 +1,9 @@
 # LinuxAdmin security review: remediation checklist
 
+> Written when the product was called LinuxAdmin (now Ervisio). File names, paths, the cookie (`la_session`) and the
+> header value (`X-Requested-With: linuxadmin`) below are the names of that time; the code is the same under the new
+> names (`docs/RELEASING.md`, "Rename transition").
+
 Date: 2026-10-01. Scope: `server/` (daemon, bridge, rpc, pam, sys, all modules) and `web/src` (API client,
 plugin loader, HTML sinks). I traced every item from the HTTP/WebSocket entry point to the code that acts on
 the system. Items marked **needs check** depend on distribution or sudo defaults that I could not confirm from

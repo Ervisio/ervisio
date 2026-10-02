@@ -1,7 +1,7 @@
 # Brief for section agents
 
-You build ONE section of LinuxAdmin end to end (Go bridge module + React page), in
-/home/fonlogen/Documenti/LinuxAdmin. Seven other agents build the other sections at the same
+You build ONE section of Ervisio end to end (Go bridge module + React page), in
+/home/fonlogen/Documenti/Ervisio. Seven other agents build the other sections at the same
 time in the same working tree, so stay strictly inside your files.
 
 ## Read first
@@ -36,13 +36,13 @@ Do not commit or push; the coordinator does.
 ## Testing end to end
 - Your test ports: daemon 127.0.0.1:<port>, Vite 5<port-last-3> (given below).
 - `server/bin`-free run: build both binaries into your scratch dir, then
-  `<scratch>/bin/linuxadmind --dev --dev-insecure-noauth --listen 127.0.0.1:<port> --bridge <scratch>/bin/linuxadmin-bridge`
+  `<scratch>/bin/ervisiod --dev --dev-insecure-noauth --listen 127.0.0.1:<port> --bridge <scratch>/bin/ervisio-bridge`
   (from the repo root). The daemon prints a one-time sign-in URL: open it in the browser, or run
   `go run ./server/tools/devclient login '<url>'` and pass the printed token with `-cookie` (or
-  `LA_SESSION=`) to `go run ./server/tools/devclient`, or as `Cookie: la_session=<token>` with curl.
+  `ERVISIO_SESSION=`) to `go run ./server/tools/devclient`, or as `Cookie: ervisio_session=<token>` with curl.
 - You cannot sudo (no password): admin methods can be tested only for the needs_admin path;
   test their logic with unit tests and by reading command output.
-- Web: `cd web && LINUXADMIN_API=http://127.0.0.1:<port> npx vite --port <vite-port>`; take
+- Web: `cd web && ERVISIO_API=http://127.0.0.1:<port> npx vite --port <vite-port>`; take
   screenshots with Playwright's Chromium (already in ~/.cache/ms-playwright; `npx playwright`
   is available through node_modules or install nothing — use `node` + `playwright-core` if
   present, else skip screenshots) at 1280×800 and 390×844, and compare with the mock-up.

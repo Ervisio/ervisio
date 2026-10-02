@@ -9,18 +9,19 @@ installed from a package are updated by their package manager instead (`docs/PAC
 ```
 git tag v1.2.0 ──▶ .github/workflows/release.yml
                      web (npm ci, build) ──┐
-                     build amd64 (ubuntu-24.04)     ──▶ linuxadmin-1.2.0-linux-amd64.tar.gz
-                                                        + linuxadmin_1.2.0_amd64.deb, linuxadmin-1.2.0-1.x86_64.rpm (nfpm)
-                     build arm64 (ubuntu-24.04-arm) ──▶ linuxadmin-1.2.0-linux-arm64.tar.gz
-                                                        + linuxadmin_1.2.0_arm64.deb, linuxadmin-1.2.0-1.aarch64.rpm
-                     release: SHA256SUMS (all six files) + SHA256SUMS.sig (RELEASE_SIGNING_KEY) ──▶ GitHub release
+                     build amd64 (ubuntu-24.04)     ──▶ ervisio-1.2.0-linux-amd64.tar.gz
+                                                        + ervisio_1.2.0_amd64.deb, ervisio-1.2.0-1.x86_64.rpm (nfpm)
+                     build arm64 (ubuntu-24.04-arm) ──▶ ervisio-1.2.0-linux-arm64.tar.gz
+                                                        + ervisio_1.2.0_arm64.deb, ervisio-1.2.0-1.aarch64.rpm
+                     + linuxadmin-1.2.0-linux-{amd64,arm64}.tar.gz (compatibility archives, see "Rename transition")
+                     release: SHA256SUMS (all eight files) + SHA256SUMS.sig (RELEASE_SIGNING_KEY) ──▶ GitHub release
                      aur (only with the AUR_SSH_KEY secret): PKGBUILDs ──▶ aur.archlinux.org
 
 install.sh ──▶ api.github.com/…/releases/latest → download → openssl: verify signature + sha256 → versioned layout
 
-console ──updates.check──▶ api.github.com/repos/Fonlogen/LinuxAdmin/releases/latest   (cached 1 h, ETag)
+console ──updates.check──▶ api.github.com/repos/ervisio/ervisio/releases/latest   (cached 1 h, ETag)
         ──updates.apply──▶ download → verify signature + sha256 → extract → run --version → install
-                           → systemd-run linuxadmind --apply-update 1.2.0
+                           → systemd-run ervisiod --apply-update 1.2.0
                               → switch `current` → restart → /api/health answers 1.2.0 within 30 s?
                                  yes: keep, previous = old version     no: switch back, restart old
 ```
@@ -48,21 +49,21 @@ From the repository folder, on the maintainer's machine:
 gh secret set RELEASE_SIGNING_KEY < ~/.config/linuxadmin-signing/release.key
 ```
 
-(add `--repo Fonlogen/LinuxAdmin` when running it elsewhere). The workflow writes the secret to a temporary 0600 file,
+(add `--repo ervisio/ervisio` when running it elsewhere). The workflow writes the secret to a temporary 0600 file,
 signs, deletes the file, and then verifies the signature against the key **embedded in the code**: if the secret is
 not the key the consoles trust, the release job fails before anything is published.
 
 ### Install every machine once with the versioned layout
 
 Self-update needs the layout below. Machines installed before this feature (flat layout: a real
-`/usr/bin/linuxadmind`, the web app in `/usr/share/linuxadmin/web`) must be reinstalled once:
+`/usr/bin/ervisiod`, the web app in `/usr/share/ervisio/web`) must be reinstalled once:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Fonlogen/LinuxAdmin/main/install.sh | sudo sh
+curl -fsSL https://raw.githubusercontent.com/ervisio/ervisio/main/install.sh | sudo sh
 ```
 
 or from a local build (`make build VERSION=0.1.0` as your user, then `sudo ./packaging/install-dev.sh`), or from a
-release archive: `tar xzf linuxadmin-1.2.0-linux-amd64.tar.gz && sudo ./linuxadmin-1.2.0-linux-amd64/packaging/install.sh`.
+release archive: `tar xzf ervisio-1.2.0-linux-amd64.tar.gz && sudo ./ervisio-1.2.0-linux-amd64/packaging/install.sh`.
 (A flat install running a build that already contains the updater is migrated by its first update: the flat files
 are copied into `versions/<its version>` before the new one is installed.)
 
@@ -81,7 +82,7 @@ are copied into `versions/<its version>` before the new one is installed.)
    version:
 
    ```sh
-   git tag -a v1.2.0 -m "LinuxAdmin 1.2.0" -m "- Self-update from Settings › About"
+   git tag -a v1.2.0 -m "Ervisio 1.2.0" -m "- Self-update from Settings › About"
    git push origin v1.2.0
    gh run watch          # follow the Release workflow
    ```
@@ -89,12 +90,12 @@ are copied into `versions/<its version>` before the new one is installed.)
    * `vX.Y.Z` is a **stable** release, marked "latest": consoles on the `stable` channel (the default) offer it.
    * `vX.Y.Z-rc.1`, `vX.Y.Z-beta.2`… are **pre-releases**: only consoles with `updates.channel = "prerelease"` offer
      them. Ordering follows semver (`1.2.0-rc.1` < `1.2.0`).
-   * The version is injected into both binaries (`brand.Version`, `-ldflags -X`) without the `v`; `linuxadmind
+   * The version is injected into both binaries (`brand.Version`, `-ldflags -X`) without the `v`; `ervisiod
      --version` prints it.
 
-4. Check the result: the release has `linuxadmin-1.2.0-linux-{amd64,arm64}.tar.gz`,
-   `linuxadmin_1.2.0_{amd64,arm64}.deb`, `linuxadmin-1.2.0-1.{x86_64,aarch64}.rpm`, `SHA256SUMS` (listing all six) and
-   `SHA256SUMS.sig`. To verify by hand:
+4. Check the result: the release has `ervisio-1.2.0-linux-{amd64,arm64}.tar.gz`,
+   `ervisio_1.2.0_{amd64,arm64}.deb`, `ervisio-1.2.0-1.{x86_64,aarch64}.rpm`, the compatibility archives
+   `linuxadmin-1.2.0-linux-{amd64,arm64}.tar.gz`, `SHA256SUMS` (listing all eight) and `SHA256SUMS.sig`. To verify by hand:
 
    ```sh
    gh release download v1.2.0 -D /tmp/r && cd server && go run ./tools/release-sign -verify -dir /tmp/r /tmp/r/SHA256SUMS
@@ -109,39 +110,39 @@ A tag that fails the workflow publishes nothing; fix, delete the tag (`git push 
 v1.2.0`) and tag again. Never re-publish different files under a version that consoles may already have installed:
 bump the patch version instead.
 
-`make dist VERSION=1.2.0` builds the same archive locally for this machine's architecture (into `dist/`), unsigned.
+`make dist VERSION=1.2.0` builds the same archives locally for this machine's architecture (into `dist/`), unsigned.
 
 ## What a console does
 
 ### Install layout
 
 ```
-/usr/lib/linuxadmin/versions/<version>/{bin/linuxadmind, bin/linuxadmin-bridge, web/, plugins/, packaging/, VERSION}
-/usr/lib/linuxadmin/current  -> versions/<version>       the running version
-/usr/lib/linuxadmin/previous -> versions/<version>       kept for rollback (only these two are kept)
-/usr/lib/linuxadmin/linuxadmin-bridge -> current/bin/linuxadmin-bridge   (old unit files)
-/usr/bin/linuxadmind -> /usr/lib/linuxadmin/current/bin/linuxadmind
-/var/lib/linuxadmin/updates/           last.json (0644), lock, staging/ (0700, downloads)
+/usr/lib/ervisio/versions/<version>/{bin/ervisiod, bin/ervisio-bridge, web/, plugins/, packaging/, VERSION}
+/usr/lib/ervisio/current  -> versions/<version>       the running version
+/usr/lib/ervisio/previous -> versions/<version>       kept for rollback (only these two are kept)
+/usr/lib/ervisio/ervisio-bridge -> current/bin/ervisio-bridge   (old unit files)
+/usr/bin/ervisiod -> /usr/lib/ervisio/current/bin/ervisiod
+/var/lib/ervisio/updates/           last.json (0644), lock, staging/ (0700, downloads)
 ```
 
-The unit runs `/usr/bin/linuxadmind`; the daemon resolves its real path and takes the bridge, the web app and the
+The unit runs `/usr/bin/ervisiod`; the daemon resolves its real path and takes the bridge, the web app and the
 packaged plugins from the same version folder, so a running daemon never mixes versions.
 
 ### Update (`updates.apply`, admin)
 
-1. Refuses when this copy is not installed in `/usr/lib/linuxadmin` (a dev build), in `--dev`, while another update
+1. Refuses when this copy is not installed in `/usr/lib/ervisio` (a dev build), in `--dev`, while another update
    runs, or while the Software section runs a package transaction (the restart would kill it).
 2. Downloads `SHA256SUMS` and `SHA256SUMS.sig` (HTTPS, GitHub hosts only, size limits), verifies the signature with
-   the embedded key, then downloads `linuxadmin-<v>-linux-<arch>.tar.gz` (≤ 200 MB) and checks its sha256.
+   the embedded key, then downloads `ervisio-<v>-linux-<arch>.tar.gz` (≤ 200 MB) and checks its sha256.
 3. Extracts it into `versions/.<v>.partial-*`: only regular files and folders under the one top-level folder; no
    `..`, absolute names, links or devices; at most 20 000 entries, 256 MB per file, 1 GB in total. Checks
-   `VERSION` and runs `bin/linuxadmind --version` and `bin/linuxadmin-bridge --version` (they must print the
+   `VERSION` and runs `bin/ervisiod --version` and `bin/ervisio-bridge --version` (they must print the
    version: proves they run on this machine).
-4. Renames it to `versions/<v>` and starts `systemd-run --unit=linuxadmin-update-<v>-<time> --collect
-   /usr/lib/linuxadmin/versions/<v>/bin/linuxadmind --apply-update <v> --kind update` — a transient unit outside
-   `linuxadmin.service`, so it survives the restart.
+4. Renames it to `versions/<v>` and starts `systemd-run --unit=ervisio-update-<v>-<time> --collect
+   /usr/lib/ervisio/versions/<v>/bin/ervisiod --apply-update <v> --kind update` — a transient unit outside
+   `ervisio.service`, so it survives the restart.
 5. The helper points `current` at `versions/<v>` (temporary symlink renamed over the old one: atomic), runs
-   `systemctl restart linuxadmin.service` and polls `https://127.0.0.1:<port>/api/health` until it answers
+   `systemctl restart ervisio.service` and polls `https://127.0.0.1:<port>/api/health` until it answers
    `{"version":"<v>"}`. Within 30 s: `previous` becomes the old version and older folders are deleted. Otherwise:
    `current` goes back, the service restarts on the old version, the new folder is deleted, and `last.json` says
    `rolled-back`.
@@ -157,16 +158,16 @@ live in the daemon's memory, so **everyone has to sign in again** after an updat
 * By hand on the machine, if the web console is unreachable:
 
   ```sh
-  sudo ln -sfn versions/1.1.0 /usr/lib/linuxadmin/current.tmp && sudo mv -T /usr/lib/linuxadmin/current.tmp /usr/lib/linuxadmin/current
-  sudo systemctl restart linuxadmin
+  sudo ln -sfn versions/1.1.0 /usr/lib/ervisio/current.tmp && sudo mv -T /usr/lib/ervisio/current.tmp /usr/lib/ervisio/current
+  sudo systemctl restart ervisio
   ```
 
-Logs: `journalctl -u linuxadmin` (daemon, automatic installs) and `journalctl -u 'linuxadmin-update-*'` (helper).
-The last result is in `/var/lib/linuxadmin/updates/last.json` and in Settings › About.
+Logs: `journalctl -u ervisio` (daemon, automatic installs) and `journalctl -u 'ervisio-update-*'` (helper).
+The last result is in `/var/lib/ervisio/updates/last.json` and in Settings › About.
 
 ### Automatic checks and installs
 
-`[updates]` in `/etc/linuxadmin/linuxadmin.conf` (`docs/api/config.md`), editable in Settings › About:
+`[updates]` in `/etc/ervisio/ervisio.conf` (`docs/api/config.md`), editable in Settings › About:
 
 ```toml
 [updates]
@@ -178,6 +179,137 @@ auto_install_at = "03:30"
 
 The automatic install runs in the daemon (root) with the same code as the button, logs to the journal, writes
 `last.json`, and skips the day when a package transaction is running.
+
+## Rename transition
+
+The product was called **LinuxAdmin** up to 0.2.0 and lived in `Fonlogen/LinuxAdmin`. From 0.3.0 it is
+**Ervisio**, in `ervisio/ervisio`: new names for the binaries (`ervisiod`, `ervisio-bridge`), the unit
+(`ervisio.service`), the PAM service and every folder (`/etc/ervisio`, `/usr/lib/ervisio`, `/var/lib/ervisio`,
+`/usr/share/ervisio`, `~/.config/ervisio`). Machines running LinuxAdmin must get there without anyone logging in to
+them, and must be able to go back. The code is `server/internal/legacy`; its tests run the whole move in a fake
+root (`legacy_test.go`).
+
+### What does not change
+
+* **The signature prefixes.** Releases are signed over `"linuxadmin-release-v1\n" + SHA256SUMS` and plugins over
+  `"linuxadmin-plugin-v1\n" + manifest`. LinuxAdmin consoles verify the release that moves them with the first, and
+  every plugin and catalog signed so far uses the second, so both stay as historical constants (`sigPrefix` in
+  `update/sign.go`, `signaturePrefix` in `plugins/sign.go`, the `printf` in `install.sh`). Change them only together
+  with a key rotation. The same keys sign (`~/.config/linuxadmin-signing/` on the maintainer's machine is just a
+  folder name).
+* **The SSH key sign-in prefix** did change (`ervisio-ssh-auth-v1`): server and browser are released together. A
+  tab still running LinuxAdmin's page reloads after the update anyway.
+* **The plugin frame protocol** (`la: 'plugin'` in postMessage) and the Docker plugin's `la.autoupdate` labels stay:
+  installed plugins and existing containers use them.
+* **The port, address, certificate and configuration**: everything is copied.
+
+### How LinuxAdmin's updater reaches Ervisio
+
+A LinuxAdmin console (0.1.x or 0.2.0) asks `api.github.com/repos/Fonlogen/LinuxAdmin/releases/latest`. After the
+repository moves to `ervisio/ervisio`, GitHub answers that with `301` to `/repositories/<id>/releases/latest`; Go's
+HTTP client follows it for a GET and keeps the headers (`TestCheckerFollowsMovedRepository`), and the asset URLs of
+the answer are `github.com/ervisio/ervisio/releases/download/…`, which the downloader accepts. The updater then
+looks for `linuxadmin-<v>-linux-<arch>.tar.gz` with a `linuxadmin-<v>-linux-<arch>/` folder holding
+`bin/linuxadmind`, `bin/linuxadmin-bridge`, `web/index.html` and `VERSION`, checks it against the signed
+`SHA256SUMS`, runs both binaries with `--version`, installs the folder as `/usr/lib/linuxadmin/versions/<v>` and
+starts **the new version's** binary as its switch helper:
+
+```
+systemd-run --unit=linuxadmin-update-<v>-<time> /usr/lib/linuxadmin/versions/<v>/bin/linuxadmind --apply-update <v> --kind update
+```
+
+So every release publishes a **compatibility archive**, `linuxadmin-<v>-linux-<arch>.tar.gz`
+(`packaging/build-release.sh`): the same files as the Ervisio archive with the binaries named `linuxadmind` and
+`linuxadmin-bridge`, plus `packaging/linuxadmin.service` and `packaging/pam.d/linuxadmin.*` for LinuxAdmin's
+`install.sh --version <v>`. It is listed in `SHA256SUMS`. Keep publishing it for as long as LinuxAdmin consoles may
+still be around: one that was offline for a year updates to whatever is latest then. (The 0.2.0 updater was run
+against a real compatibility archive, with a test key, from the `v0.2.0` sources: it downloads, verifies,
+extracts, probes and launches it unchanged.)
+
+### The transition
+
+The binary started as `--apply-update` from `/usr/lib/linuxadmin/versions/<v>/bin/` sees that it runs from
+LinuxAdmin's layout and performs the transition (`legacy.Transition`) instead of a plain switch. It runs in the
+transient unit, outside both services:
+
+1. Installs `/usr/lib/linuxadmin/versions/<v>` as `/usr/lib/ervisio/versions/<v>` (binaries renamed),
+   `current -> versions/<v>`, `/usr/bin/ervisiod`.
+2. Copies the data, leaving an `.imported-from-linuxadmin` marker in the copied folders:
+   `/etc/linuxadmin` → `/etc/ervisio` (`linuxadmin.conf` → `ervisio.conf`, paths inside `/etc/linuxadmin/` and
+   comments rewritten, `tls/` as it is), `/var/lib/linuxadmin` → `/var/lib/ervisio` (without the download staging
+   folder), `/etc/pam.d/linuxadmin` → `/etc/pam.d/ervisio` (comments renamed when LinuxAdmin wrote it, as it is
+   otherwise), `linuxadmin.service.d/*.conf` → `ervisio.service.d/`. A destination that already holds Ervisio files
+   is never overwritten; empty folders (what a package creates) do not count.
+3. Writes `/etc/systemd/system/ervisio.service` from the release (with install.sh's header), `daemon-reload`.
+4. Stops `linuxadmin.service`, starts `ervisio.service` (it also has `Conflicts=linuxadmin.service`: one port, one
+   service) and waits up to 30 s for `/api/health` to answer `<v>`.
+5. **Healthy:** enables `ervisio.service` and disables `linuxadmin.service` (only if LinuxAdmin was enabled), removes
+   the markers, writes `/etc/linuxadmin/MOVED-TO-ERVISIO.txt`, moves the scheduled update timer
+   (`linuxadmin-update.*` → `ervisio-update.*`), writes `last.json` (`ok`) in both update folders.
+   **Not healthy:** stops `ervisio.service`, starts `linuxadmin.service` again, removes everything steps 1-3
+   created (the marked folders, the unit, `/usr/lib/ervisio`, `/usr/bin/ervisiod`), drops
+   `/usr/lib/linuxadmin/versions/<v>` as LinuxAdmin's own rollback would, and writes `rolled-back` into LinuxAdmin's
+   `last.json`, which its Settings › About shows.
+
+LinuxAdmin's page in the browser polls `/api/health` until it answers `<v>` (the same port), then reloads and gets
+Ervisio's page. Sessions live in memory, so everyone signs in again, as after any update. Each user's bridge copies
+`~/.config/linuxadmin` to `~/.config/ervisio` at their next sign-in (preferences, the Docker plugin's settings), and
+the page moves the browser's `la.*` localStorage keys to `ervisio.*` once.
+
+Why this design: the helper is the only code of the new version that LinuxAdmin's updater runs **outside** its
+service, as root, before anything is switched, and it is the code that decides what "healthy" means and how to roll
+back. Keeping LinuxAdmin's files untouched (copy, never move; `current` of the LinuxAdmin layout is not changed)
+makes the rollback a plain `systemctl start linuxadmin`, and makes every step safe to repeat:
+
+* Power cut or crash in the middle: `linuxadmin.service` is still enabled (it is disabled only after Ervisio
+  answered), so the machine boots LinuxAdmin; the marked copies are replaced by the next attempt, and a daemon that
+  starts meanwhile leaves a marked import alone.
+* After a failure LinuxAdmin's updater offers the release again; the next attempt starts from scratch.
+
+### Other ways in
+
+* **A daemon started from LinuxAdmin's layout** by `linuxadmin.service` (LinuxAdmin's `install.sh --version <v>` with
+  the compatibility archive, or a manual switch): it serves as usual, imports the data on start, and after 3 seconds
+  starts the same transition in a transient unit (`ervisiod --transition <v>`). A failed transition is recorded in
+  `/var/lib/linuxadmin/updates/ervisio-transition-failed.json` and not retried on every start for that version; run
+  `ervisiod --transition <v>` as root to retry.
+* **Ervisio's `install.sh`** on a machine with LinuxAdmin: reads LinuxAdmin's configuration for its questions,
+  installs Ervisio, runs `ervisiod --migrate-legacy` (the copy above, final at once, plus the timer), disables
+  `linuxadmin.service`, starts `ervisio.service`, and once it runs removes LinuxAdmin's programs, unit and links with
+  `ervisiod --remove-legacy` (data kept). A packaged LinuxAdmin is refused with a pointer to the `ervisio` package.
+* **Packages:** the `ervisio` `.deb` has `Replaces/Conflicts/Provides: linuxadmin` (dpkg removes `linuxadmin`,
+  keeping its configuration), the `.rpm` has `Obsoletes: linuxadmin < <v>` and `Provides: linuxadmin = <v>`; both
+  post-install scripts run `ervisiod --migrate-legacy` before anything else, start the service (deferred until the
+  package manager exits when it runs inside the console's terminal) and remove a LinuxAdmin made by `install.sh`.
+  The AUR packages `ervisio-bin` and `ervisio` conflict with and replace `linuxadmin-bin` and `linuxadmin`; their
+  `post_install` migrates.
+* **Anything else:** `ervisiod` started as root with the default configuration path copies LinuxAdmin's data when
+  `/etc/ervisio` holds no files yet (`legacy.ImportOnStart`).
+
+### Going back, and cleaning up
+
+```sh
+sudo systemctl disable --now ervisio && sudo systemctl enable --now linuxadmin   # LinuxAdmin, as it was before the move
+sudo ervisiod --remove-legacy            # LinuxAdmin's programs, unit, links, PAM file (when it wrote it), cache
+sudo ervisiod --remove-legacy --purge    # also /etc/linuxadmin and /var/lib/linuxadmin
+```
+
+Changes made in Ervisio are not copied back. `--remove-legacy` refuses while `linuxadmin.service` runs, while a
+transition is unfinished, and for a packaged LinuxAdmin (its package manager removes it).
+
+### Checklist for the first Ervisio release
+
+1. Transfer `Fonlogen/LinuxAdmin` to the `ervisio` organization and rename it `ervisio` (Settings › Transfer). GitHub
+   keeps redirecting the old web, git, raw and API URLs as long as no new repository takes the old name: **never
+   create a new `Fonlogen/LinuxAdmin`**. `raw.githubusercontent.com/Fonlogen/LinuxAdmin/main/install.sh` keeps
+   working through the redirect and serves the new `install.sh`.
+2. Set `RELEASE_SIGNING_KEY` (and `AUR_SSH_KEY`) in the new repository if they did not move with it
+   (`gh secret list --repo ervisio/ervisio`).
+3. Sign `plugins/docker` again (the manifest changed) and commit `manifest.sig`.
+4. Tag `v0.3.0`. Check that the release has the eight files, then on a LinuxAdmin 0.2.0 machine: Settings › About
+   offers 0.3.0, the update ends on Ervisio, `/etc/linuxadmin/MOVED-TO-ERVISIO.txt` exists.
+5. AUR: create `ervisio-bin` and `ervisio`, run `packaging/arch/update-pkgbuild.sh 0.3.0`, publish; mark
+   `linuxadmin-bin` and `linuxadmin` for deletion or merge into the new ones (an AUR request), once published.
 
 ## Rotating the key
 
@@ -213,3 +345,4 @@ the secret to the new key only together with that commit.
 * 2026-10-01: release key generated (`eYuaHtzK…`); self-update and the release workflow added.
 * 2026-10-01: `install.sh`, `.deb`/`.rpm` packages (nfpm), AUR PKGBUILDs, managed-install marker. First release with
   packages: 0.1.1.
+* 2026-10-02: LinuxAdmin renamed Ervisio (0.3.0); compatibility archives and the rename transition (see above).

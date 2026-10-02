@@ -1,6 +1,6 @@
 # File transfer streams (files.readStream / files.writeStream)
 
-linuxadmind implements `GET /api/files/download` and `POST /api/files/upload` by streaming
+ervisiod implements `GET /api/files/download` and `POST /api/files/upload` by streaming
 to/from two **bridge stream methods** that the Files section implements in
 `server/internal/modules/files`. Both are `rpc.User` level (the daemon sends them to the root
 bridge when the request has `admin=1`). The daemon tests (`server/internal/server/files_test.go`)
@@ -50,5 +50,5 @@ Implementations should write to a temporary file in the target directory and ren
 `eof`, removing it if the stream is cancelled (ctx done / Input closed).
 
 HTTP side: `POST /api/files/upload?path=/abs/target&admin=0|1&overwrite=0|1`, raw body,
-header `X-Requested-With: linuxadmin` → 200 `{"result":{"done":true,"size":…,"path":…}}` or an
+header `X-Requested-With: ervisio` → 200 `{"result":{"done":true,"size":…,"path":…}}` or an
 error (`conflict` → 409, …).

@@ -5,7 +5,7 @@ in `web/src/plugins`, SDK in `web/PLUGIN-SDK.md`). Error codes follow `docs/ARCH
 
 ## Isolation
 
-Plugin code never runs in the app's origin. linuxadmind serves:
+Plugin code never runs in the app's origin. ervisiod serves:
 
 | Path | What | Checks |
 |---|---|---|
@@ -45,12 +45,12 @@ when the frame fails, navigates away or is removed.
 
 | Location (`location`) | Folder | Notes |
 |---|---|---|
-| `system` | `/usr/share/linuxadmin/plugins/<id>` | packaged, removed by the package manager |
-| `installed` | `/var/lib/linuxadmin/plugins/<id>` | from Browse / `plugins.install`, removable |
+| `system` | `/usr/share/ervisio/plugins/<id>` | packaged, removed by the package manager |
+| `installed` | `/var/lib/ervisio/plugins/<id>` | from Browse / `plugins.install`, removable |
 | `dev` | `./plugins` of the daemon's working directory (daemon `--dev` only, passed to the bridge as `--dev --dev-plugins <dir>`), plus folders from `plugins.loadDev` | loaded folders only when `plugins.dev = true` or the daemon runs in `--dev` |
 
 The folder name must equal the manifest `id`. On duplicate ids the order is dev, system, installed.
-Enabled state: `/var/lib/linuxadmin/plugins-state.json` (`{"enabled":{"docker":false}}`, missing = enabled).
+Enabled state: `/var/lib/ervisio/plugins-state.json` (`{"enabled":{"docker":false}}`, missing = enabled).
 
 ## manifest.json
 
@@ -73,7 +73,7 @@ Strict: unknown fields are rejected.
               "maxBody":8388608,"timeoutSec":60}],
     "files": {"read": ["/srv","~/projects"],
               "write": [{"path":"/opt/stacks","admin":true,"adminUnlessGroup":"docker"},
-                        {"path":"~/.config/linuxadmin/plugins/docker","create":true}]},
+                        {"path":"~/.config/ervisio/plugins/docker","create":true}]},
     "sockets": ["/var/run/docker.sock"],
     "network": ["example.org"]
   },
@@ -131,7 +131,7 @@ canonical form is the JSON re-encoded with sorted keys and no whitespace. Becaus
 other file in `files`, the signature covers the whole folder. Verification also fails when a file differs from its hash,
 when a listed file is missing, or when the folder holds a file that is not listed.
 
-The trusted key is `plugins.TeamPublicKey` in `sign.go`, the public half of the LinuxAdmin team key. The private key
+The trusted key is `plugins.TeamPublicKey` in `sign.go`, the public half of the Ervisio team key. The private key
 is never in the repository: where it lives, who may use it and how to rotate it is in `docs/PLUGIN-SIGNING.md`.
 The first-party `plugins/docker` is signed with it (`TestShippedDockerSigned` checks this).
 
@@ -143,7 +143,7 @@ plugin-sign -verify plugins/docker            # against the embedded key (or -pu
 ```
 
 `plugins.allow_unsigned = false` (config, **the default**): only plugins with a valid signature are listed as enabled, run
-commands, are served or install. Exception: plugins in the dev location (the repository's `./plugins` under `linuxadmind
+commands, are served or install. Exception: plugins in the dev location (the repository's `./plugins` under `ervisiod
 --dev`, or folders loaded with `plugins.loadDev`) run unsigned while developer mode is on; `plugins.list` marks them
 `devUnsigned` and the UI shows an "Unsigned, dev" badge. Present-but-invalid signatures are always refused at install
 time.
@@ -170,7 +170,7 @@ Other users only see plugins allowed by `visibleTo`.
 Params `{"id":"docker","enabled":false}` → `{id, enabled}`. `not_found` for an unknown id.
 
 ### `plugins.uninstall` (admin)
-Params `{"id"}` → `{id}`. Only plugins in `/var/lib/linuxadmin/plugins`; others → `forbidden`, unknown → `not_found`, bad id → `invalid`.
+Params `{"id"}` → `{id}`. Only plugins in `/var/lib/ervisio/plugins`; others → `forbidden`, unknown → `not_found`, bad id → `invalid`.
 
 ### `plugins.install` (admin)
 Params `{"source": "https://…/x.tar.gz" | "/abs/path/x.tar.gz", "sha256"?: "<hex>", "consent"?: <capabilities>}` → the new list entry.
@@ -184,9 +184,9 @@ Errors: `invalid` (bad source, archive, manifest, checksum), `forbidden`, `confl
 
 ### `plugins.catalog` (user)
 Params `{}` → `{"categories":[{id,name,icon,color}], "plugins":[{id,name,version,author,description,icon,color,category,verified,installs,featured?,notes?,source,sha256?,capabilities,contributes,visibleTo,installed,installedVersion?}], "warning"?}`.
-Sources: the first existing `catalog.json` of `./plugins` (dev), `/var/lib/linuxadmin/plugins`, `/usr/share/linuxadmin/plugins`
+Sources: the first existing `catalog.json` of `./plugins` (dev), `/var/lib/ervisio/plugins`, `/usr/share/ervisio/plugins`
 (the repo ships a sample in `plugins/catalog.json`), then, optionally, the https URL on the first line of
-`/etc/linuxadmin/plugins-catalog.url` (5 s timeout, 2 MiB, cached 5 min; entries override local ones by id; a failure only sets `warning`).
+`/etc/ervisio/plugins-catalog.url` (5 s timeout, 2 MiB, cached 5 min; entries override local ones by id; a failure only sets `warning`).
 Malformed entries are skipped.
 
 ### `plugins.exec` (user; admin commands need the root bridge)
@@ -270,7 +270,7 @@ user; any refusal is `not_found`. The daemon asks it before serving `/plugins/<i
 
 ### `plugins.loadDev` (user)
 Params `{"path":"~/projects/my-plugin"}` → `{path,id,name,linked,note?}`. Allowed only in dev mode (`plugins.dev = true` or daemon `--dev`),
-else `forbidden`. Validates the folder and remembers it in `~/.config/linuxadmin/plugins-dev.json`; `linked` is always true
+else `forbidden`. Validates the folder and remembers it in `~/.config/ervisio/plugins-dev.json`; `linked` is always true
 (kept for older clients). `conflict` when the id exists as a system/installed plugin. Works in production too (with `plugins.dev = true`):
 the daemon serves `/plugins/<id>/…` of a loaded folder through `plugins.devAsset` on the session's user bridge (see below).
 
@@ -279,6 +279,6 @@ Params `{"path"}` → `{path}`. Forgets the folder.
 
 ### `plugins.devAsset` (stream, user; used by the daemon only)
 Params `{"id","file"}`. When `/plugins/<id>/<file>` is not found in the packaged/installed (and, in `--dev`, the repo) folders,
-linuxadmind opens this stream on the requesting session's user bridge. The bridge looks the id up among the folders that user loaded
+ervisiod opens this stream on the requesting session's user bridge. The bridge looks the id up among the folders that user loaded
 with `plugins.loadDev` (developer mode must be on), opens the file through `os.Root` (no `..`, absolute paths or symlinks out of the
 folder) with the user's own rights, and sends `{"name","size","mime"}` then base64 chunks (16 MiB max). Any failure is `not_found`.

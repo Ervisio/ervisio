@@ -1,9 +1,9 @@
 # Architecture
 
-Working name: **LinuxAdmin**. The brand string lives in one place per side
+Working name: **Ervisio**. The brand string lives in one place per side
 (`server/internal/brand/brand.go`, `web/src/brand.ts`) so a rename is a small change.
-Identifiers: Go module `github.com/Fonlogen/LinuxAdmin/server`, binaries `linuxadmind` and
-`linuxadmin-bridge`, config `/etc/linuxadmin/linuxadmin.conf`, per-user data `~/.config/linuxadmin/`.
+Identifiers: Go module `github.com/ervisio/ervisio/server`, binaries `ervisiod` and
+`ervisio-bridge`, config `/etc/ervisio/ervisio.conf`, per-user data `~/.config/ervisio/`.
 
 The visual design is fixed: see `docs/design/index.html` (approved screens) and the rules in
 `docs/DESIGN-RULES.md`. Build what the screens show.
@@ -11,20 +11,20 @@ The visual design is fixed: see `docs/design/index.html` (approved screens) and 
 ## Processes
 
 ```
-browser ──HTTPS/WS──▶ linuxadmind (root, one per machine)
+browser ──HTTPS/WS──▶ ervisiod (root, one per machine)
                         │  PAM login, sessions, routing, static files
-                        ├─ stdio JSON ─▶ linuxadmin-bridge  (runs as the logged-in user)
-                        └─ stdio JSON ─▶ linuxadmin-bridge  (runs as root via `sudo -S`, only after "unlock")
+                        ├─ stdio JSON ─▶ ervisio-bridge  (runs as the logged-in user)
+                        └─ stdio JSON ─▶ ervisio-bridge  (runs as root via `sudo -S`, only after "unlock")
 ```
 
-- **linuxadmind** (`server/cmd/linuxadmind`): HTTP(S) server on `:9090`, serves the built web app,
-  authenticates with PAM, keeps sessions (cookie `la_session`, HttpOnly, SameSite=Strict),
+- **ervisiod** (`server/cmd/ervisiod`): HTTP(S) server on `:9090`, serves the built web app,
+  authenticates with PAM, keeps sessions (cookie `ervisio_session`, HttpOnly, SameSite=Strict),
   spawns one *user bridge* per session with the user's uid/gid/groups, and routes API calls and
   WebSocket streams to it. It never touches the system on behalf of a user itself.
-- **linuxadmin-bridge** (`server/cmd/linuxadmin-bridge`): does all the system work (systemd, files,
+- **ervisio-bridge** (`server/cmd/ervisio-bridge`): does all the system work (systemd, files,
   journal, packages, users...). Talks newline-delimited JSON on stdin/stdout.
-- **Admin rights (sudo model)**: when the user unlocks, linuxadmind starts a second bridge with
-  `sudo -S -p '' -- /path/linuxadmin-bridge --admin` *as the user*, writing the password to stdin.
+- **Admin rights (sudo model)**: when the user unlocks, ervisiod starts a second bridge with
+  `sudo -S -p '' -- /path/ervisio-bridge --admin` *as the user*, writing the password to stdin.
   sudoers decides: if the user may not sudo, unlock fails with `forbidden`. The root bridge is
   stopped after 5 minutes without admin calls (configurable) or on lock/logout. Calls and streams
   in progress on it (a package transaction, an attached root terminal, a copy, a transfer) count
@@ -34,18 +34,18 @@ browser ──HTTPS/WS──▶ linuxadmind (root, one per machine)
 
 ### Dev mode
 
-`linuxadmind --dev` listens on `127.0.0.1:9090` without TLS, does not need root, only lets the
+`ervisiod --dev` listens on `127.0.0.1:9090` without TLS, does not need root, only lets the
 user running the daemon sign in (PAM still checks the password), spawns the bridge without
 changing uid, and proxies the web app to Vite (`http://127.0.0.1:5173`) unless `--web dist/`.
 It passes `--dev --dev-plugins <cwd>/plugins` to the bridges, so they know about dev mode explicitly.
 It answers only requests whose `Host` is a loopback name or address, and opens no PAM session
 around the bridge (that needs root; outside dev the daemon opens one through
-`linuxadmind --pam-session-helper`, see `docs/api/auth.md`). `--dev-insecure-noauth` (never as root)
+`ervisiod --pam-session-helper`, see `docs/api/auth.md`). `--dev-insecure-noauth` (never as root)
 prints a one-time sign-in URL instead of asking for a password.
 
 ## Wire protocols
 
-### Browser ↔ linuxadmind
+### Browser ↔ ervisiod
 
 | What | How |
 |---|---|
@@ -62,7 +62,7 @@ prints a one-time sign-in URL instead of asking for a password.
 | Plugin assets | `GET /plugins/<id>/<file>` (only plugins the user may use) |
 | Plugin frame | `GET /plugin-frame/<id>`: host page of a plugin's sandboxed iframe (`docs/api/plugins.md`, "Isolation") |
 
-Every POST must carry `X-Requested-With: linuxadmin` (CSRF) and JSON bodies `Content-Type: application/json`.
+Every POST must carry `X-Requested-With: ervisio` (CSRF) and JSON bodies `Content-Type: application/json`.
 Exact shapes, HTTP statuses and failure reasons: `docs/api/auth.md`.
 
 Error codes (string): `needs_admin`, `forbidden`, `not_found`, `invalid`, `conflict`, `unavailable`,
@@ -79,7 +79,7 @@ server → {"ch":7,"op":"end"}  |  {"ch":7,"op":"error","error":{code,message}}
 ```
 Binary-ish payloads (terminal output, file chunks) are base64 strings in `data` with `"b64":true`.
 
-### linuxadmind ↔ bridge (stdio, one JSON object per line)
+### ervisiod ↔ bridge (stdio, one JSON object per line)
 
 ```
 → {"id":1,"method":"services.list","params":{}}
@@ -135,14 +135,14 @@ following `docs/DESIGN-RULES.md`. Routing with react-router. Terminal with `@xte
 
 ## Preferences
 
-Per Linux user, stored by the user bridge in `~/.config/linuxadmin/prefs.json`
+Per Linux user, stored by the user bridge in `~/.config/ervisio/prefs.json`
 (`prefs.get`, `prefs.set {key, value}`): theme, colourMode, language, density, reduceMotion,
 terminal options, dashboard layout, file manager bookmarks, snippets, log watchers.
 Theme/language are also cached in localStorage so the sign-in page renders in them.
 
 ## Server configuration
 
-`/etc/linuxadmin/linuxadmin.conf` (TOML), read by linuxadmind, editable from Settings through
+`/etc/ervisio/ervisio.conf` (TOML), read by ervisiod, editable from Settings through
 `config.get` / `config.set` (admin, writes a backup first):
 
 ```toml
@@ -175,7 +175,7 @@ Key table, types and the `config.*` methods: `docs/api/config.md`.
 ## Plugins
 
 A plugin is a folder with `manifest.json`, a frontend ES module and optional assets, installed in
-`/usr/share/linuxadmin/plugins/<id>` (packaged) or `/var/lib/linuxadmin/plugins/<id>` (from Browse).
+`/usr/share/ervisio/plugins/<id>` (packaged) or `/var/lib/ervisio/plugins/<id>` (from Browse).
 
 ```json
 {
@@ -205,19 +205,19 @@ carry `manifest.sig` (ed25519, team key: `docs/PLUGIN-SIGNING.md`); unsigned one
 ## Releases and self-update
 
 Tags `vX.Y.Z` build signed release archives on GitHub (`.github/workflows/release.yml`). Installed consoles live in
-`/usr/lib/linuxadmin/versions/<v>` with a `current` symlink; `updates.apply` downloads and verifies a release
+`/usr/lib/ervisio/versions/<v>` with a `current` symlink; `updates.apply` downloads and verifies a release
 (ed25519 over `SHA256SUMS`, key in `server/internal/update/sign.go`), installs it next to the running one and hands
-off to `linuxadmind --apply-update` in a transient systemd unit, which switches `current`, restarts the service and
+off to `ervisiod --apply-update` in a transient systemd unit, which switches `current`, restarts the service and
 rolls back if `/api/health` does not report the new version within 30 s. Details: `docs/RELEASING.md`,
 `docs/api/updates.md`. New machines are installed by `install.sh` into that layout. Distribution packages (`.deb`,
-`.rpm`, AUR) use a flat layout instead (`/usr/bin/linuxadmind`, `/usr/lib/linuxadmin/linuxadmin-bridge`,
-`/usr/share/linuxadmin/{web,plugins}`) and write `/usr/lib/linuxadmin/managed`, which turns self-update off:
+`.rpm`, AUR) use a flat layout instead (`/usr/bin/ervisiod`, `/usr/lib/ervisio/ervisio-bridge`,
+`/usr/share/ervisio/{web,plugins}`) and write `/usr/lib/ervisio/managed`, which turns self-update off:
 `docs/PACKAGING.md`.
 
 ## Repository layout
 
 ```
-server/            Go: cmd/linuxadmind, cmd/linuxadmin-bridge, internal/…
+server/            Go: cmd/ervisiod, cmd/ervisio-bridge, internal/…
 web/               React app
 plugins/           first-party example plugins
 docs/              ARCHITECTURE.md, DESIGN-RULES.md, api/<module>.md, design/
