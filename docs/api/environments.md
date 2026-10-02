@@ -224,5 +224,13 @@ for a capability or command that does not declare `remote` fails with `forbidden
 * The paired server writes its own activity log entries for what it runs for another one (`origin` = `via <server> by
   <user>`); the first server records the same calls with `env`.
 * Portainer agents cannot carry upgraded connections (above).
+* **Streams through a Portainer agent arrive in 4 KiB steps.** Tested against `portainer/agent` 2.45 with `curl` straight
+  to the agent (signed headers) and through the tunnel: the agent copies a Docker stream into its own HTTP response with
+  a 4 KiB write buffer and never flushes (`http/proxy/local.go` in the agent), so `logs?follow=1`, `stats?stream=1` and
+  `/events` deliver nothing, not even the response headers, until 4096 bytes are ready or the stream ends. A quiet
+  container's log can sit in that buffer indefinitely. This is the agent, not the tunnel; use SSH or TLS when live
+  output matters. (The tunnel itself had a related fault, fixed: Go's chunked reader waits to fill its whole buffer
+  inside an HTTP chunk, and the agent sends a stream as one big chunk, so the 32 KiB copy buffer added up to 32 KiB of
+  extra delay on top of the agent's. It now copies with a 1 KiB buffer; `TestAgentTunnelFlushesEachChunk`.)
 * The remote bridge of an Ervisio environment is started on first use and closed after 5 minutes without calls.
 * Docker Swarm node targeting (`X-PortainerAgent-Target`) is not supported.

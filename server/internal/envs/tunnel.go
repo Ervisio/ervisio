@@ -342,6 +342,12 @@ func (m *Manager) agentProxy(e *Env) (http.Handler, error) {
 	rp := httputil.NewSingleHostReverseProxy(target)
 	rp.Transport = rt
 	rp.FlushInterval = -1
+	// net/http's chunked reader keeps reading inside one HTTP chunk until the
+	// caller's buffer is full. The agent proxies a Docker stream as one big
+	// chunk, so a 32 KiB copy buffer (the default) holds a log or stats
+	// stream back until 32 KiB arrived, minutes for a quiet container. A
+	// small buffer returns what the agent sent as it comes.
+	rp.BufferPool = smallBuffers{}
 	rp.ErrorLog = m.opts.Log
 	rp.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
 		w.Header().Set("Content-Type", "application/json")
@@ -361,3 +367,9 @@ func (m *Manager) agentProxy(e *Env) (http.Handler, error) {
 		rp.ServeHTTP(w, r)
 	}), nil
 }
+
+// smallBuffers hands httputil.ReverseProxy a 1 KiB copy buffer (see agentProxy).
+type smallBuffers struct{}
+
+func (smallBuffers) Get() []byte { return make([]byte, 1024) }
+func (smallBuffers) Put([]byte)  {}

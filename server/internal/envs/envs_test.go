@@ -506,11 +506,59 @@ func fakeAgent(t *testing.T, cert, key, secret string) (string, func()) {
 		if secret == "" {
 			bound = pub
 		}
+		if strings.HasSuffix(r.URL.Path, "/stream") {
+			// What the real agent does: one HTTP chunk that is declared
+			// large and filled as data comes (a proxied Docker stream). The
+			// first 4 KiB (the agent's own write buffer) now, more after 3 s.
+			c, brw, err := w.(http.Hijacker).Hijack()
+			if err != nil {
+				return
+			}
+			defer c.Close()
+			io.WriteString(brw, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n100000\r\n"+strings.Repeat("x", 4096))
+			brw.Flush()
+			time.Sleep(3 * time.Second)
+			io.WriteString(brw, "two\n")
+			brw.Flush()
+			return
+		}
 		io.WriteString(w, `{"Version":"26.0.0","ApiVersion":"1.45"}`)
 	}))
 	ts.TLS = &tls.Config{Certificates: []tls.Certificate{kp}}
 	ts.StartTLS()
 	return ts.Listener.Addr().String(), ts.Close
+}
+
+// A streamed answer (logs follow, stats, events) must reach the client chunk
+// by chunk through the agent tunnel, not when it ends. The real Portainer
+// agent does not flush its own proxy (docs/api/environments.md), but whatever
+// it flushes must pass through here at once.
+func TestAgentTunnelFlushesEachChunk(t *testing.T) {
+	cert, key, der := selfSigned(t, false)
+	addr, stop := fakeAgent(t, cert, key, "s")
+	defer stop()
+	m, _ := NewManager(Options{Dir: t.TempDir(), TunnelDir: shortTemp(t)})
+	v, err := m.Create(context.Background(), Input{Name: "agent", Kind: KindPortainerAgent, Address: addr, Fingerprint: CertFingerprint(der), AgentSecret: "s"}, "r")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := m.Tunnel(m.Get(v.ID), os.Getuid(), os.Getgid())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cl := &http.Client{Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, "unix", p)
+	}}}
+	start := time.Now()
+	r, err := cl.Get("http://docker/v1.45/containers/x/logs/stream")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Body.Close()
+	first := make([]byte, 4096)
+	if _, err := io.ReadFull(r.Body, first); err != nil || time.Since(start) > time.Second {
+		t.Fatalf("first 4 KiB after %v: %v", time.Since(start), err)
+	}
 }
 
 func TestPortainerAgentEnv(t *testing.T) {
