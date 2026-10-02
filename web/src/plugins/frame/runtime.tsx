@@ -38,6 +38,11 @@ function applyTheme(t: FrameTheme) {
 
 /* ---------- helpers ---------- */
 const b64ToBytes = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+/** The env option of a files call. */
+function envArg(o?: { env?: string }): { env?: string } {
+  return o && o.env ? { env: o.env } : {};
+}
+
 function bytesToB64(u: Uint8Array): string {
   let s = '';
   for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000));
@@ -186,26 +191,26 @@ function makeSdk(plugin: { id: string; name: string; version: string }, view: Fr
         request<{ entries: AuditEntry[]; next: string; enabled: boolean }>('auditList', { ...q }),
     },
     files: {
-      async read(path: string): Promise<string> {
-        const r = await request<{ data: string; b64?: boolean }>('readFile', { path });
+      async read(path: string, o?: { env?: string }): Promise<string> {
+        const r = await request<{ data: string; b64?: boolean }>('readFile', { path, ...envArg(o) });
         return r.b64 ? new TextDecoder().decode(b64ToBytes(r.data)) : r.data;
       },
-      async readBytes(path: string): Promise<Uint8Array> {
-        const r = await request<{ data: string; b64?: boolean }>('readFile', { path, b64: true });
+      async readBytes(path: string, o?: { env?: string }): Promise<Uint8Array> {
+        const r = await request<{ data: string; b64?: boolean }>('readFile', { path, b64: true, ...envArg(o) });
         return r.b64 ? b64ToBytes(r.data) : new TextEncoder().encode(r.data);
       },
-      async write(path: string, data: string | Uint8Array): Promise<void> {
-        await request('writeFile', typeof data === 'string' ? { path, data } : { path, data: bytesToB64(data), b64: true });
+      async write(path: string, data: string | Uint8Array, o?: { env?: string }): Promise<void> {
+        await request('writeFile', { ...(typeof data === 'string' ? { path, data } : { path, data: bytesToB64(data), b64: true }), ...envArg(o) });
       },
-      async list(path: string) {
-        const r = await request<{ entries: { name: string; type: string; size: number; mtime: number }[] }>('listDir', { path });
+      async list(path: string, o?: { env?: string }) {
+        const r = await request<{ entries: { name: string; type: string; size: number; mtime: number }[] }>('listDir', { path, ...envArg(o) });
         return r.entries ?? [];
       },
-      async mkdir(path: string): Promise<void> {
-        await request('mkdir', { path });
+      async mkdir(path: string, o?: { env?: string }): Promise<void> {
+        await request('mkdir', { path, ...envArg(o) });
       },
-      async remove(path: string): Promise<void> {
-        await request('remove', { path });
+      async remove(path: string, o?: { env?: string }): Promise<void> {
+        await request('remove', { path, ...envArg(o) });
       },
     },
     envs: {

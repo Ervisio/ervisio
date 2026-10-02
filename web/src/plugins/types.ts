@@ -1,6 +1,11 @@
 import type { ComponentType } from 'react';
 
 /** A plugins.list entry, as far as the app shell needs it. */
+/** Files calls take `env` for an environment of kind ervisio (a paired server): the call runs there, as the paired user, under that server's manifest. Other kinds refuse it. */
+export interface FilesEnvOption {
+  env?: string;
+}
+
 export interface PluginManifest {
   id: string;
   name: string;
@@ -287,14 +292,14 @@ export interface PluginSDK {
   };
   /** Only inside capabilities.files (read: read+write folders; write: write folders), with the user's own rights (admin folders: administrator rights when needed). */
   files: {
-    read(path: string): Promise<string>;
-    readBytes(path: string): Promise<Uint8Array>;
-    write(path: string, data: string | Uint8Array): Promise<void>;
-    list(path: string): Promise<{ name: string; type: 'file' | 'dir' | 'link' | 'other'; size: number; mtime: number }[]>;
+    read(path: string, o?: FilesEnvOption): Promise<string>;
+    readBytes(path: string, o?: FilesEnvOption): Promise<Uint8Array>;
+    write(path: string, data: string | Uint8Array, o?: FilesEnvOption): Promise<void>;
+    list(path: string, o?: FilesEnvOption): Promise<{ name: string; type: 'file' | 'dir' | 'link' | 'other'; size: number; mtime: number }[]>;
     /** SDK v3: creates a folder (and missing parents) inside a write folder. */
-    mkdir(path: string): Promise<void>;
+    mkdir(path: string, o?: FilesEnvOption): Promise<void>;
     /** SDK v3: removes a file or an empty folder inside a write folder. */
-    remove(path: string): Promise<void>;
+    remove(path: string, o?: FilesEnvOption): Promise<void>;
   };
   /** Environments (remote Docker hosts) the signed-in user may use. Pass an id as `env` to http, httpStream, exec, execStream or pty. */
   envs: { list(): Promise<PluginEnv[]> };

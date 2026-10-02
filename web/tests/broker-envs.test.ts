@@ -68,3 +68,26 @@ test('network requests need userHosts and a plain host name', () => {
   const without: BrokerManifest = { id: 'x', capabilities: {} };
   assert.equal(authorize(without, 'network', { host: 'x.org' }, user).kind, 'deny');
 });
+
+test('files calls take an environment: no admin on this side, absolute paths, the plugin must opt in somewhere', () => {
+  const fm: BrokerManifest = { ...m, capabilities: { ...m.capabilities, files: { read: [], write: [{ path: '/opt/stacks', admin: true, adminUnlessGroup: 'docker', create: true }] } } };
+  const w = authorize(fm, 'writeFile', { path: '/opt/stacks/a/compose.yaml', data: 'x', env: ENV }, user);
+  assert.deepEqual(w, { kind: 'call', method: 'plugins.writeFile', params: { plugin: 'docker', path: '/opt/stacks/a/compose.yaml', data: 'x', b64: false, env: ENV }, admin: false });
+  for (const op of ['mkdir', 'remove', 'listDir', 'readFile']) {
+    const r = authorize(fm, op, { path: '/opt/stacks/a', env: ENV }, user) as { kind: string; params: { env?: string }; admin: boolean };
+    assert.equal(r.kind, 'call', op);
+    assert.equal(r.params.env, ENV, op);
+    assert.equal(r.admin, false, op);
+  }
+  // Without env nothing changes.
+  const local = authorize(fm, 'listDir', { path: '/opt/stacks' }, user) as { params: { env?: string }; admin: boolean };
+  assert.equal(local.params.env, undefined);
+  assert.equal(local.admin, true);
+  assert.equal(authorize(fm, 'listDir', { path: '/opt/stacks', env: 'nope' }, user).kind, 'deny');
+  assert.equal(authorize(fm, 'listDir', { path: '/etc', env: ENV }, user).kind, 'deny');
+  const home: BrokerManifest = { ...fm, capabilities: { ...fm.capabilities, files: { write: ['~/x'] } } };
+  assert.equal(authorize(home, 'writeFile', { path: '~/x/a', data: '', env: ENV }, user).kind, 'deny');
+  const noRemote: BrokerManifest = { id: 'p', capabilities: { files: { write: ['/srv'] }, commands: [{ name: 'c' }] } };
+  assert.equal(authorize(noRemote, 'writeFile', { path: '/srv/a', data: '', env: ENV }, user).kind, 'deny');
+  assert.equal(authorize(noRemote, 'writeFile', { path: '/srv/a', data: '' }, user).kind, 'call');
+});

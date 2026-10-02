@@ -506,6 +506,19 @@ Every matching entry the user may see, oldest first, as a download (`activity-lo
 leading `'` so a spreadsheet does not run it. Settings › Activity log (everyone: their own entries; administrators:
 all) lists, filters and exports it, and Settings › Sign-in and security links to it.
 
+### Files on a paired server (`env` on the files methods)
+`plugins.readFile`, `writeFile`, `listDir`, `mkdir` and `remove` take `env` like `plugins.http` does, **only for an
+environment of kind `ervisio`**. The call is relayed to the paired server, where its own user bridge (the mapped user,
+never root) runs it under *that* server's manifest of the plugin: the declared folders, the 4 MiB limit and the admin rule
+apply there. An `admin` folder works only when the mapped user is root or in the folder's `adminUnlessGroup` (the same as
+for commands over a pairing: the pairing never gets administrator rights); otherwise the answer is `needs_admin`. `~` is
+not expanded for an environment (use absolute paths). For `tcp-tls`, `ssh` and `portainer-agent` environments `env` on a
+files call is refused (`invalid`, "Files are local for this kind of environment"): those kinds tunnel the Docker API only.
+The plugin must also declare `remote` on some HTTP entry or command (it opts in to environments at all). Writes, folders
+and removals are recorded in the activity log on both servers (`env` on this one, `origin` = `via <server> by <user>` on
+the paired one); reads are not logged on either. SDK: `sdk.files.write(path, data, { env })` and the same option on
+`read`, `readBytes`, `list`, `mkdir`, `remove`.
+
 ### `plugins.readFile` (user)
 Params `{"plugin","path","b64"?}` → `{"path","size","data","b64"?}`. `path` is absolute or `~/…` and must be inside a folder of
 `capabilities.files.read` or `files.write` (longest match). The file is opened through `os.Root` of that folder, so `..` and
@@ -543,7 +556,8 @@ Params `{}` → `[{"id","name","kind","status"?:{"reachable","engineVersion"?,"a
 environments the user may use (access list), never any secret. See [environments.md](environments.md).
 
 ### `plugins.envCheck` (user; used by the daemon)
-Params `{"method","kind","params"}` (the original call). Succeeds when the plugin may be used by this user and the HTTP
+Params `{"method","kind","params"}` (the original call). For the files methods it succeeds only for `kind: "ervisio"` when the
+plugin declares files and uses environments (above). Otherwise succeeds when the plugin may be used by this user and the HTTP
 entry (`params.name`) or command (`params.command`) declares `remote` for a family the environment `kind` serves; else
 `forbidden`. The daemon calls it before it hands out a tunnel or routes to a paired server.
 

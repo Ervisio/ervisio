@@ -36,6 +36,12 @@ func envSocketOK(p string) error {
 	return nil
 }
 
+// fileMethods are the plugin file methods that may take an environment.
+var fileMethods = map[string]bool{
+	"plugins.readFile": true, "plugins.writeFile": true, "plugins.listDir": true,
+	"plugins.mkdir": true, "plugins.remove": true,
+}
+
 // envCheckParams are the params of plugins.envCheck.
 type envCheckParams struct {
 	Method string `json:"method"`
@@ -79,6 +85,29 @@ func envCheck(_ context.Context, c *rpc.Call) (any, error) {
 	m := f.M
 	family := ""
 	switch {
+	case fileMethods[p.Method]:
+		// Files are not tunnelled: only another Ervisio server can run them
+		// (its bridge applies its own manifest). The plugin must be one that
+		// uses environments at all.
+		if p.Kind != envs.KindErvisio {
+			return nil, rpc.Errorf(rpc.Invalid, "Files are local for this kind of environment: leave out env for files calls (only an environment of kind Ervisio, a paired server, can read and write files).")
+		}
+		if len(m.Capabilities.Files.Read)+len(m.Capabilities.Files.Write) == 0 {
+			return nil, rpc.Errorf(rpc.Forbidden, "%s declares no files.", m.Name)
+		}
+		for i := range m.Capabilities.HTTP {
+			if m.Capabilities.HTTP[i].Remote != "" {
+				family = m.Capabilities.HTTP[i].Remote
+			}
+		}
+		for i := range m.Capabilities.Commands {
+			if m.Capabilities.Commands[i].Remote != "" {
+				family = m.Capabilities.Commands[i].Remote
+			}
+		}
+		if family == "" {
+			return nil, rpc.Errorf(rpc.Forbidden, "%s does not allow targeting an environment.", m.Name)
+		}
 	case q.Command != "":
 		for i := range m.Capabilities.Commands {
 			if m.Capabilities.Commands[i].Name == q.Command {

@@ -28,7 +28,7 @@ const envManifest = `{
        "rules": [{"methods": ["GET", "POST"], "path": "/version"}]},
       {"name": "other", "socket": "%SOCK%", "admin": false, "rules": [{"methods": ["GET"], "path": "/version"}]}
     ],
-    "files": {"read": [], "write": []},
+    "files": {"read": [], "write": ["/opt/stacks"]},
     "sockets": [], "network": {"hosts": ["api.example.org"], "userHosts": true}
   },
   "contributes": {"pages": [], "widgets": [], "snippets": []},
@@ -71,6 +71,29 @@ func TestManifestRemoteAndNetwork(t *testing.T) {
 	for what, doc := range bad {
 		if _, err := ParseManifest([]byte(doc)); err == nil {
 			t.Errorf("%s: accepted", what)
+		}
+	}
+}
+
+func TestEnvCheckFiles(t *testing.T) {
+	envSetup(t)
+	check := func(method, kind, plugin string) error {
+		b, _ := json.Marshal(map[string]any{"method": method, "kind": kind, "params": map[string]string{"plugin": plugin}})
+		_, err := envCheck(context.Background(), &rpc.Call{Params: b})
+		return err
+	}
+	for m := range fileMethods {
+		if err := check(m, "ervisio", "envp"); err != nil {
+			t.Errorf("%s on a paired server: %v", m, err)
+		}
+		for _, k := range []string{"tcp-tls", "ssh", "portainer-agent"} {
+			err := check(m, k, "envp")
+			if !rpc.IsCode(err, rpc.Invalid) || !strings.Contains(err.Error(), "Files are local") {
+				t.Errorf("%s on %s: %v", m, k, err)
+			}
+		}
+		if check(m, "ervisio", "nope") == nil {
+			t.Errorf("%s: unknown plugin allowed", m)
 		}
 	}
 }

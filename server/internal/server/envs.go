@@ -313,6 +313,10 @@ var envMethods = map[string]bool{
 	"plugins.http": true, "plugins.httpStream": true,
 	"plugins.exec": true, "plugins.execStream": true, "plugins.pty": true,
 	"plugins.httpDownload": true, "plugins.httpUpload": true, "plugins.execDownload": true,
+	// The plugin files capability: only for an Ervisio environment (the
+	// bridge's plugins.envCheck refuses the tunnel kinds: files are local there).
+	"plugins.readFile": true, "plugins.writeFile": true, "plugins.listDir": true,
+	"plugins.mkdir": true, "plugins.remove": true,
 }
 
 // routeWithEnv is route for the methods above: without "env" it is route;

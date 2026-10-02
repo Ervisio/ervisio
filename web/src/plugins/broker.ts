@@ -440,15 +440,25 @@ export function authorize(m: BrokerManifest, op: FrameOp | string, args: Record<
       const tilde = path === '~' || path.startsWith('~/');
       const folder = tilde && !u.home ? { path } : matchFolder(path, declared, u.home);
       if (!folder) return deny(`${m.id} did not declare that it may ${write ? 'write' : 'read'} ${path}.`);
-      const admin = needsAdmin(folder, u);
+      // An environment (a paired server): the folder lives there, so ~ means nothing here, and the call runs as the
+      // mapped user on that server, under its manifest: no administrator rights apply on this side.
+      const env = envId(a.env);
+      if (env === null) return deny('env must be the id of an environment.', 'invalid');
+      if (env) {
+        if (tilde) return deny('A path on an environment must be absolute (~ is not expanded there).', 'invalid');
+        const remote = [...(m.capabilities?.http ?? []), ...(m.capabilities?.commands ?? [])].some((x) => x.remote);
+        if (!remote) return deny(`${m.id} does not allow targeting an environment.`);
+      }
+      const admin = env ? false : needsAdmin(folder, u);
+      const e = env ? { env } : {};
       if (op === 'writeFile') {
         const data = str(a.data, Math.ceil((MAX_WRITE * 4) / 3) + 4);
         if (data === null) return deny('The data to write is missing or too large.', 'invalid');
-        return { kind: 'call', method: 'plugins.writeFile', params: { plugin: m.id, path, data, b64: a.b64 === true }, admin };
+        return { kind: 'call', method: 'plugins.writeFile', params: { plugin: m.id, path, data, b64: a.b64 === true, ...e }, admin };
       }
-      if (op === 'mkdir' || op === 'remove') return { kind: 'call', method: `plugins.${op}`, params: { plugin: m.id, path }, admin };
+      if (op === 'mkdir' || op === 'remove') return { kind: 'call', method: `plugins.${op}`, params: { plugin: m.id, path, ...e }, admin };
       const method = op === 'readFile' ? 'plugins.readFile' : 'plugins.listDir';
-      return { kind: 'call', method, params: { plugin: m.id, path, ...(op === 'readFile' && a.b64 === true ? { b64: true } : {}) }, admin };
+      return { kind: 'call', method, params: { plugin: m.id, path, ...(op === 'readFile' && a.b64 === true ? { b64: true } : {}), ...e }, admin };
     }
     case 'http': {
       const r = httpRequest(m, a, u);

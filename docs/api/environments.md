@@ -133,8 +133,9 @@ http" (the credential and calls would travel unencrypted).
 to it after a filter. A's daemon wraps the connection as a bridge process (`bridge.NewRemote`), so streams, flow
 control, cancellation and binary chunks work exactly as for local bridges, for every method, with no special cases.
 The filter lets through **only** `plugins.http`, `plugins.httpStream`, `plugins.exec`, `plugins.execStream`,
-`plugins.pty`, and the transfer methods `plugins.httpDownload`, `plugins.httpUpload` and `plugins.execDownload` (`pairAllowed` in `server/internal/server/envpair.go`); anything else
-(`plugins.list`, `plugins.install`, files, terminal, config, ...) is answered `forbidden` without reaching the bridge.
+`plugins.pty`, the transfer methods `plugins.httpDownload`, `plugins.httpUpload` and `plugins.execDownload`, and the plugin files
+methods `plugins.readFile`, `writeFile`, `listDir`, `mkdir` and `remove` (`pairAllowed` in `server/internal/server/envpair.go`); anything else
+(`plugins.list`, `plugins.install`, the console's own files and terminal, config, ...) is answered `forbidden` without reaching the bridge.
 A call is also checked on A first (`plugins.envCheck`: plugin usable, capability opted in) and then by B's bridge
 against B's manifest, signature policy, visibility and the capability rules.
 
@@ -194,6 +195,18 @@ Answered by the daemon. Admin unless noted. Errors: `invalid` (message fit for t
 `Input`: `{name, kind, address, user?, socketPath?, insecure?, skipVerify?, ca?, clientCert?, fingerprint?, hostKey?,
 access?, clientKey?, sshKey?, passphrase?, agentSecret?, token?}`. `View`: the stored public fields plus `hasSecrets`
 and `status: {reachable, engineVersion?, apiVersion?, latencyMs, error?, checked}`.
+
+## Files on a paired server
+
+The files capability of a plugin (`sdk.files.*`, `capabilities.files`) takes the `env` option too, for environments of kind
+`ervisio` only (the Docker plugin uses it to create and edit stacks in the paired server's `/opt/stacks`). The call
+is relayed like the others and **executed by B's user bridge under B's manifest** for the mapped user: B's folders,
+limits and rules decide, A's manifest is only a first filter. Administrator folders follow the rule commands already
+follow over a pairing: they work only if the mapped user is root or a member of the folder's `adminUnlessGroup`, else
+`needs_admin`; a pairing never reaches the root bridge, so nothing is escalated. For `tcp-tls`, `ssh` and
+`portainer-agent` the option is refused with a clear message (files stay local there). Writes, folder creations and
+removals are in the activity log of both servers (A: `env`; B: `origin` = `via <server> by <user>`); reads are not
+logged. The `env` and `via` keys are stripped from a browser's params in any case, as for the other methods.
 
 ## Using it from a plugin
 

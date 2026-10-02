@@ -27,6 +27,11 @@ var pairAllowed = map[string]bool{
 	"plugins.http": true, "plugins.httpStream": true,
 	"plugins.exec": true, "plugins.execStream": true, "plugins.pty": true,
 	"plugins.httpDownload": true, "plugins.httpUpload": true, "plugins.execDownload": true,
+	// The plugin files capability, run by this server's user bridge under
+	// its manifest (never the root bridge: an admin folder works only when
+	// the mapped user is root or in the folder's adminUnlessGroup).
+	"plugins.readFile": true, "plugins.writeFile": true, "plugins.listDir": true,
+	"plugins.mkdir": true, "plugins.remove": true,
 }
 
 func (s *Server) registerPair(mux *http.ServeMux) {

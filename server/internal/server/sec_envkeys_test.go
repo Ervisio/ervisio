@@ -52,3 +52,33 @@ func TestBrowserCannotForgeAuditOrigin(t *testing.T) {
 		t.Fatalf("%+v", l)
 	}
 }
+
+// The files methods take the same env option: forged keys are stripped and an
+// unknown environment is refused, and a pairing's file writes are audited with
+// the origin and without the env.
+func TestFilesMethodsTakeEnvLikeTheOthers(t *testing.T) {
+	e := newXferEnv(t)
+	sess := e.srv.sessions.all()[0]
+	_, _, out, release, rerr := e.srv.routeWithEnv(context.Background(), sess, "plugins.writeFile", json.RawMessage(`{"plugin":"xfer","path":"/opt/stacks/a/x","data":"x","EnvSocket":"/x","VIA":"forged"}`), false)
+	if rerr != nil {
+		t.Fatal(rerr)
+	}
+	release()
+	var p map[string]any
+	_ = json.Unmarshal(out, &p)
+	if _, ok := p["EnvSocket"]; ok || p["via"] != nil || p["VIA"] != nil {
+		t.Fatalf("%s", out)
+	}
+	if _, _, _, _, rerr := e.srv.routeWithEnv(context.Background(), sess, "plugins.listDir", json.RawMessage(`{"plugin":"xfer","path":"/opt/stacks","Env":"env-00000000"}`), false); rerr == nil {
+		t.Fatal("an unknown environment on a files call was accepted")
+	}
+	for _, m := range []string{"plugins.writeFile", "plugins.mkdir", "plugins.remove"} {
+		rec := e.srv.pairAudit("alice", "", rpcMsg(m, `{"plugin":"xfer","path":"/opt/stacks/a","data":"hello","via":"A by bob","env":"env-aabbccdd"}`), "A (pairing p1) by bob")
+		if rec == nil {
+			t.Fatalf("%s is not audited on the paired side", m)
+		}
+		if rec.e.Origin != "A (pairing p1) by bob" || rec.e.Env != "" || rec.e.Target != "/opt/stacks/a" {
+			t.Fatalf("%s: %+v", m, rec.e)
+		}
+	}
+}
