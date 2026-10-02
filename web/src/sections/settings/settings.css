@@ -107,6 +107,7 @@
 }
 @media (max-width: 700px) {
   .st-row { flex-wrap: wrap; }
+  .st-row > .st-tx { flex: 1 1 140px; }
   .st-ctl { justify-content: flex-start; }
 }
 @media (prefers-reduced-motion: reduce) { .st-scroll { scroll-behavior: auto; } }
