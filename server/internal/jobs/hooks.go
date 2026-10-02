@@ -195,6 +195,16 @@ func (m *Manager) HandleHook(plugin, token, ip string, body []byte, query url.Va
 		}
 	}
 
+	// An instance that runs steps as root runs with the values an
+	// administrator approved, and only those: a call that tries to set a
+	// param is refused (400), whatever webhook.params says.
+	if len(over) > 0 {
+		a, err := m.env.Account(snap.Owner)
+		if err != nil || a == nil || man.JobNeedsAdmin(job, a.IsRoot(), groupSet(a)) {
+			return HookResult{Status: http.StatusBadRequest}
+		}
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	cur := m.findLocked(snap.ID)

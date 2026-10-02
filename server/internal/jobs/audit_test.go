@@ -19,10 +19,7 @@ func TestJobsRecordToTheActivityLog(t *testing.T) {
 
 	// A job that needs administrator rights: the approval is recorded.
 	f := newFixture(t)
-	v, err := f.m.Create(f.caller("alice"), CreateReq{Plugin: "jt", Job: "rooty", ConfirmAdmin: true})
-	if err != nil {
-		t.Fatal(err)
-	}
+	v := f.approved("alice", "rooty", nil, nil)
 	f.m.RunNow(f.caller("alice"), "jt", v.ID)
 	f.m.Wait()
 

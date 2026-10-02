@@ -513,6 +513,17 @@ func init() {
 		}
 		return s.jobs.SetEnabled(s.jobCaller(sess), p.ID, p.Enabled)
 	}}
+	// jobs.approve is the only way to approve an instance that runs steps
+	// as root: admin level (the session is root or unlocked, so sudo
+	// accepted this user's password), and not a plugins.* method, so the
+	// broker never lets a plugin frame call it.
+	localMethods["jobs.approve"] = localMethod{admin: true, run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
+		var p struct{ ID string }
+		if err := bind(raw, &p); err != nil {
+			return nil, err
+		}
+		return s.jobs.Approve(s.jobCaller(sess), p.ID)
+	}}
 	localMethods["jobs.runNow"] = localMethod{admin: true, run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
 		var p struct{ ID string }
 		if err := bind(raw, &p); err != nil {

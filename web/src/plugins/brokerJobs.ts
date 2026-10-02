@@ -4,8 +4,9 @@
  *
  * What a plugin can ask: create, list, change, delete, run and read the history of ITS OWN job instances (the
  * jobs its manifest declares in capabilities.jobs), manage their webhook URLs, and send a notification when
- * capabilities.notify is true. Never admin: the daemon decides who may approve an instance that needs
- * administrator rights (the user must be an administrator and confirm), and runs the instance as its creator.
+ * capabilities.notify is true. Never admin, and never an approval: an instance whose job runs steps as root is
+ * created waiting for an administrator, who approves it in Settings > Plugin jobs (jobs.approve, which no plugin
+ * can reach); confirmAdmin from the frame is dropped. The daemon runs the instance as its creator.
  * The daemon checks all of this again (plugins.jobs.*, plugins.notify).
  */
 import type { BrokerManifest, Plan } from './broker';
@@ -127,10 +128,8 @@ export function authorizeJobsOp(m: BrokerManifest, op: string, a: Record<string,
       if (typeof a.enabled !== 'boolean') return deny('enabled must be true or false.');
       params.enabled = a.enabled;
     }
-    if (a.confirmAdmin !== undefined) {
-      if (typeof a.confirmAdmin !== 'boolean') return deny('confirmAdmin must be true or false.');
-      params.confirmAdmin = a.confirmAdmin;
-    }
+    // confirmAdmin is never passed on: a plugin cannot approve a job that runs steps as root. Such an instance
+    // waits for an administrator, who approves it in Settings > Plugin jobs (jobs.approve, admin level).
     if (action === 'create' && a.runAs !== undefined) {
       const runAs = str(a.runAs, 64);
       if (runAs === null) return deny('runAs must be a user name.');

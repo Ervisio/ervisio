@@ -128,20 +128,32 @@ each step's last output (for `changed`).
 ### Administrator approval
 
 A job with steps that need root runs through a root bridge that the daemon starts itself, **without an interactive
-unlock** (nobody is there to type a password). So:
+unlock** (nobody is there to type a password). So an administrator approves each such instance, and a plugin never can:
 
-1. Creating (or changing the params of) such an instance needs `confirmAdmin: true` **and** a caller who can administer
-   the machine (root, or a member of `sudo`/`wheel`/`admin`). Without the confirmation the call fails with
-   `invalid`, `data.reason = "admin_confirmation_required"`; a caller who cannot administer gets `forbidden`.
-2. The instance records who approved it and when (`approval.by`, `approval.at`), plus a signature of what was approved:
-   the job definition and every command and HTTP API it uses. A plugin update that changes any of them invalidates the
-   approval: the instance is switched off ("An administrator has to approve it again") until its params are saved again
-   with `confirmAdmin`.
-3. Before every run, and every minute, the daemon checks the owner. The instance is **disabled** (with
+1. **A plugin creates it, an administrator approves it.** `plugins.jobs.create` makes the instance as usual (the owner
+   must be able to administer the machine, a member of `sudo`/`wheel`/`admin`, else `forbidden`), but it starts
+   **waiting for approval**: `needsAdmin` and `awaitingApproval` are true, and it does not run. `confirmAdmin` is
+   ignored (the broker drops it from a plugin frame; the daemon ignores it from anyone): the daemon cannot tell a
+   plugin frame from a direct `/api/rpc` call, so no plugin-scoped method approves anything.
+2. **Approval** is `jobs.approve {id}`, an admin-level method (Settings › Plugin jobs › Review and approve, with its own
+   confirmation dialog that lists the steps that run as root and the values). It needs administrator rights **now**:
+   a root session, or one whose rights are unlocked, which proves sudo accepted this user's password; membership of an
+   administrators' group is not enough (`needs_admin` otherwise, and the web app asks to unlock). The approved
+   instance records who approved it and when (`approval.by`, `approval.at`), plus a signature of what was approved:
+   the job definition, every command and HTTP API it uses, **and the instance's param values**.
+3. **What changes the approval.** A plugin update that changes the job, a command or an HTTP API it uses, or new param
+   values (`plugins.jobs.update` with other `params`) make the approval invalid: `awaitingApproval` is true again and the
+   instance does not run until an administrator approves it again. The instance stays switched on; it only waits.
+4. **While it waits** a scheduled start is skipped, `runNow` fails with `conflict` (`data.reason =
+   "awaiting_approval"`) and a webhook call answers 404, like a disabled instance.
+5. **Webhooks cannot change approved values.** For an instance whose job runs steps as root, a webhook call that sets
+   any param (body or query, even one listed in `webhook.params`) is refused with 400; a call without params runs with
+   the approved values. Jobs without root steps take their `webhook.params` as before.
+6. Before every run, and every minute, the daemon checks the owner. The instance is **disabled** (with
    `disabledReason`) when the account is gone or changed uid, may no longer sign in (shell, `auth.allow_*`, `allow_root`,
    expired), or, for an admin instance, **is no longer able to administer the machine**. Switching it on again checks
    the same things.
-4. The daemon runs admin steps only when it runs as root. A daemon started with `--dev` is not root: such a step fails
+7. The daemon runs admin steps only when it runs as root. A daemon started with `--dev` is not root: such a step fails
    with a message that says so, it never runs with fewer rights.
 
 Steps that do not need root run on the owner's user bridge, which opens a PAM session like a sign-in does. A bridge
@@ -164,10 +176,11 @@ stopped at shutdown. The root bridge of admin steps is kept the same way.
   tokens), then one per 3 seconds.
 * **Body.** Ignored, unless the job declares `webhook.params`: then a JSON object body (`{"tag":"v2"}`) or the query string
   (`?tag=v2`) may set those params (strings or numbers). Each value must match the param's pattern, or the call fails with
-  400. Everything else is ignored. At most 4 KiB of the body is read.
+  400. Everything else is ignored. At most 4 KiB of the body is read. An instance whose job runs steps as root takes no
+  params from a webhook: such a call is refused with 400 (the approval covers the values).
 * **Answers**, deliberately plain: `202 {"run":"<id>"}`; `400 {"error":"invalid request"}` (a param off its pattern);
-  `404 {"error":"not found"}` for an unknown or revoked token, a token of another plugin, a disabled instance, a
-  plugin that is switched off; `429 {"error":"too many requests"}` with `Retry-After`. Nothing says which part was wrong.
+  `404 {"error":"not found"}` for an unknown or revoked token, a token of another plugin, a disabled instance, an
+  instance waiting for approval, a plugin that is switched off; `429 {"error":"too many requests"}` with `Retry-After`. Nothing says which part was wrong.
   A `GET` on the same path is served by the web app, never by a job.
 
 ## Methods
@@ -181,10 +194,10 @@ All take `plugin` (the broker fills it in from the frame's manifest; the daemon 
 
 | Method | Params → result |
 |---|---|
-| `plugins.jobs.create` | `{plugin, job, name?, params?, schedule?, runAs?, enabled?, confirmAdmin?}` → instance |
+| `plugins.jobs.create` | `{plugin, job, name?, params?, schedule?, runAs?, enabled?}` → instance (a job with root steps waits for approval; `confirmAdmin` is ignored) |
 | `plugins.jobs.list` | `{plugin, job?}` → `{instances}` (the caller's own; an administrator sees all) |
 | `plugins.jobs.get` | `{plugin, id}` → instance |
-| `plugins.jobs.update` | `{plugin, id, name?, params?, schedule? (null clears), enabled?, confirmAdmin?}` → instance |
+| `plugins.jobs.update` | `{plugin, id, name?, params?, schedule? (null clears), enabled?}` → instance (new params of a job with root steps wait for a new approval) |
 | `plugins.jobs.delete` | `{plugin, id}` → `{}` (cancels a run in progress, removes its runs) |
 | `plugins.jobs.runNow` | `{plugin, id}` → `{run}` |
 | `plugins.jobs.history` | `{plugin, id, limit?}` → `{runs}`, newest first, the run in progress first, with step logs |
@@ -192,22 +205,23 @@ All take `plugin` (the broker fills it in from the frame's manifest; the daemon 
 | `plugins.jobs.webhooks.regenerate` | `{plugin, id, webhook}` → same shape, new token |
 | `plugins.jobs.webhooks.revoke` | `{plugin, id, webhook}` → `{}` |
 
-Instance: `{id, plugin, job, name, params, schedule?, owner, enabled, disabledReason?, needsAdmin, approval?: {by, at, valid},
+Instance: `{id, plugin, job, name, params, schedule?, owner, enabled, disabledReason?, needsAdmin, awaitingApproval?,
+adminSteps?: [{id, kind: command|http, command?, argv?, http?}], approval?: {by, at, valid},
 webhooks: [{id, label?, created, lastUsed?}], created, updated, running, nextRun? (ms), last?: {id, trigger, status, started,
 ended?, error?}}`. Run: `{id, instance, trigger: schedule|manual|webhook, by?, started, ended?, status: queued|running|ok|failed|timeout|cancelled,
 error?, steps: [{id, kind, status: ok|failed|skipped, durationMs?, exitCode?, httpStatus?, stdout?, stderr?, error?, truncated?, admin?, handled?}]}`.
 
 Errors: `not_found` (no such plugin, job or instance), `forbidden` (plugin not available to the caller; `runAs` another
-user; a non-administrator asking for an admin job), `invalid` (params, schedule, confirmation), `conflict` (`runNow` on
-a running or switched-off instance), `unavailable` (limits).
+user; a non-administrator asking for an admin job), `invalid` (params, schedule), `conflict` (`runNow` on a running or
+switched-off instance, or one waiting for approval), `unavailable` (limits).
 
 ### Settings (admin level)
 
-`jobs.list {plugin?}` (all instances), `jobs.setEnabled {id, enabled}`, `jobs.runNow {id}`, `jobs.delete {id}`,
-`jobs.history {id, limit?}`, `jobs.webhooks.create {id, label?}`, `jobs.webhooks.regenerate {id, webhook}`,
-`jobs.webhooks.revoke {id, webhook}`. Without administrator rights they fail with `needs_admin` (the web client
-opens the unlock dialog). An administrator can act on any instance, but cannot approve a job that needs root
-without `confirmAdmin`.
+`jobs.list {plugin?}` (all instances), `jobs.approve {id}` (see "Administrator approval"), `jobs.setEnabled {id, enabled}`,
+`jobs.runNow {id}`, `jobs.delete {id}`, `jobs.history {id, limit?}`, `jobs.webhooks.create {id, label?}`,
+`jobs.webhooks.regenerate {id, webhook}`, `jobs.webhooks.revoke {id, webhook}`. Without administrator rights (root, or
+unlocked) they fail with `needs_admin` (the web client opens the unlock dialog). These are not `plugins.*` methods, so the
+broker never lets a plugin frame call them. An administrator can act on any instance.
 
 ## Failure alerts
 

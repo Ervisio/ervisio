@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -84,7 +85,7 @@ func (m *Manager) execute(ctx context.Context, in *Instance, run *Run, tr Trigge
 	run.Status = "running"
 	m.mu.Unlock()
 
-	status, errMsg, outputs := m.runSteps(ctx, in, run, tr)
+	status, errMsg, outputs := m.safeRunSteps(ctx, in, run, tr)
 
 	m.mu.Lock()
 	run.Status, run.Error, run.Ended = status, errMsg, m.env.Now().UnixMilli()
@@ -92,6 +93,18 @@ func (m *Manager) execute(ctx context.Context, in *Instance, run *Run, tr Trigge
 	prev := m.finish(in, run, outputs, status)
 	m.auditRunEnd(in, run, tr)
 	m.alert(in, status, prev, errMsg)
+}
+
+// safeRunSteps is runSteps that turns a panic into a failed run: a run is
+// a bare goroutine, and a panic there would take the whole daemon down.
+func (m *Manager) safeRunSteps(ctx context.Context, in *Instance, run *Run, tr Trigger) (status, errMsg string, outputs map[string]string) {
+	defer func() {
+		if r := recover(); r != nil {
+			m.env.Logf("jobs: %s: run %s panicked: %v\n%s", in.ID, run.ID, r, debug.Stack())
+			status, errMsg, outputs = "failed", "The run stopped because of an internal error. The server log has the details.", nil
+		}
+	}()
+	return m.runSteps(ctx, in, run, tr)
 }
 
 // alert tells the "jobs" notification channels when an instance starts
@@ -116,8 +129,9 @@ func (m *Manager) alert(in *Instance, status, prev, errMsg string) {
 // runSteps does the work of one run and returns its final status, an
 // error message and the step output hashes to remember.
 func (m *Manager) runSteps(ctx context.Context, in *Instance, run *Run, tr Trigger) (status, errMsg string, outputs map[string]string) {
-	if reason, disable := m.runnable(in); reason != "" {
-		if disable {
+	chk, reason, st := m.check(in)
+	if st != checkOK {
+		if st == checkDisable {
 			m.mu.Lock()
 			if cur := m.findLocked(in.ID); cur != nil && cur.Enabled {
 				m.disableLocked(cur, reason)
@@ -126,10 +140,16 @@ func (m *Manager) runSteps(ctx context.Context, in *Instance, run *Run, tr Trigg
 		}
 		return "failed", reason, nil
 	}
-	man, _ := m.env.Manifest(in.Plugin)
-	job := man.Job(in.Job)
-	owner, _ := m.env.Account(in.Owner)
+	// The values check looked at, not a second lookup (the plugin may have
+	// been turned off in between).
+	man, job, owner := chk.man, chk.job, chk.owner
 
+	// The values of an instance that runs steps as root are the ones an
+	// administrator approved: nothing from the trigger replaces them
+	// (HandleHook already refuses such a call; this is the backstop).
+	if chk.admin && len(tr.Params) > 0 {
+		return "failed", "This job runs steps with administrator rights, so a webhook cannot change its values.", nil
+	}
 	params := map[string]string{}
 	for k, v := range in.Params {
 		params[k] = v

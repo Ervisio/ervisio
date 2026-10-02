@@ -515,12 +515,25 @@
       "timeout": "Tempo scaduto",
       "cancelled": "Annullata",
       "never": "Mai eseguita",
-      "disabled": "Spenta"
+      "disabled": "Spenta",
+      "awaiting": "In attesa di approvazione"
     },
     "enable": "Esegui {name} in automatico",
     "admin": "Esegue passaggi con permessi di amministratore. Approvata da {by}, {when}.",
-    "adminStale": "Un aggiornamento del plugin ha cambiato ciò che questa attività fa da amministratore. Un amministratore deve approvarla di nuovo.",
-    "adminMissing": "Questa attività richiede i permessi di amministratore e non ha un’approvazione.",
+    "adminStale": "Questa attività è cambiata: il plugin è stato aggiornato o i suoi valori sono stati modificati. Non viene eseguita finché un amministratore non la approva di nuovo.",
+    "adminMissing": "Questa attività esegue passaggi con permessi di amministratore. Non viene eseguita finché un amministratore non la approva.",
+    "approve": {
+      "action": "Controlla e approva",
+      "title": "Approvare {name}?",
+      "text": "{plugin} eseguirà i passaggi qui sotto come root, per {user}, senza chiedere la password: secondo la pianificazione, quando qualcuno la avvia o quando viene chiamato il suo webhook.",
+      "steps": "Eseguito come root",
+      "step": "Passaggio {id}",
+      "values": "Con questi valori",
+      "noValues": "Questa attività non ha valori da impostare.",
+      "note": "L’approvazione vale per questi passaggi e questi valori esatti. Se il plugin li cambia, o cambiano i valori, l’attività si ferma finché un amministratore non la approva di nuovo. Le chiamate al webhook non possono cambiare i valori.",
+      "confirm": "Approva",
+      "done": "{name} approvata."
+    },
     "lastRun": "Ultima esecuzione {when}",
     "nextRun": "prossima {when}",
     "runNow": "Esegui ora",

@@ -72,7 +72,8 @@ A few `/api/rpc` methods are answered by **ervisiod itself** instead of a bridge
 open: `plugins.jobs.*`, `plugins.notify`, `notify.*` and `jobs.*` (`docs/api/jobs.md`, `docs/api/notify.md`). The daemon
 keeps the job instances (`/var/lib/ervisio/jobs`) and the notification channels (`/etc/ervisio/notify.json`, 0600),
 runs the scheduler, and runs each step through a bridge: the owner's user bridge, or a root bridge it starts directly
-(no sudo, no password) for jobs an administrator approved.
+(no sudo, no password) for jobs an administrator approved: in Settings › Plugin jobs (`jobs.approve`), from a session
+whose administrator rights are unlocked, never from a plugin.
 
 Error codes (string): `needs_admin`, `forbidden`, `not_found`, `invalid`, `conflict`, `unavailable`,
 `internal`, `unauthenticated`. The web client reacts to `needs_admin` by showing the

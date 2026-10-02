@@ -515,12 +515,25 @@
       "timeout": "Timed out",
       "cancelled": "Cancelled",
       "never": "Never run",
-      "disabled": "Off"
+      "disabled": "Off",
+      "awaiting": "Waiting for approval"
     },
     "enable": "Run {name} automatically",
     "admin": "Runs steps with administrator rights. Approved by {by}, {when}.",
-    "adminStale": "A plugin update changed what this job does as administrator. An administrator has to approve it again.",
-    "adminMissing": "This job needs administrator rights and has no approval.",
+    "adminStale": "This job changed: the plugin was updated or its values were changed. It does not run until an administrator approves it again.",
+    "adminMissing": "This job runs steps with administrator rights. It does not run until an administrator approves it.",
+    "approve": {
+      "action": "Review and approve",
+      "title": "Approve {name}?",
+      "text": "{plugin} will run the steps below as root, for {user}, without asking for a password: on its schedule, when someone runs it, or when its webhook is called.",
+      "steps": "Runs as root",
+      "step": "Step {id}",
+      "values": "With these values",
+      "noValues": "This job has no values to set.",
+      "note": "The approval covers these exact steps and values. If the plugin changes them, or the values change, the job stops until an administrator approves it again. Webhook calls cannot change the values.",
+      "confirm": "Approve",
+      "done": "Approved {name}."
+    },
     "lastRun": "Last run {when}",
     "nextRun": "next run {when}",
     "runNow": "Run now",

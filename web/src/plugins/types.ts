@@ -167,6 +167,8 @@ export interface PluginJobInstance {
   enabled: boolean;
   disabledReason?: string;
   needsAdmin: boolean;
+  /** needsAdmin and not (or no longer) approved: it does not run until an administrator approves it in Settings > Plugin jobs. */
+  awaitingApproval?: boolean;
   approval?: { by: string; at: number; valid: boolean };
   webhooks: { id: string; label?: string; created: number; lastUsed?: number }[];
   running: boolean;
@@ -194,6 +196,7 @@ export interface PluginJobsApi {
     schedule?: { every: number } | { at: string[]; days?: number[] };
     runAs?: string;
     enabled?: boolean;
+    /** Ignored: an instance that runs steps as root waits for an administrator's approval in Settings > Plugin jobs. */
     confirmAdmin?: boolean;
   }): Promise<PluginJobInstance>;
   list(o?: { job?: string }): Promise<PluginJobInstance[]>;

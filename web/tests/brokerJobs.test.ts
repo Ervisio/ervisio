@@ -10,12 +10,12 @@ const m: BrokerManifest = {
 const user = { groups: ['users'], isRoot: false, home: '/home/ann' };
 const call = (op: string, a: Record<string, unknown>, mm: BrokerManifest = m) => authorize(mm, op, a, user);
 
-test('create only for declared jobs, never as admin, plugin id from the manifest', () => {
+test('create only for declared jobs, never as admin, plugin id from the manifest, confirmAdmin dropped', () => {
   const p = call('jobs', { action: 'create', job: 'poll', plugin: 'evil', name: 'Web', params: { dir: '/opt/stacks/web' }, schedule: { every: 300 }, runAs: 'ann', confirmAdmin: true, extra: 1 });
   assert.deepEqual(p, {
     kind: 'call',
     method: 'plugins.jobs.create',
-    params: { plugin: 'docker', job: 'poll', name: 'Web', params: { dir: '/opt/stacks/web' }, schedule: { every: 300 }, runAs: 'ann', confirmAdmin: true },
+    params: { plugin: 'docker', job: 'poll', name: 'Web', params: { dir: '/opt/stacks/web' }, schedule: { every: 300 }, runAs: 'ann' },
     admin: false,
   });
   assert.equal(call('jobs', { action: 'create', job: 'rm-rf' }).kind, 'deny');
@@ -60,4 +60,11 @@ test('notify needs the capability and a title', () => {
   assert.equal(call('notify', {}).kind, 'deny');
   assert.equal(call('notify', { title: 'x', level: 'loud' }).kind, 'deny');
   assert.equal(call('notify', { title: 'x' }, { id: 'x', capabilities: { notify: false } }).kind, 'deny');
+});
+
+test('a frame cannot approve a job: confirmAdmin is dropped on update, jobs.approve is not an action', () => {
+  const p = call('jobs', { action: 'update', id: 'abcdef01', params: { dir: '/opt/stacks/web' }, confirmAdmin: true });
+  assert.equal(p.kind, 'call');
+  assert.equal(p.kind === 'call' && 'confirmAdmin' in p.params, false);
+  assert.equal(call('jobs', { action: 'approve', id: 'abcdef01' }).kind, 'deny');
 });

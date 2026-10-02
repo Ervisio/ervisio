@@ -93,6 +93,10 @@ export interface JobInstance {
   enabled: boolean;
   disabledReason?: string;
   needsAdmin: boolean;
+  /** needsAdmin without a valid approval: the instance does not run. */
+  awaitingApproval?: boolean;
+  /** What the job runs as root, with the instance's values (for the approval dialog). */
+  adminSteps?: { id: string; kind: 'command' | 'http'; command?: string; argv?: string[]; http?: string }[];
   approval?: { by: string; at: number; valid: boolean };
   webhooks: { id: string; label?: string; created: number; lastUsed?: number }[];
   running: boolean;
@@ -122,6 +126,7 @@ export interface RunLog extends RunSummary {
 
 export const listJobs = () => call<{ instances: JobInstance[] }>('jobs.list', {}, quiet);
 export const setJobEnabled = (id: string, enabled: boolean) => call<JobInstance>('jobs.setEnabled', { id, enabled });
+export const approveJob = (id: string) => call<JobInstance>('jobs.approve', { id });
 export const runJob = (id: string) => call<{ run: string }>('jobs.runNow', { id });
 export const deleteJob = (id: string) => call<unknown>('jobs.delete', { id });
 export const jobHistory = (id: string) => call<{ runs: RunLog[] }>('jobs.history', { id }, quiet);

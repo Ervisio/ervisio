@@ -71,8 +71,9 @@ type Instance struct {
 }
 
 // Approval records who confirmed that the instance may run steps as root,
-// and for which definition (Sig covers the job and the commands and HTTP
-// APIs it uses: a plugin update that changes them asks for a new approval).
+// and for what (Sig covers the job, the commands and HTTP APIs it uses and
+// the instance's param values: a plugin update that changes the definition,
+// or new param values, ask for a new approval).
 type Approval struct {
 	By  string `json:"by"`
 	At  int64  `json:"at"`
@@ -127,14 +128,20 @@ type StepRun struct {
 }
 
 // approvalSig identifies what an administrator approved: the job
-// definition plus every command and HTTP API it uses.
-func approvalSig(m *plugins.Manifest, j *plugins.JobDef) string {
+// definition, every command and HTTP API it uses, and the param values the
+// instance runs with (json.Marshal sorts the map keys, so the order of the
+// params does not matter).
+func approvalSig(m *plugins.Manifest, j *plugins.JobDef, params map[string]string) string {
+	if params == nil {
+		params = map[string]string{}
+	}
 	used := struct {
-		Plugin string          `json:"plugin"`
-		Job    *plugins.JobDef `json:"job"`
-		Cmds   map[string]any  `json:"commands"`
-		APIs   map[string]any  `json:"http"`
-	}{Plugin: m.ID, Job: j, Cmds: map[string]any{}, APIs: map[string]any{}}
+		Plugin string            `json:"plugin"`
+		Job    *plugins.JobDef   `json:"job"`
+		Cmds   map[string]any    `json:"commands"`
+		APIs   map[string]any    `json:"http"`
+		Params map[string]string `json:"params"`
+	}{Plugin: m.ID, Job: j, Cmds: map[string]any{}, APIs: map[string]any{}, Params: params}
 	for i := range j.Steps {
 		if n := j.Steps[i].Command; n != "" {
 			if c := m.Command(n); c != nil {

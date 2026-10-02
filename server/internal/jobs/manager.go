@@ -15,6 +15,7 @@ import (
 	"github.com/ervisio/ervisio/server/internal/account"
 	"github.com/ervisio/ervisio/server/internal/modules/plugins"
 	"github.com/ervisio/ervisio/server/internal/notify"
+	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
 // Executor runs the steps of one run for one user. Exec and HTTP call
@@ -262,6 +263,14 @@ func (m *Manager) Tick(now time.Time) {
 // beginLocked starts a run (or queues a webhook call behind a running one).
 func (m *Manager) beginLocked(in *Instance, tr Trigger) (string, error) {
 	lv := m.live[in.ID]
+	// An instance that waits for an administrator's approval does not run:
+	// a scheduled tick or a webhook call is skipped, a manual run refused.
+	if why := m.awaitingApproval(in); why != "" {
+		if tr.Kind == "manual" {
+			return "", rpc.Errorf(rpc.Conflict, "%s", why).WithData(map[string]string{"reason": "awaiting_approval"})
+		}
+		return "", errSkipped
+	}
 	if lv.running {
 		switch tr.Kind {
 		case "manual":
@@ -404,40 +413,105 @@ func groupSet(a *account.Account) map[string]bool {
 	return g
 }
 
-// runnable checks whether the instance may run now. It returns a reason
-// when not; disable says the reason is permanent (the daemon switches the
-// instance off) rather than a failure of this run (a plugin turned off).
-func (m *Manager) runnable(in *Instance) (reason string, disable bool) {
+// checked is what check found: the manifest, job and owner account a run
+// uses. A run uses these very values (not a second lookup), so a plugin
+// turned off between the check and the steps cannot leave it without one.
+type checked struct {
+	man   *plugins.Manifest
+	job   *plugins.JobDef
+	owner *account.Account
+	// admin: the job runs steps as root for this owner.
+	admin bool
+}
+
+// Why check refused a run.
+const (
+	checkOK       = iota
+	checkLater    // a failure of this run (plugin turned off, job gone)
+	checkDisable  // permanent: the daemon switches the instance off
+	checkApproval // the instance waits for an administrator's approval
+)
+
+// check says whether the instance may run now and, when not, why.
+func (m *Manager) check(in *Instance) (*checked, string, int) {
 	a, err := m.env.Account(in.Owner)
 	if err != nil || a == nil {
-		return fmt.Sprintf("The account %s no longer exists.", in.Owner), true
+		return nil, fmt.Sprintf("The account %s no longer exists.", in.Owner), checkDisable
 	}
 	if a.UID != in.OwnerUID {
-		return fmt.Sprintf("The account %s is not the one that created this job.", in.Owner), true
+		return nil, fmt.Sprintf("The account %s is not the one that created this job.", in.Owner), checkDisable
 	}
 	if why := m.env.OwnerOK(a); why != "" {
-		return fmt.Sprintf("%s may no longer run jobs: %s", in.Owner, why), true
+		return nil, fmt.Sprintf("%s may no longer run jobs: %s", in.Owner, why), checkDisable
 	}
 	man, err := m.env.Manifest(in.Plugin)
-	if err != nil {
-		return err.Error(), false
+	if err != nil || man == nil {
+		if err == nil {
+			err = fmt.Errorf("The plugin %s is not available.", in.Plugin)
+		}
+		return nil, err.Error(), checkLater
 	}
 	job := man.Job(in.Job)
 	if job == nil {
-		return fmt.Sprintf("%s no longer declares the job %s.", man.Name, in.Job), false
+		return nil, fmt.Sprintf("%s no longer declares the job %s.", man.Name, in.Job), checkLater
 	}
 	if !man.CanBeUsedBy(groupSet(a), a.CanSudo()) {
-		return fmt.Sprintf("%s is not available to %s.", man.Name, in.Owner), false
+		return nil, fmt.Sprintf("%s is not available to %s.", man.Name, in.Owner), checkLater
 	}
+	c := &checked{man: man, job: job, owner: a}
 	if man.JobNeedsAdmin(job, a.IsRoot(), groupSet(a)) {
+		c.admin = true
 		if !a.CanSudo() {
-			return fmt.Sprintf("%s can no longer administer this machine, and the job needs administrator rights.", in.Owner), true
+			return nil, fmt.Sprintf("%s can no longer administer this machine, and the job needs administrator rights.", in.Owner), checkDisable
 		}
-		if in.Approval == nil || in.Approval.Sig != approvalSig(man, job) {
-			return fmt.Sprintf("%s changed what this job does as an administrator. An administrator has to approve it again.", man.Name), true
+		if why := approvalMissing(man, job, in); why != "" {
+			return nil, why, checkApproval
 		}
 	}
-	return "", false
+	return c, "", checkOK
+}
+
+// approvalMissing says why an instance whose job needs administrator rights
+// may not run them yet ("" when its approval holds).
+func approvalMissing(man *plugins.Manifest, job *plugins.JobDef, in *Instance) string {
+	if in.Approval == nil {
+		return "This job runs steps with administrator rights and waits for an administrator's approval in Settings › Plugin jobs."
+	}
+	if in.Approval.Sig != approvalSig(man, job, in.Params) {
+		return fmt.Sprintf("%s changed what this job does as an administrator, or its values changed. An administrator has to approve it again in Settings › Plugin jobs.", man.Name)
+	}
+	return ""
+}
+
+// runnable checks whether the instance may run now. It returns a reason
+// when not; disable says the reason is permanent (the daemon switches the
+// instance off) rather than a failure of this run (a plugin turned off) or
+// a missing approval.
+func (m *Manager) runnable(in *Instance) (reason string, disable bool) {
+	_, reason, st := m.check(in)
+	return reason, st == checkDisable
+}
+
+// awaitingApproval says why an instance waits for an administrator ("" when
+// it does not): its job runs steps as root for its owner and it has no
+// valid approval. Runs of such an instance do not start.
+func (m *Manager) awaitingApproval(in *Instance) string {
+	man, err := m.env.Manifest(in.Plugin)
+	if err != nil || man == nil {
+		return ""
+	}
+	job := man.Job(in.Job)
+	if job == nil {
+		return ""
+	}
+	a, err := m.env.Account(in.Owner)
+	if err != nil || a == nil {
+		return ""
+	}
+	if !man.JobNeedsAdmin(job, a.IsRoot(), groupSet(a)) {
+		return ""
+	}
+	return approvalMissing(man, job, in)
 }
 
 // find returns a copy of the instance.

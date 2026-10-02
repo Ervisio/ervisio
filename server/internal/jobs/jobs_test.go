@@ -204,6 +204,29 @@ func (f *fixture) caller(name string) Caller {
 	return Caller{Name: name, UID: a.UID, Groups: g, CanSudo: a.CanSudo(), IsRoot: a.IsRoot()}
 }
 
+// unlocked is the caller of a session with administrator rights now (root
+// or unlocked): the only one that may approve an admin instance.
+func (f *fixture) unlocked(name string) Caller {
+	c := f.caller(name)
+	c.Admin = true
+	return c
+}
+
+// approved creates an admin instance as user and has alice (unlocked)
+// approve it.
+func (f *fixture) approved(user, job string, params map[string]string, sch *Schedule) *InstanceView {
+	f.t.Helper()
+	v := f.create(user, job, params, sch)
+	if !v.AwaitingApproval {
+		f.t.Fatalf("%s should wait for approval: %+v", job, v)
+	}
+	a, err := f.m.Approve(f.unlocked("alice"), v.ID)
+	if err != nil {
+		f.t.Fatalf("approve %s: %v", job, err)
+	}
+	return a
+}
+
 func (f *fixture) create(user, job string, params map[string]string, sch *Schedule) *InstanceView {
 	f.t.Helper()
 	v, err := f.m.Create(f.caller(user), CreateReq{Plugin: "jt", Job: job, Params: params, Schedule: sch})
@@ -636,30 +659,54 @@ func TestParamsAreValidatedAndEscaped(t *testing.T) {
 
 func TestAdminInstanceNeedsApprovalByAnAdministrator(t *testing.T) {
 	f := newFixture(t)
-	// bob cannot administer: refused.
+	// bob cannot administer: refused, confirmAdmin or not.
 	if _, err := f.m.Create(f.caller("bob"), CreateReq{Plugin: "jt", Job: "rooty", ConfirmAdmin: true}); err == nil || !strings.Contains(err.Error(), "administrator") {
 		t.Fatalf("non-admin: %v", err)
 	}
-	// alice (wheel) must confirm explicitly.
-	_, err := f.m.Create(f.caller("alice"), CreateReq{Plugin: "jt", Job: "rooty"})
-	var re *rpc.Error
-	if err == nil || !asRPC(err, &re) || re.Data == nil {
-		t.Fatalf("without confirmation: %v", err)
-	}
-	v, err := f.m.Create(f.caller("alice"), CreateReq{Plugin: "jt", Job: "rooty", ConfirmAdmin: true})
+	// alice (wheel) creates it, even with confirmAdmin from a plugin: it
+	// waits for approval and does not run.
+	v, err := f.m.Create(f.caller("alice"), CreateReq{Plugin: "jt", Job: "rooty", ConfirmAdmin: true, Schedule: &Schedule{Every: 60}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !v.NeedsAdmin || v.Approval == nil || v.Approval.By != "alice" || !v.Approval.Valid {
+	if !v.NeedsAdmin || !v.AwaitingApproval || v.Approval != nil || len(v.AdminSteps) != 1 || v.AdminSteps[0].Argv[0] != "systemctl" {
+		t.Fatalf("awaiting: %+v", v)
+	}
+	_, err = f.m.RunNow(f.caller("alice"), "jt", v.ID)
+	var re *rpc.Error
+	if err == nil || !asRPC(err, &re) || re.Code != rpc.Conflict {
+		t.Fatalf("run while waiting: %v", err)
+	}
+	f.m.Tick(f.advance(2 * time.Minute))
+	f.m.Wait()
+	if len(f.exec.calls) != 0 {
+		t.Fatal("an instance waiting for approval ran")
+	}
+	// Approving needs administrator rights now (unlocked), not just wheel.
+	if _, err := f.m.Approve(f.caller("alice"), v.ID); err == nil || !asRPC(err, &re) || re.Code != rpc.NeedsAdmin {
+		t.Fatalf("approve without unlock: %v", err)
+	}
+	v, err = f.m.Approve(f.unlocked("alice"), v.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !v.NeedsAdmin || v.AwaitingApproval || v.Approval == nil || v.Approval.By != "alice" || !v.Approval.Valid {
 		t.Fatalf("approval: %+v", v)
 	}
-	f.m.RunNow(f.caller("alice"), "jt", v.ID)
+	if _, err := f.m.RunNow(f.caller("alice"), "jt", v.ID); err != nil {
+		t.Fatal(err)
+	}
 	f.m.Wait()
 	if r := lastRun(f, v.ID); r.Status != "ok" || !r.Steps[0].Admin || r.Steps[1].Admin {
 		t.Fatalf("admin step routing: %+v", r.Steps)
 	}
 	if !f.exec.calls[0].admin || f.exec.calls[1].admin {
 		t.Fatal("only the admin step goes through the root bridge")
+	}
+	// A job without admin steps needs no approval.
+	s := f.create("alice", "simple", nil, nil)
+	if _, err := f.m.Approve(f.unlocked("alice"), s.ID); err == nil {
+		t.Fatal("approving a job without admin steps")
 	}
 }
 
@@ -673,10 +720,7 @@ func asRPC(err error, out **rpc.Error) bool {
 
 func TestInstanceDisabledWhenOwnerLosesAdmin(t *testing.T) {
 	f := newFixture(t)
-	v, err := f.m.Create(f.caller("alice"), CreateReq{Plugin: "jt", Job: "rooty", ConfirmAdmin: true, Schedule: &Schedule{Every: 60}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	v := f.approved("alice", "rooty", nil, &Schedule{Every: 60})
 	f.mu.Lock()
 	f.accts["alice"].GroupNames = []string{"alice"} // removed from wheel
 	f.mu.Unlock()
@@ -705,7 +749,7 @@ func TestInstanceDisabledWhenOwnerLosesAdmin(t *testing.T) {
 
 func TestRunRefusedWhenAdminLostBetweenReconciles(t *testing.T) {
 	f := newFixture(t)
-	v, _ := f.m.Create(f.caller("alice"), CreateReq{Plugin: "jt", Job: "rooty", ConfirmAdmin: true})
+	v := f.approved("alice", "rooty", nil, nil)
 	f.mu.Lock()
 	f.accts["alice"].GroupNames = []string{"alice"}
 	f.mu.Unlock()
@@ -722,14 +766,28 @@ func TestRunRefusedWhenAdminLostBetweenReconciles(t *testing.T) {
 
 func TestPluginUpdateChangingAdminStepsNeedsNewApproval(t *testing.T) {
 	f := newFixture(t)
-	v, _ := f.m.Create(f.caller("alice"), CreateReq{Plugin: "jt", Job: "rooty", ConfirmAdmin: true})
+	v := f.approved("alice", "rooty", nil, nil)
 	// The plugin is updated: the admin command now runs something else.
 	f.man.Capabilities.Commands[6].Argv = []string{"rm", "-rf", "/"}
-	f.m.RunNow(f.caller("alice"), "jt", v.ID)
+	_, err := f.m.RunNow(f.caller("alice"), "jt", v.ID)
 	f.m.Wait()
-	r := lastRun(f, v.ID)
-	if r.Status != "failed" || !strings.Contains(r.Error, "approve it again") || len(f.exec.calls) != 0 {
-		t.Fatalf("%s %q calls=%d", r.Status, r.Error, len(f.exec.calls))
+	if err == nil || !strings.Contains(err.Error(), "approve it again") || len(f.exec.calls) != 0 {
+		t.Fatalf("%v calls=%d", err, len(f.exec.calls))
+	}
+	got, _ := f.m.Get(f.caller("alice"), "jt", v.ID)
+	if !got.AwaitingApproval || got.Approval == nil || got.Approval.Valid || !got.Enabled {
+		t.Fatalf("stale approval: %+v", got)
+	}
+	// A new approval covers the new definition.
+	if _, err := f.m.Approve(f.unlocked("alice"), v.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.m.RunNow(f.caller("alice"), "jt", v.ID); err != nil {
+		t.Fatal(err)
+	}
+	f.m.Wait()
+	if len(f.exec.calls) != 2 {
+		t.Fatalf("calls after approval: %d", len(f.exec.calls))
 	}
 }
 

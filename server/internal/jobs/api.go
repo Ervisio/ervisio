@@ -3,6 +3,7 @@ package jobs
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/ervisio/ervisio/server/internal/modules/plugins"
@@ -14,11 +15,13 @@ type Caller struct {
 	Name   string
 	UID    uint32
 	Groups map[string]bool
-	// Admin: the session has administrator rights now (root, or unlocked).
-	// It may see and manage every instance.
+	// Admin: the session has administrator rights now (root, or unlocked:
+	// the user typed a password sudo accepted). It may see and manage every
+	// instance, and approve one that runs steps as root (Approve).
 	Admin bool
-	// CanSudo: the account may administer the machine, so it may approve
-	// an instance that runs steps as root.
+	// CanSudo: the account is a member of an administrators' group, so it
+	// may own an instance that runs steps as root (an unlocked
+	// administrator still has to approve it).
 	CanSudo bool
 	IsRoot  bool
 }
@@ -36,8 +39,12 @@ type InstanceView struct {
 	Owner          string            `json:"owner"`
 	Enabled        bool              `json:"enabled"`
 	DisabledReason string            `json:"disabledReason,omitempty"`
-	// NeedsAdmin: the job runs steps as root, so it was approved by an administrator.
+	// NeedsAdmin: the job runs steps as root, so an administrator has to approve it.
 	NeedsAdmin bool `json:"needsAdmin"`
+	// AwaitingApproval: NeedsAdmin and no valid approval, so it does not run.
+	AwaitingApproval bool `json:"awaitingApproval,omitempty"`
+	// AdminSteps lists what the job does as root, for the approval dialog.
+	AdminSteps []AdminStep `json:"adminSteps,omitempty"`
 	// Approval says who approved it and whether the approval still holds.
 	Approval *ApprovalView `json:"approval,omitempty"`
 	Webhooks []WebhookView `json:"webhooks"`
@@ -54,6 +61,73 @@ type ApprovalView struct {
 	By    string `json:"by"`
 	At    int64  `json:"at"`
 	Valid bool   `json:"valid"`
+}
+
+// AdminStep is one step that runs as root, as the approval dialog shows it.
+type AdminStep struct {
+	ID string `json:"id"`
+	// Kind is command or http.
+	Kind string `json:"kind"`
+	// Command is the command's name and Argv what it runs, with the
+	// instance's values filled in ("{step.x.stdout}" stays a placeholder).
+	Command string   `json:"command,omitempty"`
+	Argv    []string `json:"argv,omitempty"`
+	// HTTP is "METHOD api path" for an HTTP step.
+	HTTP string `json:"http,omitempty"`
+}
+
+// adminSteps lists the steps of job that run as root for an owner with
+// these groups, with the instance's param values filled in.
+func adminSteps(man *plugins.Manifest, job *plugins.JobDef, params map[string]string, groups map[string]bool) []AdminStep {
+	val := func(r plugins.Ref) (string, error) {
+		switch r.Kind {
+		case "param":
+			return params[r.Name], nil
+		case "job":
+			return job.Name, nil
+		case "plugin":
+			return man.Name, nil
+		case "step":
+			if r.Field != "" {
+				return "{step." + r.Name + "." + r.Field + "}", nil
+			}
+			return "{step." + r.Name + "}", nil
+		}
+		return "{" + r.Kind + "}", nil
+	}
+	render := func(t string) string {
+		v, err := plugins.RenderTemplate(t, val, nil)
+		if err != nil {
+			return t
+		}
+		return v
+	}
+	var out []AdminStep
+	for i := range job.Steps {
+		s := &job.Steps[i]
+		switch {
+		case s.Command != "":
+			c := man.Command(s.Command)
+			if c == nil || !c.Admin || (c.AdminUnlessGroup != "" && groups[c.AdminUnlessGroup]) {
+				continue
+			}
+			argv := make([]string, len(c.Argv))
+			for j, a := range c.Argv {
+				for k := range s.Args {
+					a = strings.ReplaceAll(a, "{"+strconv.Itoa(k)+"}", render(s.Args[k]))
+				}
+				argv[j] = a
+			}
+			out = append(out, AdminStep{ID: s.ID, Kind: "command", Command: s.Command, Argv: argv})
+		case s.HTTP != nil:
+			a := man.API(s.HTTP.API)
+			if a == nil || !a.Admin || (a.AdminUnlessGroup != "" && groups[a.AdminUnlessGroup]) {
+				continue
+			}
+			out = append(out, AdminStep{ID: s.ID, Kind: "http", HTTP: s.HTTP.Method + " " + s.HTTP.API + " " + render(s.HTTP.Path)})
+		}
+	}
+	return out
 }
 
 // WebhookView is a webhook without its token hash.
@@ -91,13 +165,18 @@ func (m *Manager) view(in *Instance) InstanceView {
 	if man, err := m.env.Manifest(in.Plugin); err == nil {
 		if job := man.Job(in.Job); job != nil {
 			if a, err := m.env.Account(in.Owner); err == nil && a != nil {
-				v.NeedsAdmin = man.JobNeedsAdmin(job, a.IsRoot(), groupSet(a))
+				g := groupSet(a)
+				v.NeedsAdmin = man.JobNeedsAdmin(job, a.IsRoot(), g)
+				if v.NeedsAdmin {
+					v.AdminSteps = adminSteps(man, job, in.Params, g)
+				}
 			} else {
 				v.NeedsAdmin = in.Approval != nil
 			}
 			if in.Approval != nil {
-				v.Approval = &ApprovalView{By: in.Approval.By, At: in.Approval.At, Valid: in.Approval.Sig == approvalSig(man, job)}
+				v.Approval = &ApprovalView{By: in.Approval.By, At: in.Approval.At, Valid: in.Approval.Sig == approvalSig(man, job, in.Params)}
 			}
+			v.AwaitingApproval = v.NeedsAdmin && (v.Approval == nil || !v.Approval.Valid)
 		}
 	} else if in.Approval != nil {
 		v.NeedsAdmin = true
@@ -146,38 +225,79 @@ type CreateReq struct {
 	// RunAs must be empty or the caller: jobs run as the user who creates them.
 	RunAs   string `json:"runAs"`
 	Enabled *bool  `json:"enabled"`
-	// ConfirmAdmin confirms that the instance may run steps as root (needed
-	// when the job has admin steps; only an administrator can).
+	// ConfirmAdmin is ignored: a plugin cannot approve a job that runs
+	// steps as root (security review H2). Such an instance is created
+	// waiting for approval; an administrator approves it with Approve
+	// (Settings › Plugin jobs, jobs.approve). Kept so old callers still parse.
 	ConfirmAdmin bool `json:"confirmAdmin"`
 }
 
-var errAdminConfirm = func(what string) error {
-	return rpc.Errorf(rpc.Invalid, "This job runs steps with administrator rights, without asking for a password each time. %s", what).
-		WithData(map[string]string{"reason": "admin_confirmation_required"})
-}
-
-// approve checks and records the administrator's approval of an instance
-// whose job needs root, or clears it for one that does not. c is who
-// approves (the caller); the groups that exempt a user from an admin step
-// are the owner's.
-func (m *Manager) approve(c Caller, man *plugins.Manifest, job *plugins.JobDef, in *Instance, confirm bool) error {
-	groups, root := map[string]bool{}, in.OwnerUID == 0
+// checkOwnerMayAdmin refuses an instance whose job runs steps as root for
+// an owner who cannot administer the machine (nobody could approve it), and
+// says whether the job needs root for that owner.
+func (m *Manager) checkOwnerMayAdmin(c Caller, man *plugins.Manifest, job *plugins.JobDef, in *Instance) (bool, error) {
+	groups, root := c.Groups, c.IsRoot
 	if a, err := m.env.Account(in.Owner); err == nil && a != nil {
 		groups, root = groupSet(a), a.IsRoot()
 	}
 	if !man.JobNeedsAdmin(job, root, groups) {
-		in.Approval = nil
-		return nil
+		return false, nil
 	}
 	if !c.CanSudo {
-		return rpc.Errorf(rpc.Forbidden, "Only an administrator can set up a job that needs administrator rights.")
+		return true, rpc.Errorf(rpc.Forbidden, "Only an administrator can set up a job that needs administrator rights.")
 	}
-	if !confirm {
-		return errAdminConfirm("Pass confirmAdmin: true to approve it.")
+	return true, nil
+}
+
+// Approve records an administrator's approval of an instance whose job runs
+// steps as root: the daemon then runs those steps, with the instance's
+// current values, without asking for a password. Only a caller with
+// administrator rights now (root, or unlocked: sudo accepted a password in
+// this session) may approve; the daemon serves this only as the admin-level
+// jobs.approve, never to a plugin.
+func (m *Manager) Approve(c Caller, id string) (*InstanceView, error) {
+	if !c.Admin {
+		return nil, rpc.Errorf(rpc.NeedsAdmin, "Unlock administrator rights to approve a job.")
 	}
-	in.Approval = &Approval{By: c.Name, At: m.env.Now().UnixMilli(), Sig: approvalSig(man, job)}
-	m.auditApproval(c.Name, in)
-	return nil
+	cur, err := m.access(c, id, "")
+	if err != nil {
+		return nil, err
+	}
+	man, err := m.env.Manifest(cur.Plugin)
+	if err != nil {
+		return nil, err
+	}
+	job := man.Job(cur.Job)
+	if job == nil {
+		return nil, rpc.Errorf(rpc.Unavailable, "%s no longer declares the job %s.", man.Name, cur.Job)
+	}
+	a, err := m.env.Account(cur.Owner)
+	if err != nil || a == nil || a.UID != cur.OwnerUID {
+		return nil, rpc.Errorf(rpc.Invalid, "The account %s no longer exists.", cur.Owner)
+	}
+	if !man.JobNeedsAdmin(job, a.IsRoot(), groupSet(a)) {
+		return nil, rpc.Errorf(rpc.Invalid, "This job does not run anything with administrator rights; it needs no approval.")
+	}
+	if !a.CanSudo() {
+		return nil, rpc.Errorf(rpc.Invalid, "%s cannot administer this machine, so the job cannot run its administrator steps as %s.", cur.Owner, cur.Owner)
+	}
+	m.mu.Lock()
+	stored := m.findLocked(id)
+	if stored == nil {
+		m.mu.Unlock()
+		return nil, notFound()
+	}
+	stored.Approval = &Approval{By: c.Name, At: m.env.Now().UnixMilli(), Sig: approvalSig(man, job, stored.Params)}
+	stored.Updated = m.env.Now().UnixMilli()
+	err = m.saveLocked()
+	cp := *stored
+	m.mu.Unlock()
+	if err != nil {
+		return nil, rpc.Errorf(rpc.Internal, "Could not save the approval: %v", err)
+	}
+	m.auditApproval(c.Name, &cp)
+	v := m.view(&cp)
+	return &v, nil
 }
 
 func validLabel(s string, max int) (string, error) {
@@ -219,7 +339,9 @@ func (m *Manager) Create(c Caller, req CreateReq) (*InstanceView, error) {
 	now := m.env.Now()
 	in := &Instance{ID: randHex(4), Plugin: req.Plugin, Job: req.Job, Name: name, Params: params, Schedule: sched, Owner: c.Name, OwnerUID: c.UID,
 		Enabled: req.Enabled == nil || *req.Enabled, Webhooks: []Webhook{}, Created: now.UnixMilli(), Updated: now.UnixMilli()}
-	if err := m.approve(c, man, job, in, req.ConfirmAdmin); err != nil {
+	// A job that runs steps as root starts waiting for an administrator's
+	// approval (Approve); confirmAdmin from the caller is not one.
+	if _, err := m.checkOwnerMayAdmin(c, man, job, in); err != nil {
 		return nil, err
 	}
 	m.mu.Lock()
@@ -296,15 +418,28 @@ func (o *optSchedule) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, o.Value)
 }
 
+func mapsEqual(a, b map[string]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if w, ok := b[k]; !ok || w != v {
+			return false
+		}
+	}
+	return true
+}
+
 // UpdateReq is plugins.jobs.update: only the fields given change.
 type UpdateReq struct {
-	Plugin       string             `json:"plugin"`
-	ID           string             `json:"id"`
-	Name         *string            `json:"name"`
-	Params       *map[string]string `json:"params"`
-	Schedule     optSchedule        `json:"schedule"`
-	Enabled      *bool              `json:"enabled"`
-	ConfirmAdmin bool               `json:"confirmAdmin"`
+	Plugin   string             `json:"plugin"`
+	ID       string             `json:"id"`
+	Name     *string            `json:"name"`
+	Params   *map[string]string `json:"params"`
+	Schedule optSchedule        `json:"schedule"`
+	Enabled  *bool              `json:"enabled"`
+	// ConfirmAdmin is ignored (see CreateReq).
+	ConfirmAdmin bool `json:"confirmAdmin"`
 }
 
 // Update changes an instance: name, params, schedule, enabled. New params
@@ -333,11 +468,16 @@ func (m *Manager) Update(c Caller, req UpdateReq) (*InstanceView, error) {
 		if perr != nil {
 			return nil, rpc.Errorf(rpc.Invalid, "%v", perr)
 		}
-		in.Params = params
-		// The administrator approves what the job will do with the new values.
-		if err := m.approve(c, man, job, &in, req.ConfirmAdmin); err != nil {
+		// New values of a job that runs steps as root need a new approval:
+		// the approval covers the values (approvalSig).
+		needs, err := m.checkOwnerMayAdmin(c, man, job, &in)
+		if err != nil {
 			return nil, err
 		}
+		if needs && !mapsEqual(params, in.Params) {
+			in.Approval = nil
+		}
+		in.Params = params
 	}
 	if req.Schedule.Set {
 		if in.Schedule, err = req.Schedule.Value.Validate(); err != nil {

@@ -3,7 +3,7 @@ import { useI18n, useT } from '../../i18n';
 import { formatDateTime, formatDuration, relativeTime } from '../../lib/format';
 import { Badge, Button, ConfirmDialog, Dialog, Icon, IconButton, Input, Switch, toast, type Tone } from '../../ui';
 import {
-  createWebhook, deleteJob, jobHistory, listJobs, regenerateWebhook, revokeWebhook, runJob, setJobEnabled,
+  approveJob, createWebhook, deleteJob, jobHistory, listJobs, regenerateWebhook, revokeWebhook, runJob, setJobEnabled,
   type JobInstance, type NewWebhook, type RunLog, type Schedule,
 } from './jobsApi';
 import { LockedPanel, useAdminLoad } from './useAdminLoad';
@@ -40,6 +40,7 @@ export function PluginJobsBlock() {
   const [naming, setNaming] = useState<JobInstance | null>(null);
   const [revoking, setRevoking] = useState<{ job: JobInstance; id: string; label: string } | null>(null);
   const [busy, setBusy] = useState('');
+  const [approving, setApproving] = useState<JobInstance | null>(null);
 
   if (state === 'locked') return <LockedPanel title={t('jobs.lockedTitle')} text={t('jobs.lockedText')} onUnlocked={() => void reload()} />;
   if (state === 'failed') return <div className="st-warn" role="alert"><Icon name="alert" /><div>{error}</div></div>;
@@ -66,14 +67,15 @@ export function PluginJobsBlock() {
                     <b>{label(j)}</b>
                     <small>{t('jobs.owner', { user: j.owner })} · {describeSchedule(t, lang, j.schedule)}{j.name ? ` · ${j.job}` : ''}</small>
                   </div>
-                  {j.running ? <Badge tone="info">{t('jobs.status.running')}</Badge> : !j.enabled ? <Badge>{t('jobs.status.disabled')}</Badge> : last ? <Badge tone={STATUS_TONE[last.status] ?? 'neutral'}>{t(`jobs.status.${last.status}`)}</Badge> : <Badge>{t('jobs.status.never')}</Badge>}
+                  {j.running ? <Badge tone="info">{t('jobs.status.running')}</Badge> : !j.enabled ? <Badge>{t('jobs.status.disabled')}</Badge> : j.awaitingApproval ? <Badge tone="warn">{t('jobs.status.awaiting')}</Badge> : last ? <Badge tone={STATUS_TONE[last.status] ?? 'neutral'}>{t(`jobs.status.${last.status}`)}</Badge> : <Badge>{t('jobs.status.never')}</Badge>}
                   <Switch aria-label={t('jobs.enable', { name: label(j) })} checked={j.enabled} onChange={(on) => setJobEnabled(j.id, on).then(() => reload(), (e) => fail(label(j), e))} />
                 </div>
                 {j.disabledReason && !j.enabled && <div className="st-warn"><Icon name="alert" /><div>{j.disabledReason}</div></div>}
                 {j.needsAdmin && (
                   <div className={`st-warn${j.approval?.valid ? ' st-warn--soft' : ''}`}>
                     <Icon name="shield" />
-                    <div>{j.approval ? (j.approval.valid ? t('jobs.admin', { by: j.approval.by, when: formatDateTime(j.approval.at) }) : t('jobs.adminStale')) : t('jobs.adminMissing')}</div>
+                    <div className="grow">{j.approval ? (j.approval.valid ? t('jobs.admin', { by: j.approval.by, when: formatDateTime(j.approval.at) }) : t('jobs.adminStale')) : t('jobs.adminMissing')}</div>
+                    {j.awaitingApproval && <Button size="sm" icon="shield" onClick={() => setApproving(j)}>{t('jobs.approve.action')}</Button>}
                   </div>
                 )}
                 <div className="st-job-meta">
@@ -97,7 +99,7 @@ export function PluginJobsBlock() {
                   <div><Button size="sm" icon="plus" disabled={j.webhooks.length >= 5} onClick={() => setNaming(j)}>{t('jobs.webhooks.add')}</Button></div>
                 </div>
                 <div className="st-job-act">
-                  <Button icon="play" loading={busy === j.id} disabled={!j.enabled || j.running} onClick={async () => {
+                  <Button icon="play" loading={busy === j.id} disabled={!j.enabled || j.running || !!j.awaitingApproval} onClick={async () => {
                     setBusy(j.id);
                     try { await runJob(j.id); toast.info(t('jobs.started', { name: label(j) })); void reload(); } catch (e) { fail(label(j), e); } finally { setBusy(''); }
                   }}>{t('jobs.runNow')}</Button>
@@ -126,9 +128,42 @@ export function PluginJobsBlock() {
       )}
       <ConfirmDialog open={!!revoking} onClose={() => setRevoking(null)} title={t('jobs.webhooks.revokeTitle')} description={t('jobs.webhooks.revokeText')} confirmLabel={t('jobs.webhooks.revoke')} cancelLabel={t('cancel')}
         onConfirm={async () => { if (revoking) { await revokeWebhook(revoking.job.id, revoking.id); void reload(); } }} />
+      <ConfirmDialog open={!!approving} onClose={() => setApproving(null)} danger={false} icon="shield"
+        title={t('jobs.approve.title', { name: approving ? label(approving) : '' })}
+        description={t('jobs.approve.text', { plugin: approving?.plugin ?? '', user: approving?.owner ?? '' })}
+        confirmLabel={t('jobs.approve.confirm')} cancelLabel={t('cancel')}
+        onConfirm={async () => { if (approving) { await approveJob(approving.id); toast.ok(t('jobs.approve.done', { name: label(approving) })); void reload(); } }}>
+        {approving && <ApprovalDetails job={approving} />}
+      </ConfirmDialog>
       <ConfirmDialog open={!!removing} onClose={() => setRemoving(null)} title={t('jobs.deleteTitle')} description={t('jobs.deleteText', { name: removing ? label(removing) : '' })} confirmLabel={t('jobs.deleteAction')} cancelLabel={t('cancel')}
         onConfirm={async () => { if (removing) { await deleteJob(removing.id); void reload(); } }} />
     </>
+  );
+}
+
+/** What an approval covers: the values the job runs with and each step it runs as root. */
+function ApprovalDetails({ job }: { job: JobInstance }) {
+  const t = useT('settings');
+  const params = Object.entries(job.params);
+  return (
+    <div className="st-approve">
+      <b>{t('jobs.approve.steps')}</b>
+      <ul>
+        {(job.adminSteps ?? []).map((s) => (
+          <li key={s.id}>
+            <small>{t('jobs.approve.step', { id: s.id })}</small>
+            <code className="st-code">{s.kind === 'command' ? (s.argv ?? []).join(' ') : s.http}</code>
+          </li>
+        ))}
+      </ul>
+      <b>{t('jobs.approve.values')}</b>
+      {params.length === 0 ? <small>{t('jobs.approve.noValues')}</small> : (
+        <dl>
+          {params.map(([k, v]) => (<div key={k}><dt>{k}</dt><dd><code>{v}</code></dd></div>))}
+        </dl>
+      )}
+      <small className="st-note">{t('jobs.approve.note')}</small>
+    </div>
   );
 }
 

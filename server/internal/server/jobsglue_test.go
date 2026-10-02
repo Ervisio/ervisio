@@ -125,4 +125,8 @@ func TestDaemonAdminMethodsAskForUnlock(t *testing.T) {
 	if code, body = doc(t, c, "POST", ts.URL+"/api/rpc", `{"method":"jobs.list","params":{}}`, true); code != 403 || !strings.Contains(body, "needs_admin") {
 		t.Fatalf("%d %s", code, body)
 	}
+	// Approving a job that runs steps as root needs an unlocked session too.
+	if code, body = doc(t, c, "POST", ts.URL+"/api/rpc", `{"method":"jobs.approve","params":{"id":"00000000"}}`, true); code != 403 || !strings.Contains(body, "needs_admin") {
+		t.Fatalf("jobs.approve: %d %s", code, body)
+	}
 }
