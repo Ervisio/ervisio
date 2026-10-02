@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.4.0] - 2026-10-02
 
 ### Changed
 - **The Docker plugin moved to the marketplace.** It is no longer part of Ervisio: releases and packages ship no plugins. Its source is at [Ervisio/plugin-docker](https://github.com/Ervisio/plugin-docker), and it is published, signed by the Ervisio team, through the registry [Ervisio/plugins](https://github.com/Ervisio/plugins). A machine that used it keeps it: on the first start after the update, on a host with a Docker socket where the plugin was not switched off, the daemon installs the marketplace version into `/var/lib/ervisio/plugins` (catalog signature, checksum and plugin signature are all checked; it retries every hour while offline). Until then, Plugins › Installed shows a "Docker moved to the marketplace" card with an Install button.
@@ -12,6 +12,7 @@
 - `ervisiod --install-plugin ID` installs a plugin from the signed catalog; `ervisiod --skip-moved-plugins` keeps the daemon from adding the Docker plugin by itself.
 - The installer offers the Docker plugin when Docker is installed (`--with-docker-plugin`, `--no-plugins`).
 - `plugin-sign -catalog catalog.json` signs and verifies catalogs.
+- Logo files in `docs/brand/pack` (mark, logo with name, monochrome, app icons, SVG).
 
 ## [0.3.0] - 2026-10-02
 
