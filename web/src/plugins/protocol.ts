@@ -20,7 +20,7 @@ export interface FrameTheme {
 }
 
 /** Operations a plugin may ask for. Everything else is refused by the broker. */
-export type FrameOp = 'exec' | 'http' | 'readFile' | 'writeFile' | 'listDir' | 'mkdir' | 'remove' | 'asset' | 'toast' | 'open' | 'openUrl';
+export type FrameOp = 'exec' | 'http' | 'readFile' | 'writeFile' | 'listDir' | 'mkdir' | 'remove' | 'asset' | 'toast' | 'open' | 'openUrl' | 'jobs' | 'notify';
 
 /** An HTTP request to a capabilities.http entry (sdk.api.http / httpStream). Binary bodies travel as Uint8Array. */
 export interface FrameHttpRequest {
