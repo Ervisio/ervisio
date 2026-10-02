@@ -1,5 +1,5 @@
-# variant-studio runtime state (server pid, keys, events)
-.variant-studio/state/
+# variant-studio (local design workspace, not versioned)
+.variant-studio/
 node_modules/
 dist/
 target/
