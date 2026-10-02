@@ -1,10 +1,13 @@
 package config
 
 import (
+	"crypto/ed25519"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"math"
 	"net"
+	"net/url"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -149,6 +152,10 @@ var keys = []Key{
 		get: func(c *Config) any { return c.Plugins.AllowUnsigned }, set: func(c *Config, v any) { c.Plugins.AllowUnsigned = v.(bool) }, validate: noCheck},
 	{Name: "plugins.dev", Type: Bool,
 		get: func(c *Config) any { return c.Plugins.Dev }, set: func(c *Config, v any) { c.Plugins.Dev = v.(bool) }, validate: noCheck},
+	{Name: "plugins.catalog_url", Type: String,
+		get: func(c *Config) any { return c.Plugins.CatalogURL }, set: func(c *Config, v any) { c.Plugins.CatalogURL = v.(string) }, validate: validateCatalogURL},
+	{Name: "plugins.catalog_key", Type: String,
+		get: func(c *Config) any { return c.Plugins.CatalogKey }, set: func(c *Config, v any) { c.Plugins.CatalogKey = v.(string) }, validate: validateEd25519Key},
 	{Name: "updates.channel", Type: Enum, Values: []string{"stable", "prerelease"},
 		get: func(c *Config) any { return c.Updates.Channel }, set: func(c *Config, v any) { c.Updates.Channel = v.(string) },
 		validate: func(v any) error {
@@ -213,6 +220,32 @@ func validateListen(s string) error {
 	p, err := strconv.Atoi(port)
 	if err != nil || p < 1 || p > 65535 {
 		return errors.New("port must be between 1 and 65535")
+	}
+	return nil
+}
+
+// validateCatalogURL accepts "" (no remote catalog) or an https URL.
+func validateCatalogURL(v any) error {
+	s := v.(string)
+	if s == "" {
+		return nil
+	}
+	u, err := url.Parse(s)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Fragment != "" || len(s) > 2048 {
+		return errors.New("must be empty or an https:// URL")
+	}
+	return nil
+}
+
+// validateEd25519Key accepts "" or the base64 of a 32-byte ed25519 public key.
+func validateEd25519Key(v any) error {
+	s := v.(string)
+	if s == "" {
+		return nil
+	}
+	b, err := base64.StdEncoding.DecodeString(s)
+	if err != nil || len(b) != ed25519.PublicKeySize {
+		return errors.New("must be empty or the base64 of an ed25519 public key (32 bytes)")
 	}
 	return nil
 }

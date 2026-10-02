@@ -1,0 +1,424 @@
+{
+  "categories": [
+    {
+      "id": "Containers",
+      "name": "Containers",
+      "icon": "server",
+      "color": "file"
+    },
+    {
+      "id": "Security",
+      "name": "Security",
+      "icon": "shield",
+      "color": "svc"
+    },
+    {
+      "id": "Networking",
+      "name": "Networking",
+      "icon": "globe",
+      "color": "term"
+    },
+    {
+      "id": "Storage",
+      "name": "Storage",
+      "icon": "disk",
+      "color": "sw"
+    },
+    {
+      "id": "Monitoring",
+      "name": "Monitoring",
+      "icon": "zap",
+      "color": "ov"
+    },
+    {
+      "id": "Web servers",
+      "name": "Web servers",
+      "icon": "globe",
+      "color": "log"
+    }
+  ],
+  "plugins": [
+    {
+      "id": "proxmox",
+      "name": "Proxmox",
+      "version": "0.7.0",
+      "author": "Ervisio team",
+      "description": "Manage VMs and containers on a Proxmox node.",
+      "icon": "server",
+      "color": "usr",
+      "category": "Containers",
+      "verified": true,
+      "installs": 12000,
+      "featured": true,
+      "notes": "Start, stop and snapshot your VMs from the same place as the rest of your servers.",
+      "source": "https://plugins.example.invalid/proxmox-0.7.0.tar.gz",
+      "capabilities": {
+        "commands": [
+          {
+            "name": "vms",
+            "description": "List VMs",
+            "argv": [
+              "qm",
+              "list"
+            ],
+            "admin": true
+          },
+          {
+            "name": "start",
+            "description": "Start a VM",
+            "argv": [
+              "qm",
+              "start",
+              "{0}"
+            ],
+            "args": [
+              {
+                "pattern": "[0-9]{1,6}",
+                "maxLen": 6
+              }
+            ],
+            "admin": true
+          },
+          {
+            "name": "stop",
+            "description": "Stop a VM",
+            "argv": [
+              "qm",
+              "stop",
+              "{0}"
+            ],
+            "args": [
+              {
+                "pattern": "[0-9]{1,6}",
+                "maxLen": 6
+              }
+            ],
+            "admin": true
+          },
+          {
+            "name": "snapshot",
+            "description": "Snapshot a VM",
+            "argv": [
+              "qm",
+              "snapshot",
+              "{0}",
+              "{1}"
+            ],
+            "args": [
+              {
+                "pattern": "[0-9]{1,6}",
+                "maxLen": 6
+              },
+              {
+                "pattern": "[a-zA-Z0-9][a-zA-Z0-9_.-]*",
+                "maxLen": 40
+              }
+            ],
+            "admin": true
+          }
+        ],
+        "files": {
+          "read": [],
+          "write": []
+        },
+        "sockets": [
+          "/var/run/pveproxy.sock"
+        ],
+        "network": [
+          "localhost"
+        ]
+      },
+      "contributes": {
+        "pages": [
+          {
+            "id": "proxmox",
+            "title": "Proxmox",
+            "icon": "server"
+          }
+        ],
+        "widgets": [
+          {
+            "id": "vms",
+            "title": "Virtual machines",
+            "icon": "server"
+          }
+        ],
+        "snippets": []
+      },
+      "visibleTo": {
+        "groups": []
+      }
+    },
+    {
+      "id": "nginx-sites",
+      "name": "Nginx sites",
+      "version": "2.0.1",
+      "author": "Ervisio team",
+      "description": "Virtual hosts, certificates and reverse proxies.",
+      "icon": "globe",
+      "color": "term",
+      "category": "Web servers",
+      "verified": true,
+      "installs": 31000,
+      "notes": "Virtual hosts and certificates.",
+      "source": "https://plugins.example.invalid/nginx-sites-2.0.1.tar.gz",
+      "capabilities": {
+        "commands": [
+          {
+            "name": "test",
+            "description": "Check the configuration",
+            "argv": [
+              "nginx",
+              "-t"
+            ],
+            "admin": true
+          },
+          {
+            "name": "reload",
+            "description": "Reload nginx",
+            "argv": [
+              "systemctl",
+              "reload",
+              "nginx"
+            ],
+            "admin": true
+          },
+          {
+            "name": "certbot",
+            "description": "Renew certificates",
+            "argv": [
+              "certbot",
+              "renew",
+              "--quiet"
+            ],
+            "admin": true
+          }
+        ],
+        "files": {
+          "read": [
+            "/etc/nginx"
+          ],
+          "write": [
+            "/etc/nginx",
+            "/etc/letsencrypt"
+          ]
+        },
+        "sockets": [],
+        "network": []
+      },
+      "contributes": {
+        "pages": [
+          {
+            "id": "nginx",
+            "title": "Nginx sites",
+            "icon": "globe"
+          }
+        ],
+        "widgets": [
+          {
+            "id": "sites",
+            "title": "Sites",
+            "icon": "globe"
+          }
+        ],
+        "snippets": []
+      },
+      "visibleTo": {
+        "groups": [
+          "wheel",
+          "sudo"
+        ]
+      }
+    },
+    {
+      "id": "fail2ban",
+      "name": "Fail2ban",
+      "version": "1.2.0",
+      "author": "community, @lrossi",
+      "description": "Bans, jails and blocked IPs at a glance.",
+      "icon": "shield",
+      "color": "svc",
+      "category": "Security",
+      "verified": false,
+      "installs": 18000,
+      "source": "https://plugins.example.invalid/fail2ban-1.2.0.tar.gz",
+      "capabilities": {
+        "commands": [
+          {
+            "name": "status",
+            "description": "List jails",
+            "argv": [
+              "fail2ban-client",
+              "status"
+            ],
+            "admin": true
+          },
+          {
+            "name": "jail",
+            "description": "Show a jail",
+            "argv": [
+              "fail2ban-client",
+              "status",
+              "{0}"
+            ],
+            "args": [
+              {
+                "pattern": "[a-zA-Z0-9][a-zA-Z0-9_.-]*",
+                "maxLen": 40
+              }
+            ],
+            "admin": true
+          },
+          {
+            "name": "unban",
+            "description": "Unban an address",
+            "argv": [
+              "fail2ban-client",
+              "unban",
+              "{0}"
+            ],
+            "args": [
+              {
+                "pattern": "[0-9a-fA-F:.]{3,45}",
+                "maxLen": 45
+              }
+            ],
+            "admin": true
+          }
+        ],
+        "files": {
+          "read": [
+            "/var/log/fail2ban.log"
+          ],
+          "write": []
+        },
+        "sockets": [],
+        "network": []
+      },
+      "contributes": {
+        "pages": [
+          {
+            "id": "fail2ban",
+            "title": "Fail2ban",
+            "icon": "shield"
+          }
+        ],
+        "widgets": [],
+        "snippets": []
+      },
+      "visibleTo": {
+        "groups": [
+          "wheel",
+          "sudo"
+        ]
+      }
+    },
+    {
+      "id": "samba-shares",
+      "name": "Samba shares",
+      "version": "1.0.4",
+      "author": "Ervisio team",
+      "description": "Share folders with Windows and Mac.",
+      "icon": "files",
+      "color": "file",
+      "category": "Storage",
+      "verified": true,
+      "installs": 9000,
+      "source": "https://plugins.example.invalid/samba-shares-1.0.4.tar.gz",
+      "capabilities": {
+        "commands": [
+          {
+            "name": "status",
+            "description": "Show connections",
+            "argv": [
+              "smbstatus",
+              "--shares"
+            ],
+            "admin": true
+          },
+          {
+            "name": "reload",
+            "description": "Reload Samba",
+            "argv": [
+              "systemctl",
+              "reload",
+              "smb"
+            ],
+            "admin": true
+          }
+        ],
+        "files": {
+          "read": [
+            "/etc/samba"
+          ],
+          "write": [
+            "/etc/samba/smb.conf"
+          ]
+        },
+        "sockets": [],
+        "network": []
+      },
+      "contributes": {
+        "pages": [
+          {
+            "id": "samba",
+            "title": "Samba shares",
+            "icon": "files"
+          }
+        ],
+        "widgets": [],
+        "snippets": []
+      },
+      "visibleTo": {
+        "groups": [
+          "wheel",
+          "sudo"
+        ]
+      }
+    },
+    {
+      "id": "prometheus",
+      "name": "Prometheus",
+      "version": "0.4.2",
+      "author": "community, @dferrante",
+      "description": "Export metrics and graph any scrape target.",
+      "icon": "zap",
+      "color": "ov",
+      "category": "Monitoring",
+      "verified": false,
+      "installs": 7000,
+      "source": "https://plugins.example.invalid/prometheus-0.4.2.tar.gz",
+      "capabilities": {
+        "commands": [],
+        "files": {
+          "read": [],
+          "write": []
+        },
+        "sockets": [],
+        "network": [
+          "localhost:9090"
+        ]
+      },
+      "contributes": {
+        "pages": [
+          {
+            "id": "prometheus",
+            "title": "Prometheus",
+            "icon": "zap"
+          }
+        ],
+        "widgets": [
+          {
+            "id": "targets",
+            "title": "Targets",
+            "icon": "zap"
+          }
+        ],
+        "snippets": []
+      },
+      "visibleTo": {
+        "groups": []
+      }
+    }
+  ]
+}

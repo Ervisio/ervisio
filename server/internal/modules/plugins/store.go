@@ -58,15 +58,16 @@ type Found struct {
 type policy struct {
 	AllowUnsigned bool
 	Dev           bool
+	CatalogURL    string
+	CatalogKey    string
 }
 
 func readPolicy() policy {
 	c, _, _, err := cfg.Load(configmod.Path)
 	if err != nil || c == nil {
-		d := cfg.Default()
-		return policy{AllowUnsigned: d.Plugins.AllowUnsigned, Dev: d.Plugins.Dev}
+		c = cfg.Default()
 	}
-	return policy{AllowUnsigned: c.Plugins.AllowUnsigned, Dev: c.Plugins.Dev}
+	return policy{AllowUnsigned: c.Plugins.AllowUnsigned, Dev: c.Plugins.Dev, CatalogURL: c.Plugins.CatalogURL, CatalogKey: c.Plugins.CatalogKey}
 }
 
 // devDirs returns the folders scanned as "dev" plugin locations: the
@@ -308,7 +309,13 @@ func list(adminBridge bool) []Info {
 	p := readPolicy()
 	who := currentCaller(adminBridge)
 	st := readState()
-	cat, _ := loadLocalCatalog()
+	local, err := loadLocalCatalog()
+	if err != nil {
+		local = &Catalog{}
+	}
+	// Updates come from the local and the signed remote catalog; the remote
+	// one only from the cache, so listing never waits for the network.
+	cat := mergeCatalogs(local, cachedRemoteCatalog())
 	out := []Info{}
 	for _, f := range scan(p) {
 		if f.M == nil {

@@ -39,9 +39,8 @@ package() {
 	# Self-update stays off: pacman installs new versions.
 	printf 'pacman\n' | install -Dm644 /dev/stdin "$pkgdir/usr/lib/ervisio/managed"
 
-	install -d "$pkgdir/usr/share/ervisio"
+	install -d "$pkgdir/usr/share/ervisio/plugins"
 	cp -r --no-preserve=ownership web "$pkgdir/usr/share/ervisio/web"
-	cp -r --no-preserve=ownership plugins "$pkgdir/usr/share/ervisio/plugins"
 	chmod -R u+rwX,go+rX,go-w "$pkgdir/usr/share/ervisio"
 
 	install -Dm644 packaging/ervisio.service "$pkgdir/usr/lib/systemd/system/ervisio.service"

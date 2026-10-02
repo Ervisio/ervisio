@@ -65,6 +65,10 @@ const (
 	// versioned install uses LibDir/versions/<v>/plugins as packaged root.
 	PackagedPluginsDir  = "/usr/share/" + Slug + "/plugins"
 	InstalledPluginsDir = StateDir + "/plugins"
+	// PluginCatalogURL is the default marketplace catalog (config
+	// plugins.catalog_url), built and signed by the Ervisio/plugins registry.
+	// Its signature is at the same address with .sig instead of .json.
+	PluginCatalogURL = "https://ervisio.github.io/plugins/catalog.json"
 
 	// PAMService is the PAM service name; PAMFallbackService is used when
 	// /etc/pam.d/<PAMService> does not exist.

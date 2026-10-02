@@ -12,7 +12,7 @@ Ervisio is installed in one of two layouts (details and publishing: `docs/PACKAG
 | `bin/ervisiod` | `/usr/lib/ervisio/versions/<v>/bin/`, `/usr/bin/ervisiod -> …/current/bin/ervisiod` | `/usr/bin/ervisiod` |
 | `bin/ervisio-bridge` | `/usr/lib/ervisio/versions/<v>/bin/` | `/usr/lib/ervisio/ervisio-bridge` |
 | `web/` | `/usr/lib/ervisio/versions/<v>/web/` | `/usr/share/ervisio/web/` |
-| `plugins/<id>` | `/usr/lib/ervisio/versions/<v>/plugins/<id>/` | `/usr/share/ervisio/plugins/<id>/` |
+| `plugins/` (empty since 0.4.0) | `/usr/lib/ervisio/versions/<v>/plugins/` | `/usr/share/ervisio/plugins/` |
 | `ervisio.service` | `/etc/systemd/system/ervisio.service` | `/usr/lib/systemd/system/ervisio.service` |
 | `pam.d/ervisio.<family>` | `/etc/pam.d/ervisio` | `/etc/pam.d/ervisio` |
 | `package-service.sh` | — | `/usr/lib/ervisio/package-service` |
@@ -35,7 +35,7 @@ Files here:
 
 Runtime paths, the same for every layout: configuration `/etc/ervisio/ervisio.conf` (optional; defaults apply
 when missing), self-signed certificate in `/etc/ervisio/tls/` (generated on first start), plugins installed from
-the UI in `/var/lib/ervisio/plugins/`, self-update state in `/var/lib/ervisio/updates/`.
+the marketplace in `/var/lib/ervisio/plugins/` (outcome of the Docker plugin move in `/var/lib/ervisio/plugins-moved.json`), self-update state in `/var/lib/ervisio/updates/`.
 
 Without `/etc/pam.d/ervisio` the daemon falls back to the `login` PAM service. The PAM file needs `auth`,
 `account` and `session` lines: each user bridge runs inside a PAM session opened by `ervisiod

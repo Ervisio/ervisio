@@ -30,7 +30,6 @@ trap 'rm -rf "$STAGE"' EXIT
 mkdir -p "$STAGE/bin" "$STAGE/plugins" "$STAGE/packaging"
 install -m755 server/bin/ervisiod server/bin/ervisio-bridge "$STAGE/bin/"
 cp -r web/dist "$STAGE/web"
-cp -r plugins/docker "$STAGE/plugins/docker"
 cp -r packaging/ervisio.service packaging/pam.d "$STAGE/packaging/"
 printf '%s\n' "$VER" > "$STAGE/VERSION"
 

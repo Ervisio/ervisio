@@ -28,7 +28,7 @@ VERSION="$1" ARCH="$2" OUT="$3"
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "VERSION must be x.y.z or x.y.z-pre (no leading v)"; exit 2; }
 [[ "$ARCH" =~ ^(amd64|arm64)$ ]] || { echo "ARCH must be amd64 or arm64"; exit 2; }
 
-for f in server/bin/ervisiod server/bin/ervisio-bridge web/dist/index.html plugins/docker/manifest.sig; do
+for f in server/bin/ervisiod server/bin/ervisio-bridge web/dist/index.html; do
   [ -f "$f" ] || { echo "missing $f"; exit 1; }
 done
 # Check the binaries carry VERSION (they can only run on a host of the same arch).
@@ -62,7 +62,8 @@ D="$STAGE/$NAME"
 mkdir -p "$D/bin" "$D/plugins" "$D/packaging"
 install -m755 server/bin/ervisiod server/bin/ervisio-bridge "$D/bin/"
 cp -r web/dist "$D/web"
-cp -r plugins/docker "$D/plugins/docker"
+# plugins/ stays empty: plugins (Docker included, up to 0.3.0 shipped here)
+# come from the signed marketplace catalog (docs/api/plugins.md).
 cp -r packaging/ervisio.service packaging/pam.d packaging/install.sh packaging/README.md "$D/packaging/"
 # The installer; packaging/install.sh runs it with --from this folder.
 install -m755 install.sh "$D/install.sh"

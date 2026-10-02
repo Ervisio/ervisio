@@ -6,7 +6,8 @@
 # Packages use the flat layout and mark the install as managed:
 #   /usr/bin/ervisiod                  daemon
 #   /usr/lib/ervisio/ervisio-bridge    bridge
-#   /usr/share/ervisio/{web,plugins}   web app, first-party plugins
+#   /usr/share/ervisio/web             web app
+#   /usr/share/ervisio/plugins         packaged plugins (empty: plugins come from the marketplace)
 #   /usr/lib/ervisio/managed           "apt" / "dnf" / "zypper": self-update is off
 #
 # Ervisio was called LinuxAdmin up to 0.2.0: the package replaces the
@@ -48,9 +49,10 @@ contents:
   - src: ./web
     dst: /usr/share/ervisio/web
     type: tree
-  - src: ./plugins
-    dst: /usr/share/ervisio/plugins
-    type: tree
+  - dst: /usr/share/ervisio/plugins
+    type: dir
+    file_info:
+      mode: 0755
   - src: ./LICENSE
     dst: /usr/share/licenses/ervisio/LICENSE
     file_info:

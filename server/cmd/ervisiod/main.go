@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -18,6 +19,9 @@ import (
 	"github.com/ervisio/ervisio/server/internal/bridge"
 	"github.com/ervisio/ervisio/server/internal/config"
 	"github.com/ervisio/ervisio/server/internal/legacy"
+	configmod "github.com/ervisio/ervisio/server/internal/modules/config"
+	"github.com/ervisio/ervisio/server/internal/modules/plugins"
+	"github.com/ervisio/ervisio/server/internal/rpc"
 	"github.com/ervisio/ervisio/server/internal/server"
 	"github.com/ervisio/ervisio/server/internal/update"
 )
@@ -62,6 +66,8 @@ func main() {
 	devKeys := flag.String("dev-authorized-keys", "", "dev only: authorized_keys file used for SSH-key sign-in instead of ~/.ssh")
 	check := flag.Bool("check-config", false, "parse and validate the configuration (the file after the flag, else -config), print OK or the errors, exit 0 or 1; starts nothing")
 	version := flag.Bool("version", false, "print the version and exit")
+	installPlugin := flag.String("install-plugin", "", "install (or update) this plugin from the signed marketplace catalog, then exit (root)")
+	skipMoved := flag.Bool("skip-moved-plugins", false, "do not install the plugins that left "+brand.Name+" (Docker) from the marketplace on start, then exit (root)")
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [flags]\n", brand.DaemonBinary)
 		flag.VisitAll(func(f *flag.Flag) {
@@ -151,6 +157,13 @@ func main() {
 	if versioned {
 		pluginDirs[0] = filepath.Join(versionDir, "plugins")
 	}
+	// Plugins work in this process (as root) uses the same configuration
+	// and packaged folder as the bridges.
+	configmod.Path = cfgAbs
+	plugins.SystemDir = pluginDirs[0]
+	if *installPlugin != "" || *skipMoved {
+		os.Exit(pluginCommand(*installPlugin, *skipMoved))
+	}
 	devPlugins := ""
 	if *dev {
 		if wd, err := os.Getwd(); err == nil {
@@ -224,9 +237,60 @@ func main() {
 			}()
 		}
 	}
+	if !*dev && os.Geteuid() == 0 {
+		// Plugins that moved out of the core (Docker): keep them on machines
+		// that use them (internal/modules/plugins/moved.go).
+		go func() {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(10 * time.Second):
+			}
+			plugins.MigrateMoved(ctx, log.Printf)
+		}()
+	}
 	if err := srv.Run(ctx); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// pluginCommand implements --install-plugin and --skip-moved-plugins.
+func pluginCommand(id string, skip bool) int {
+	if os.Geteuid() != 0 {
+		fmt.Fprintln(os.Stderr, "run this as root")
+		return 1
+	}
+	if skip {
+		for _, mp := range plugins.Moved {
+			if plugins.ReadMoved()[mp.ID] == "" {
+				if err := plugins.SetMoved(mp.ID, plugins.MovedSkipped); err != nil {
+					fmt.Fprintln(os.Stderr, err)
+					return 1
+				}
+			}
+		}
+		if id == "" {
+			return 0
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	in, err := plugins.InstallFromCatalog(ctx, id)
+	if err != nil {
+		var re *rpc.Error
+		if errors.As(err, &re) {
+			err = errors.New(re.Message)
+		}
+		fmt.Fprintf(os.Stderr, "could not install the plugin %s: %v\n", id, err)
+		return 1
+	}
+	for _, mp := range plugins.Moved {
+		if mp.ID == id {
+			_ = plugins.SetMoved(id, plugins.MovedInstalled)
+		}
+	}
+	fmt.Printf("installed %s %s (signature verified) in %s\n", in.Name, in.Version, plugins.InstalledDir)
+	return 0
 }
 
 // checkConfig implements --check-config: 0 when the file is valid.

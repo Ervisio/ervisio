@@ -248,15 +248,3 @@ func TestNetworkHosts(t *testing.T) {
 		t.Fatal("CSP injection through capabilities.network accepted")
 	}
 }
-
-// The shipped Docker example must verify with the embedded team key.
-func TestShippedDockerSigned(t *testing.T) {
-	dir := "../../../../plugins/docker"
-	if _, err := os.Stat(dir); err != nil {
-		t.Skip("plugins/docker not found")
-	}
-	s := CheckSignature(dir, TrustedKeys)
-	if !s.Signed || !s.Verified {
-		t.Fatalf("plugins/docker: signed=%v verified=%v %s", s.Signed, s.Verified, s.Err)
-	}
-}

@@ -315,12 +315,14 @@ func setup(t *testing.T) (system, installed string) {
 	StatePath = filepath.Join(root, "state.json")
 	CatalogURLFile = filepath.Join(root, "none.url")
 	DevDirs = []string{}
+	MovedStatePath = filepath.Join(root, "moved.json")
+	noRemoteCatalog = true
 	configmod.Path = filepath.Join(root, "ervisio.conf")
 	os.MkdirAll(SystemDir, 0o755)
 	os.MkdirAll(InstalledDir, 0o755)
 	// Most tests use unsigned fixtures; the default (signed only) is tested in TestTrustPolicy.
 	os.WriteFile(configmod.Path, []byte("[plugins]\nallow_unsigned = true\n"), 0o644)
-	t.Cleanup(func() { DevDirs = nil })
+	t.Cleanup(func() { DevDirs = nil; noRemoteCatalog = false })
 	return SystemDir, InstalledDir
 }
 
@@ -593,16 +595,17 @@ func TestCanSee(t *testing.T) {
 	}
 }
 
-// The sample catalog shipped in plugins/catalog.json must parse and hold valid entries.
-func TestShippedCatalog(t *testing.T) {
-	b, err := os.ReadFile("../../../../plugins/catalog.json")
+// The sample catalog (testdata, the format of the marketplace catalog) must
+// parse and hold valid entries.
+func TestSampleCatalog(t *testing.T) {
+	b, err := os.ReadFile("testdata/catalog-sample.json")
 	if err != nil {
-		t.Skip("catalog not found")
+		t.Fatal(err)
 	}
 	var raw struct{ Plugins []json.RawMessage }
 	json.Unmarshal(b, &raw)
 	c, err := parseCatalog(b)
-	if err != nil || len(c.Plugins) != len(raw.Plugins) || len(c.Plugins) != 6 {
+	if err != nil || len(c.Plugins) != len(raw.Plugins) || len(c.Plugins) != 5 {
 		t.Fatalf("%d of %d entries valid: %v", len(c.Plugins), len(raw.Plugins), err)
 	}
 	for _, e := range c.Plugins {
@@ -611,11 +614,6 @@ func TestShippedCatalog(t *testing.T) {
 				t.Errorf("%s: %v", e.ID, err)
 			}
 		}
-	}
-	// The docker entry must advertise the same permissions as the shipped plugin.
-	m, _ := LoadManifest("../../../../plugins/docker")
-	if m == nil || !sameJSON(c.find("docker").Capabilities, m.Capabilities) {
-		t.Error("docker catalog entry differs from plugins/docker/manifest.json")
 	}
 }
 

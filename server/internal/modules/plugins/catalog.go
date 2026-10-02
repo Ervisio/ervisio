@@ -2,7 +2,10 @@ package plugins
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -125,53 +128,214 @@ func loadLocalCatalog() (*Catalog, error) {
 	return &Catalog{Categories: []CatalogCategory{}, Plugins: []CatalogEntry{}}, nil
 }
 
-var (
-	remoteMu    sync.Mutex
-	remoteCache *Catalog
-	remoteAt    time.Time
+// catalogSigPrefix is prepended to the canonical catalog before signing
+// (catalog.sig), so a catalog signature can never pass for a plugin
+// signature or the other way round.
+const catalogSigPrefix = "ervisio-catalog-v1\n"
+
+// Remote catalog limits.
+const (
+	maxCatalogBytes = 2 << 20
+	maxCatalogSig   = 1 << 10
+	catalogTTL      = 5 * time.Minute
 )
 
-// loadRemoteCatalog fetches the catalog from the URL in CatalogURLFile
-// (https only, 5 s, 2 MiB). It returns nil when no URL is configured.
-func loadRemoteCatalog(ctx context.Context) (*Catalog, error) {
-	b, err := os.ReadFile(CatalogURLFile)
-	if err != nil {
-		return nil, nil
-	}
-	raw := strings.TrimSpace(strings.SplitN(string(b), "\n", 2)[0])
-	if raw == "" {
-		return nil, nil
-	}
-	u, err := url.Parse(raw)
-	if err != nil || u.Scheme != "https" || u.Host == "" {
-		return nil, fmt.Errorf("the catalog address in %s must be an https URL", CatalogURLFile)
-	}
-	remoteMu.Lock()
-	defer remoteMu.Unlock()
-	if remoteCache != nil && time.Since(remoteAt) < 5*time.Minute {
-		return remoteCache, nil
-	}
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
-	resp, err := httpClient().Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("could not fetch the plugin catalog: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("the plugin catalog server answered %s", resp.Status)
-	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20+1))
-	if err != nil || len(data) > 2<<20 {
-		return nil, fmt.Errorf("the plugin catalog is unreadable or larger than 2 MiB")
-	}
-	c, err := parseCatalog(data)
+// CatalogMessage is the byte string a catalog signature covers.
+func CatalogMessage(catalog []byte) ([]byte, error) {
+	c, err := Canonical(catalog)
 	if err != nil {
 		return nil, err
 	}
-	remoteCache, remoteAt = c, time.Now()
-	return c, nil
+	return append([]byte(catalogSigPrefix), c...), nil
+}
+
+// SignCatalog returns the catalog.sig content (base64 and a newline).
+func SignCatalog(catalog []byte, priv ed25519.PrivateKey) ([]byte, error) {
+	msg, err := CatalogMessage(catalog)
+	if err != nil {
+		return nil, fmt.Errorf("catalog.json: %v", err)
+	}
+	return []byte(base64.StdEncoding.EncodeToString(ed25519.Sign(priv, msg)) + "\n"), nil
+}
+
+// VerifyCatalog checks a catalog.sig against the keys.
+func VerifyCatalog(catalog, sig []byte, keys []ed25519.PublicKey) error {
+	raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(sig)))
+	if err != nil || len(raw) != ed25519.SignatureSize {
+		return errors.New("catalog.sig is not a base64 ed25519 signature")
+	}
+	msg, err := CatalogMessage(catalog)
+	if err != nil {
+		return fmt.Errorf("catalog.json: %v", err)
+	}
+	for _, k := range keys {
+		if ed25519.Verify(k, msg, raw) {
+			return nil
+		}
+	}
+	return errors.New("the catalog signature does not match any trusted key")
+}
+
+// catalogSigURL is where the signature of a catalog lives: the same
+// address with a final ".json" replaced by ".sig" (".sig" appended when the
+// path does not end in .json).
+func catalogSigURL(u *url.URL) string {
+	s := *u
+	s.RawQuery, s.Fragment, s.RawPath = "", "", ""
+	if strings.HasSuffix(s.Path, ".json") {
+		s.Path = strings.TrimSuffix(s.Path, ".json") + ".sig"
+	} else {
+		s.Path += ".sig"
+	}
+	return s.String()
+}
+
+// remoteSource says which remote catalog to read: the https URL on the
+// first line of CatalogURLFile when that file exists (an override kept from
+// earlier versions), else plugins.catalog_url. "" = no remote catalog.
+func remoteSource(p policy) (string, error) {
+	if noRemoteCatalog {
+		return "", nil
+	}
+	raw := p.CatalogURL
+	if b, err := os.ReadFile(CatalogURLFile); err == nil {
+		if line := strings.TrimSpace(strings.SplitN(string(b), "\n", 2)[0]); line != "" {
+			raw = line
+		}
+	}
+	if raw == "" {
+		return "", nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
+		return "", fmt.Errorf("the plugin catalog address %q is not an https URL", raw)
+	}
+	return u.String(), nil
+}
+
+// catalogKeys are the keys trusted for catalog signatures: the team keys
+// plus plugins.catalog_key.
+func catalogKeys(p policy) []ed25519.PublicKey {
+	keys := append([]ed25519.PublicKey(nil), Keys()...)
+	if p.CatalogKey != "" {
+		if k, err := base64.StdEncoding.DecodeString(p.CatalogKey); err == nil && len(k) == ed25519.PublicKeySize {
+			keys = append(keys, ed25519.PublicKey(k))
+		}
+	}
+	return keys
+}
+
+type remoteResult struct {
+	url string
+	cat *Catalog
+	err error
+	at  time.Time
+}
+
+// noRemoteCatalog turns the remote catalog off (tests that do not want the
+// network).
+var noRemoteCatalog bool
+
+var (
+	remoteMu   sync.Mutex
+	remoteLast *remoteResult
+	remoteBusy bool
+	// catalogClient fetches the remote catalog (tests replace it).
+	catalogClient = func() *http.Client { c := httpClient(); c.Timeout = 10 * time.Second; return c }
+)
+
+// loadRemoteCatalog returns the signed remote catalog (nil, nil when none
+// is configured). Results, failures included, are cached for 5 minutes. A
+// catalog without a valid signature by a trusted key is an error: it is
+// ignored and its entries are never offered.
+func loadRemoteCatalog(ctx context.Context) (*Catalog, error) {
+	p := readPolicy()
+	src, err := remoteSource(p)
+	if err != nil || src == "" {
+		return nil, err
+	}
+	remoteMu.Lock()
+	defer remoteMu.Unlock()
+	if r := remoteLast; r != nil && r.url == src && time.Since(r.at) < catalogTTL {
+		return r.cat, r.err
+	}
+	c, err := fetchSignedCatalog(ctx, src, catalogKeys(p))
+	remoteLast = &remoteResult{url: src, cat: c, err: err, at: time.Now()}
+	return c, err
+}
+
+// cachedRemoteCatalog returns the cached remote catalog without waiting for
+// the network. When the cache is stale it starts a refresh in the
+// background, so the next call sees it.
+func cachedRemoteCatalog() *Catalog {
+	p := readPolicy()
+	src, err := remoteSource(p)
+	if err != nil || src == "" {
+		return nil
+	}
+	remoteMu.Lock()
+	r := remoteLast
+	stale := r == nil || r.url != src || time.Since(r.at) >= catalogTTL
+	start := stale && !remoteBusy
+	if start {
+		remoteBusy = true
+	}
+	remoteMu.Unlock()
+	if start {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			_, _ = loadRemoteCatalog(ctx)
+			remoteMu.Lock()
+			remoteBusy = false
+			remoteMu.Unlock()
+		}()
+	}
+	if r == nil || r.url != src {
+		return nil
+	}
+	return r.cat
+}
+
+func fetchSignedCatalog(ctx context.Context, src string, keys []ed25519.PublicKey) (*Catalog, error) {
+	u, _ := url.Parse(src)
+	data, err := fetchSmall(ctx, src, maxCatalogBytes)
+	if err != nil {
+		return nil, fmt.Errorf("could not fetch the plugin catalog: %v", err)
+	}
+	sig, err := fetchSmall(ctx, catalogSigURL(u), maxCatalogSig)
+	if err != nil {
+		return nil, fmt.Errorf("the plugin catalog at %s was ignored: its signature could not be fetched (%v)", u.Host, err)
+	}
+	if err := VerifyCatalog(data, sig, keys); err != nil {
+		return nil, fmt.Errorf("the plugin catalog at %s was ignored: %v", u.Host, err)
+	}
+	return parseCatalog(data)
+}
+
+func fetchSmall(ctx context.Context, src string, limit int64) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, src, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := catalogClient().Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("the server answered %s", resp.Status)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("larger than %d KiB", limit>>10)
+	}
+	return data, nil
 }
 
 // httpClient only follows redirects to https.
@@ -191,8 +355,13 @@ func httpClient() *http.Client {
 type CatalogView struct {
 	Categories []CatalogCategory `json:"categories"`
 	Plugins    []CatalogItem     `json:"plugins"`
-	// Warning is set when the remote catalog could not be read (the local one is still shown).
+	// Warning is set when the remote catalog could not be read or was not
+	// signed by a trusted key (the local one is still shown).
 	Warning string `json:"warning,omitempty"`
+	// Moved lists plugins that used to ship with Ervisio, are offered by
+	// the catalog and are not installed on this machine although it looks
+	// like they are wanted (moved.go). The UI shows an "Install" card.
+	Moved []MovedNotice `json:"moved"`
 }
 
 // CatalogItem is an entry plus its install state.
@@ -202,30 +371,42 @@ type CatalogItem struct {
 	InstalledVersion string `json:"installedVersion,omitempty"`
 }
 
+// mergeCatalogs adds the remote entries to the local ones (a remote entry
+// replaces a local one with the same id). The remote categories win when
+// it has any.
+func mergeCatalogs(local, remote *Catalog) *Catalog {
+	out := &Catalog{Categories: local.Categories, Plugins: append([]CatalogEntry(nil), local.Plugins...)}
+	if remote == nil {
+		return out
+	}
+	byID := map[string]int{}
+	for i, e := range out.Plugins {
+		byID[e.ID] = i
+	}
+	for _, e := range remote.Plugins {
+		if i, ok := byID[e.ID]; ok {
+			out.Plugins[i] = e
+		} else {
+			byID[e.ID] = len(out.Plugins)
+			out.Plugins = append(out.Plugins, e)
+		}
+	}
+	if len(remote.Categories) > 0 {
+		out.Categories = remote.Categories
+	}
+	return out
+}
+
 func catalogView(ctx context.Context) (*CatalogView, error) {
 	local, err := loadLocalCatalog()
 	if err != nil {
 		return nil, err
 	}
-	view := &CatalogView{Categories: local.Categories, Plugins: []CatalogItem{}}
-	entries := local.Plugins
-	if remote, rerr := loadRemoteCatalog(ctx); rerr != nil {
+	remote, rerr := loadRemoteCatalog(ctx)
+	merged := mergeCatalogs(local, remote)
+	view := &CatalogView{Categories: merged.Categories, Plugins: []CatalogItem{}, Moved: []MovedNotice{}}
+	if rerr != nil {
 		view.Warning = rerr.Error()
-	} else if remote != nil {
-		byID := map[string]int{}
-		for i, e := range entries {
-			byID[e.ID] = i
-		}
-		for _, e := range remote.Plugins {
-			if i, ok := byID[e.ID]; ok {
-				entries[i] = e
-			} else {
-				entries = append(entries, e)
-			}
-		}
-		if len(remote.Categories) > 0 {
-			view.Categories = remote.Categories
-		}
 	}
 	installed := map[string]string{}
 	for _, f := range scan(readPolicy()) {
@@ -233,10 +414,11 @@ func catalogView(ctx context.Context) (*CatalogView, error) {
 			installed[f.M.ID] = f.M.Version
 		}
 	}
-	for _, e := range entries {
+	for _, e := range merged.Plugins {
 		it := CatalogItem{CatalogEntry: e}
 		it.InstalledVersion, it.Installed = installed[e.ID]
 		view.Plugins = append(view.Plugins, it)
 	}
+	view.Moved = movedNotices(merged, installed)
 	return view, nil
 }

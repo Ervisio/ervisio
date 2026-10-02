@@ -6,3 +6,7 @@ target/
 *.log
 .env
 __pycache__/
+
+# Dev plugin folders (plugins/README.md)
+/plugins/*
+!/plugins/README.md

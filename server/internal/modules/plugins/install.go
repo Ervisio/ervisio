@@ -157,6 +157,9 @@ func ExtractTarGz(r io.Reader, dest string) error {
 	return nil
 }
 
+// downloadClient downloads plugin packages (tests replace it).
+var downloadClient = httpClient
+
 // installRequest are the plugins.install params.
 type installRequest struct {
 	Source string `json:"source"`
@@ -251,7 +254,7 @@ func fetchArchive(ctx context.Context, source, wantSHA string) (io.ReadCloser, e
 			return nil, rpc.Errorf(rpc.Invalid, "Only https:// addresses are accepted for downloads.")
 		}
 		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
-		resp, err := httpClient().Do(req)
+		resp, err := downloadClient().Do(req)
 		if err != nil {
 			return nil, rpc.Errorf(rpc.Unavailable, "Download failed: %v", err)
 		}

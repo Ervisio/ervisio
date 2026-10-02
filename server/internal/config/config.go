@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+
+	"github.com/ervisio/ervisio/server/internal/brand"
 )
 
 // MaxFileSize bounds the size of a configuration file we accept to parse.
@@ -111,6 +113,16 @@ type TLS struct {
 type Plugins struct {
 	AllowUnsigned bool `toml:"allow_unsigned"`
 	Dev           bool `toml:"dev"`
+	// CatalogURL is the https address of the marketplace catalog shown in
+	// Plugins › Browse (default: the Ervisio registry on GitHub Pages; empty
+	// turns the remote catalog off). The catalog must carry a valid
+	// signature (CatalogURL with .json replaced by .sig).
+	CatalogURL string `toml:"catalog_url"`
+	// CatalogKey is an extra ed25519 public key (base64) trusted for
+	// catalog signatures, for a private catalog. The team key is always
+	// trusted. It does not make the plugins it lists trusted: they still
+	// need a team signature (or allow_unsigned).
+	CatalogKey string `toml:"catalog_key"`
 }
 
 // Updates holds the self-update settings (internal/update).
@@ -150,7 +162,7 @@ func Default() *Config {
 		TLS:     TLS{Mode: "self-signed", Redirect: true},
 		// Only signed plugins by default (security review H2); dev
 		// folders are still loaded in developer mode, marked unsigned.
-		Plugins: Plugins{AllowUnsigned: false},
+		Plugins: Plugins{AllowUnsigned: false, CatalogURL: brand.PluginCatalogURL},
 		Updates: Updates{Channel: "stable", AutoCheck: true, AutoInstall: false, AutoInstallAt: "03:30"},
 		Web:     Web{TrustedProxies: []string{"127.0.0.0/8", "::1/128"}},
 	}

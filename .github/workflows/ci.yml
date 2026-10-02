@@ -98,10 +98,10 @@ jobs:
           echo "$NFPM_SHA256_AMD64  $RUNNER_TEMP/$f" | sha256sum -c -
           tar -xzf "$RUNNER_TEMP/$f" -C "$RUNNER_TEMP" nfpm
           R="$RUNNER_TEMP/rel"
-          mkdir -p "$R/bin" "$R/web" "$R/plugins/docker"
+          mkdir -p "$R/bin" "$R/web" "$R/plugins"
           printf '#!/bin/sh\necho 0.0.0-ci\n' > "$R/bin/ervisiod"; cp "$R/bin/ervisiod" "$R/bin/ervisio-bridge"
           chmod 755 "$R/bin/"*
-          echo '<!doctype html>' > "$R/web/index.html"; echo '{}' > "$R/plugins/docker/manifest.json"
+          echo '<!doctype html>' > "$R/web/index.html"
           echo 0.0.0-ci > "$R/VERSION"
           NFPM="$RUNNER_TEMP/nfpm" ./packaging/build-packages.sh "$R" amd64 "$RUNNER_TEMP/out"
           dpkg-deb --info "$RUNNER_TEMP/out/ervisio_0.0.0-ci_amd64.deb"

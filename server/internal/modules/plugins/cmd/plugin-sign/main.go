@@ -3,6 +3,8 @@
 //	plugin-sign -genkey key.pem            create a new ed25519 key (prints the public key to embed)
 //	plugin-sign -key key.pem <folder>      hash every file into manifest.json "files" and write manifest.sig
 //	plugin-sign -verify [-pub BASE64] <folder>   check a signed folder
+//	plugin-sign -key key.pem -catalog catalog.json          write catalog.sig (marketplace catalog)
+//	plugin-sign -verify [-pub BASE64] -catalog catalog.json check catalog.sig
 //
 // The key file holds the base64 of the 64-byte ed25519 private key (package
 // signkey, shared with release-sign).
@@ -14,6 +16,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/ervisio/ervisio/server/internal/modules/plugins"
 	"github.com/ervisio/ervisio/server/internal/signkey"
@@ -24,9 +27,38 @@ func main() {
 	key := flag.String("key", "", "private key file used to sign")
 	verify := flag.Bool("verify", false, "verify the folder instead of signing")
 	pub := flag.String("pub", "", "base64 public key for -verify (default: the embedded team key)")
+	catalog := flag.String("catalog", "", "sign or verify this catalog.json (signature in the same folder, .json replaced by .sig)")
 	flag.Parse()
 
 	switch {
+	case *catalog != "" && flag.NArg() == 0 && (*verify || *key != ""):
+		data, err := os.ReadFile(*catalog)
+		check(err)
+		sigPath := strings.TrimSuffix(*catalog, ".json") + ".sig"
+		if *verify {
+			keys := plugins.TrustedKeys
+			if *pub != "" {
+				b, err := signkey.ParsePublic(*pub)
+				if err != nil {
+					check(fmt.Errorf("-pub: %v", err))
+				}
+				keys = []ed25519.PublicKey{b}
+			}
+			sig, err := os.ReadFile(sigPath)
+			check(err)
+			if err := plugins.VerifyCatalog(data, sig, keys); err != nil {
+				fmt.Println("INVALID:", err)
+				os.Exit(1)
+			}
+			fmt.Println("catalog signature ok")
+			return
+		}
+		sk, err := signkey.Load(*key)
+		check(err)
+		sig, err := plugins.SignCatalog(data, sk)
+		check(err)
+		check(os.WriteFile(sigPath, sig, 0o644))
+		fmt.Println("signed", *catalog, "->", sigPath)
 	case *genkey != "":
 		pk, err := signkey.GenerateFile(*genkey)
 		check(err)
@@ -65,6 +97,7 @@ func main() {
 
 func usage() {
 	fmt.Fprintln(os.Stderr, "usage: plugin-sign -genkey FILE | plugin-sign -key FILE FOLDER | plugin-sign -verify [-pub KEY] FOLDER")
+	fmt.Fprintln(os.Stderr, "       plugin-sign -key FILE -catalog catalog.json | plugin-sign -verify [-pub KEY] -catalog catalog.json")
 	os.Exit(2)
 }
 
