@@ -747,3 +747,87 @@ func TestPluginInlineBodyLimits(t *testing.T) {
 		t.Fatalf("oversize rpc: %d %s", code, out)
 	}
 }
+
+// status asks GET .../status for a transfer link, as a client.
+func (e *xferEnv) status(t *testing.T, cl *http.Client, link string, wait int) (int, map[string]any) {
+	t.Helper()
+	resp, err := cl.Get(fmt.Sprintf("%s%s/status?wait=%d", e.ts.URL, link, wait))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var out struct {
+		Result map[string]any `json:"result"`
+	}
+	json.NewDecoder(resp.Body).Decode(&out)
+	return resp.StatusCode, out.Result
+}
+
+func TestDownloadStatusReportsTheEnd(t *testing.T) {
+	e := newXferEnv(t)
+	const n = 3<<20 + 7
+	_, r := e.start(t, map[string]any{"kind": "download", "name": "svc", "method": "GET", "path": fmt.Sprintf("/dl/%d", n), "filename": "x"})
+	link := r["url"].(string)
+	// Not fetched yet: a short wait answers "not done".
+	if st, res := e.status(t, e.cl, link, 1); st != 200 || res["done"] != false {
+		t.Fatalf("before the fetch: %d %v", st, res)
+	}
+	// Another session cannot read it, or learn that it exists.
+	if st, _ := e.status(t, noAuthClient(t, e.srv, e.ts), link, 0); st != http.StatusNotFound {
+		t.Fatalf("other session: %d", st)
+	}
+	// A waiting poll is answered when the download ends.
+	got := make(chan map[string]any, 1)
+	go func() { _, res := e.status(t, e.cl, link, 20); got <- res }()
+	time.Sleep(100 * time.Millisecond)
+	resp, err := e.cl.Get(e.ts.URL + link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+	select {
+	case res := <-got:
+		if res["done"] != true || res["ok"] != true || res["bytes"] != float64(n) || res["error"] != nil {
+			t.Fatalf("result %v", res)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the waiting poll was not answered")
+	}
+	// It stays readable after the end.
+	if _, res := e.status(t, e.cl, link, 0); res["ok"] != true || res["bytes"] != float64(n) {
+		t.Fatalf("after: %v", res)
+	}
+	if st, _ := e.status(t, e.cl, "/api/plugins/transfer/nope", 0); st != http.StatusNotFound {
+		t.Fatalf("unknown token: %d", st)
+	}
+}
+
+func TestDownloadStatusReportsFailures(t *testing.T) {
+	e := newXferEnv(t)
+	// Cut short by the browser.
+	_, r := e.start(t, map[string]any{"kind": "download", "name": "svc", "method": "GET", "path": "/dl/chunked", "filename": "x"})
+	link := r["url"].(string)
+	resp, err := e.cl.Get(e.ts.URL + link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Read(make([]byte, 10))
+	resp.Body.Close()
+	_, res := e.status(t, e.cl, link, 10)
+	if res["done"] != true || res["ok"] != false || res["error"] == nil {
+		t.Fatalf("cut short: %v", res)
+	}
+	// Never fetched: the link expires.
+	e.srv.transfers.ttl = 100 * time.Millisecond
+	_, r = e.start(t, map[string]any{"kind": "download", "name": "svc", "method": "GET", "path": "/dl/100", "filename": "x"})
+	_, res = e.status(t, e.cl, r["url"].(string), 10)
+	if res["done"] != true || res["ok"] != false || !strings.Contains(fmt.Sprint(res["error"]), "did not start") {
+		t.Fatalf("expired: %v", res)
+	}
+	// An upload has no status.
+	_, r = e.start(t, map[string]any{"kind": "upload", "name": "svc", "method": "POST", "path": "/up", "size": 3})
+	if st, _ := e.status(t, e.cl, r["url"].(string), 0); st != http.StatusNotFound {
+		t.Fatalf("upload status: %d", st)
+	}
+}

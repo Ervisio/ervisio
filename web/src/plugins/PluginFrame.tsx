@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { useNavigate } from 'react-router-dom';
 import { ApiError, call, fromBase64, stream, toBase64, useSession, type StreamHandle } from '../api';
 import { apiUrl, FETCH_CREDENTIALS } from '../api/base';
-import { saveDownload, sendUpload, startTransfer } from '../api/transfer';
+import { saveDownload, sendUpload, startTransfer, watchDownloadEnd } from '../api/transfer';
 import { useI18n, useT } from '../i18n';
 import { themeVars, useTheme } from '../theme';
 import { EmptyState, Skeleton, toast } from '../ui';
@@ -91,6 +91,8 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
     const saves = new SaveLimiter();
     // Uploads in progress; aborted with the frame.
     const uploads = new Map<number, AbortController>();
+    // Downloads whose end the frame wants to hear about; stopped with the frame.
+    const watchers = new AbortController();
 
     const fail = (msg: string) => {
       if (dead) return;
@@ -99,6 +101,7 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
       streams.clear();
       for (const u of uploads.values()) u.abort();
       uploads.clear();
+      watchers.abort();
       setFailure(msg);
       setPhase('failed');
       reportError(plugin.id, msg);
@@ -157,6 +160,13 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
             m.id,
             startTransfer(plan.body, plan.admin).then((r) => {
               saveDownload(r);
+              // The browser fetches the file by itself: the daemon says how that ended, and the frame hears it.
+              const did = m.args && typeof (m.args as { did?: unknown }).did === 'number' ? ((m.args as { did: number }).did as number) : 0;
+              if (did) {
+                void watchDownloadEnd(r, watchers.signal).then((o) => {
+                  if (!dead) post({ la: 'plugin', t: 'download-done', did, ...o });
+                });
+              }
               return { filename: r.filename ?? 'download', size: r.size, status: r.status };
             }),
           );
@@ -369,6 +379,7 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
       streams.clear();
       for (const u of uploads.values()) u.abort();
       uploads.clear();
+      watchers.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

@@ -212,6 +212,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/ws", s.authed(s.handleWS))
 	mux.HandleFunc("POST /api/plugins/transfer", s.authed(s.csrfS(s.handleTransferStart)))
 	mux.HandleFunc("GET /api/plugins/transfer/{token}", s.authed(s.handleTransfer))
+	mux.HandleFunc("GET /api/plugins/transfer/{token}/status", s.authed(s.handleTransferStatus))
 	mux.HandleFunc("POST /api/plugins/transfer/{token}", s.authed(s.csrfS(s.handleTransfer)))
 	mux.HandleFunc("GET /api/audit/export", s.authed(s.handleAuditExport))
 	mux.HandleFunc("GET /api/files/download", s.authed(s.handleDownload))

@@ -64,10 +64,65 @@ type transfer struct {
 
 	status int
 	timer  *time.Timer
+
+	// store is the store that holds res.
+	store *transferStore
+	// rid keys res in the store (the hash of the token).
+	rid string
+	// res is what the page can ask for when the transfer ends.
+	res *xferResult
+}
+
+// resultKeep is how long the outcome of a transfer stays readable.
+const resultKeep = 5 * time.Minute
+
+// xferResult is the outcome of one transfer, readable by the session that
+// started it with GET /api/plugins/transfer/{token}/status. A download is
+// fetched by the browser itself, so the page cannot see its end: it asks.
+type xferResult struct {
+	sess *Session
+	done chan struct{}
+	once sync.Once
+
+	// Set before done is closed.
+	ok    bool
+	bytes int64
+	err   string
+}
+
+// finishResult records the outcome once (the first call wins); later calls,
+// such as the generic close after a normal end, change nothing.
+func (ts *transferStore) finishResult(t *transfer, ok bool, bytes int64, msg string, id string) {
+	r := t.res
+	if r == nil {
+		return
+	}
+	r.once.Do(func() {
+		r.ok, r.bytes, r.err = ok, bytes, msg
+		close(r.done)
+		time.AfterFunc(resultKeep, func() {
+			ts.mu.Lock()
+			delete(ts.results, id)
+			ts.mu.Unlock()
+		})
+	})
+}
+
+// result returns the outcome record of token, for the session that owns it.
+func (ts *transferStore) result(token string, sess *Session) *xferResult {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	r := ts.results[tokenID(token)]
+	if r == nil || r.sess != sess {
+		return nil
+	}
+	return r
 }
 
 // close ends the transfer's stream and gives its slot back.
 func (t *transfer) close(ts *transferStore) {
+	// A transfer that ends without having said so was cut short.
+	ts.finishResult(t, false, 0, "The transfer was cancelled before it finished.", t.rid)
 	t.st.Close()
 	t.cancel()
 	t.release()
@@ -80,12 +135,14 @@ type transferStore struct {
 	byID   map[string]*transfer
 	live   map[*Session]int
 	issued map[*Session][]time.Time
+	// results are the outcomes of started transfers, by token hash.
+	results map[string]*xferResult
 	now    func() time.Time
 	ttl    time.Duration
 }
 
 func newTransferStore() *transferStore {
-	return &transferStore{byID: map[string]*transfer{}, live: map[*Session]int{}, issued: map[*Session][]time.Time{}, now: time.Now, ttl: transferTTL}
+	return &transferStore{byID: map[string]*transfer{}, live: map[*Session]int{}, issued: map[*Session][]time.Time{}, results: map[string]*xferResult{}, now: time.Now, ttl: transferTTL}
 }
 
 // reserve takes a slot for a new transfer of sess, or says why not.
@@ -159,9 +216,16 @@ func (ts *transferStore) put(t *transfer) (string, time.Time, error) {
 	exp := ts.now().Add(ts.ttl)
 	ts.mu.Lock()
 	ts.byID[id] = t
+	t.rid = id
+	t.store = ts
+	if t.kind == "download" {
+		t.res = &xferResult{sess: t.sess, done: make(chan struct{})}
+		ts.results[id] = t.res
+	}
 	// Under the lock: the callback reads t.timer through take.
 	t.timer = time.AfterFunc(ts.ttl, func() {
 		if ts.take(token, nil) == t {
+			ts.finishResult(t, false, 0, "The download did not start in time.", id)
 			t.close(ts)
 		}
 	})
@@ -201,6 +265,7 @@ func (ts *transferStore) closeSession(sess *Session) {
 		if t.timer != nil {
 			t.timer.Stop()
 		}
+		ts.finishResult(t, false, 0, "The session ended.", t.rid)
 		t.close(ts)
 	}
 	ts.forget(sess)
@@ -557,8 +622,56 @@ func (s *Server) handleTransfer(w http.ResponseWriter, r *http.Request, sess *Se
 		s.serveUpload(w, r, t)
 	default:
 		t.rec = nil
+		s.transfers.finishResult(t, false, 0, "The link was used with the wrong method.", t.rid)
 		writeErrorStatus(w, http.StatusMethodNotAllowed, rpc.Errorf(rpc.Invalid, "This link is for a %s.", t.kind))
 	}
+}
+
+// maxStatusWait bounds how long GET .../status holds a request open.
+const maxStatusWait = 25 * time.Second
+
+// handleTransferStatus is GET /api/plugins/transfer/{token}/status?wait=<seconds>:
+// the outcome of a download, for the session that started it. It waits up to
+// `wait` seconds (at most 25) for the transfer to end and answers
+// {"done":false} when it has not, so the page can ask again. The record is
+// kept for five minutes after the end. Unknown, expired and other sessions'
+// tokens are all "not found".
+func (s *Server) handleTransferStatus(w http.ResponseWriter, r *http.Request, sess *Session) {
+	res := s.transfers.result(r.PathValue("token"), sess)
+	if res == nil {
+		writeError(w, rpc.Errorf(rpc.NotFound, "There is no such download, or its result is no longer kept."))
+		return
+	}
+	wait := time.Duration(0)
+	if n, err := strconv.Atoi(r.URL.Query().Get("wait")); err == nil && n > 0 {
+		wait = time.Duration(n) * time.Second
+		if wait > maxStatusWait {
+			wait = maxStatusWait
+		}
+	}
+	if wait > 0 {
+		timer := time.NewTimer(wait)
+		defer timer.Stop()
+		select {
+		case <-res.done:
+		case <-timer.C:
+		case <-r.Context().Done():
+			return
+		}
+	}
+	out := map[string]any{"done": false}
+	select {
+	case <-res.done:
+		out = map[string]any{"done": true, "ok": res.ok, "bytes": res.bytes}
+		if res.err != "" {
+			out["error"] = res.err
+		}
+	default:
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, struct {
+		Result any `json:"result"`
+	}{out})
 }
 
 func (s *Server) serveDownload(w http.ResponseWriter, r *http.Request, t *transfer) {
@@ -607,8 +720,18 @@ func (s *Server) serveDownload(w http.ResponseWriter, r *http.Request, t *transf
 	}
 }
 
-// finish writes the audit entry of a download.
+// finish writes the audit entry of a download and records its outcome.
 func (t *transfer) finish(bytes *int64, err error) {
+	if t.store != nil {
+		msg := ""
+		if err != nil {
+			msg = "The download did not finish: " + err.Error()
+			if errors.Is(err, context.Canceled) {
+				msg = "The download was cancelled before the end."
+			}
+		}
+		t.store.finishResult(t, err == nil, *bytes, msg, t.rid)
+	}
 	if t.rec == nil {
 		return
 	}

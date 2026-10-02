@@ -81,6 +81,20 @@ export interface PluginError extends Error {
 }
 
 /** Request of sdk.api.http / httpStream. An object body is sent as JSON. */
+/** How a download ended, as the daemon saw the browser fetch it. */
+export interface DownloadResult {
+  ok: boolean;
+  /** Bytes sent to the browser. */
+  bytes: number;
+  /** Why it did not finish (cancelled, cut short, never started); absent when ok. */
+  error?: string;
+}
+
+export interface DownloadOptions {
+  /** Called once when the transfer ends (never when the request itself was refused: that rejects the promise). */
+  onDone?(r: DownloadResult): void;
+}
+
 export interface HttpRequestOptions {
   method: string;
   /** URL path, matched against the manifest's rules; no query string. */
@@ -253,9 +267,9 @@ export interface PluginSDK {
      * the disk (no memory, no size limit); resolves when the download starts, rejects when the service refuses.
      * The file name is cleaned by the daemon.
      */
-    download(name: string, req: HttpRequestOptions, filename?: string): Promise<DownloadStarted>;
+    download(name: string, req: HttpRequestOptions, filename?: string, o?: DownloadOptions): Promise<DownloadStarted>;
     /** SDK 0.2: same for the standard output of a command declared in the manifest (not pty). */
-    downloadCommand(command: string, args: string[], filename?: string, o?: { env?: string }): Promise<DownloadStarted>;
+    downloadCommand(command: string, args: string[], filename?: string, o?: { env?: string } & DownloadOptions): Promise<DownloadStarted>;
     /**
      * SDK 0.2: sends a File or Blob as the body of a POST or PUT to an HTTP API, streamed with progress, up to the API's
      * `maxUpload` (default 20 GiB). The result is the service's answer like `http` (a non-2xx status is a normal result;

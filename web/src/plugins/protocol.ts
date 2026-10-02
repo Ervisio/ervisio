@@ -121,7 +121,9 @@ export type HostToFrame =
   | { la: 'plugin'; t: 'upload'; uid: number; ev: 'start'; status: number; headers: Record<string, string> }
   | { la: 'plugin'; t: 'upload'; uid: number; ev: 'data'; chunk: Uint8Array }
   | { la: 'plugin'; t: 'upload'; uid: number; ev: 'done'; result: FrameUploadResult }
-  | { la: 'plugin'; t: 'upload'; uid: number; ev: 'error'; error: FrameError };
+  | { la: 'plugin'; t: 'upload'; uid: number; ev: 'error'; error: FrameError }
+  /** The end of a download asked for with `did` (sdk.api.download onDone): the daemon's record of what the browser fetched. */
+  | { la: 'plugin'; t: 'download-done'; did: number; ok: boolean; bytes: number; error?: string };
 
 export const isFrameMessage = (d: unknown): d is FrameToHost =>
   !!d && typeof d === 'object' && (d as { la?: unknown }).la === 'plugin' && typeof (d as { t?: unknown }).t === 'string';

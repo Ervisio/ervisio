@@ -395,6 +395,17 @@ no-store`. The body is piped from the service chunk by chunk (flow control from 
 service breaks off, or ends short of its `Content-Length`, the connection is aborted so the browser does not keep a
 partial file as complete. The web app starts it from the top-level page (a sandboxed plugin frame cannot download).
 
+### `GET /api/plugins/transfer/<token>/status?wait=<seconds>` (session; downloads only)
+
+The browser fetches a download by itself, so the page cannot see how it ended. The daemon records the outcome per
+transfer when the stream ends (or when the link expires unused, the session ends, or the browser cuts it short) and this
+endpoint reads it, for the session that started the transfer only (another session, an unknown token, an upload and a
+record older than five minutes are all `not_found`). It waits up to `wait` seconds (at most 25) for the end; answer
+`{"result":{"done":false}}` when it has not come (ask again) or `{"result":{"done":true,"ok":true|false,"bytes":N,"error"?}}`
+with the bytes written to the browser. The web app asks for it when the plugin passed `onDone` and relays the answer to
+the frame as `{t:"download-done", did, ok, bytes, error?}`; SDK `sdk.api.download(name, req, filename, { onDone })` and
+`downloadCommand(command, args, filename, { env?, onDone })` call `onDone({ ok, bytes, error? })` once.
+
 ### `POST /api/plugins/transfer/<token>` (upload, `X-Requested-With`)
 
 The raw file as the body, exactly `size` bytes (`Content-Length` must match when it is sent; more or fewer bytes is

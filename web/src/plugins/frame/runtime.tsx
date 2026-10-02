@@ -13,7 +13,7 @@ import tokensCss from '../../styles/tokens.css?inline';
 import uiCss from '../../ui/ui.css?inline';
 import frameCss from './frame.css?inline';
 import type { FrameHttpRequest, FrameHttpResult, FrameTheme, FrameUploadResult, FrameView, HostToFrame } from '../protocol';
-import { handleReply, openHttpStream, openPty, openStream, openUpload, PluginError, request, send, type HttpStreamCallbacks, type PtyCallbacks, type UploadCallbacks } from './channel';
+import { handleReply, openHttpStream, unwatchDownload, watchDownload, type DownloadDone, openPty, openStream, openUpload, PluginError, request, send, type HttpStreamCallbacks, type PtyCallbacks, type UploadCallbacks } from './channel';
 import { getLang, setLang, subscribeLang } from './i18n-shim';
 import { jobsApi, notifyApi } from './jobs';
 import * as kit from './kit';
@@ -129,6 +129,17 @@ interface AuditEntry {
   detail?: string;
 }
 
+/** A download request; with onDone the host also reports how the browser's fetch ended (`did` names it). */
+async function startDownload(args: Record<string, unknown>, onDone?: (r: DownloadDone) => void) {
+  const did = typeof onDone === 'function' ? watchDownload(onDone) : 0;
+  try {
+    return await request<{ filename: string; size?: number; status?: number }>('download', did ? { ...args, did } : args);
+  } catch (e) {
+    if (did) unwatchDownload(did);
+    throw e;
+  }
+}
+
 /* ---------- SDK ---------- */
 function makeSdk(plugin: { id: string; name: string; version: string }, view: FrameView) {
   const pages = new Map<string, ViewDef<unknown>>();
@@ -150,13 +161,13 @@ function makeSdk(plugin: { id: string; name: string; version: string }, view: Fr
       },
       httpStream: (name: string, o: HttpOptions, h: HttpStreamCallbacks) => openHttpStream(httpRequest(name, o), h ?? {}),
       /** SDK 0.2: the browser saves the response of a GET as a file; it streams, there is no size limit. Resolves when the download starts. */
-      async download(name: string, o: HttpOptions, filename?: string) {
+      async download(name: string, o: HttpOptions, filename?: string, d?: { onDone?: (r: DownloadDone) => void }) {
         const req = httpRequest(name, { ...o, method: o?.method ?? 'GET' });
-        return request<{ filename: string; size?: number; status?: number }>('download', { req, filename: downloadName(filename, req) });
+        return startDownload({ req, filename: downloadName(filename, req) }, d?.onDone);
       },
       /** SDK 0.2: same for the standard output of a declared command. */
-      async downloadCommand(command: string, args: string[], filename?: string, o?: { env?: string }) {
-        return request<{ filename: string; size?: number; status?: number }>('download', { command, args: args ?? [], filename: downloadName(filename, { path: command }), ...(o?.env ? { env: o.env } : {}) });
+      async downloadCommand(command: string, args: string[], filename?: string, o?: { env?: string; onDone?: (r: DownloadDone) => void }) {
+        return startDownload({ command, args: args ?? [], filename: downloadName(filename, { path: command }), ...(o?.env ? { env: o.env } : {}) }, o?.onDone);
       },
       /** SDK 0.2: sends a File or Blob as the body of a POST or PUT, streamed with progress; cancel() stops it. */
       upload(name: string, o: HttpOptions, file: Blob, opts?: UploadOptions | ((p: { loaded: number; total: number }) => void)) {

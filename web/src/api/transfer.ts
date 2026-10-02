@@ -44,6 +44,31 @@ export function saveDownload(start: TransferStart): void {
   window.setTimeout(() => a.remove(), 1000);
 }
 
+export interface DownloadOutcome {
+  ok: boolean;
+  bytes: number;
+  error?: string;
+}
+
+/**
+ * Asks the daemon how a download ended (GET <url>/status, long poll). Resolves once with the outcome; if the daemon
+ * cannot be asked (signed out, record gone) it resolves with ok:false and says so. Never rejects.
+ */
+export async function watchDownloadEnd(start: TransferStart, signal?: AbortSignal): Promise<DownloadOutcome> {
+  // A started transfer lives 60 s unfetched; a download itself has no limit, so keep asking while it runs.
+  for (;;) {
+    try {
+      const r = await http<{ done: boolean; ok?: boolean; bytes?: number; error?: string }>(`${start.url}/status?wait=20`, { signal });
+      if (r.done) return { ok: !!r.ok, bytes: r.bytes ?? 0, ...(r.error ? { error: r.error } : {}) };
+    } catch (e) {
+      if (e instanceof ApiError && e.code === 'cancelled') return { ok: false, bytes: 0, error: 'The page was closed before the download ended.' };
+      if (e instanceof ApiError && e.code !== 'network') return { ok: false, bytes: 0, error: 'The end of the download could not be read.' };
+      await new Promise((res) => window.setTimeout(res, 2000)); // a network blip: ask again
+    }
+    if (signal?.aborted) return { ok: false, bytes: 0, error: 'The page was closed before the download ended.' };
+  }
+}
+
 export interface UploadResult {
   status: number;
   headers: Record<string, string>;

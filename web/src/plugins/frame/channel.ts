@@ -129,8 +129,38 @@ export function openUpload(req: FrameHttpRequest, file: Blob, o: UploadCallbacks
   };
 }
 
+export interface DownloadDone {
+  ok: boolean;
+  bytes: number;
+  error?: string;
+}
+const downloads = new Map<number, (d: DownloadDone) => void>();
+let nextDid = 1;
+
+/** Remembers a download's onDone; the returned id goes to the host with the download request. */
+export function watchDownload(onDone: (d: DownloadDone) => void): number {
+  const did = nextDid++;
+  downloads.set(did, onDone);
+  return did;
+}
+
+/** The download request failed to start: no end will be reported. */
+export function unwatchDownload(did: number): void {
+  downloads.delete(did);
+}
+
 /** Handles responses and stream events; returns false for other messages. */
 export function handleReply(m: HostToFrame): boolean {
+  if (m.t === 'download-done') {
+    const cb = downloads.get(m.did);
+    downloads.delete(m.did);
+    try {
+      cb?.({ ok: m.ok, bytes: m.bytes, ...(m.error ? { error: m.error } : {}) });
+    } catch (e) {
+      console.warn(e);
+    }
+    return true;
+  }
   if (m.t === 'res') {
     const p = pending.get(m.id);
     pending.delete(m.id);
