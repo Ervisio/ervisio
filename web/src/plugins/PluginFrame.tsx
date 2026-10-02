@@ -26,7 +26,7 @@ const toHttpResult = (r: { status: number; headers?: Record<string, string>; bod
   r.b64 ? { status: r.status, headers: r.headers ?? {}, bytes: fromBase64(r.body ?? '') } : { status: r.status, headers: r.headers ?? {}, text: r.body ?? '' };
 
 /**
- * Hosts one view (page or widget) of a plugin in an <iframe sandbox="allow-scripts"> served by the daemon at
+ * Hosts one view (page or widget) of a plugin in an <iframe sandbox="allow-scripts allow-forms"> served by the daemon at
  * /plugin-frame/<id>. The frame has an opaque origin: it cannot read cookies, the app's DOM or storage, or call
  * the API. Everything it needs goes through this component, which applies the broker policy (./broker.ts) and
  * then calls the daemon, which checks the manifest again.
@@ -297,7 +297,7 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
       <iframe
         ref={frameRef}
         src={apiUrl(`/plugin-frame/${plugin.id}`)}
-        sandbox="allow-scripts"
+        sandbox="allow-scripts allow-forms"
         referrerPolicy="no-referrer"
         title={title ?? plugin.name}
         style={{

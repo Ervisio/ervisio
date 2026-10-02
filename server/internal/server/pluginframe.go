@@ -13,7 +13,7 @@ import (
 // Plugin isolation (security review H2 and L2).
 //
 // Plugin code never runs in the app's origin. The web app embeds
-// /plugin-frame/<id> in an <iframe sandbox="allow-scripts"> (no
+// /plugin-frame/<id> in an <iframe sandbox="allow-scripts allow-forms"> (no
 // allow-same-origin), so the frame has an opaque origin: no cookies, no
 // access to the app's DOM or storage, and no way to call /api/*. The app
 // fetches the plugin's entry module itself and hands it to the frame over
@@ -72,7 +72,9 @@ func setPluginAssetHeaders(h http.Header) {
 // pluginFrameCSP is the policy of the plugin frame document. The frame runs
 // sandboxed even when opened directly (the sandbox directive); scripts are
 // only the nonce'd runtime and the blob: module the runtime creates from the
-// code the app hands over; no network except the declared hosts.
+// code the app hands over; no network except the declared hosts. allow-forms
+// only lets submit events fire (the UI kit's dialogs use them): form-action
+// 'none' still stops any form from being sent anywhere.
 func pluginFrameCSP(nonce string, hosts []string) string {
 	connect := "'none'"
 	if len(hosts) > 0 {
@@ -88,7 +90,7 @@ func pluginFrameCSP(nonce string, hosts []string) string {
 	}
 	return "default-src 'none'; script-src 'nonce-" + nonce + "' blob:; style-src 'unsafe-inline'; " +
 		"img-src data: blob:; font-src data:; media-src data: blob:; connect-src " + connect + "; " +
-		"form-action 'none'; base-uri 'none'; frame-ancestors 'self'; sandbox allow-scripts"
+		"form-action 'none'; base-uri 'none'; frame-ancestors 'self'; sandbox allow-scripts allow-forms"
 }
 
 // handlePluginFrame serves GET /plugin-frame/<id>: the empty host page of a

@@ -195,7 +195,7 @@ pseudo-terminal through `plugins.pty`, reusing the terminal module's pty code), 
 lets a plugin call an HTTP API on a unix socket for declared methods, paths and headers only
 (`plugins.http` / `plugins.httpStream`; the bridge connects as the user, or as root for `admin`
 entries), and folders may be declared `admin` or `create` (`docs/api/plugins.md`). Their frontend never runs in the app either: each page or widget
-runs in an `<iframe sandbox="allow-scripts">` (opaque origin, strict CSP) and talks to the app only through a
+runs in an `<iframe sandbox="allow-scripts allow-forms">` (opaque origin, strict CSP) and talks to the app only through a
 `postMessage` broker that allows the declared commands and folders (`web/PLUGIN-SDK.md`). Signed plugins
 carry `manifest.sig` (ed25519, team key: `docs/PLUGIN-SIGNING.md`); unsigned ones are blocked by default.
 

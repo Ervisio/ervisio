@@ -9,14 +9,14 @@ Plugin code never runs in the app's origin. linuxadmind serves:
 
 | Path | What | Checks |
 |---|---|---|
-| `GET /plugin-frame/<id>` | Empty host page of a plugin frame, embedded by the app in `<iframe sandbox="allow-scripts">`. It loads `/plugin-runtime.js` (built from `web/src/plugins/frame`). | session; `plugins.access` |
+| `GET /plugin-frame/<id>` | Empty host page of a plugin frame, embedded by the app in `<iframe sandbox="allow-scripts allow-forms">`. It loads `/plugin-runtime.js` (built from `web/src/plugins/frame`). | session; `plugins.access` |
 | `GET /plugins/<id>/<file>` | Plugin files. The app fetches the entry module and hands it to the frame; `sdk.asset()` goes through the app too. | session; `plugins.access` |
 
 `plugins.access` (below) runs on the session's user bridge: the plugin must exist, be enabled, pass the signature policy
 and be visible to the user (`visibleTo`); otherwise both paths answer 404. Frame headers: `Content-Security-Policy:
 default-src 'none'; script-src 'nonce-…' blob:; style-src 'unsafe-inline'; img-src data: blob:; font-src data:;
 media-src data: blob:; connect-src <https:// and wss:// of capabilities.network, else 'none'>; form-action 'none';
-base-uri 'none'; frame-ancestors 'self'; sandbox allow-scripts`, no `X-Frame-Options`, `Cache-Control: no-store`.
+base-uri 'none'; frame-ancestors 'self'; sandbox allow-scripts allow-forms`, no `X-Frame-Options`, `Cache-Control: no-store`.
 Plugin files: `Content-Security-Policy: sandbox; default-src 'none'; frame-ancestors 'none'`, `X-Content-Type-Options:
 nosniff`, `Cross-Origin-Resource-Policy: same-origin`.
 

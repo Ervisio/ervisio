@@ -1,6 +1,6 @@
 /**
  * Plugin frame runtime, built by `npm run build:runtime` into public/plugin-runtime.js (vite.runtime.config.ts)
- * and loaded by the daemon's /plugin-frame/<id> page inside <iframe sandbox="allow-scripts">.
+ * and loaded by the daemon's /plugin-frame/<id> page inside <iframe sandbox="allow-scripts allow-forms">.
  *
  * It waits for the app's `init` message (plugin code, view, theme, language), imports the plugin module from a
  * blob: URL, calls its activate(sdk) and renders the requested page or widget. Everything outside the frame

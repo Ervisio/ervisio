@@ -6,7 +6,7 @@ in its own sandboxed frame:
 
 ```
 app (http(s)://host)                              plugin frame (opaque origin "null")
-  PluginFrame ── <iframe sandbox="allow-scripts" src="/plugin-frame/<id>"> ──▶ runtime + your module
+  PluginFrame ── <iframe sandbox="allow-scripts allow-forms" src="/plugin-frame/<id>"> ──▶ runtime + your module
       │  postMessage: init {code, view, theme, lang}             │
       │◀──────────── req {op: exec | http | readFile | …} ────────┤
   broker (web/src/plugins/broker.ts): checks the request against your manifest,
