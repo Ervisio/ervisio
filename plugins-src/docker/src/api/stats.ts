@@ -57,7 +57,7 @@ export function toPoint(prev: { raw: StatsRaw; point: StatPoint } | undefined, r
 
 /* ---------- shared streams ---------- */
 
-const HISTORY = 90;
+const HISTORY = 180;
 const MAX_STREAMS = 24;
 
 interface Entry {

@@ -26,7 +26,7 @@ export function ViewHost({ route }: { route: Route }) {
     case 'stack':
       return <StackPage name={route.name} />;
     case 'create':
-      return <CreatePage from={route.from} image={route.image} />;
+      return <CreatePage from={route.from} image={route.image} prefill={route.prefill} />;
     case 'templates':
       return <TemplatesPage />;
     case 'template':

@@ -34,15 +34,55 @@ export interface RegistriesFile {
 
 export interface AlertRule {
   id: string;
-  kind: 'stopped' | 'restart-loop' | 'unhealthy' | 'cpu' | 'memory';
+  kind: 'stopped' | 'restart-loop' | 'unhealthy' | 'cpu' | 'memory' | 'disk';
   enabled: boolean;
-  /** Percent, for cpu and memory rules. */
+  /** What the rule covers. Missing means all containers. Disk rules ignore it. */
+  scope?: 'all' | 'stack' | 'container';
+  /** Stack (compose project) or container name when scope is not all. */
+  target?: string;
+  /** cpu and memory: percent. disk: gigabytes used by Docker. */
   threshold?: number;
-  /** Container names this rule covers; empty means all. */
-  containers: string[];
+  /** restart-loop: number of restarts. */
+  count?: number;
+  /** restart-loop: window in minutes. cpu and memory: minutes the value must stay above the threshold. */
+  minutes?: number;
+  /** memory: percent of the container limit, or of the host memory. */
+  memBasis?: 'limit' | 'host';
+  /** Older files: container names. */
+  containers?: string[];
 }
 export interface AlertsFile {
   rules: AlertRule[];
+}
+
+export interface AlertHistoryItem {
+  id: string;
+  /** Unix milliseconds. */
+  at: number;
+  ruleId: string;
+  kind: AlertRule['kind'] | 'test';
+  title: string;
+  detail: string;
+  container?: string;
+  containerId?: string;
+}
+export interface AlertsHistoryFile {
+  items: AlertHistoryItem[];
+}
+
+export interface AutoUpdateConfig {
+  enabled: boolean;
+  schedule: { type: 'daily' | 'weekly' | 'custom'; hour: number; minute: number; /** 0 = Sunday */ day: number; cron: string };
+  mode: 'all' | 'choose';
+  containers: string[];
+  cleanup: boolean;
+  includeStopped: boolean;
+  monitorOnly: boolean;
+  rolling: boolean;
+  image: string;
+}
+export interface AutoUpdateFile {
+  config: AutoUpdateConfig;
 }
 
 export interface TemplateSource {
@@ -60,6 +100,8 @@ export interface FileMap {
   settings: Settings;
   registries: RegistriesFile;
   alerts: AlertsFile;
+  'alerts-history': AlertsHistoryFile;
+  autoupdate: AutoUpdateFile;
   'templates-sources': TemplateSourcesFile;
 }
 export type FileName = keyof FileMap;
@@ -68,6 +110,20 @@ export const DEFAULTS: { [K in FileName]: FileMap[K] } = {
   settings: { stacksDir: '/opt/stacks', liveStats: true, watchtowerImage: 'nickfedor/watchtower' },
   registries: { registries: [] },
   alerts: { rules: [] },
+  'alerts-history': { items: [] },
+  autoupdate: {
+    config: {
+      enabled: false,
+      schedule: { type: 'daily', hour: 4, minute: 0, day: 0, cron: '0 0 4 * * *' },
+      mode: 'all',
+      containers: [],
+      cleanup: true,
+      includeStopped: false,
+      monitorOnly: false,
+      rolling: false,
+      image: '',
+    },
+  },
   'templates-sources': { sources: [] },
 };
 
@@ -128,4 +184,29 @@ export function useFile<K extends FileName>(name: K): [FileMap[K], (patch: Parti
     await saveFile(name, next);
   };
   return [value ?? DEFAULTS[name], update, value !== undefined];
+}
+
+/** Loads a file into the shared cache (once) and returns it. For code outside components. */
+export async function ensureFile<K extends FileName>(name: K): Promise<FileMap[K]> {
+  if (cache.has(name)) return cache.get(name) as FileMap[K];
+  const v = await loadFile(name);
+  if (!cache.has(name)) {
+    cache.set(name, v);
+    notify(name);
+  }
+  return cache.get(name) as FileMap[K];
+}
+
+/** Replaces a file's value in the cache and saves it. For code outside components. */
+export async function setFile<K extends FileName>(name: K, value: FileMap[K]): Promise<void> {
+  cache.set(name, value);
+  notify(name);
+  await saveFile(name, value);
+}
+
+/** Calls `fn` whenever the cached value of a file changes. */
+export function subscribeFile(name: FileName, fn: () => void): () => void {
+  if (!listeners.has(name)) listeners.set(name, new Set());
+  listeners.get(name)!.add(fn);
+  return () => listeners.get(name)!.delete(fn);
 }

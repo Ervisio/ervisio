@@ -1,3 +1,4 @@
+import { useAlertEngine } from '../api/alerts';
 import { countContainers } from '../api/model';
 import { containers } from '../api/resources';
 import { t } from '../i18n';
@@ -6,6 +7,7 @@ import { getSdk } from '../sdk';
 
 /** Overview widget `containers`: running of total, how many need attention, and an Open button. */
 export function ContainersWidget() {
+  useAlertEngine();
   const { data, error } = containers.use();
   const c = data ? countContainers(data) : undefined;
   const sub = error && !data ? error.message : !c ? '' : c.problems ? t('containers.widget.problems', { n: c.problems }) : c.total ? t('containers.widget.allWell') : t('containers.sub.none');

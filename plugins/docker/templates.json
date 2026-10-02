@@ -1,0 +1,1559 @@
+{
+ "version": 1,
+ "name": "LinuxAdmin catalog",
+ "templates": [
+  {
+   "id": "nginx",
+   "name": "nginx",
+   "hue": "term",
+   "category": "Web",
+   "type": "container",
+   "description": "Fast web server and reverse proxy. Serves the files of a folder.",
+   "website": "https://nginx.org",
+   "needs": {
+    "ports": [
+     8080
+    ],
+    "ram": "20 MB"
+   },
+   "variables": [
+    {
+     "name": "HTTP_PORT",
+     "label": "Port on this server",
+     "default": "8080",
+     "type": "port",
+     "required": true
+    },
+    {
+     "name": "HTML_DIR",
+     "label": "Folder with the site",
+     "default": "/srv/www",
+     "type": "path",
+     "required": true,
+     "hint": "Files in this folder are served read only."
+    }
+   ],
+   "container": {
+    "image": "nginx:stable-alpine",
+    "ports": [
+     {
+      "host": "${HTTP_PORT}",
+      "container": "80",
+      "proto": "tcp"
+     }
+    ],
+    "volumes": [
+     {
+      "source": "${HTML_DIR}",
+      "target": "/usr/share/nginx/html",
+      "readOnly": true
+     }
+    ],
+    "env": [],
+    "restart": "unless-stopped"
+   },
+   "featured": false,
+   "source": "linuxadmin"
+  },
+  {
+   "id": "caddy",
+   "name": "Caddy",
+   "hue": "file",
+   "category": "Web",
+   "type": "container",
+   "description": "Web server that gets and renews HTTPS certificates by itself.",
+   "website": "https://caddyserver.com",
+   "needs": {
+    "ports": [
+     80,
+     443
+    ],
+    "ram": "40 MB",
+    "note": "Ports 80 and 443 must be free."
+   },
+   "variables": [
+    {
+     "name": "HTTP_PORT",
+     "label": "HTTP port",
+     "default": "80",
+     "type": "port",
+     "required": true
+    },
+    {
+     "name": "HTTPS_PORT",
+     "label": "HTTPS port",
+     "default": "443",
+     "type": "port",
+     "required": true
+    },
+    {
+     "name": "SITE_DIR",
+     "label": "Folder with the site",
+     "default": "/srv/caddy/site",
+     "type": "path",
+     "required": true
+    }
+   ],
+   "container": {
+    "image": "caddy:2-alpine",
+    "ports": [
+     {
+      "host": "${HTTP_PORT}",
+      "container": "80",
+      "proto": "tcp"
+     },
+     {
+      "host": "${HTTPS_PORT}",
+      "container": "443",
+      "proto": "tcp"
+     },
+     {
+      "host": "${HTTPS_PORT}",
+      "container": "443",
+      "proto": "udp"
+     }
+    ],
+    "volumes": [
+     {
+      "source": "${SITE_DIR}",
+      "target": "/usr/share/caddy"
+     },
+     {
+      "source": "caddy-data",
+      "target": "/data"
+     },
+     {
+      "source": "caddy-config",
+      "target": "/config"
+     }
+    ],
+    "env": [],
+    "restart": "unless-stopped"
+   },
+   "featured": false,
+   "source": "linuxadmin"
+  },
+  {
+   "id": "jellyfin",
+   "name": "Jellyfin",
+   "hue": "sw",
+   "category": "Media",
+   "type": "container",
+   "featured": true,
+   "description": "Stream your movies, shows and music to any device.",
+   "website": "https://jellyfin.org",
+   "needs": {
+    "ports": [
+     8096
+    ],
+    "ram": "1 GB",
+    "note": "Transcoding uses a lot of CPU."
+   },
+   "variables": [
+    {
+     "name": "WEB_PORT",
+     "label": "Port on this server",
+     "default": "8096",
+     "type": "port",
+     "required": true
+    },
+    {
+     "name": "MEDIA_DIR",
+     "label": "Folder with your media",
+     "default": "/srv/media",
+     "type": "path",
+     "required": true,
+     "hint": "Mounted read only at /media."
+    },
+    {
+     "name": "TZ",
+     "label": "Time zone",
+     "default": "Europe/Rome",
+     "type": "text",
+     "hint": "For example Europe/Rome or America/New_York."
+    }
+   ],
+   "container": {
+    "image": "jellyfin/jellyfin:latest",
+    "ports": [
+     {
+      "host": "${WEB_PORT}",
+      "container": "8096",
+      "proto": "tcp"
+     }
+    ],
+    "volumes": [
+     {
+      "source": "jellyfin-config",
+      "target": "/config"
+     },
+     {
+      "source": "jellyfin-cache",
+      "target": "/cache"
+     },
+     {
+      "source": "${MEDIA_DIR}",
+      "target": "/media",
+      "readOnly": true
+     }
+    ],
+    "env": [
+     {
+      "key": "TZ",
+      "value": "${TZ}"
+     }
+    ],
+    "restart": "unless-stopped"
+   },
+   "source": "linuxadmin"
+  },
+  {
+   "id": "vaultwarden",
+   "name": "Vaultwarden",
+   "hue": "term",
+   "category": "Security",
+   "type": "container",
+   "featured": true,
+   "description": "Password manager that works with the Bitwarden apps and browser extensions.",
+   "website": "https://github.com/dani-garcia/vaultwarden",
+   "needs": {
+    "ports": [
+     8222
+    ],
+    "ram": "30 MB",
+    "note": "The apps need HTTPS: put it behind a reverse proxy."
+   },
+   "variables": [
+    {
+     "name": "DOMAIN",
+     "label": "Address people will use",
+     "default": "https://vault.example.com",
+     "type": "text",
+     "required": true,
+     "hint": "Needed for the apps and for e-mail links."
+    },
+    {
+     "name": "WEB_PORT",
+     "label": "Port on this server",
+     "default": "8222",
+     "type": "port",
+     "required": true
+    },
+    {
+     "name": "DATA_DIR",
+     "label": "Data folder",
+     "default": "/srv/vaultwarden",
+     "type": "path",
+     "required": true
+    },
+    {
+     "name": "ADMIN_TOKEN",
+     "label": "Admin token",
+     "default": "",
+     "type": "password",
+     "required": true,
+     "hint": "Opens the /admin page. Generated for you; keep it.",
+     "generate": true
+    },
+    {
+     "name": "SIGNUPS_ALLOWED",
+     "label": "Allow new sign-ups",
+     "default": "true",
+     "type": "bool"
+    }
+   ],
+   "container": {
+    "image": "vaultwarden/server:latest",
+    "ports": [
+     {
+      "host": "${WEB_PORT}",
+      "container": "80",
+      "proto": "tcp"
+     }
+    ],
+    "volumes": [
+     {
+      "source": "${DATA_DIR}",
+      "target": "/data"
+     }
+    ],
+    "env": [
+     {
+      "key": "DOMAIN",
+      "value": "${DOMAIN}"
+     },
+     {
+      "key": "ADMIN_TOKEN",
+      "value": "${ADMIN_TOKEN}"
+     },
+     {
+      "key": "SIGNUPS_ALLOWED",
+      "value": "${SIGNUPS_ALLOWED}"
+     }
+    ],
+    "restart": "unless-stopped"
+   },
+   "source": "linuxadmin"
+  },
+  {
+   "id": "gitea",
+   "name": "Gitea",
+   "hue": "term",
+   "category": "Development",
+   "type": "container",
+   "description": "Lightweight Git server with issues and pull requests.",
+   "website": "https://about.gitea.com",
+   "needs": {
+    "ports": [
+     3000,
+     2222
+    ],
+    "ram": "200 MB"
+   },
+   "variables": [
+    {
+     "name": "WEB_PORT",
+     "label": "Web port",
+     "default": "3000",
+     "type": "port",
+     "required": true
+    },
+    {
+     "name": "SSH_PORT",
+     "label": "SSH port for git",
+     "default": "2222",
+     "type": "port",
+     "required": true
+    }
+   ],
+   "container": {
+    "image": "gitea/gitea:1",
+    "ports": [
+     {
+      "host": "${WEB_PORT}",
+      "container": "3000",
+      "proto": "tcp"
+     },
+     {
+      "host": "${SSH_PORT}",
+      "container": "22",
+      "proto": "tcp"
+     }
+    ],
+    "volumes": [
+     {
+      "source": "gitea-data",
+      "target": "/data"
+     }
+    ],
+    "env": [
+     {
+      "key": "USER_UID",
+      "value": "1000"
+     },
+     {
+      "key": "USER_GID",
+      "value": "1000"
+     }
+    ],
+    "restart": "unless-stopped"
+   },
+   "featured": false,
+   "source": "linuxadmin"
+  },
+  {
+   "id": "uptime-kuma",
+   "name": "Uptime Kuma",
+   "hue": "term",
+   "category": "Monitoring",
+   "type": "container",
+   "featured": true,
+   "description": "Checks your sites and services and alerts you when they go down.",
+   "website": "https://uptime.kuma.pet",
+   "needs": {
+    "ports": [
+     3001
+    ],
+    "ram": "100 MB"
+   },
+   "variables": [
+    {
+     "name": "WEB_PORT",
+     "label": "Port on this server",
+     "default": "3001",
+     "type": "port",
+     "required": true
+    }
+   ],
+   "container": {
+    "image": "louislam/uptime-kuma:1",
+    "ports": [
+     {
+      "host": "${WEB_PORT}",
+      "container": "3001",
+      "proto": "tcp"
+     }
+    ],
+    "volumes": [
+     {
+      "source": "uptime-kuma",
+      "target": "/app/data"
+     }
+    ],
+    "env": [],
+    "restart": "unless-stopped"
+   },
+   "source": "linuxadmin"
+  },
+  {
+   "id": "pihole",
+   "name": "Pi-hole",
+   "hue": "svc",
+   "category": "Network",
+   "type": "container",
+   "description": "Blocks ads and trackers for every device on your network.",
+   "website": "https://pi-hole.net",
+   "needs": {
+    "ports": [
+     53,
+     8081
+    ],
+    "ram": "100 MB",
+    "note": "Port 53 is often used by systemd-resolved. Free it first."
+   },
+   "variables": [
+    {
+     "name": "WEB_PORT",
+     "label": "Web port",
+     "default": "8081",
+     "type": "port",
+     "required": true
+    },
+    {
+     "name": "WEB_PASSWORD",
+     "label": "Admin password",
+     "default": "",
+     "type": "password",
+     "required": true,
+     "hint": "Generated for you; keep it.",
+     "generate": true
+    },
+    {
+     "name": "TZ",
+     "label": "Time zone",
+     "default": "Europe/Rome",
+     "type": "text",
+     "hint": "For example Europe/Rome or America/New_York."
+    }
+   ],
+   "container": {
+    "image": "pihole/pihole:latest",
+    "ports": [
+     {
+      "host": "53",
+      "container": "53",
+      "proto": "tcp"
+     },
+     {
+      "host": "53",
+      "container": "53",
+      "proto": "udp"
+     },
+     {
+      "host": "${WEB_PORT}",
+      "container": "80",
+      "proto": "tcp"
+     }
+    ],
+    "volumes": [
+     {
+      "source": "pihole-etc",
+      "target": "/etc/pihole"
+     }
+    ],
+    "env": [
+     {
+      "key": "TZ",
+      "value": "${TZ}"
+     },
+     {
+      "key": "FTLCONF_webserver_api_password",
+      "value": "${WEB_PASSWORD}"
+     },
+     {
+      "key": "FTLCONF_dns_listeningMode",
+      "value": "all"
+     }
+    ],
+    "restart": "unless-stopped"
+   },
+   "featured": false,
+   "source": "linuxadmin"
+  },
+  {
+   "id": "adguardhome",
+   "name": "AdGuard Home",
+   "hue": "file",
+   "category": "Network",
+   "type": "container",
+   "description": "Network-wide ad blocker and DNS server with a clean web page.",
+   "website": "https://adguard.com/adguard-home.html",
+   "needs": {
+    "ports": [
+     53,
+     3000
+    ],
+    "ram": "100 MB",
+    "note": "Port 53 is often used by systemd-resolved. Free it first. The setup page is on port 3000."
+   },
+   "variables": [
+    {
+     "name": "SETUP_PORT",
+     "label": "Setup and web port",
+     "default": "3000",
+     "type": "port",
+     "required": true
+    }
+   ],
+   "container": {
+    "image": "adguard/adguardhome:latest",
+    "ports": [
+     {
+      "host": "53",
+      "container": "53",
+      "proto": "tcp"
+     },
+     {
+      "host": "53",
+      "container": "53",
+      "proto": "udp"
+     },
+     {
+      "host": "${SETUP_PORT}",
+      "container": "3000",
+      "proto": "tcp"
+     }
+    ],
+    "volumes": [
+     {
+      "source": "adguard-work",
+      "target": "/opt/adguardhome/work"
+     },
+     {
+      "source": "adguard-conf",
+      "target": "/opt/adguardhome/conf"
+     }
+    ],
+    "env": [],
+    "restart": "unless-stopped"
+   },
+   "featured": false,
+   "source": "linuxadmin"
+  },
+  {
+   "id": "homeassistant",
+   "name": "Home Assistant",
+   "hue": "usr",
+   "category": "Home",
+   "type": "container",
+   "featured": true,
+   "description": "Control lights, sensors and automations at home.",
+   "website": "https://www.home-assistant.io",
+   "needs": {
+    "ports": [
+     8123
+    ],
+    "ram": "500 MB",
+    "note": "Uses the host network, so it finds devices on your LAN."
+   },
+   "variables": [
+    {
+     "name": "CONFIG_DIR",
+     "label": "Config folder",
+     "default": "/srv/homeassistant",
+     "type": "path",
+     "required": true
+    },
+    {
+     "name": "TZ",
+     "label": "Time zone",
+     "default": "Europe/Rome",
+     "type": "text",
+     "hint": "For example Europe/Rome or America/New_York."
+    }
+   ],
+   "container": {
+    "image": "ghcr.io/home-assistant/home-assistant:stable",
+    "ports": [],
+    "volumes": [
+     {
+      "source": "${CONFIG_DIR}",
+      "target": "/config"
+     },
+     {
+      "source": "/etc/localtime",
+      "target": "/etc/localtime",
+      "readOnly": true
+     }
+    ],
+    "env": [
+     {
+      "key": "TZ",
+      "value": "${TZ}"
+     }
+    ],
+    "restart": "unless-stopped",
+    "network": "host"
+   },
+   "source": "linuxadmin"
+  },
+  {
+   "id": "postgres",
+   "name": "PostgreSQL",
+   "hue": "file",
+   "category": "Database",
+   "type": "container",
+   "description": "The relational database many apps ask for.",
+   "website": "https://www.postgresql.org",
+   "needs": {
+    "ports": [
+     5432
+    ],
+    "ram": "200 MB"
+   },
+   "variables": [
+    {
+     "name": "DB_PORT",
+     "label": "Port on this server",
+     "default": "5432",
+     "type": "port",
+     "required": true
+    },
+    {
+     "name": "POSTGRES_USER",
+     "label": "User",
+     "default": "postgres",
+     "type": "text",
+     "required": true
+    },
+    {
+     "name": "POSTGRES_PASSWORD",
+     "label": "Password",
+     "default": "",
+     "type": "password",
+     "required": true,
+     "generate": true
+    },
+    {
+     "name": "POSTGRES_DB",
+     "label": "Database",
+     "default": "app",
+     "type": "text",
+     "required": true
+    }
+   ],
+   "container": {
+    "image": "postgres:17",
+    "ports": [
+     {
+      "host": "${DB_PORT}",
+      "container": "5432",
+      "proto": "tcp"
+     }
+    ],
+    "volumes": [
+     {
+      "source": "postgres-data",
+      "target": "/var/lib/postgresql/data"
+     }
+    ],
+    "env": [
+     {
+      "key": "POSTGRES_USER",
+      "value": "${POSTGRES_USER}"
+     },
+     {
+      "key": "POSTGRES_PASSWORD",
+      "value": "${POSTGRES_PASSWORD}"
+     },
+     {
+      "key": "POSTGRES_DB",
+      "value": "${POSTGRES_DB}"
+     }
+    ],
+    "restart": "unless-stopped"
+   },
+   "featured": false,
+   "source": "linuxadmin"
+  },
+  {
+   "id": "redis",
+   "name": "Redis",
+   "hue": "svc",
+   "category": "Database",
+   "type": "container",
+   "description": "In-memory store for caches and queues, saved to disk.",
+   "website": "https://redis.io",
+   "needs": {
+    "ports": [
+     6379
+    ],
+    "ram": "50 MB"
+   },
+   "variables": [
+    {
+     "name": "REDIS_PORT",
+     "label": "Port on this server",
+     "default": "6379",
+     "type": "port",
+     "required": true
+    },
+    {
+     "name": "REDIS_PASSWORD",
+     "label": "Password",
+     "default": "",
+     "type": "password",
+     "required": true,
+     "generate": true
+    }
+   ],
+   "container": {
+    "image": "redis:7-alpine",
+    "ports": [
+     {
+      "host": "${REDIS_PORT}",
+      "container": "6379",
+      "proto": "tcp"
+     }
+    ],
+    "volumes": [
+     {
+      "source": "redis-data",
+      "target": "/data"
+     }
+    ],
+    "env": [],
+    "restart": "unless-stopped",
+    "command": "redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}"
+   },
+   "featured": false,
+   "source": "linuxadmin"
+  },
+  {
+   "id": "mariadb",
+   "name": "MariaDB",
+   "hue": "log",
+   "category": "Database",
+   "type": "container",
+   "description": "Open source MySQL-compatible database.",
+   "website": "https://mariadb.org",
+   "needs": {
+    "ports": [
+     3306
+    ],
+    "ram": "200 MB"
+   },
+   "variables": [
+    {
+     "name": "DB_PORT",
+     "label": "Port on this server",
+     "default": "3306",
+     "type": "port",
+     "required": true
+    },
+    {
+     "name": "MARIADB_ROOT_PASSWORD",
+     "label": "Root password",
+     "default": "",
+     "type": "password",
+     "required": true,
+     "generate": true
+    },
+    {
+     "name": "MARIADB_DATABASE",
+     "label": "First database (optional)",
+     "default": "",
+     "type": "text"
+    }
+   ],
+   "container": {
+    "image": "mariadb:11",
+    "ports": [
+     {
+      "host": "${DB_PORT}",
+      "container": "3306",
+      "proto": "tcp"
+     }
+    ],
+    "volumes": [
+     {
+      "source": "mariadb-data",
+      "target": "/var/lib/mysql"
+     }
+    ],
+    "env": [
+     {
+      "key": "MARIADB_ROOT_PASSWORD",
+      "value": "${MARIADB_ROOT_PASSWORD}"
+     },
+     {
+      "key": "MARIADB_DATABASE",
+      "value": "${MARIADB_DATABASE}"
+     }
+    ],
+    "restart": "unless-stopped"
+   },
+   "featured": false,
+   "source": "linuxadmin"
+  },
+  {
+   "id": "mongo",
+   "name": "MongoDB",
+   "hue": "term",
+   "category": "Database",
+   "type": "container",
+   "description": "Document database for JSON-like data.",
+   "website": "https://www.mongodb.com",
+   "needs": {
+    "ports": [
+     27017
+    ],
+    "ram": "400 MB",
+    "note": "MongoDB 5 and newer need a CPU with AVX."
+   },
+   "variables": [
+    {
+     "name": "DB_PORT",
+     "label": "Port on this server",
+     "default": "27017",
+     "type": "port",
+     "required": true
+    },
+    {
+     "name": "MONGO_INITDB_ROOT_USERNAME",
+     "label": "Admin user",
+     "default": "admin",
+     "type": "text",
+     "required": true
+    },
+    {
+     "name": "MONGO_INITDB_ROOT_PASSWORD",
+     "label": "Admin password",
+     "default": "",
+     "type": "password",
+     "required": true,
+     "generate": true
+    }
+   ],
+   "container": {
+    "image": "mongo:8",
+    "ports": [
+     {
+      "host": "${DB_PORT}",
+      "container": "27017",
+      "proto": "tcp"
+     }
+    ],
+    "volumes": [
+     {
+      "source": "mongo-data",
+      "target": "/data/db"
+     }
+    ],
+    "env": [
+     {
+      "key": "MONGO_INITDB_ROOT_USERNAME",
+      "value": "${MONGO_INITDB_ROOT_USERNAME}"
+     },
+     {
+      "key": "MONGO_INITDB_ROOT_PASSWORD",
+      "value": "${MONGO_INITDB_ROOT_PASSWORD}"
+     }
+    ],
+    "restart": "unless-stopped"
+   },
+   "featured": false,
+   "source": "linuxadmin"
+  },
+  {
+   "id": "minio",
+   "name": "MinIO",
+   "hue": "svc",
+   "category": "Files",
+   "type": "container",
+   "description": "S3-compatible object storage on your own disk.",
+   "website": "https://min.io",
+   "needs": {
+    "ports": [
+     9000,
+     9001
+    ],
+    "ram": "300 MB"
+   },
+   "variables": [
+    {
+     "name": "API_PORT",
+     "label": "S3 API port",
+     "default": "9000",
+     "type": "port",
+     "required": true
+    },
+    {
+     "name": "CONSOLE_PORT",
+     "label": "Web console port",
+     "default": "9001",
+     "type": "port",
+     "required": true
+    },
+    {
+     "name": "MINIO_ROOT_USER",
+     "label": "Root user",
+     "default": "minioadmin",
+     "type": "text",
+     "required": true
+    },
+    {
+     "name": "MINIO_ROOT_PASSWORD",
+     "label": "Root password",
+     "default": "",
+     "type": "password",
+     "required": true,
+     "hint": "At least 8 characters.",
+     "generate": true
+    },
+    {
+     "name": "DATA_DIR",
+     "label": "Data folder",
+     "default": "/srv/minio",
+     "type": "path",
+     "required": true
+    }
+   ],
+   "container": {
+    "image": "quay.io/minio/minio:latest",
+    "ports": [
+     {
+      "host": "${API_PORT}",
+      "container": "9000",
+      "proto": "tcp"
+     },
+     {
+      "host": "${CONSOLE_PORT}",
+      "container": "9001",
+      "proto": "tcp"
+     }
+    ],
+    "volumes": [
+     {
+      "source": "${DATA_DIR}",
+      "target": "/data"
+     }
+    ],
+    "env": [
+     {
+      "key": "MINIO_ROOT_USER",
+      "value": "${MINIO_ROOT_USER}"
+     },
+     {
+      "key": "MINIO_ROOT_PASSWORD",
+      "value": "${MINIO_ROOT_PASSWORD}"
+     }
+    ],
+    "restart": "unless-stopped",
+    "command": "server /data --console-address :9001"
+   },
+   "featured": false,
+   "source": "linuxadmin"
+  },
+  {
+   "id": "syncthing",
+   "name": "Syncthing",
+   "hue": "file",
+   "category": "Files",
+   "type": "container",
+   "description": "Syncs folders between your devices, peer to peer.",
+   "website": "https://syncthing.net",
+   "needs": {
+    "ports": [
+     8384,
+     22000,
+     21027
+    ],
+    "ram": "150 MB"
+   },
+   "variables": [
+    {
+     "name": "WEB_PORT",
+     "label": "Web port",
+     "default": "8384",
+     "type": "port",
+     "required": true
+    },
+    {
+     "name": "DATA_DIR",
+     "label": "Folder to sync",
+     "default": "/srv/syncthing",
+     "type": "path",
+     "required": true
+    }
+   ],
+   "container": {
+    "image": "syncthing/syncthing:latest",
+    "ports": [
+     {
+      "host": "${WEB_PORT}",
+      "container": "8384",
+      "proto": "tcp"
+     },
+     {
+      "host": "22000",
+      "container": "22000",
+      "proto": "tcp"
+     },
+     {
+      "host": "22000",
+      "container": "22000",
+      "proto": "udp"
+     },
+     {
+      "host": "21027",
+      "container": "21027",
+      "proto": "udp"
+     }
+    ],
+    "volumes": [
+     {
+      "source": "${DATA_DIR}",
+      "target": "/var/syncthing"
+     }
+    ],
+    "env": [
+     {
+      "key": "PUID",
+      "value": "1000"
+     },
+     {
+      "key": "PGID",
+      "value": "1000"
+     }
+    ],
+    "restart": "unless-stopped",
+    "hostname": "syncthing"
+   },
+   "featured": false,
+   "source": "linuxadmin"
+  },
+  {
+   "id": "filebrowser",
+   "name": "File Browser",
+   "hue": "file",
+   "category": "Files",
+   "type": "container",
+   "description": "Browse, upload and share the files of a folder from the web.",
+   "website": "https://filebrowser.org",
+   "needs": {
+    "ports": [
+     8082
+    ],
+    "ram": "30 MB",
+    "note": "The first login is admin / admin. Change it right away."
+   },
+   "variables": [
+    {
+     "name": "WEB_PORT",
+     "label": "Port on this server",
+     "default": "8082",
+     "type": "port",
+     "required": true
+    },
+    {
+     "name": "ROOT_DIR",
+     "label": "Folder to show",
+     "default": "/srv/files",
+     "type": "path",
+     "required": true
+    }
+   ],
+   "container": {
+    "image": "filebrowser/filebrowser:latest",
+    "ports": [
+     {
+      "host": "${WEB_PORT}",
+      "container": "80",
+      "proto": "tcp"
+     }
+    ],
+    "volumes": [
+     {
+      "source": "${ROOT_DIR}",
+      "target": "/srv"
+     },
+     {
+      "source": "filebrowser-db",
+      "target": "/database"
+     },
+     {
+      "source": "filebrowser-config",
+      "target": "/config"
+     }
+    ],
+    "env": [
+     {
+      "key": "FB_DATABASE",
+      "value": "/database/filebrowser.db"
+     }
+    ],
+    "restart": "unless-stopped"
+   },
+   "featured": false,
+   "source": "linuxadmin"
+  },
+  {
+   "id": "n8n",
+   "name": "n8n",
+   "hue": "plg",
+   "category": "Automation",
+   "type": "container",
+   "description": "Build automations by connecting apps and services with a visual editor.",
+   "website": "https://n8n.io",
+   "needs": {
+    "ports": [
+     5678
+    ],
+    "ram": "500 MB",
+    "note": "Without HTTPS, sign-in works because the secure cookie is turned off."
+   },
+   "variables": [
+    {
+     "name": "WEB_PORT",
+     "label": "Port on this server",
+     "default": "5678",
+     "type": "port",
+     "required": true
+    },
+    {
+     "name": "TZ",
+     "label": "Time zone",
+     "default": "Europe/Rome",
+     "type": "text",
+     "hint": "For example Europe/Rome or America/New_York."
+    }
+   ],
+   "container": {
+    "image": "docker.n8n.io/n8nio/n8n:latest",
+    "ports": [
+     {
+      "host": "${WEB_PORT}",
+      "container": "5678",
+      "proto": "tcp"
+     }
+    ],
+    "volumes": [
+     {
+      "source": "n8n-data",
+      "target": "/home/node/.n8n"
+     }
+    ],
+    "env": [
+     {
+      "key": "GENERIC_TIMEZONE",
+      "value": "${TZ}"
+     },
+     {
+      "key": "TZ",
+      "value": "${TZ}"
+     },
+     {
+      "key": "N8N_SECURE_COOKIE",
+      "value": "false"
+     }
+    ],
+    "restart": "unless-stopped"
+   },
+   "featured": false,
+   "source": "linuxadmin"
+  },
+  {
+   "id": "code-server",
+   "name": "code-server",
+   "hue": "ov",
+   "category": "Development",
+   "type": "container",
+   "description": "VS Code in your browser, running on this server.",
+   "website": "https://coder.com/docs/code-server",
+   "needs": {
+    "ports": [
+     8443
+    ],
+    "ram": "500 MB"
+   },
+   "variables": [
+    {
+     "name": "WEB_PORT",
+     "label": "Port on this server",
+     "default": "8443",
+     "type": "port",
+     "required": true
+    },
+    {
+     "name": "PASSWORD",
+     "label": "Password for the web page",
+     "default": "",
+     "type": "password",
+     "required": true,
+     "generate": true
+    },
+    {
+     "name": "PROJECTS_DIR",
+     "label": "Projects folder",
+     "default": "/srv/projects",
+     "type": "path",
+     "required": true
+    },
+    {
+     "name": "TZ",
+     "label": "Time zone",
+     "default": "Europe/Rome",
+     "type": "text",
+     "hint": "For example Europe/Rome or America/New_York."
+    }
+   ],
+   "container": {
+    "image": "lscr.io/linuxserver/code-server:latest",
+    "ports": [
+     {
+      "host": "${WEB_PORT}",
+      "container": "8443",
+      "proto": "tcp"
+     }
+    ],
+    "volumes": [
+     {
+      "source": "code-server-config",
+      "target": "/config"
+     },
+     {
+      "source": "${PROJECTS_DIR}",
+      "target": "/config/workspace"
+     }
+    ],
+    "env": [
+     {
+      "key": "PUID",
+      "value": "1000"
+     },
+     {
+      "key": "PGID",
+      "value": "1000"
+     },
+     {
+      "key": "TZ",
+      "value": "${TZ}"
+     },
+     {
+      "key": "PASSWORD",
+      "value": "${PASSWORD}"
+     }
+    ],
+    "restart": "unless-stopped"
+   },
+   "featured": false,
+   "source": "linuxadmin"
+  },
+  {
+   "id": "nextcloud",
+   "name": "Nextcloud",
+   "hue": "file",
+   "category": "Files",
+   "type": "stack",
+   "featured": true,
+   "description": "Your own cloud for files, calendar and contacts, with a MariaDB database.",
+   "website": "https://nextcloud.com",
+   "needs": {
+    "ports": [
+     8080
+    ],
+    "ram": "1 GB",
+    "containers": 2
+   },
+   "variables": [
+    {
+     "name": "WEB_PORT",
+     "label": "Port on this server",
+     "default": "8080",
+     "type": "port",
+     "required": true
+    },
+    {
+     "name": "MYSQL_ROOT_PASSWORD",
+     "label": "Database root password",
+     "default": "",
+     "type": "password",
+     "required": true,
+     "generate": true
+    },
+    {
+     "name": "MYSQL_PASSWORD",
+     "label": "Database password",
+     "default": "",
+     "type": "password",
+     "required": true,
+     "generate": true
+    },
+    {
+     "name": "NEXTCLOUD_ADMIN_USER",
+     "label": "Admin user",
+     "default": "admin",
+     "type": "text",
+     "required": true
+    },
+    {
+     "name": "NEXTCLOUD_ADMIN_PASSWORD",
+     "label": "Admin password",
+     "default": "",
+     "type": "password",
+     "required": true,
+     "generate": true
+    }
+   ],
+   "compose": "services:\n  db:\n    image: mariadb:11\n    restart: unless-stopped\n    command: --transaction-isolation=READ-COMMITTED --log-bin=binlog --binlog-format=ROW\n    volumes:\n      - db:/var/lib/mysql\n    environment:\n      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}\n      MYSQL_PASSWORD: ${MYSQL_PASSWORD}\n      MYSQL_DATABASE: nextcloud\n      MYSQL_USER: nextcloud\n  app:\n    image: nextcloud:stable\n    restart: unless-stopped\n    depends_on:\n      - db\n    ports:\n      - \"${WEB_PORT}:80\"\n    volumes:\n      - nextcloud:/var/www/html\n    environment:\n      MYSQL_HOST: db\n      MYSQL_DATABASE: nextcloud\n      MYSQL_USER: nextcloud\n      MYSQL_PASSWORD: ${MYSQL_PASSWORD}\n      NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER}\n      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD}\nvolumes:\n  db:\n  nextcloud:\n",
+   "source": "linuxadmin"
+  },
+  {
+   "id": "immich",
+   "name": "Immich",
+   "hue": "plg",
+   "category": "Photos",
+   "type": "stack",
+   "featured": true,
+   "description": "Back up photos and videos from your phone, browse them on a map and find faces.",
+   "website": "https://immich.app",
+   "needs": {
+    "ports": [
+     2283
+    ],
+    "ram": "4 GB",
+    "disk": "Depends on your library",
+    "containers": 4,
+    "note": "Based on the official compose file. The machine learning container is large."
+   },
+   "variables": [
+    {
+     "name": "IMMICH_PORT",
+     "label": "Port on this server",
+     "default": "2283",
+     "type": "port",
+     "required": true
+    },
+    {
+     "name": "UPLOAD_LOCATION",
+     "label": "Folder for photos and videos",
+     "default": "/srv/immich/library",
+     "type": "path",
+     "required": true
+    },
+    {
+     "name": "DB_DATA_LOCATION",
+     "label": "Folder for the database",
+     "default": "/srv/immich/postgres",
+     "type": "path",
+     "required": true,
+     "hint": "Keep this on a local disk, not a network share."
+    },
+    {
+     "name": "DB_PASSWORD",
+     "label": "Database password",
+     "default": "",
+     "type": "password",
+     "required": true,
+     "hint": "Letters and digits only.",
+     "generate": true
+    },
+    {
+     "name": "TZ",
+     "label": "Time zone",
+     "default": "Europe/Rome",
+     "type": "text",
+     "hint": "For example Europe/Rome or America/New_York."
+    },
+    {
+     "name": "IMMICH_VERSION",
+     "label": "Version",
+     "default": "release",
+     "type": "text",
+     "required": true,
+     "hint": "release is the latest stable one."
+    }
+   ],
+   "compose": "services:\n  immich-server:\n    container_name: immich_server\n    image: ghcr.io/immich-app/immich-server:${IMMICH_VERSION}\n    volumes:\n      - ${UPLOAD_LOCATION}:/data\n      - /etc/localtime:/etc/localtime:ro\n    env_file:\n      - .env\n    ports:\n      - \"${IMMICH_PORT}:2283\"\n    depends_on:\n      - redis\n      - database\n    restart: always\n  immich-machine-learning:\n    container_name: immich_machine_learning\n    image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION}\n    volumes:\n      - model-cache:/cache\n    env_file:\n      - .env\n    restart: always\n  redis:\n    container_name: immich_redis\n    image: docker.io/valkey/valkey:8-bookworm\n    healthcheck:\n      test: redis-cli ping || exit 1\n    restart: always\n  database:\n    container_name: immich_postgres\n    image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0\n    environment:\n      POSTGRES_PASSWORD: ${DB_PASSWORD}\n      POSTGRES_USER: postgres\n      POSTGRES_DB: immich\n      POSTGRES_INITDB_ARGS: \"--data-checksums\"\n    volumes:\n      - ${DB_DATA_LOCATION}:/var/lib/postgresql/data\n    shm_size: 128mb\n    restart: always\nvolumes:\n  model-cache:\n",
+   "source": "linuxadmin"
+  },
+  {
+   "id": "grafana-prometheus",
+   "name": "Grafana and Prometheus",
+   "hue": "log",
+   "category": "Monitoring",
+   "type": "stack",
+   "description": "Dashboards (Grafana) on top of a metrics database (Prometheus).",
+   "website": "https://grafana.com",
+   "needs": {
+    "ports": [
+     3002,
+     9090
+    ],
+    "ram": "500 MB",
+    "containers": 2
+   },
+   "variables": [
+    {
+     "name": "GRAFANA_PORT",
+     "label": "Grafana port",
+     "default": "3002",
+     "type": "port",
+     "required": true
+    },
+    {
+     "name": "PROMETHEUS_PORT",
+     "label": "Prometheus port",
+     "default": "9090",
+     "type": "port",
+     "required": true
+    },
+    {
+     "name": "GF_SECURITY_ADMIN_USER",
+     "label": "Grafana admin user",
+     "default": "admin",
+     "type": "text",
+     "required": true
+    },
+    {
+     "name": "GF_SECURITY_ADMIN_PASSWORD",
+     "label": "Grafana admin password",
+     "default": "",
+     "type": "password",
+     "required": true,
+     "generate": true
+    }
+   ],
+   "compose": "services:\n  prometheus:\n    image: prom/prometheus:latest\n    restart: unless-stopped\n    ports:\n      - \"${PROMETHEUS_PORT}:9090\"\n    volumes:\n      - prometheus-data:/prometheus\n  grafana:\n    image: grafana/grafana-oss:latest\n    restart: unless-stopped\n    depends_on:\n      - prometheus\n    ports:\n      - \"${GRAFANA_PORT}:3000\"\n    environment:\n      GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER}\n      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD}\n    volumes:\n      - grafana-data:/var/lib/grafana\nvolumes:\n  prometheus-data:\n  grafana-data:\n",
+   "featured": false,
+   "source": "linuxadmin"
+  },
+  {
+   "id": "wg-easy",
+   "name": "WireGuard Easy",
+   "hue": "svc",
+   "category": "Network",
+   "type": "stack",
+   "description": "A WireGuard VPN server with a web page to add devices.",
+   "website": "https://github.com/wg-easy/wg-easy",
+   "needs": {
+    "ports": [
+     51820,
+     51821
+    ],
+    "ram": "50 MB",
+    "note": "Forward UDP 51820 on your router. The web page is plain HTTP: keep it on a trusted network."
+   },
+   "variables": [
+    {
+     "name": "VPN_PORT",
+     "label": "VPN port (UDP)",
+     "default": "51820",
+     "type": "port",
+     "required": true
+    },
+    {
+     "name": "WEB_PORT",
+     "label": "Web port",
+     "default": "51821",
+     "type": "port",
+     "required": true
+    }
+   ],
+   "compose": "services:\n  wg-easy:\n    image: ghcr.io/wg-easy/wg-easy:15\n    restart: unless-stopped\n    environment:\n      INSECURE: \"true\"\n    volumes:\n      - etc_wireguard:/etc/wireguard\n      - /lib/modules:/lib/modules:ro\n    ports:\n      - \"${VPN_PORT}:51820/udp\"\n      - \"${WEB_PORT}:51821/tcp\"\n    cap_add:\n      - NET_ADMIN\n      - SYS_MODULE\n    sysctls:\n      - net.ipv4.ip_forward=1\n      - net.ipv4.conf.all.src_valid_mark=1\n      - net.ipv6.conf.all.disable_ipv6=0\n      - net.ipv6.conf.all.forwarding=1\n      - net.ipv6.conf.default.forwarding=1\nvolumes:\n  etc_wireguard:\n",
+   "featured": false,
+   "source": "linuxadmin"
+  },
+  {
+   "id": "paperless-ngx",
+   "name": "Paperless-ngx",
+   "hue": "log",
+   "category": "Documents",
+   "type": "stack",
+   "description": "Scan, index and search your paper documents.",
+   "website": "https://docs.paperless-ngx.com",
+   "needs": {
+    "ports": [
+     8000
+    ],
+    "ram": "1.5 GB",
+    "containers": 3
+   },
+   "variables": [
+    {
+     "name": "WEB_PORT",
+     "label": "Port on this server",
+     "default": "8000",
+     "type": "port",
+     "required": true
+    },
+    {
+     "name": "CONSUME_DIR",
+     "label": "Inbox folder",
+     "default": "/srv/paperless/consume",
+     "type": "path",
+     "required": true,
+     "hint": "Files put here are imported."
+    },
+    {
+     "name": "PAPERLESS_URL",
+     "label": "Address people will use",
+     "default": "http://localhost:8000",
+     "type": "text",
+     "required": true
+    },
+    {
+     "name": "PAPERLESS_SECRET_KEY",
+     "label": "Secret key",
+     "default": "",
+     "type": "password",
+     "required": true,
+     "generate": true
+    },
+    {
+     "name": "POSTGRES_PASSWORD",
+     "label": "Database password",
+     "default": "",
+     "type": "password",
+     "required": true,
+     "generate": true
+    },
+    {
+     "name": "PAPERLESS_ADMIN_USER",
+     "label": "Admin user",
+     "default": "admin",
+     "type": "text",
+     "required": true
+    },
+    {
+     "name": "PAPERLESS_ADMIN_PASSWORD",
+     "label": "Admin password",
+     "default": "",
+     "type": "password",
+     "required": true,
+     "generate": true
+    },
+    {
+     "name": "PAPERLESS_TIME_ZONE",
+     "label": "Time zone",
+     "default": "Europe/Rome",
+     "type": "text"
+    }
+   ],
+   "compose": "services:\n  broker:\n    image: docker.io/library/redis:7\n    restart: unless-stopped\n    volumes:\n      - redisdata:/data\n  db:\n    image: docker.io/library/postgres:16\n    restart: unless-stopped\n    volumes:\n      - pgdata:/var/lib/postgresql/data\n    environment:\n      POSTGRES_DB: paperless\n      POSTGRES_USER: paperless\n      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}\n  webserver:\n    image: ghcr.io/paperless-ngx/paperless-ngx:latest\n    restart: unless-stopped\n    depends_on:\n      - db\n      - broker\n    ports:\n      - \"${WEB_PORT}:8000\"\n    volumes:\n      - data:/usr/src/paperless/data\n      - media:/usr/src/paperless/media\n      - ${CONSUME_DIR}:/usr/src/paperless/consume\n    environment:\n      PAPERLESS_REDIS: redis://broker:6379\n      PAPERLESS_DBHOST: db\n      PAPERLESS_DBPASS: ${POSTGRES_PASSWORD}\n      PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY}\n      PAPERLESS_URL: ${PAPERLESS_URL}\n      PAPERLESS_TIME_ZONE: ${PAPERLESS_TIME_ZONE}\n      PAPERLESS_ADMIN_USER: ${PAPERLESS_ADMIN_USER}\n      PAPERLESS_ADMIN_PASSWORD: ${PAPERLESS_ADMIN_PASSWORD}\nvolumes:\n  data:\n  media:\n  pgdata:\n  redisdata:\n",
+   "featured": false,
+   "source": "linuxadmin"
+  }
+ ]
+}

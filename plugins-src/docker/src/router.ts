@@ -11,12 +11,29 @@
  */
 import { useSyncExternalStore } from 'react';
 
+/** Starting values for the new container form; plain JSON so it can sit in a route. */
+export interface CreatePrefill {
+  name?: string;
+  ports?: { host: string; container: string; proto?: string }[];
+  volumes?: { source: string; target: string; readOnly?: boolean }[];
+  env?: { key: string; value: string }[];
+  restart?: string;
+  network?: string;
+  hostname?: string;
+  command?: string;
+  user?: string;
+  privileged?: boolean;
+  labels?: { key: string; value: string }[];
+  memoryMb?: string;
+  cpus?: string;
+}
+
 export type Route =
   | { view: 'containers' }
   | { view: 'container'; id: string; tab?: 'overview' | 'logs' | 'stats' | 'shell' | 'inspect' | 'settings' }
   | { view: 'stacks' }
   | { view: 'stack'; name: string }
-  | { view: 'create'; /** container id to edit (recreate with the same settings) */ from?: string; /** image to start from */ image?: string }
+  | { view: 'create'; /** container id to edit (recreate with the same settings) */ from?: string; /** image to start from */ image?: string; /** values to start the form with (from a template) */ prefill?: CreatePrefill }
   | { view: 'templates' }
   | { view: 'template'; id: string }
   | { view: 'images' }

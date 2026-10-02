@@ -423,146 +423,641 @@
     {
       "id": "docker",
       "name": "Docker",
-      "version": "1.5.0",
+      "version": "2.0.0",
       "author": "LinuxAdmin team",
-      "description": "Containers, images and compose stacks.",
+      "description": "Manage containers, compose stacks, images, volumes and networks. Live stats, logs, shell, templates and clean-up.",
       "icon": "server",
       "color": "file",
       "category": "Containers",
       "verified": true,
       "installs": 54000,
-      "notes": "Adds compose file editing. Asks for no new permissions.",
-      "source": "https://plugins.example.invalid/docker-1.5.0.tar.gz",
+      "notes": "Rebuilt as a full container manager: container pages with logs, stats and a shell, compose stacks in /opt/stacks, templates, image updates, clean-up, auto-update and alerts. Asks for new permissions: Docker Engine API access, a terminal, and the /opt/stacks folder.",
+      "source": "https://plugins.example.invalid/docker-2.0.0.tar.gz",
       "capabilities": {
         "commands": [
           {
-            "name": "ps",
-            "description": "List containers",
-            "argv": [
-              "docker",
-              "ps",
-              "-a",
-              "--no-trunc",
-              "--format",
-              "{{json .}}"
-            ],
-            "admin": true,
-            "adminUnlessGroup": "docker"
-          },
-          {
-            "name": "images",
-            "description": "List images",
-            "argv": [
-              "docker",
-              "images",
-              "--format",
-              "{{json .}}"
-            ],
-            "admin": true,
-            "adminUnlessGroup": "docker"
-          },
-          {
-            "name": "start",
-            "description": "Start a container",
-            "argv": [
-              "docker",
-              "start",
-              "{0}"
-            ],
-            "args": [
-              {
-                "pattern": "[a-zA-Z0-9][a-zA-Z0-9_.-]*",
-                "maxLen": 128
-              }
-            ],
-            "admin": true,
-            "adminUnlessGroup": "docker"
-          },
-          {
-            "name": "stop",
-            "description": "Stop a container",
-            "argv": [
-              "docker",
-              "stop",
-              "{0}"
-            ],
-            "args": [
-              {
-                "pattern": "[a-zA-Z0-9][a-zA-Z0-9_.-]*",
-                "maxLen": 128
-              }
-            ],
             "admin": true,
             "adminUnlessGroup": "docker",
+            "args": [
+              {
+                "maxLen": 128,
+                "pattern": "[a-zA-Z0-9][a-zA-Z0-9_.-]*"
+              },
+              {
+                "maxLen": 16,
+                "pattern": "/bin/(sh|bash|ash|zsh)"
+              }
+            ],
+            "argv": [
+              "docker",
+              "-H",
+              "unix:///var/run/docker.sock",
+              "exec",
+              "-it",
+              "-e",
+              "TERM=xterm-256color",
+              "{0}",
+              "{1}"
+            ],
+            "description": "Open a shell inside a container",
+            "name": "shell",
+            "pty": true
+          },
+          {
+            "name": "compose-up",
+            "description": "Create or update the containers of a stack",
+            "admin": true,
+            "adminUnlessGroup": "docker",
+            "args": [
+              {
+                "pattern": "[a-z0-9][a-z0-9_-]{0,62}",
+                "maxLen": 63
+              }
+            ],
+            "argv": [
+              "docker",
+              "-H",
+              "unix:///var/run/docker.sock",
+              "compose",
+              "--project-name",
+              "{0}",
+              "--project-directory",
+              "/opt/stacks/{0}",
+              "-f",
+              "/opt/stacks/{0}/compose.yaml",
+              "up",
+              "-d",
+              "--remove-orphans"
+            ],
+            "timeoutSec": 600
+          },
+          {
+            "name": "compose-pull",
+            "description": "Pull the images of a stack",
+            "admin": true,
+            "adminUnlessGroup": "docker",
+            "args": [
+              {
+                "pattern": "[a-z0-9][a-z0-9_-]{0,62}",
+                "maxLen": 63
+              }
+            ],
+            "argv": [
+              "docker",
+              "-H",
+              "unix:///var/run/docker.sock",
+              "compose",
+              "--project-name",
+              "{0}",
+              "--project-directory",
+              "/opt/stacks/{0}",
+              "-f",
+              "/opt/stacks/{0}/compose.yaml",
+              "pull"
+            ],
+            "timeoutSec": 600
+          },
+          {
+            "name": "compose-down",
+            "description": "Stop and remove the containers of a stack",
+            "admin": true,
+            "adminUnlessGroup": "docker",
+            "args": [
+              {
+                "pattern": "[a-z0-9][a-z0-9_-]{0,62}",
+                "maxLen": 63
+              }
+            ],
+            "argv": [
+              "docker",
+              "-H",
+              "unix:///var/run/docker.sock",
+              "compose",
+              "--project-name",
+              "{0}",
+              "--project-directory",
+              "/opt/stacks/{0}",
+              "-f",
+              "/opt/stacks/{0}/compose.yaml",
+              "down",
+              "--remove-orphans"
+            ],
+            "timeoutSec": 300
+          },
+          {
+            "name": "compose-down-volumes",
+            "description": "Stop and remove the containers and volumes of a stack",
+            "admin": true,
+            "adminUnlessGroup": "docker",
+            "args": [
+              {
+                "pattern": "[a-z0-9][a-z0-9_-]{0,62}",
+                "maxLen": 63
+              }
+            ],
+            "argv": [
+              "docker",
+              "-H",
+              "unix:///var/run/docker.sock",
+              "compose",
+              "--project-name",
+              "{0}",
+              "--project-directory",
+              "/opt/stacks/{0}",
+              "-f",
+              "/opt/stacks/{0}/compose.yaml",
+              "down",
+              "--remove-orphans",
+              "--volumes"
+            ],
+            "timeoutSec": 300
+          },
+          {
+            "name": "compose-restart",
+            "description": "Restart the containers of a stack",
+            "admin": true,
+            "adminUnlessGroup": "docker",
+            "args": [
+              {
+                "pattern": "[a-z0-9][a-z0-9_-]{0,62}",
+                "maxLen": 63
+              }
+            ],
+            "argv": [
+              "docker",
+              "-H",
+              "unix:///var/run/docker.sock",
+              "compose",
+              "--project-name",
+              "{0}",
+              "--project-directory",
+              "/opt/stacks/{0}",
+              "-f",
+              "/opt/stacks/{0}/compose.yaml",
+              "restart"
+            ],
+            "timeoutSec": 300
+          },
+          {
+            "name": "compose-stop",
+            "description": "Stop the containers of a stack",
+            "admin": true,
+            "adminUnlessGroup": "docker",
+            "args": [
+              {
+                "pattern": "[a-z0-9][a-z0-9_-]{0,62}",
+                "maxLen": 63
+              }
+            ],
+            "argv": [
+              "docker",
+              "-H",
+              "unix:///var/run/docker.sock",
+              "compose",
+              "--project-name",
+              "{0}",
+              "--project-directory",
+              "/opt/stacks/{0}",
+              "-f",
+              "/opt/stacks/{0}/compose.yaml",
+              "stop"
+            ],
+            "timeoutSec": 300
+          },
+          {
+            "name": "compose-start",
+            "description": "Start the containers of a stack",
+            "admin": true,
+            "adminUnlessGroup": "docker",
+            "args": [
+              {
+                "pattern": "[a-z0-9][a-z0-9_-]{0,62}",
+                "maxLen": 63
+              }
+            ],
+            "argv": [
+              "docker",
+              "-H",
+              "unix:///var/run/docker.sock",
+              "compose",
+              "--project-name",
+              "{0}",
+              "--project-directory",
+              "/opt/stacks/{0}",
+              "-f",
+              "/opt/stacks/{0}/compose.yaml",
+              "start"
+            ],
+            "timeoutSec": 300
+          },
+          {
+            "name": "compose-config",
+            "description": "Check a stack's compose file and show it fully resolved",
+            "admin": true,
+            "adminUnlessGroup": "docker",
+            "args": [
+              {
+                "pattern": "[a-z0-9][a-z0-9_-]{0,62}",
+                "maxLen": 63
+              }
+            ],
+            "argv": [
+              "docker",
+              "-H",
+              "unix:///var/run/docker.sock",
+              "compose",
+              "--project-name",
+              "{0}",
+              "--project-directory",
+              "/opt/stacks/{0}",
+              "-f",
+              "/opt/stacks/{0}/compose.yaml",
+              "config"
+            ],
             "timeoutSec": 60
           },
           {
-            "name": "restart",
-            "description": "Restart a container",
-            "argv": [
-              "docker",
-              "restart",
-              "{0}"
-            ],
-            "args": [
-              {
-                "pattern": "[a-zA-Z0-9][a-zA-Z0-9_.-]*",
-                "maxLen": 128
-              }
-            ],
+            "name": "compose-p-down",
+            "description": "Stop and remove the containers of a compose project, by project name",
             "admin": true,
             "adminUnlessGroup": "docker",
-            "timeoutSec": 90
-          },
-          {
-            "name": "logs",
-            "description": "Show the last 200 log lines of a container",
-            "argv": [
-              "docker",
-              "logs",
-              "--tail",
-              "200",
-              "--timestamps",
-              "{0}"
-            ],
             "args": [
               {
-                "pattern": "[a-zA-Z0-9][a-zA-Z0-9_.-]*",
-                "maxLen": 128
+                "pattern": "[a-z0-9][a-z0-9_-]{0,62}",
+                "maxLen": 63
               }
             ],
+            "argv": [
+              "docker",
+              "-H",
+              "unix:///var/run/docker.sock",
+              "compose",
+              "--project-name",
+              "{0}",
+              "down"
+            ],
+            "timeoutSec": 300
+          },
+          {
+            "name": "compose-p-restart",
+            "description": "Restart the containers of a compose project, by project name",
             "admin": true,
-            "adminUnlessGroup": "docker"
+            "adminUnlessGroup": "docker",
+            "args": [
+              {
+                "pattern": "[a-z0-9][a-z0-9_-]{0,62}",
+                "maxLen": 63
+              }
+            ],
+            "argv": [
+              "docker",
+              "-H",
+              "unix:///var/run/docker.sock",
+              "compose",
+              "--project-name",
+              "{0}",
+              "restart"
+            ],
+            "timeoutSec": 300
+          },
+          {
+            "name": "compose-p-stop",
+            "description": "Stop the containers of a compose project, by project name",
+            "admin": true,
+            "adminUnlessGroup": "docker",
+            "args": [
+              {
+                "pattern": "[a-z0-9][a-z0-9_-]{0,62}",
+                "maxLen": 63
+              }
+            ],
+            "argv": [
+              "docker",
+              "-H",
+              "unix:///var/run/docker.sock",
+              "compose",
+              "--project-name",
+              "{0}",
+              "stop"
+            ],
+            "timeoutSec": 300
+          },
+          {
+            "name": "compose-p-start",
+            "description": "Start the containers of a compose project, by project name",
+            "admin": true,
+            "adminUnlessGroup": "docker",
+            "args": [
+              {
+                "pattern": "[a-z0-9][a-z0-9_-]{0,62}",
+                "maxLen": 63
+              }
+            ],
+            "argv": [
+              "docker",
+              "-H",
+              "unix:///var/run/docker.sock",
+              "compose",
+              "--project-name",
+              "{0}",
+              "start"
+            ],
+            "timeoutSec": 300
+          },
+          {
+            "name": "compose-config-project",
+            "description": "Show a compose project outside /opt/stacks, fully resolved (read only)",
+            "admin": true,
+            "adminUnlessGroup": "docker",
+            "args": [
+              {
+                "pattern": "[a-z0-9][a-z0-9_-]{0,62}",
+                "maxLen": 63
+              },
+              {
+                "pattern": "(/[a-zA-Z0-9_@+-][a-zA-Z0-9_@+.-]*)+\\.ya?ml",
+                "maxLen": 400
+              }
+            ],
+            "argv": [
+              "docker",
+              "-H",
+              "unix:///var/run/docker.sock",
+              "compose",
+              "--project-name",
+              "{0}",
+              "-f",
+              "{1}",
+              "config"
+            ],
+            "timeoutSec": 60
+          },
+          {
+            "name": "compose-ls",
+            "description": "List compose projects, including the ones not managed here",
+            "admin": true,
+            "adminUnlessGroup": "docker",
+            "argv": [
+              "docker",
+              "-H",
+              "unix:///var/run/docker.sock",
+              "compose",
+              "ls",
+              "-a",
+              "--format",
+              "json"
+            ],
+            "timeoutSec": 30
+          },
+          {
+            "name": "stacks-init",
+            "description": "Create the shared stacks folder /opt/stacks, writable by the docker group",
+            "admin": true,
+            "argv": [
+              "install",
+              "-d",
+              "-m",
+              "2775",
+              "-g",
+              "docker",
+              "/opt/stacks"
+            ],
+            "timeoutSec": 30
           }
         ],
         "files": {
-          "read": [],
-          "write": []
+          "read": [
+            {
+              "admin": true,
+              "adminUnlessGroup": "docker",
+              "path": "/opt/stacks"
+            }
+          ],
+          "write": [
+            {
+              "admin": true,
+              "adminUnlessGroup": "docker",
+              "path": "/opt/stacks"
+            },
+            {
+              "create": true,
+              "path": "~/.config/linuxadmin/plugins/docker"
+            }
+          ]
         },
+        "http": [
+          {
+            "admin": true,
+            "adminUnlessGroup": "docker",
+            "headers": [
+              "Content-Type",
+              "X-Registry-Auth"
+            ],
+            "maxBody": 8388608,
+            "name": "docker",
+            "rules": [
+              {
+                "methods": [
+                  "GET",
+                  "HEAD"
+                ],
+                "path": "/_ping"
+              },
+              {
+                "methods": [
+                  "GET"
+                ],
+                "path": "/version"
+              },
+              {
+                "methods": [
+                  "GET",
+                  "HEAD"
+                ],
+                "path": "/v1\\.[0-9]+/_ping"
+              },
+              {
+                "methods": [
+                  "GET"
+                ],
+                "path": "/v1\\.[0-9]+/(version|info|events|system/df)"
+              },
+              {
+                "methods": [
+                  "POST"
+                ],
+                "path": "/v1\\.[0-9]+/(containers|images|volumes|networks|build)/prune"
+              },
+              {
+                "methods": [
+                  "GET"
+                ],
+                "path": "/v1\\.[0-9]+/containers/json"
+              },
+              {
+                "methods": [
+                  "GET"
+                ],
+                "path": "/v1\\.[0-9]+/containers/[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}/(json|logs|stats|top|changes)"
+              },
+              {
+                "methods": [
+                  "POST"
+                ],
+                "path": "/v1\\.[0-9]+/containers/create"
+              },
+              {
+                "methods": [
+                  "POST"
+                ],
+                "path": "/v1\\.[0-9]+/containers/[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}/(start|stop|restart|kill|pause|unpause|rename|update|exec)"
+              },
+              {
+                "methods": [
+                  "DELETE"
+                ],
+                "path": "/v1\\.[0-9]+/containers/[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}"
+              },
+              {
+                "methods": [
+                  "POST"
+                ],
+                "path": "/v1\\.[0-9]+/exec/[a-f0-9]{64}/(start|resize)"
+              },
+              {
+                "methods": [
+                  "GET"
+                ],
+                "path": "/v1\\.[0-9]+/exec/[a-f0-9]{64}/json"
+              },
+              {
+                "methods": [
+                  "GET"
+                ],
+                "path": "/v1\\.[0-9]+/images/json"
+              },
+              {
+                "methods": [
+                  "GET"
+                ],
+                "path": "/v1\\.[0-9]+/images/[a-zA-Z0-9_:@-]+(?:\\.[a-zA-Z0-9_:@-]+)*(?:/[a-zA-Z0-9_:@-]+(?:\\.[a-zA-Z0-9_:@-]+)*){0,9}/(json|history)"
+              },
+              {
+                "methods": [
+                  "POST"
+                ],
+                "path": "/v1\\.[0-9]+/images/create"
+              },
+              {
+                "methods": [
+                  "POST"
+                ],
+                "path": "/v1\\.[0-9]+/images/[a-zA-Z0-9_:@-]+(?:\\.[a-zA-Z0-9_:@-]+)*(?:/[a-zA-Z0-9_:@-]+(?:\\.[a-zA-Z0-9_:@-]+)*){0,9}/tag"
+              },
+              {
+                "methods": [
+                  "DELETE"
+                ],
+                "path": "/v1\\.[0-9]+/images/[a-zA-Z0-9_:@-]+(?:\\.[a-zA-Z0-9_:@-]+)*(?:/[a-zA-Z0-9_:@-]+(?:\\.[a-zA-Z0-9_:@-]+)*){0,9}"
+              },
+              {
+                "methods": [
+                  "GET"
+                ],
+                "path": "/v1\\.[0-9]+/distribution/[a-zA-Z0-9_:@-]+(?:\\.[a-zA-Z0-9_:@-]+)*(?:/[a-zA-Z0-9_:@-]+(?:\\.[a-zA-Z0-9_:@-]+)*){0,9}/json"
+              },
+              {
+                "methods": [
+                  "POST"
+                ],
+                "path": "/v1\\.[0-9]+/auth"
+              },
+              {
+                "methods": [
+                  "GET"
+                ],
+                "path": "/v1\\.[0-9]+/volumes"
+              },
+              {
+                "methods": [
+                  "GET"
+                ],
+                "path": "/v1\\.[0-9]+/volumes/[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}"
+              },
+              {
+                "methods": [
+                  "POST"
+                ],
+                "path": "/v1\\.[0-9]+/volumes/create"
+              },
+              {
+                "methods": [
+                  "DELETE"
+                ],
+                "path": "/v1\\.[0-9]+/volumes/[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}"
+              },
+              {
+                "methods": [
+                  "GET"
+                ],
+                "path": "/v1\\.[0-9]+/networks"
+              },
+              {
+                "methods": [
+                  "GET"
+                ],
+                "path": "/v1\\.[0-9]+/networks/[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}"
+              },
+              {
+                "methods": [
+                  "POST"
+                ],
+                "path": "/v1\\.[0-9]+/networks/create"
+              },
+              {
+                "methods": [
+                  "DELETE"
+                ],
+                "path": "/v1\\.[0-9]+/networks/[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}"
+              },
+              {
+                "methods": [
+                  "POST"
+                ],
+                "path": "/v1\\.[0-9]+/networks/[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}/(connect|disconnect)"
+              }
+            ],
+            "socket": "/var/run/docker.sock",
+            "timeoutSec": 120
+          }
+        ],
+        "network": [
+          "raw.githubusercontent.com",
+          "gist.githubusercontent.com"
+        ],
         "sockets": [
           "/var/run/docker.sock"
-        ],
-        "network": []
+        ]
       },
       "contributes": {
         "pages": [
           {
+            "icon": "server",
             "id": "docker",
-            "title": "Docker",
-            "icon": "server"
-          }
-        ],
-        "widgets": [
-          {
-            "id": "containers",
-            "title": "Containers",
-            "icon": "server"
+            "title": "Docker"
           }
         ],
         "snippets": [
           {
-            "name": "docker ps",
-            "command": "docker ps"
+            "command": "docker ps",
+            "name": "docker ps"
+          }
+        ],
+        "widgets": [
+          {
+            "icon": "server",
+            "id": "containers",
+            "title": "Containers"
           }
         ]
       },

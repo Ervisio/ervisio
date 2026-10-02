@@ -20,6 +20,6 @@ export default defineConfig({
     sourcemap: false,
     cssCodeSplit: false,
     lib: { entry: src('index.ts'), formats: ['es'], fileName: () => 'index.js' },
-    rolldownOptions: { output: { codeSplitting: false } },
+    rolldownOptions: { output: { codeSplitting: false, minify: true } }, // lib mode keeps whitespace otherwise
   },
 });

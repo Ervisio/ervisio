@@ -1,3 +1,4 @@
+import { useAlertEngine } from '../api/alerts';
 import { containers, images, info, networks, volumes } from '../api/resources';
 import { resetEngine } from '../api/engine';
 import { groupByStack } from '../api/model';
@@ -21,6 +22,7 @@ const OFFLINE_OK: NavId[] = ['registries'];
 
 /** The page: inner sidebar, search box, and the view for the current route. */
 export function App() {
+  useAlertEngine();
   const route = useRoute();
   const section = sectionOf(route);
   const q = useSearch();
