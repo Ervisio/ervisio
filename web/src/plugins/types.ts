@@ -271,7 +271,7 @@ export interface PluginSDK {
       args: string[],
       o: { cols: number; rows: number; env?: string; onData(chunk: Uint8Array): void; onExit(code: number): void; onError(e: PluginError): void },
     ): { write(data: string | Uint8Array): void; resize(cols: number, rows: number): void; close(): void };
-    /** SDK 0.2: background jobs (capabilities.jobs). Absent on consoles older than core 0.6: check before use. */
+    /** SDK 0.2: background jobs (capabilities.jobs). Absent on consoles older than core 0.5: check before use. */
     jobs?: PluginJobsApi;
     /** SDK 0.2: sends a notification to the channels the administrator configured (needs capabilities.notify). */
     notify?(n: { title: string; body?: string; level?: 'info' | 'success' | 'warn' | 'error'; link?: string }): Promise<{ channels: number; delivered: number; failed: number }>;
