@@ -19,6 +19,9 @@ import (
 
 // pairAllowed lists what another Ervisio server may ask this one's bridge
 // for: the plugin capabilities and commands, nothing else.
+// maxPairConns bounds the bridges one pairing may hold open on this server.
+const maxPairConns = 16
+
 var pairAllowed = map[string]bool{
 	"plugins.http": true, "plugins.httpStream": true,
 	"plugins.exec": true, "plugins.execStream": true, "plugins.pty": true,
@@ -135,6 +138,13 @@ func (s *Server) handlePairBridge(w http.ResponseWriter, r *http.Request) {
 	}
 	if viaUser != "" {
 		via += " by " + viaUser
+	}
+	s.env.mu.Lock()
+	open := len(s.env.pairConns[p.ID])
+	s.env.mu.Unlock()
+	if open >= maxPairConns {
+		writeErrorStatus(w, http.StatusTooManyRequests, rpc.Errorf(rpc.Unavailable, "This pairing already has %d connections open.", open))
+		return
 	}
 	hj, ok := w.(http.Hijacker)
 	if !ok {

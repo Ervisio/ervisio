@@ -272,5 +272,16 @@ func (m *Manager) agentProxy(e *Env) (http.Handler, error) {
 		w.WriteHeader(http.StatusBadGateway)
 		_ = json.NewEncoder(w).Encode(map[string]string{"message": err.Error()})
 	}
-	return rp, nil
+	// The agent's proxy cannot carry a hijacked (upgraded) connection: it
+	// answers 101 and then drops the stream, so attach, foreground run and
+	// exec would hang or end empty. Refuse them with a message instead.
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Upgrade") != "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotImplemented)
+			_ = json.NewEncoder(w).Encode(map[string]string{"message": "A Portainer agent cannot carry attach, exec or interactive streams (it drops them). Use SSH or Docker over TLS for those, or run the container detached."})
+			return
+		}
+		rp.ServeHTTP(w, r)
+	}), nil
 }

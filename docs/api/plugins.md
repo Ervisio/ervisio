@@ -165,7 +165,14 @@ Strict: unknown fields are rejected.
   talking to `/var/run/docker.sock`). A plugin opens a socket itself only through `capabilities.http`.
 * `capabilities.network`: host names (`api.example.org`, `*.example.org`, `host:8443`; nothing else, the entries go into
   a CSP header). The plugin frame may connect to them over https/wss; the user's session cookie is never sent from the
-  frame.
+  frame. It is a list, or `{"hosts": [...], "userHosts": true}`: with `userHosts` the plugin may ask an administrator to
+  approve more hosts, one exact `host:port` at a time (`plugins.network.request`, below).
+* `remote` (SDK 3, environments, see [environments.md](environments.md)): `"remote": "docker"` on a `capabilities.http`
+  entry lets calls with an `env` go to a remote Docker host instead of `socket`. On a command it declares that the
+  command may run against an environment: `argv[0]` must be `docker`, and `argv` must hold exactly one item equal to
+  `{env}` (for example `["docker", "-H", "{env}", "compose", "up", "-d"]`). The item is the whole argv entry, never part
+  of one, and `{env}` without `remote` is refused. Against an environment the call runs with the user's own rights and
+  never as root, so `admin` and `adminUnlessGroup` do not apply to it.
 
 ## Signing
 
@@ -263,6 +270,10 @@ Errors: `not_found` (plugin or command), `forbidden` (disabled, blocked, not vis
 `needs_admin` (admin command from the user bridge, unless the user is in `adminUnlessGroup`: the web client unlocks and retries),
 `unavailable` (program missing, timeout). The SDK shortcut is `sdk.api.exec(command, args)`.
 
+Params also take `env` (an environment id, handled by the daemon, see [environments.md](environments.md)) and, set
+by the daemon only, `envSocket`: the command must declare `remote`, and `{env}` becomes `unix://<tunnel socket>`
+(`unix:///var/run/docker.sock` when there is no `env`). The daemon removes any `envSocket` a browser sends.
+
 ### `plugins.execStream` (stream, user)
 Same params and checks. Events: `{"stream":"stdout"|"stderr","line":"…"}` per line, then `{"exit":<code>}`; closing the stream kills the process.
 
@@ -296,6 +307,9 @@ Params `{"plugin","name","method","path","query"?,"headers"?:{…},"body"?,"b64"
 Errors: `not_found` (plugin or API), `forbidden` (disabled, blocked, not visible, user API on the root bridge, socket
 permission denied), `invalid` (method, path, query, header or body not allowed), `needs_admin` (admin API from the user
 bridge, unless the user is in `adminUnlessGroup`), `unavailable` (nothing listening, timeout, response too large).
+
+Params also take `env` (and, from the daemon only, `envSocket`): the entry must declare `remote`; the call then
+goes to the environment's tunnel socket and the entry's `admin` settings do not apply.
 
 ### `plugins.httpStream` (stream, user)
 Same params and checks. Events: `{"status","headers"}` when the response starts, then the body as binary chunks as
@@ -333,6 +347,28 @@ name). Same rules as `readFile`.
 ### `plugins.access` (user; used by the daemon)
 Params `{"id"}` → `{"id","network":[…]}` when the plugin exists, is enabled, passes the signature policy and is visible to the
 user; any refusal is `not_found`. The daemon asks it before serving `/plugins/<id>/…` or `/plugin-frame/<id>`.
+
+### `plugins.envs.list` (user; answered by the daemon)
+Params `{}` → `[{"id","name","kind","status"?:{"reachable","engineVersion"?,"apiVersion"?,"latencyMs","error"?,"checked"}}]`: the
+environments the user may use (access list), never any secret. See [environments.md](environments.md).
+
+### `plugins.envCheck` (user; used by the daemon)
+Params `{"method","kind","params"}` (the original call). Succeeds when the plugin may be used by this user and the HTTP
+entry (`params.name`) or command (`params.command`) declares `remote` for a family the environment `kind` serves; else
+`forbidden`. The daemon calls it before it hands out a tunnel or routes to a paired server.
+
+### `plugins.network.request` (user)
+Params `{"plugin","host","scheme"?:"https"|"http"}` → `{"status":"approved"|"pending","host","scheme"}`. The plugin must
+declare `capabilities.network.userHosts`. `host` becomes an exact `host:port` (lower case; port 443, or 80 for http,
+when omitted; no wildcard, scheme, path or credentials). `approved` when the manifest's own list covers it or an
+administrator already approved it; `pending` otherwise: the web app then asks an administrator in a dialog it owns
+(the frame cannot draw or answer it) and calls `plugins.network.approve`. SDK: `sdk.network.request(host)`.
+
+### `plugins.network.approve` / `plugins.network.revoke` (admin)
+Params `{"plugin","host","scheme"?}` / `{"plugin","host"}`. Approvals are kept in `/var/lib/ervisio/plugins-hosts.json` (root writes, 0644)
+as `{plugin, host, scheme, by, at}`. `plugins.access` adds the approved hosts to the frame's `network` list (an http
+approval as `http://host:port`, which the frame's CSP turns into `http://` and `ws://` sources); the web app reloads the
+plugin's frames after an approval. `plugins.network.list` (user) returns `{"approved":[…]}` for Settings.
 
 ### `plugins.loadDev` (user)
 Params `{"path":"~/projects/my-plugin"}` → `{path,id,name,linked,note?}`. Allowed only in dev mode (`plugins.dev = true` or daemon `--dev`),
