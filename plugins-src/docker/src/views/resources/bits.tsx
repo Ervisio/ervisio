@@ -1,4 +1,4 @@
-import { containerName } from '../../api/format';
+import { containerName, localStatus } from '../../api/format';
 import type { Container } from '../../api/types';
 import { t } from '../../i18n';
 import { IconButton, toast } from '../../kit';
@@ -24,7 +24,7 @@ export function UsedBy({ list, unusedLabel, max = 4 }: { list: Container[]; unus
   return (
     <div className="dk-used">
       {list.slice(0, max).map((c) => (
-        <button key={c.Id} type="button" className={`dk-uchip${c.State === 'running' ? '' : ' dk-uchip--off'}`} title={c.Status} onClick={(e) => { e.stopPropagation(); navigate({ view: 'container', id: c.Id }); }}>
+        <button key={c.Id} type="button" className={`dk-uchip${c.State === 'running' ? '' : ' dk-uchip--off'}`} title={localStatus(c.Status)} onClick={(e) => { e.stopPropagation(); navigate({ view: 'container', id: c.Id }); }}>
           {containerName(c)}
         </button>
       ))}

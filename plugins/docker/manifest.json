@@ -632,7 +632,7 @@
   "description": "Manage containers, compose stacks, images, volumes and networks. Live stats, logs, shell, templates and clean-up.",
   "entry": "index.js",
   "files": {
-    "index.js": "3b1aad6b78603468f5dd31de7ef8ce7b7710be764e273dd47d0e11c64f893cee",
+    "index.js": "32783f0c9c1809b621fad853e77f2a18c84c9e6b0875c817bc3ccc968bd8d3af",
     "templates.json": "00cb95ca3375bd8128d429c9f01d693138c49da77ced44c1a97e4bb61e7ca5bb"
   },
   "icon": "server",

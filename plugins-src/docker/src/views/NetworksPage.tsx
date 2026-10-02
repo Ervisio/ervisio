@@ -3,7 +3,7 @@ import { docker, errorText, resetEngine } from '../api/engine';
 import { containerName } from '../api/format';
 import { containers, networks } from '../api/resources';
 import type { Container, NetworkInfo } from '../api/types';
-import { t } from '../i18n';
+import { t, tn } from '../i18n';
 import { Badge, Button, Checkbox, ConfirmDialog, EmptyState, IconButton, Input, Select, Skeleton, toast } from '../kit';
 import { navigate, useSearch } from '../router';
 import { ErrorState } from '../ui/ErrorState';
@@ -34,7 +34,7 @@ export function NetworksPage() {
       icon="net"
       hue="svc"
       title={t('nav.networks')}
-      subtitle={data ? t('res.networks.sub', { n: list.length }) : ''}
+      subtitle={data ? tn('res.networks.sub', { n: list.length }) : ''}
       actions={<Button variant="primary" icon="plus" onClick={() => setCreating(true)}>{t('res.networks.new')}</Button>}
     />
   );

@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { docker, errorText, resetEngine } from '../api/engine';
 import { containerName, formatBytes, shortId } from '../api/format';
 import { containers, diskUsage, images, networks, volumes } from '../api/resources';
-import { t } from '../i18n';
+import { t, tn } from '../i18n';
 import { Button, Checkbox, ConfirmDialog, EmptyState, Icon, Segmented, Skeleton, toast } from '../kit';
 import { navigate } from '../router';
 import { DiskBar } from '../ui/DiskBar';
@@ -160,22 +160,22 @@ export function CleanupPage() {
           <CleanRow
             k="images" item={items.images} checked={on.images} onChange={set("images")} sizesReady={sizesReady} icon="image" hue="sw"
             title={t('res.cleanup.images.title')}
-            empty={imageMode === 'dangling' && est.images.unused.length > 0 ? t('res.cleanup.images.otherMode', { n: est.images.unused.length }) : undefined}
-            text={imageMode === 'dangling' ? t('res.cleanup.images.danglingText', { n: items.images.count }) : t('res.cleanup.images.unusedText', { n: items.images.count })}
+            empty={imageMode === 'dangling' && est.images.unused.length > 0 ? tn('res.cleanup.images.otherMode', { n: est.images.unused.length }) : undefined}
+            text={imageMode === 'dangling' ? tn('res.cleanup.images.danglingText', { n: items.images.count }) : tn('res.cleanup.images.unusedText', { n: items.images.count })}
             extra={<Segmented options={imageSeg} value={imageMode} onChange={(v) => setImageMode(v as ImageMode)} aria-label={t('res.cleanup.images.title')} />}
             detail={names(imgList.map((i) => realTags(i.RepoTags)[0] ?? `<none> ${shortId(i.Id)}`))}
           />
           <CleanRow
             k="containers" item={items.containers} checked={on.containers} onChange={set("containers")} sizesReady={sizesReady} icon="box" hue="file"
             title={t('res.cleanup.containers.title')}
-            text={t('res.cleanup.containers.text', { n: items.containers.count })}
+            text={tn('res.cleanup.containers.text', { n: items.containers.count })}
             detail={names(est.containers.list.map(containerName))}
           />
           <CleanRow
             k="volumes" item={items.volumes} checked={on.volumes} onChange={set("volumes")} sizesReady={sizesReady} icon="database" hue="term" warn
             title={t('res.cleanup.volumes.title')}
-            empty={volumeMode === 'anonymous' && est.volumes.all.length > 0 ? t('res.cleanup.volumes.otherMode', { n: est.volumes.all.length }) : undefined}
-            text={volumeMode === 'anonymous' ? t('res.cleanup.volumes.anonText', { n: items.volumes.count }) : t('res.cleanup.volumes.allText', { n: items.volumes.count })}
+            empty={volumeMode === 'anonymous' && est.volumes.all.length > 0 ? tn('res.cleanup.volumes.otherMode', { n: est.volumes.all.length }) : undefined}
+            text={volumeMode === 'anonymous' ? tn('res.cleanup.volumes.anonText', { n: items.volumes.count }) : tn('res.cleanup.volumes.allText', { n: items.volumes.count })}
             extra={
               <>
                 <Segmented options={volumeSeg} value={volumeMode} onChange={(v) => setVolumeMode(v as VolumeMode)} aria-label={t('res.cleanup.volumes.title')} />
@@ -187,12 +187,12 @@ export function CleanupPage() {
           <CleanRow
             k="cache" item={items.cache} checked={on.cache} onChange={set("cache")} sizesReady={sizesReady} icon="layers" hue="log"
             title={t('res.cleanup.cache.title')}
-            text={t('res.cleanup.cache.text', { n: items.cache.count })}
+            text={tn('res.cleanup.cache.text', { n: items.cache.count })}
           />
           <CleanRow
             k="networks" item={items.networks} checked={on.networks} onChange={set("networks")} sizesReady={sizesReady} icon="net" hue="svc"
             title={t('res.cleanup.networks.title')}
-            text={t('res.cleanup.networks.text', { n: items.networks.count })}
+            text={tn('res.cleanup.networks.text', { n: items.networks.count })}
             detail={names(est.networks.list.map((n) => n.Name))}
           />
           <div className="dk-cl-foot">
@@ -247,7 +247,7 @@ function CleanRow({ k, item, checked, onChange, sizesReady, icon, hue, title, te
           <b>{title}</b>
           <span className="dk-muted">{item.count === 0 ? empty ?? t('res.cleanup.nothing') : text}</span>
         </div>
-        <span className="dk-cl-sz">{item.count === 0 ? '' : k === 'networks' ? t('res.cleanup.count', { n: item.count }) : sizesReady ? formatBytes(item.bytes) : '…'}</span>
+        <span className="dk-cl-sz">{item.count === 0 ? '' : k === 'networks' ? tn('res.cleanup.count', { n: item.count }) : sizesReady ? formatBytes(item.bytes) : '…'}</span>
       </div>
       {extra && <div className="dk-cl-extra">{extra}</div>}
       {detail && item.count > 0 && <details className="dk-cl-det"><summary>{t('res.cleanup.show')}</summary>{detail}</details>}

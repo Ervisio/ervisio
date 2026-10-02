@@ -3,7 +3,7 @@ import { resetEngine, docker, errorText } from '../api/engine';
 import { containerName, formatBytes, relativeTime, shortId } from '../api/format';
 import { containers, diskUsage, images } from '../api/resources';
 import type { ImageSummary } from '../api/types';
-import { t } from '../i18n';
+import { t, tn } from '../i18n';
 import { Badge, Button, Checkbox, ConfirmDialog, EmptyState, Icon, IconButton, Input, Segmented, Skeleton, toast } from '../kit';
 import { navigate, useSearch } from '../router';
 import { DiskBar } from '../ui/DiskBar';
@@ -72,7 +72,7 @@ export function ImagesPage() {
 
   const totalSize = df?.LayersSize ?? (data ?? []).reduce((a, i) => a + i.Size, 0);
   const subtitle = data
-    ? [t('res.images.sub', { n: new Set(rows.map((r) => r.img.Id)).size, size: formatBytes(totalSize) }), counts.updates > 0 && t('res.images.subNewer', { n: counts.updates })].filter(Boolean).join('. ')
+    ? [tn('res.images.sub', { n: new Set(rows.map((r) => r.img.Id)).size, size: formatBytes(totalSize) }), counts.updates > 0 && t('res.images.subNewer', { n: counts.updates })].filter(Boolean).join('. ')
     : '';
 
   const header = (

@@ -4,6 +4,7 @@ const s: AreaStrings = {
   en: {
     'stacks.title': 'Stacks',
     'stacks.sub': '{n} stacks, {running} running',
+    'stacks.sub.one': '{n} stack, {running} running',
     'stacks.sub.none': 'No stacks yet',
     'stacks.new': 'New stack',
     'stacks.filter.all': 'All',
@@ -120,6 +121,7 @@ const s: AreaStrings = {
     'stacks.detected.title': 'Started outside LinuxAdmin',
     'stacks.detected.text': 'This project was started from {dir}. You can start, stop, restart and take it down here, and read its configuration. To edit and deploy it, move it to /opt/stacks.',
     'stacks.detected.config': 'Resolved configuration (read only)',
+    'stacks.detected.textNoDir': 'This project was started outside LinuxAdmin. You can start, stop, restart and take it down here, and read its configuration. To edit and deploy it, move it to /opt/stacks.',
     'stacks.detected.noFile': 'No compose file is known for this project.',
     'stacks.detected.multi': 'This project uses several compose files. Showing the result of the first, {file}.',
     'stacks.move.button': 'Move to /opt/stacks',
@@ -137,6 +139,7 @@ const s: AreaStrings = {
   it: {
     'stacks.title': 'Stack',
     'stacks.sub': '{n} stack, {running} in esecuzione',
+    'stacks.sub.one': '{n} stack, {running} in esecuzione',
     'stacks.sub.none': 'Nessuno stack',
     'stacks.new': 'Nuovo stack',
     'stacks.filter.all': 'Tutti',
@@ -253,6 +256,7 @@ const s: AreaStrings = {
     'stacks.detected.title': 'Avviato fuori da LinuxAdmin',
     'stacks.detected.text': 'Questo progetto è stato avviato da {dir}. Qui puoi avviarlo, fermarlo, riavviarlo, spegnerlo e leggerne la configurazione. Per modificarlo e distribuirlo, spostalo in /opt/stacks.',
     'stacks.detected.config': 'Configurazione risolta (sola lettura)',
+    'stacks.detected.textNoDir': 'Questo progetto è stato avviato fuori da LinuxAdmin. Qui puoi avviarlo, fermarlo, riavviarlo, spegnerlo e leggerne la configurazione. Per modificarlo e distribuirlo, spostalo in /opt/stacks.',
     'stacks.detected.noFile': 'Non è noto alcun file compose per questo progetto.',
     'stacks.detected.multi': 'Questo progetto usa più file compose. Si vede il risultato del primo, {file}.',
     'stacks.move.button': 'Sposta in /opt/stacks',

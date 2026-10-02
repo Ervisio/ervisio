@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { containerAction, runBulk } from '../../api/actions';
 import type { StackService } from '../../api/compose';
-import { shortImage } from '../../api/format';
+import { localStatus, shortImage } from '../../api/format';
 import { containers } from '../../api/resources';
 import { t } from '../../i18n';
 import { IconButton, toast } from '../../kit';
@@ -39,7 +39,7 @@ export function ServicesCard({ services, images }: { services: StackService[]; i
                 <b>{s.name}{s.containers.length > 1 && <small> ×{s.containers.length}</small>}</b>
                 <span className="dk-sk-img">{img}</span>
               </span>
-              <span className="dk-muted dk-sk-sv-st">{first ? first.Status : t('stacks.notCreated')}</span>
+              <span className="dk-muted dk-sk-sv-st">{first ? localStatus(first.Status) : t('stacks.notCreated')}</span>
             </button>
             {first && (
               <span className="dk-sk-sv-act">

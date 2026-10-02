@@ -390,10 +390,10 @@ function DetectedStack({ stack, reload }: { stack: Stack; reload(): Promise<void
           </>
         }
       />
-      <div className="dk-sk-note"><Icon name="info" /><div><b>{t('stacks.detected.title')}</b><p>{t('stacks.detected.text', { dir: stack.dir || '?' })}</p></div></div>
+      <div className="dk-sk-note"><Icon name="info" /><div><b>{t('stacks.detected.title')}</b><p>{stack.dir ? t('stacks.detected.text', { dir: stack.dir }) : t('stacks.detected.textNoDir')}</p></div></div>
       <div className="dk-sk-grid">
         <Card className="dk-sk-edcard" title={t('stacks.detected.config')}>
-          {!cfg ? <Skeleton height={200} style={{ borderRadius: 14 }} /> : cfg.ok ? <CodeEditor value={cfg.text} lang="yaml" readOnly label={t('stacks.detected.config')} /> : <p className="dk-sk-err">{cfg.text}</p>}
+          {!cfg ? <Skeleton height={200} style={{ borderRadius: 14 }} /> : cfg.ok ? <CodeEditor value={cfg.text} lang="yaml" readOnly label={t('stacks.detected.config')} /> : <p className={file ? 'dk-sk-err' : 'dk-muted'}>{cfg.text}</p>}
           {stack.configFiles.length > 1 && <p className="dk-muted">{t('stacks.detected.multi', { file })}</p>}
         </Card>
         <div className="dk-sk-col">

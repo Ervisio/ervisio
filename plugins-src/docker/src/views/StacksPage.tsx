@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { stackAction, type Stack } from '../api/compose';
 import { healthOf, isProblem } from '../api/model';
-import { t } from '../i18n';
+import { t, tn } from '../i18n';
 import { Badge, Button, Chip, EmptyState, IconButton, Skeleton, toast } from '../kit';
 import { navigate, useSearch } from '../router';
 import { ErrorState } from '../ui/ErrorState';
@@ -48,7 +48,7 @@ export function StacksPage() {
     <PageHeader
       icon="layers"
       title={t('stacks.title')}
-      subtitle={stacks.length ? t('stacks.sub', { n: stacks.length, running }) : sources ? t('stacks.sub.none') : ''}
+      subtitle={stacks.length ? tn('stacks.sub', { n: stacks.length, running }) : sources ? t('stacks.sub.none') : ''}
       actions={<Button variant="primary" icon="plus" onClick={() => navigate({ view: 'stack', name: '' })}>{t('stacks.new')}</Button>}
     />
   );

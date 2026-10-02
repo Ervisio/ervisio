@@ -3,7 +3,7 @@ import { docker, errorText, resetEngine } from '../api/engine';
 import { formatBytes, relativeTime } from '../api/format';
 import { containers, diskUsage, volumes } from '../api/resources';
 import type { VolumeInfo } from '../api/types';
-import { t } from '../i18n';
+import { t, tn } from '../i18n';
 import { Badge, Button, EmptyState, Icon, IconButton, Input, Segmented, Skeleton, toast, ConfirmDialog } from '../kit';
 import { useSearch } from '../router';
 import { DiskBar } from '../ui/DiskBar';
@@ -36,7 +36,7 @@ export function VolumesPage() {
       icon="database"
       hue="term"
       title={t('nav.volumes')}
-      subtitle={data ? t('res.volumes.sub', { n: list.length, size: df ? formatBytes(total) : '–' }) : ''}
+      subtitle={data ? (df ? tn('res.volumes.sub', { n: list.length, size: formatBytes(total) }) : tn('res.volumes.count', { n: list.length })) : ''}
       actions={<Button variant="primary" icon="plus" onClick={() => setCreating(true)}>{t('res.volumes.new')}</Button>}
     />
   );

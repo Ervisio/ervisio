@@ -51,6 +51,34 @@ export function relativeTime(when: number | string): string {
   return rtf.format(Math.round(diff / (86400 * 365)), 'year');
 }
 
+const IT_UNITS: Record<string, [string, string]> = {
+  second: ['secondo', 'secondi'], minute: ['minuto', 'minuti'], hour: ['ora', 'ore'], day: ['giorno', 'giorni'],
+  week: ['settimana', 'settimane'], month: ['mese', 'mesi'], year: ['anno', 'anni'],
+};
+
+/** Italian for a span like "10 minutes", "About an hour", "Less than a second". */
+function spanIt(span: string): string {
+  const x = span.trim();
+  if (/^less than a second$/i.test(x)) return 'meno di un secondo';
+  const about = /^about an? (\w+?)s?$/i.exec(x);
+  if (about) return about[1].toLowerCase() === 'hour' ? "circa un'ora" : `circa un ${IT_UNITS[about[1].toLowerCase()]?.[0] ?? about[1]}`;
+  const m = /^(\d+) (\w+?)s?$/.exec(x);
+  const u = m && IT_UNITS[m[2].toLowerCase()];
+  if (m && u) return `${m[1]} ${m[1] === '1' ? u[0] : u[1]}`;
+  return x;
+}
+
+/** The Engine's status text ("Up 3 minutes (unhealthy)", "Exited (0) 2 hours ago") in the app's language. */
+export function localStatus(status: string): string {
+  if (getSdk().lang() !== 'it') return status;
+  let m = /^Up (.+?)( \((?:health: )?(unhealthy|healthy|health: starting|starting)\))?$/.exec(status);
+  if (m) return `Attivo da ${spanIt(m[1])}${m[3] ? ` (${m[3].replace(/^health: /, '') === 'unhealthy' ? 'non integro' : m[3].replace(/^health: /, '') === 'healthy' ? 'integro' : 'in avvio'})` : ''}`;
+  m = /^(Exited|Restarting|Dead) (\(\d+\)) (.+) ago$/.exec(status);
+  if (m) return `${m[1] === 'Exited' ? 'Fermo' : m[1] === 'Restarting' ? 'Si riavvia' : 'Morto'} ${m[2]} ${spanIt(m[3])} fa`;
+  const simple: Record<string, string> = { Created: 'Creato', Paused: 'In pausa', Dead: 'Morto', Removing: 'In rimozione', Restarting: 'Si riavvia' };
+  return simple[status] ?? status;
+}
+
 /** Container name without the leading slash. */
 export const containerName = (c: { Names?: string[] }): string => (c.Names?.[0] ?? '').replace(/^\//, '') || '?';
 

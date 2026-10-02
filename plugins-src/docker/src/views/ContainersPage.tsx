@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { containerAction, removeContainer, runBulk, type ContainerAction } from '../api/actions';
 import { resetEngine } from '../api/engine';
-import { containerName, formatBytes, formatPercent, shortImage } from '../api/format';
+import { containerName, formatBytes, formatPercent, localStatus, shortImage } from '../api/format';
 import { useStats } from '../api/hooks';
 import { countContainers, groupByStack, isProblem, isStopped, matchesContainer, portUrl, publishedPorts, healthOf, type StackGroup } from '../api/model';
 import { containers, info } from '../api/resources';
@@ -289,7 +289,7 @@ function ContainerCard({ c, selected, busy, live, ncpu, onToggle, onAction }: {
         </div>
       </div>
       {running && live && <MiniSpark values={history.map((p) => p.cpu)} />}
-      <span className="dk-cc-st" title={c.Status}>{c.Status}</span>
+      <span className="dk-cc-st" title={localStatus(c.Status)}>{localStatus(c.Status)}</span>
       <div className="dk-cc-f">
         <div className="dk-cc-ports">
           {ports.slice(0, 3).map((p) => (

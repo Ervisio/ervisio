@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { docker, errorText } from '../../api/engine';
 import { LogLines, type LogLine } from '../../api/streams';
-import { t } from '../../i18n';
+import { t, tn } from '../../i18n';
 import { Button, Icon, IconButton, Input, Segmented, Select, toast } from '../../kit';
 import { getSdk } from '../../sdk';
 import { CONFIG_DIR } from '../../settings';
@@ -135,7 +135,7 @@ export function LogsTab({ id, name, tty, running }: { id: string; name: string; 
 
   const asText = () => matched.map((l) => (timestamps && l.ts ? `${l.ts} ${l.text}` : l.text)).join('\n') + '\n';
   const copy = async () => {
-    if (await copyText(asText())) toast.ok(t('container.logs.copied', { n: matched.length }));
+    if (await copyText(asText())) toast.ok(tn('container.logs.copied', { n: matched.length }));
     else toast.err(t('container.copyFail'));
   };
   /** The plugin frame cannot start a browser download, so the log is written to a file in the plugin's folder. */
@@ -189,8 +189,8 @@ export function LogsTab({ id, name, tty, running }: { id: string; name: string; 
         {!atBottom && !paused && <Button className="dk-c-lg-jump" size="sm" variant="primary" icon="chevron" onClick={toLatest}>{t('container.logs.latest')}</Button>}
       </div>
       <div className="dk-c-lgfoot">
-        <span className="dk-muted">{needle ? t('container.logs.matches', { n: matched.length, total: source.length }) : t('container.logs.count', { n: source.length })}{rows.length < matched.length ? ` ${t('container.logs.showingLast', { n: rows.length })}` : ''}</span>
-        {paused && fresh > 0 && <span className="dk-muted">{t('container.logs.newLines', { n: fresh })}</span>}
+        <span className="dk-muted">{needle ? t('container.logs.matches', { n: matched.length, total: source.length }) : tn('container.logs.count', { n: source.length })}{rows.length < matched.length ? ` ${t('container.logs.showingLast', { n: rows.length })}` : ''}</span>
+        {paused && fresh > 0 && <span className="dk-muted">{tn('container.logs.newLines', { n: fresh })}</span>}
         {status === 'error' && <Button size="sm" icon="refresh" onClick={() => setRound((n) => n + 1)}>{t('common.retry')}</Button>}
         {status === 'ended' && running && <Button size="sm" icon="refresh" onClick={() => setRound((n) => n + 1)}>{t('container.logs.follow')}</Button>}
         <span className="dk-c-lg-key"><Icon name="info" />{t('container.logs.stderrNote')}</span>

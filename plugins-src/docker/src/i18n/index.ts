@@ -30,3 +30,12 @@ export function registerAllStrings(): void {
 
 /** Translate. `t('containers.title')`, `t('common.count', { n: 3 })`. Falls back to English, then to the key. */
 export const t = (key: string, vars?: Record<string, string | number>): string => getSdk().t(key, vars);
+
+/** Like `t`, but uses `<key>.one` when `vars.n` is 1 and that key exists ("1 volume" instead of "1 volumes"). */
+export const tn = (key: string, vars: Record<string, string | number> & { n: number }): string => {
+  if (vars.n === 1) {
+    const one = t(`${key}.one`, vars);
+    if (one !== `${key}.one`) return one;
+  }
+  return t(key, vars);
+};

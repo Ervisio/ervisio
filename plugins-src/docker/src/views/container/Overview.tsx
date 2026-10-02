@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { formatDuration, relativeTime, shortId } from '../../api/format';
 import { portUrl } from '../../api/model';
 import type { ContainerInspect } from '../../api/types';
-import { t } from '../../i18n';
+import { t, tn } from '../../i18n';
 import { Badge, IconButton, Icon, toast } from '../../kit';
 import { openUrl } from '../../ui/openUrl';
 import { LiveCharts } from './LiveCharts';
@@ -55,7 +55,7 @@ function Facts({ inspect: c }: { inspect: ContainerInspect }) {
     )],
     [t('container.f.created'), `${fmtDate(c.Created)} (${relativeTime(c.Created)})`],
     [t('container.f.started'), c.State.Running && c.State.StartedAt ? `${relativeTime(c.State.StartedAt)}, ${t('container.up', { time: formatDuration((Date.now() - Date.parse(c.State.StartedAt)) / 1000) })}` : c.State.FinishedAt && !c.State.FinishedAt.startsWith('0001') ? t('container.stoppedAgo', { when: relativeTime(c.State.FinishedAt), code: c.State.ExitCode }) : '–'],
-    [t('container.f.policy'), c.RestartCount ? `${policyText}, ${t('container.restarts', { n: c.RestartCount })}` : policyText],
+    [t('container.f.policy'), c.RestartCount ? `${policyText}, ${tn('container.restarts', { n: c.RestartCount })}` : policyText],
     [t('container.f.command'), cmd ? <span className="dk-mono dk-c-wrapany">{cmd}</span> : '–'],
     [t('container.f.entrypoint'), ep ? <span className="dk-mono dk-c-wrapany">{ep}</span> : '–'],
   ];

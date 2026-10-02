@@ -13,6 +13,9 @@ import { runText, specFromPrefill } from './create/model';
 import { InstallFields, formProblems, initialForm, type FormState } from './templates/InstallForm';
 import { isInstalled, Tile } from './templates/shared';
 
+/** Compose settings that hand a container the host (shown as a warning before a third-party stack is deployed). */
+const RISKY = /privileged:\s*["']?true|docker\.sock|(?:network_mode|pid|ipc|userns_mode):\s*["']?host|cap_add:|devices:|security_opt:|(?:^|\s|["'-])\/(?::|["']?\s*$)/m;
+
 /** One app of the store (design 030 b): about, needs, install form. */
 export function TemplatePage({ id }: RouteProps<'template'>) {
   const cat = useTemplates();
@@ -37,6 +40,10 @@ function App({ tpl }: { tpl: Template }) {
   const [specText, setSpecText] = useState('');
   const [specError, setSpecError] = useState('');
   const [busy, setBusy] = useState(false);
+  // A stack from a third-party list is fetched from its repository (mutable): the user reviews it first, and
+  // exactly the reviewed text is deployed.
+  const remoteStack = tpl.type === 'stack' && !tpl.compose;
+  const [reviewed, setReviewed] = useState<string | null>(null);
   const [lines, setLines] = useState<string[]>([]);
   const [failed, setFailed] = useState('');
   const logRef = useRef<HTMLPreElement>(null);
@@ -66,7 +73,9 @@ function App({ tpl }: { tpl: Template }) {
         const pf = containerPrefill(tpl.container, form.values, form.name.trim());
         setSpecText(runText(specFromPrefill(tpl.container.image, pf)));
       } else {
-        setSpecText(await composeOf(tpl));
+        const text = await composeOf(tpl);
+        setSpecText(text);
+        if (remoteStack) setReviewed(text);
       }
       setShowSpec(true);
     } catch (e) {
@@ -84,6 +93,18 @@ function App({ tpl }: { tpl: Template }) {
       navigate({ view: 'create', image: substitute(tpl.container.image, form.values), prefill: containerPrefill(tpl.container, form.values, name) });
       return;
     }
+    if (remoteStack && reviewed === null) {
+      setSpecError('');
+      try {
+        const text = await composeOf(tpl);
+        setSpecText(text);
+        setReviewed(text);
+        setShowSpec(true);
+      } catch (e) {
+        setSpecError((e as Error).message);
+      }
+      return;
+    }
     setBusy(true);
     setFailed('');
     setLines([]);
@@ -96,7 +117,7 @@ function App({ tpl }: { tpl: Template }) {
       }
       if (exists) throw new Error(t('templates.err.stackExists'));
       setLines([t('templates.step.fetch')]);
-      const compose = await composeOf(tpl);
+      const compose = remoteStack && reviewed !== null ? reviewed : await composeOf(tpl);
       setLines((l) => [...l, t('templates.step.write', { name })]);
       await writeStack(name, compose, envText(form.values, tpl.variables, tpl.fixedEnv));
       const code = await deployStack(name, { pull: true }, (_s, line) => setLines((l) => (l.length > 400 ? [...l.slice(-300), line] : [...l, line])));
@@ -165,6 +186,9 @@ function App({ tpl }: { tpl: Template }) {
               {failed && <div className="dk-cr-fail" role="alert"><b>{t('templates.failed')}</b><p>{failed}</p></div>}
               {lines.length > 0 && failed && <pre className="dk-cr-run dk-tp-log">{lines.join('\n')}</pre>}
               {specError && <div className="dk-cr-hint dk-cr-hint--err" role="alert"><Icon name="alert" size={14} /><span>{specError}</span></div>}
+              {remoteStack && reviewed !== null && (
+                <div className="dk-cr-hint dk-cr-hint--warn" role="note"><Icon name="alert" size={14} /><span>{t(RISKY.test(reviewed) ? 'templates.review.risky' : 'templates.review')}</span></div>
+              )}
               {showSpec && <pre className="dk-cr-run">{specText}</pre>}
               <div className="dk-tp-go">
                 <Button icon="code" onClick={() => void preview()}>{showSpec ? t('templates.hideSpec') : tpl.type === 'stack' ? t('templates.showCompose') : t('templates.showRun')}</Button>
