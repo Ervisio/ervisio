@@ -6,6 +6,8 @@
 export interface RecentUser {
   user: string;
   isAdmin?: boolean;
+  /** How this account signed in last time (never the key itself). */
+  method?: 'key';
 }
 
 const LIST = 'la.recentUsers';

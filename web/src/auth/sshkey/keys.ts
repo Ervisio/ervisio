@@ -137,6 +137,41 @@ const CIPHERS: Record<string, CipherSpec> = {
   'aes256-gcm@openssh.com': { keyLen: 32, ivLen: 12, mode: 'gcm', authLen: 16 },
 };
 
+/**
+ * Type, size and fingerprint of an OpenSSH private key without its passphrase: that format keeps the public
+ * key in clear. Null for other formats or anything unreadable.
+ */
+export async function publicInfo(text: string): Promise<{ type: KeyType; bits: number; fingerprint: string } | null> {
+  try {
+    const block = findBlock((text ?? '').trim());
+    if (!block || block.label !== 'OPENSSH PRIVATE KEY' || !globalThis.crypto?.subtle) return null;
+    const r = new Reader(b64decode(block.body));
+    if (new TextDecoder().decode(r.bytes(AUTH_MAGIC.length)) !== AUTH_MAGIC) return null;
+    r.text();
+    r.text();
+    r.string();
+    if (r.u32() !== 1) return null;
+    const blob = r.string();
+    const pr = new Reader(blob);
+    const type = pr.text();
+    checkType(type);
+    let bits = 256;
+    if (type === 'ssh-rsa') {
+      pr.string(); // e
+      const n = pr.string();
+      let i = 0;
+      while (i < n.length && n[i] === 0) i++;
+      bits = (n.length - i) * 8 - (i < n.length ? Math.clz32(n[i]) - 24 : 0);
+    } else if (type !== 'ssh-ed25519') {
+      bits = Number(type.slice(-3));
+    }
+    const fp = new Uint8Array(await crypto.subtle.digest('SHA-256', blob));
+    return { type, bits, fingerprint: 'SHA256:' + b64encode(fp).replace(/=+$/, '') };
+  } catch {
+    return null;
+  }
+}
+
 async function parseOpenSSH(raw: Bytes, passphrase: string): Promise<PrivateKey> {
   const r = new Reader(raw);
   if (new TextDecoder().decode(r.bytes(AUTH_MAGIC.length)) !== AUTH_MAGIC) throw new SshKeyError('corrupt_key', 'Not an OpenSSH private key.');

@@ -67,6 +67,8 @@ export interface PublicHost {
   hostname: string;
   ip?: string;
   distro: DistroInfo;
+  /** The server accepts SSH-key sign-in (auth.ssh_keys). */
+  sshKeys?: boolean;
 }
 
 export interface LoginResult {

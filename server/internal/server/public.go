@@ -22,6 +22,8 @@ type publicHost struct {
 	Hostname string       `json:"hostname"`
 	IP       string       `json:"ip,omitempty"`
 	Distro   publicDistro `json:"distro"`
+	// SSHKeys: the sign-in page may offer "Sign in with an SSH key" (auth.ssh_keys).
+	SSHKeys bool `json:"sshKeys"`
 }
 
 // hostCache avoids re-reading os-release and probing the network on every
@@ -59,6 +61,7 @@ func (s *Server) handlePublicHost(w http.ResponseWriter, r *http.Request) {
 	if s.Config().Login.ShowIP {
 		h.IP = ip
 	}
+	h.SSHKeys = s.Config().Auth.SSHKeys
 	writeJSON(w, http.StatusOK, h)
 }
 

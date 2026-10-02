@@ -316,8 +316,10 @@ func doc(t *testing.T, client *http.Client, method, url, body string, csrf bool)
 
 func TestUnauthenticated(t *testing.T) {
 	ts, _ := newTestServer(t, false)
-	if code, _ := do(t, "GET", ts.URL+"/api/public/host", "", false); code != 200 {
+	if code, body := do(t, "GET", ts.URL+"/api/public/host", "", false); code != 200 {
 		t.Fatal("public host", code)
+	} else if !strings.Contains(body, `"sshKeys":true`) {
+		t.Fatal("public host should expose sshKeys (default on):", body)
 	}
 	if code, body := do(t, "GET", ts.URL+"/api/auth/session", "", false); code != 401 || !strings.Contains(body, "unauthenticated") {
 		t.Fatal(code, body)

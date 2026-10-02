@@ -6,18 +6,29 @@ import { UnlockDialog } from '../ui';
 /** Mount once: owns the global "Administrator rights needed" dialog used by call() on needs_admin. */
 export function UnlockHost() {
   const { session, unlock } = useSession();
+  const viaKey = session?.authMethod === 'ssh-key';
   const [open, setOpen] = useState(false);
   const pending = useRef<{ resolve(): void; reject(e: Error): void } | null>(null);
 
   useEffect(() => {
-    setUnlockRequester(() => {
+    setUnlockRequester(async () => {
+      // A key session never gave the server a password: try sudo without one (NOPASSWD) first and only
+      // ask when sudo says it needs a password. Anything else also falls back to the dialog.
+      if (viaKey) {
+        try {
+          await unlock('');
+          return;
+        } catch (e) {
+          void e;
+        }
+      }
       setOpen(true);
       return new Promise<void>((resolve, reject) => {
         pending.current = { resolve, reject };
       });
     });
     return () => setUnlockRequester(null);
-  }, []);
+  }, [viaKey, unlock]);
 
   const cancel = useCallback(() => {
     setOpen(false);

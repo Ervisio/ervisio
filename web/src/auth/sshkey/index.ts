@@ -19,7 +19,7 @@ import { authChallenge, loginKey } from '../../api/client';
 import { signInWithKeyUsing, type KeySignInResult, type SignInWithKeyArgs, type Transport } from './signin.ts';
 
 export { SshKeyError, type SshKeyErrorCode } from './errors.ts';
-export { needsPassphrase, type KeyType, type PrivateKey } from './keys.ts';
+export { needsPassphrase, publicInfo, type KeyType, type PrivateKey } from './keys.ts';
 export { describeKey, challengeMessage, type KeySignInResult, type SignInWithKeyArgs } from './signin.ts';
 
 const transport: Transport = {

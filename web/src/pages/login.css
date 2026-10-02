@@ -27,6 +27,34 @@
 .lb-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 22px; color: var(--ink3); font-size: 12.5px; gap: 12px; }
 .lb-foot button { color: var(--ink2); font-weight: 600; display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 8px; }
 .lb-foot button:hover { background: var(--sunk); color: var(--ink); }
+/* SSH key step */
+.sk-tabs { display: flex; gap: 6px; margin: 0 0 8px; }
+.sk-tabs button { height: 32px; padding: 0 12px; border-radius: 9px; background: none; color: var(--ink2); font-weight: 700; font-size: 13px; }
+.sk-tabs button:hover { background: var(--sunk); color: var(--ink); }
+.sk-tabs button.on { background: var(--acc-s); color: var(--acc); }
+.sk-drop { display: flex; align-items: center; gap: 12px; padding: 16px; border-radius: 14px; background: var(--sunk); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ink3) 35%, transparent); color: var(--ink2); font-size: 13.5px; line-height: 1.45; cursor: pointer; }
+.sk-drop:hover, .sk-drop.over { box-shadow: inset 0 0 0 2px var(--acc); }
+.sk-drop:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.sk-drop .ui-icon { width: 20px; height: 20px; color: var(--acc); flex: none; }
+.sk-drop b { color: var(--ink); }
+.sk-drop em { display: block; font-style: normal; font-family: var(--mono); font-size: 12px; color: var(--ink2); margin-top: 2px; overflow-wrap: anywhere; }
+.sk-paste { width: 100%; min-height: 110px; border-radius: 12px; background: var(--sunk); color: var(--ink); padding: 10px 12px; font: 12px/1.5 var(--mono); resize: none; border: 0; }
+.sk-paste:focus { outline: 0; box-shadow: inset 0 0 0 2px var(--acc); }
+.sk-card { display: flex; align-items: center; gap: 12px; padding: 12px 10px 12px 14px; border-radius: 14px; background: var(--sunk); }
+.sk-ic { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--acc-s); color: var(--acc); flex: none; }
+.sk-meta { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; flex: 1; }
+.sk-meta b { font-size: 14px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sk-meta .mono { font-family: var(--mono); font-size: 12px; color: var(--ink2); max-width: 100%; overflow-wrap: anywhere; }
+.sk-cm { font-size: 12px; color: var(--ink2); max-width: 100%; overflow-wrap: anywhere; }
+.sk-chip { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; height: 24px; padding: 0 9px; border-radius: 8px; background: var(--acc-s); color: var(--acc); font-size: 12px; font-weight: 700; }
+.sk-chip .ui-icon { width: 13px; height: 13px; }
+.sk-or { text-align: center; color: var(--ink2); font-size: 12.5px; margin: -2px 0; }
+.sk-alt { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 44px; border-radius: 12px; background: var(--sunk); color: var(--ink); font-weight: 700; font-size: 14px; }
+.sk-alt:hover { background: color-mix(in srgb, var(--sunk) 80%, var(--ink)); }
+.sk-alt:disabled { opacity: 0.5; }
+.sk-alt .ui-icon { width: 17px; height: 17px; color: var(--acc); }
+.sk-note { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; color: var(--ink2); margin: 0; line-height: 1.45; }
+.sk-note .ui-icon { width: 15px; height: 15px; flex: none; margin-top: 1px; color: var(--ok); }
 @media (prefers-reduced-motion: reduce) { .ut .av { transition: none; } }
 @media (max-width: 860px) {
   .login { grid-template-columns: 1fr; }

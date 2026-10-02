@@ -15,7 +15,7 @@ import * as ed from '@noble/ed25519';
 import { bcryptHash, bcryptPbkdf } from '../src/auth/sshkey/bcrypt.ts';
 import { md5 } from '../src/auth/sshkey/md5.ts';
 import { b64decode, b64url, hex, Reader, utf8, concat } from '../src/auth/sshkey/bytes.ts';
-import { needsPassphrase, parsePrivateKey } from '../src/auth/sshkey/keys.ts';
+import { needsPassphrase, parsePrivateKey, publicInfo } from '../src/auth/sshkey/keys.ts';
 import { SshKeyError } from '../src/auth/sshkey/errors.ts';
 import { challengeMessage, signInWithKeyUsing, toSshKeyError, type Transport } from '../src/auth/sshkey/signin.ts';
 
@@ -235,4 +235,21 @@ test('ed25519 keys still sign when WebCrypto lacks Ed25519', async () => {
   } finally {
     (subtle as any).importKey = orig;
   }
+});
+
+test('publicInfo reads type and fingerprint of OpenSSH keys without the passphrase', async () => {
+  const dir = fileURLToPath(new URL('./fixtures/sshkeys/', import.meta.url));
+  const fps = JSON.parse(readFileSync(dir + 'fingerprints.json', 'utf8')) as Record<string, string>;
+  for (const name of ['ed25519-enc', 'ecdsa384-enc', 'ecdsa521-enc', 'ed25519']) {
+    const info = await publicInfo(readFileSync(dir + name, 'utf8'));
+    assert.equal(info?.fingerprint, fps[name], name);
+  }
+  assert.equal((await publicInfo(readFileSync(dir + 'ecdsa384-enc', 'utf8')))?.bits, 384);
+  assert.equal(await publicInfo(readFileSync(dir + 'ecdsa256-pem', 'utf8')), null);
+  assert.equal(await publicInfo('garbage'), null);
+});
+
+test('publicInfo gives the RSA modulus size', async () => {
+  const dir = fileURLToPath(new URL('./fixtures/sshkeys/', import.meta.url));
+  assert.equal((await publicInfo(readFileSync(dir + 'rsa1024', 'utf8')))?.bits, 1024);
 });
