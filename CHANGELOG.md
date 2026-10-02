@@ -1,8 +1,8 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.0] - 2026-10-02
 
-To be released as 0.3.0, the first version named Ervisio.
+The first version named Ervisio.
 
 ### Changed
 - **LinuxAdmin is now Ervisio.** The repository moves to `ervisio/ervisio`; the binaries are `ervisiod` and `ervisio-bridge`, the unit `ervisio.service`, the PAM service `ervisio`, and the folders `/etc/ervisio`, `/usr/lib/ervisio`, `/var/lib/ervisio`, `/usr/share/ervisio` and `~/.config/ervisio`. Release archives are `ervisio-<version>-linux-<arch>.tar.gz`, the packages `ervisio` (`.deb`, `.rpm`) and `ervisio-bin` / `ervisio` (AUR). The one-line installer is `curl -fsSL https://raw.githubusercontent.com/ervisio/ervisio/main/install.sh | sudo sh`.
@@ -13,6 +13,7 @@ To be released as 0.3.0, the first version named Ervisio.
 - Existing LinuxAdmin installations move to Ervisio by themselves. Updating from LinuxAdmin's Settings › About installs Ervisio, copies the configuration, TLS certificate, installed plugins, update state, PAM file, unit drop-ins and scheduled update, switches `linuxadmin.service` to `ervisio.service` on the same port, and goes back to LinuxAdmin if Ervisio does not answer. `install.sh` and the packages (which replace `linuxadmin`) do the same. Users' `~/.config/linuxadmin` and the browser's settings are carried over at the next sign-in. LinuxAdmin's files are kept for a rollback until `ervisiod --remove-legacy [--purge]` removes them. See `docs/RELEASING.md`, "Rename transition".
 - Every release also publishes `linuxadmin-<version>-linux-<arch>.tar.gz`, the archive LinuxAdmin consoles update from.
 - `ervisiod --migrate-legacy` and `ervisiod --remove-legacy [--purge]`.
+- The Ervisio logo: favicon, sign-in screen, Settings › About and README.
 
 ## [0.2.0] - 2026-10-02
 
