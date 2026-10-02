@@ -5,7 +5,7 @@ import { Badge, Button, ConfirmDialog, Dialog, Icon, IconButton, Input, Switch, 
 import {
   createWebhook, deleteJob, jobHistory, listJobs, regenerateWebhook, revokeWebhook, runJob, setJobEnabled,
   type JobInstance, type NewWebhook, type RunLog, type Schedule,
-} from './background';
+} from './jobsApi';
 import { LockedPanel, useAdminLoad } from './useAdminLoad';
 
 const STATUS_TONE: Record<string, Tone> = { ok: 'ok', failed: 'err', timeout: 'err', running: 'info', queued: 'info', cancelled: 'neutral' };

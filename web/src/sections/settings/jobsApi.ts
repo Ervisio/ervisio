@@ -3,7 +3,7 @@ import { call } from '../../api';
 /* Notification channels (Settings > Notification channels): daemon methods notify.*, docs/api/notify.md. */
 
 export type ChannelType = 'email' | 'telegram' | 'webhook' | 'ntfy' | 'gotify';
-export type ChannelEvent = 'updates' | 'plugins' | 'jobs';
+export type ChannelEvent = 'alerts' | 'updates' | 'plugins' | 'jobs';
 export type ChannelLevel = 'info' | 'warn' | 'error';
 
 /** A channel as the server returns it: no secrets, only flags saying which ones are set. */

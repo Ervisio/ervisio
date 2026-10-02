@@ -39,10 +39,13 @@ const (
 	EventPlugins = "plugins"
 	// EventJobs: a plugin job failed or recovered.
 	EventJobs = "jobs"
+	// EventAlerts: the Overview page's alerts (failed service, pending
+	// updates, failed SSH sign-ins, disk, swap).
+	EventAlerts = "alerts"
 )
 
 // Events lists them all; a new channel subscribes to every one.
-var Events = []string{EventUpdates, EventPlugins, EventJobs}
+var Events = []string{EventAlerts, EventUpdates, EventPlugins, EventJobs}
 
 // Levels, lowest first. "success" ranks as info.
 var levelRank = map[string]int{"info": 0, "success": 0, "warn": 1, "error": 2}

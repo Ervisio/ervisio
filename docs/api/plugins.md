@@ -118,7 +118,10 @@ Strict: unknown fields are rejected.
               "write": [{"path":"/opt/stacks","admin":true,"adminUnlessGroup":"docker"},
                         {"path":"~/.config/ervisio/plugins/docker","create":true}]},
     "sockets": ["/var/run/docker.sock"],
-    "network": ["example.org"]
+    "network": ["example.org"],
+    "notify": true,
+    "jobs": [{"name":"poll","params":[{"name":"dir","pattern":"/opt/stacks/[a-z0-9_.-]+"}],
+              "steps":[{"id":"fetch","command":"fetch","args":["{param.dir}"]}]}]
   },
   "contributes": {"pages":[{"id":"docker","title":"Docker","icon":"server"}],
                   "widgets":[{"id":"containers","title":"Containers"}],
@@ -163,9 +166,25 @@ Strict: unknown fields are rejected.
     bounds `plugins.http`, and the wait for the response headers of `plugins.httpStream`.
 * `capabilities.sockets`: informational. It lists the sockets the plugin's commands talk to (for example `docker`
   talking to `/var/run/docker.sock`). A plugin opens a socket itself only through `capabilities.http`.
+* `capabilities.jobs` (SDK 0.2, core 0.6): named, declarative jobs the daemon runs in the background for instances
+  the plugin creates at runtime: ordered steps over the plugin's own commands and HTTP APIs (and `notify` steps),
+  with `{param.x}` / `{step.id.stdout}` placeholders and one condition per step. At most 16 jobs. The full schema, the
+  validation rules, the run model, administrator approval and webhooks are in `docs/api/jobs.md`.
+* `capabilities.notify` (SDK 0.2, core 0.6): `true` lets the plugin send notifications through `plugins.notify` and job
+  `notify` steps, to the channels an administrator configured in Settings (`docs/api/notify.md`). Rate limited per plugin.
 * `capabilities.network`: host names (`api.example.org`, `*.example.org`, `host:8443`; nothing else, the entries go into
   a CSP header). The plugin frame may connect to them over https/wss; the user's session cookie is never sent from the
   frame.
+
+## Background jobs and notifications
+
+`plugins.jobs.*` (create, list, get, update, delete, runNow, history, webhooks) and `plugins.notify` are answered by the
+daemon itself, not by a bridge, because jobs must run while no page is open. The broker (`web/src/plugins/brokerJobs.ts`)
+fills in the plugin id and refuses undeclared jobs, but the daemon checks everything again. Reference:
+`docs/api/jobs.md` (jobs, instances, webhooks `POST /hooks/<plugin>/<token>`) and `docs/api/notify.md` (channels,
+`plugins.notify`). The SDK exposes them as `sdk.api.jobs` and `sdk.api.notify`; both are absent on consoles older than
+0.6, so a plugin checks `sdk.api.jobs` before using it. The SDK contract version stays 3: the additions are backward
+compatible.
 
 ## Signing
 

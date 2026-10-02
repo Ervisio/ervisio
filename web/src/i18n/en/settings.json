@@ -338,6 +338,7 @@
     },
     "events": "What to send",
     "ev": {
+      "alerts": "Server alerts (failed services, updates, disk, SSH)",
       "updates": "New {name} versions",
       "plugins": "Messages from plugins",
       "jobs": "Plugin jobs that fail or recover"

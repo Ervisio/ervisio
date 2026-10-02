@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **Background jobs for plugins.** A plugin declares `capabilities.jobs` in its manifest: named, ordered steps over its own declared commands and HTTP calls, with parameters checked by patterns, `{param.x}` / `{step.id.stdout}` placeholders, one condition per step (`ok`, `failed`, `changed`, `unchanged`, `differs`, `same`) and `notify` steps. It then creates job instances at run time (`sdk.api.jobs.create/list/get/update/delete/runNow/history`) that run on an interval (at least one minute) or at times of the day, as the user who created them, also while nobody is signed in, and survive restarts. One run at a time per instance, a timeout, and the last 20 runs are kept with logs. A job that needs administrator rights needs an administrator's explicit confirmation when the instance is created, which records who approved it; it is switched off when that user loses admin rights, or when a plugin update changes what the job does. See `docs/api/jobs.md`.
+- **Webhooks.** An instance can have webhook URLs, `POST /hooks/<plugin>/<random token>`: no sign-in, no CSRF header, only the token (32 random bytes, kept only as a hash). Rate limited per token and per client address, revocable and regenerable, answers 202 with a run id and never says why it refused. A job can let a call set some declared parameters (for example an image tag), checked against their patterns.
+- **Notification channels** (Settings › Notification channels): email (SMTP with STARTTLS or TLS and login), Telegram, a generic webhook (JSON template, optional secret header), ntfy and Gotify, each with a Send test button. Secrets are stored in `/etc/ervisio/notify.json` (0600) and never shown again. Channels get server alerts (failed services, updates, disk, SSH), new Ervisio versions, plugin messages (`sdk.api.notify`, with `capabilities.notify`, rate limited per plugin) and job failures.
+- Settings › Plugin jobs lists every job instance with its owner, schedule, last run, webhooks, a switch, Run now and the logs of each run.
+- `ervisiod --dev-state-dir` keeps the jobs and the channels file in a folder of your choice in dev mode.
+
 ## [0.4.0] - 2026-10-02
 
 ### Changed

@@ -208,8 +208,8 @@
 .st-job-hooks .st-host:hover { background: none; }
 .st-form { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; min-width: 0; }
 .st-form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
-.st-form-set { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.st-form-set legend { font-size: 13px; font-weight: 700; padding: 0; margin-bottom: 6px; }
+.st-form-set { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.st-form-set legend { font-size: 13px; font-weight: 700; padding: 0; margin-bottom: 6px; float: left; width: 100%; }
 .st-code { display: block; padding: 8px 10px; border-radius: 10px; background: var(--sunk); font: 12.5px var(--mono); overflow-wrap: anywhere; user-select: all; }
 .st-runs { display: grid; grid-template-columns: 220px 1fr; gap: 16px; margin-top: 12px; min-width: 0; }
 .st-runlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 420px; overflow: auto; }

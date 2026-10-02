@@ -90,6 +90,7 @@ type Server struct {
 	// (jobsglue.go). jobs is nil when its state file cannot be read.
 	jobs     *jobs.Manager
 	notifier *notify.Service
+	jobPool  *bridgePool
 }
 
 // New validates options and loads the configuration.
@@ -262,6 +263,7 @@ func (s *Server) Run(ctx context.Context) error {
 	if s.jobs != nil {
 		go s.jobs.Run(ctx)
 	}
+	go s.runAlertWatch(ctx)
 
 	errCh := make(chan error, 2)
 	if s.opts.Dev {
@@ -301,6 +303,13 @@ func (s *Server) shutdown(srv, redirect *http.Server) {
 	sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	s.cancel() // ends websocket handlers and in-flight calls
+	if s.jobs != nil {
+		s.jobs.CancelAll()
+		s.jobs.Wait()
+	}
+	if s.jobPool != nil {
+		s.jobPool.closeAll()
+	}
 	_ = srv.Shutdown(sctx)
 	if redirect != nil {
 		_ = redirect.Shutdown(sctx)

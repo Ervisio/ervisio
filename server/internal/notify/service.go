@@ -200,6 +200,25 @@ func (s *Service) Send(ctx context.Context, msg Message, event string) Delivery 
 	return d
 }
 
+// Subscribed reports whether an enabled channel wants the event.
+func (s *Service) Subscribed(event string) bool {
+	list, err := s.Store.Load()
+	if err != nil {
+		return false
+	}
+	for _, c := range list {
+		if !c.Enabled {
+			continue
+		}
+		for _, e := range c.Events {
+			if e == event {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // AllowPlugin counts one notification of a plugin against its rate limit
 // (10 a minute, 60 an hour). It returns false and how long to wait when the
 // plugin is over it.

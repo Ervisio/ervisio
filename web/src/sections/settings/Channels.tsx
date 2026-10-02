@@ -3,11 +3,11 @@ import { Name } from '../../brand';
 import { useT } from '../../i18n';
 import { formatDateTime } from '../../lib/format';
 import { Badge, Button, Checkbox, ConfirmDialog, Dialog, Icon, IconButton, Input, Select, Switch, Textarea, toast } from '../../ui';
-import { deleteChannel, listChannels, saveChannel, testChannel, type Channel, type ChannelEvent, type ChannelInput, type ChannelType } from './background';
+import { deleteChannel, listChannels, saveChannel, testChannel, type Channel, type ChannelEvent, type ChannelInput, type ChannelType } from './jobsApi';
 import { LockedPanel, useAdminLoad } from './useAdminLoad';
 
 const TYPES: ChannelType[] = ['email', 'telegram', 'webhook', 'ntfy', 'gotify'];
-const EVENTS: ChannelEvent[] = ['updates', 'plugins', 'jobs'];
+const EVENTS: ChannelEvent[] = ['alerts', 'updates', 'plugins', 'jobs'];
 const DEFAULT_TEMPLATE = '{"title":"{title}","body":"{body}","level":"{level}","link":"{link}","source":"{source}","time":"{time}"}';
 const PORTS = { starttls: 587, tls: 465, none: 25 } as const;
 
@@ -235,7 +235,7 @@ function ChannelDialog({ draft, existing, onClose, onSaved }: { draft: Draft; ex
             <Input label={t('channels.webhook.url')} hint={existing?.urlHint ? t('channels.webhook.urlSet', { url: existing.urlHint }) : t('channels.webhook.urlHint')} mono {...secretProps('url')} type="text"
               value={d.url} onChange={(e) => set({ url: e.target.value })} placeholder={has('url') ? t('channels.secretKept') : 'https://example.org/hook'} />
             <Select label={t('channels.webhook.method')} value={d.method} options={['POST', 'PUT', 'PATCH'].map((x) => ({ value: x, label: x }))} onChange={(v) => set({ method: v })} />
-            <Textarea label={t('channels.webhook.template')} hint={t('channels.webhook.templateHint')} mono rows={5} value={d.template} onChange={(e) => set({ template: e.target.value })} />
+            <Textarea label={t('channels.webhook.template')} hint={t('channels.webhook.templateHint')} mono rows={3} value={d.template} onChange={(e) => set({ template: e.target.value })} />
             <div className="st-form-row">
               <Input label={t('channels.webhook.headerName')} mono value={d.headerName} onChange={(e) => set({ headerName: e.target.value })} placeholder="X-Token" />
               <Input label={t('channels.webhook.headerValue')} {...secretProps('headerValue')} value={d.headerValue} onChange={(e) => set({ headerValue: e.target.value })} />

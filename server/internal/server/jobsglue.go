@@ -39,6 +39,7 @@ func (s *Server) initJobs() error {
 	if nf == "" {
 		nf = filepath.Join(filepath.Dir(s.opts.ConfigPath), "notify.json")
 	}
+	s.jobPool = newBridgePool()
 	s.notifier = notify.New(nf)
 	s.notifier.Logf = s.log.Printf
 	m, err := jobs.NewManager(jobs.Env{
@@ -97,46 +98,129 @@ func (s *Server) jobOwnerOK(a *account.Account) string {
 	return ""
 }
 
+// bridgePool keeps the bridges that job runs use, so a job that runs every
+// minute does not start a bridge (and open a PAM session) every minute: a
+// bridge stays for jobBridgeIdle after its last run ends, then it is stopped.
+type bridgePool struct {
+	mu sync.Mutex
+	m  map[string]*pooled
+}
+
+type pooled struct {
+	p     *bridge.Proc
+	refs  int
+	timer *time.Timer
+}
+
+// jobBridgeIdle is how long an unused job bridge is kept.
+const jobBridgeIdle = 5 * time.Minute
+
+func newBridgePool() *bridgePool { return &bridgePool{m: map[string]*pooled{}} }
+
+// acquire returns the live bridge for key, starting it with start when
+// there is none, and counts a use. release must follow.
+func (bp *bridgePool) acquire(key string, start func() (*bridge.Proc, error)) (*bridge.Proc, error) {
+	bp.mu.Lock()
+	defer bp.mu.Unlock()
+	e := bp.m[key]
+	if e != nil && e.p.Alive() {
+		e.refs++
+		if e.timer != nil {
+			e.timer.Stop()
+			e.timer = nil
+		}
+		return e.p, nil
+	}
+	p, err := start()
+	if err != nil {
+		return nil, err
+	}
+	bp.m[key] = &pooled{p: p, refs: 1}
+	return p, nil
+}
+
+func (bp *bridgePool) release(key string, p *bridge.Proc) {
+	bp.mu.Lock()
+	defer bp.mu.Unlock()
+	e := bp.m[key]
+	if e == nil || e.p != p {
+		return
+	}
+	if e.refs--; e.refs > 0 {
+		return
+	}
+	e.timer = time.AfterFunc(jobBridgeIdle, func() {
+		bp.mu.Lock()
+		cur := bp.m[key]
+		stop := cur == e && e.refs == 0
+		if stop {
+			delete(bp.m, key)
+		}
+		bp.mu.Unlock()
+		if stop {
+			e.p.Stop()
+		}
+	})
+}
+
+func (bp *bridgePool) closeAll() {
+	bp.mu.Lock()
+	all := bp.m
+	bp.m = map[string]*pooled{}
+	bp.mu.Unlock()
+	for _, e := range all {
+		if e.timer != nil {
+			e.timer.Stop()
+		}
+		e.p.Stop()
+	}
+}
+
 // bridgeExecutor runs the steps of one run: the user's bridge for user
 // steps, a root bridge (started directly: the daemon is root) for the
-// steps of a job an administrator approved.
+// steps of a job an administrator approved. Bridges come from the pool.
 type bridgeExecutor struct {
 	s *Server
 	a *account.Account
 
 	mu   sync.Mutex
-	user *bridge.Proc
-	root *bridge.Proc
+	held map[string]*bridge.Proc
 }
 
 func (e *bridgeExecutor) proc(ctx context.Context, admin bool) (*bridge.Proc, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	key := "u:" + strconv.FormatUint(uint64(e.a.UID), 10)
 	if admin {
-		if e.root != nil && e.root.Alive() {
-			return e.root, nil
-		}
-		ra, err := account.Lookup("root")
-		if err != nil {
-			return nil, rpc.Errorf(rpc.Unavailable, "Cannot look up root: %v", err)
-		}
-		sp := e.s.spec(ra, "")
-		sp.SwitchUser, sp.SessionHelper = false, ""
-		p, err := bridge.StartRoot(ctx, sp)
-		if err != nil {
-			return nil, err
-		}
-		e.root = p
+		key = "root"
+	}
+	if p := e.held[key]; p != nil && p.Alive() {
 		return p, nil
 	}
-	if e.user != nil && e.user.Alive() {
-		return e.user, nil
+	if e.held == nil {
+		e.held = map[string]*bridge.Proc{}
 	}
-	p, err := bridge.StartUser(ctx, e.s.spec(e.a, ""))
+	p, err := e.s.jobPool.acquire(key, func() (*bridge.Proc, error) {
+		if admin {
+			ra, err := account.Lookup("root")
+			if err != nil {
+				return nil, rpc.Errorf(rpc.Unavailable, "Cannot look up root: %v", err)
+			}
+			return bridge.StartRoot(ctx, e.s.rootSpec(ra))
+		}
+		p, err := bridge.StartUser(ctx, e.s.spec(e.a, ""))
+		if err != nil {
+			return nil, rpc.Errorf(rpc.Unavailable, "Could not start a bridge for %s: %v", e.a.Name, err)
+		}
+		return p, nil
+	})
 	if err != nil {
-		return nil, rpc.Errorf(rpc.Unavailable, "Could not start a bridge for %s: %v", e.a.Name, err)
+		return nil, err
 	}
-	e.user = p
+	if old := e.held[key]; old != nil {
+		e.s.jobPool.release(key, old)
+	}
+	e.held[key] = p
 	return p, nil
 }
 
@@ -172,15 +256,19 @@ func (e *bridgeExecutor) HTTP(ctx context.Context, admin bool, p plugins.HTTPPar
 
 func (e *bridgeExecutor) Close() {
 	e.mu.Lock()
-	user, root := e.user, e.root
-	e.user, e.root = nil, nil
+	held := e.held
+	e.held = nil
 	e.mu.Unlock()
-	if root != nil {
-		root.Stop()
+	for key, p := range held {
+		e.s.jobPool.release(key, p)
 	}
-	if user != nil {
-		user.Stop()
-	}
+}
+
+// rootSpec is the bridge spec of a root bridge the daemon starts itself.
+func (s *Server) rootSpec(ra *account.Account) *bridge.Spec {
+	sp := s.spec(ra, "")
+	sp.SwitchUser, sp.SessionHelper = false, ""
+	return sp
 }
 
 // ---- who is calling ----
