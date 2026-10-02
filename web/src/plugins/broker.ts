@@ -3,12 +3,13 @@
  * Pure (no imports with side effects) so it can be unit-tested with `node --test` (web/tests/broker.test.ts).
  *
  * The daemon enforces the same rules again (plugins.exec / plugins.execStream / plugins.pty / plugins.http /
- * plugins.httpStream / plugins.readFile / plugins.writeFile / plugins.listDir / plugins.mkdir / plugins.remove
+ * plugins.httpStream / plugins.download / plugins.upload / plugins.audit.list / plugins.readFile / plugins.writeFile / plugins.listDir / plugins.mkdir / plugins.remove
  * check the manifest, the signature policy and visibleTo), so this is the first of two gates, never the only
  * one. What a plugin can never reach through the broker: any other RPC method, raw streams, admin rights for
  * a command, HTTP API or folder not declared `admin`, files outside `capabilities.files`, sockets other than
  * through its declared commands and `capabilities.http` rules, other plugins' assets.
  */
+import { authorizeJobsOp } from './brokerJobs.ts';
 import type { FrameOp } from './protocol';
 
 /** Anything that may need the root bridge: a command, an HTTP API or a folder. */
@@ -21,6 +22,8 @@ export interface BrokerCommand extends AdminLevel {
   name: string;
   args?: unknown[];
   pty?: boolean;
+  /** Kind family ("docker") the command may run against an environment for. */
+  remote?: string;
 }
 
 export interface BrokerHTTP extends AdminLevel {
@@ -28,6 +31,10 @@ export interface BrokerHTTP extends AdminLevel {
   socket?: string;
   headers?: string[];
   rules?: { methods: string[]; path: string }[];
+  /** Largest file plugins.upload may send (default 20 GiB). */
+  maxUpload?: number;
+  /** Kind family ("docker") the API may be sent to an environment for. */
+  remote?: string;
 }
 
 /** A capabilities.files entry: a path (SDK v2) or {path, admin, adminUnlessGroup, create} (v3). */
@@ -38,7 +45,12 @@ export interface BrokerManifest {
   capabilities?: {
     commands?: BrokerCommand[];
     http?: BrokerHTTP[];
+    /** Background jobs (capabilities.jobs) and the notify capability: see brokerJobs.ts. */
+    jobs?: { name: string }[];
+    notify?: boolean;
     files?: { read?: BrokerFolder[]; write?: BrokerFolder[] };
+    /** capabilities.network.userHosts: the plugin may ask an administrator to approve more hosts. */
+    userHosts?: boolean;
   };
   contributes?: { pages?: { id: string }[] };
 }
@@ -53,11 +65,17 @@ export interface BrokerUser {
 
 export type Plan =
   | { kind: 'call'; method: string; params: Record<string, unknown>; admin: boolean }
+  /** A large transfer: the host asks the daemon for a one-time URL (POST /api/plugins/transfer) with `body`. */
+  | { kind: 'transfer'; transfer: 'download' | 'upload'; body: Record<string, unknown>; admin: boolean; size?: number }
+  /** sdk.saveFile: the app saves data the plugin holds in memory as a browser download. */
+  | { kind: 'save'; filename: string; mime: string; data: Blob | Uint8Array | string; size: number }
   | { kind: 'stream'; method: string; params: Record<string, unknown>; admin: boolean }
   | { kind: 'asset'; path: string }
   | { kind: 'toast'; tone: 'ok' | 'err' | 'info'; title: string; detail?: string }
   | { kind: 'open'; to: string }
   | { kind: 'openUrl'; url: string }
+  /** sdk.network.request: the app asks an administrator (a dialog) and reloads the plugin's frames when approved. */
+  | { kind: 'network'; host: string; scheme: 'https' | 'http' }
   | { kind: 'deny'; code: 'forbidden' | 'invalid'; message: string };
 
 const MAX_ARGS = 16;
@@ -67,7 +85,14 @@ const MAX_WRITE = 4 << 20;
 const MAX_HTTP_PATH = 2048;
 const MAX_HTTP_QUERY = 8 << 10;
 const MAX_HTTP_HEADERS = 32;
-const MAX_HTTP_BODY = 64 << 20;
+// A request body travels inside one JSON message (/api/rpc, or the WebSocket frame that opens a stream), which the
+// daemon accepts up to 12 MiB: 8 MiB of bytes is 11.2 MiB as base64. Larger bodies are sent with plugins.upload.
+const MAX_HTTP_BODY = 8 << 20;
+const TEXT_BODY_INLINE = 256 << 10;
+const TOO_BIG = 'The request body is larger than 8 MiB. Send large bodies with sdk.api.upload.';
+const DEFAULT_MAX_UPLOAD = 20 * 2 ** 30;
+const ENV_RE = /^env-[0-9a-f]{8}$/;
+const HOST_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*(:[0-9]{1,5})?$/;
 const HTTP_METHODS = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'];
 
 const deny = (message: string, code: 'forbidden' | 'invalid' = 'forbidden'): Plan => ({ kind: 'deny', code, message });
@@ -81,6 +106,12 @@ function command(m: BrokerManifest, name: unknown): BrokerCommand | undefined {
 export function needsAdmin(c: AdminLevel, u: BrokerUser): boolean {
   if (!c.admin || u.isRoot) return false;
   return !(c.adminUnlessGroup && (u.groups ?? []).includes(c.adminUnlessGroup));
+}
+
+/** An optional environment id: undefined when absent, null when it is not an id. */
+function envId(v: unknown): string | null | undefined {
+  if (v === undefined || v === null || v === '') return undefined;
+  return typeof v === 'string' && ENV_RE.test(v) ? v : null;
 }
 
 function argList(v: unknown): string[] | null {
@@ -213,21 +244,162 @@ function httpRequest(m: BrokerManifest, req: Record<string, unknown>, u: BrokerU
     if (typeof v !== 'string' || v.length > 8192 || /[\r\n\0]/.test(v)) return deny(`The value of the header ${JSON.stringify(k)} is not allowed.`, 'invalid');
     headers[k] = v;
   }
-  const params: Record<string, unknown> = { plugin: m.id, name: api.name, method, path: req.path, ...(query ? { query } : {}) };
+  const env = envId(req.env);
+  if (env === null) return deny('env must be the id of an environment.', 'invalid');
+  if (env && !api.remote) return deny(`${m.id} does not allow ${api.name} to target an environment.`);
+  const params: Record<string, unknown> = { plugin: m.id, name: api.name, method, path: req.path, ...(query ? { query } : {}), ...(env ? { env } : {}) };
   if (entries.length) params.headers = headers;
   const body = req.body;
   if (body instanceof Uint8Array) {
-    if (body.length > MAX_HTTP_BODY) return deny('The request body is too large.', 'invalid');
+    if (body.length > MAX_HTTP_BODY) return deny(TOO_BIG, 'invalid');
     params.body = bytesToB64(body);
     params.b64 = true;
   } else if (typeof body === 'string') {
-    if (body.length > MAX_HTTP_BODY) return deny('The request body is too large.', 'invalid');
-    params.body = body;
+    if (body.length > MAX_HTTP_BODY) return deny(TOO_BIG, 'invalid');
+    if (body.length > TEXT_BODY_INLINE) {
+      // JSON escaping can multiply a long text: send it as base64 so the message size is known.
+      const bytes = new TextEncoder().encode(body);
+      if (bytes.length > MAX_HTTP_BODY) return deny(TOO_BIG, 'invalid');
+      params.body = bytesToB64(bytes);
+      params.b64 = true;
+    } else params.body = body;
   } else if (body !== undefined && body !== null) {
     return deny('The body must be a string or a Uint8Array.', 'invalid');
   }
   if (req.json === true) params.json = true;
-  return { params, admin: needsAdmin(api, u) };
+  // Against an environment the daemon's tunnel is the user's own: no administrator rights apply.
+  return { params, admin: env ? false : needsAdmin(api, u) };
+}
+
+const MAX_FILENAME = 255;
+const MAX_AUDIT_LIMIT = 1000;
+
+/** A request for plugins.download / plugins.upload: an HTTP request without a body. */
+function transferHttp(m: BrokerManifest, req: unknown, u: BrokerUser, methods: string[], what: string): { params: Record<string, unknown>; admin: boolean; api: BrokerHTTP } | Plan {
+  if (!req || typeof req !== 'object') return deny('Give an HTTP request.', 'invalid');
+  const r = req as Record<string, unknown>;
+  if (typeof r.method !== 'string' || !methods.includes(r.method)) return deny(`A ${what} uses ${methods.join(' or ')}, not ${JSON.stringify(r.method)}.`, 'invalid');
+  if (r.body !== undefined && r.body !== null) return deny(`A ${what} takes no body.`, 'invalid');
+  const x = httpRequest(m, { ...r, body: undefined, json: undefined }, u);
+  if ('kind' in x) return x;
+  const api = (m.capabilities?.http ?? []).find((h) => h.name === r.name)!;
+  return { ...x, api };
+}
+
+/** Decision for plugins.download(name, req, filename): GET of an HTTP API, or the output of a declared command. */
+export function authorizeDownload(m: BrokerManifest, a: Record<string, unknown>, u: BrokerUser): Plan {
+  const filename = a.filename === undefined ? 'download' : str(a.filename, MAX_FILENAME);
+  if (!filename) return deny('The file name is not valid.', 'invalid');
+  if (typeof a.command === 'string') {
+    const c = command(m, a.command);
+    if (!c) return deny(`${m.id} does not declare a command ${JSON.stringify(a.command)}.`);
+    if (c.pty) return deny(`${c.name} is a terminal command: it cannot be downloaded.`, 'invalid');
+    const list = argList(a.args);
+    if (!list) return deny('Command arguments must be a list of at most 16 strings.', 'invalid');
+    const env = remoteEnv(m, c, a.env);
+    if (typeof env === 'object' && env) return env;
+    const admin = env ? false : needsAdmin(c, u);
+    return { kind: 'transfer', transfer: 'download', body: { kind: 'download', plugin: m.id, command: c.name, args: list, filename, ...(env ? { env } : {}), admin }, admin };
+  }
+  const x = transferHttp(m, a.req, u, ['GET'], 'download');
+  if ('kind' in x) return x;
+  const { name, method, path, query, headers, env } = x.params as { name: string; method: string; path: string; query?: string; headers?: Record<string, string>; env?: string };
+  return { kind: 'transfer', transfer: 'download', body: { kind: 'download', plugin: m.id, name, method, path, query, headers, filename, ...(env ? { env } : {}), admin: x.admin }, admin: x.admin };
+}
+
+/** Decision for plugins.upload(name, req, file): POST or PUT of `size` bytes, at most the API's maxUpload. */
+export function authorizeUpload(m: BrokerManifest, req: unknown, size: unknown, u: BrokerUser, stream = false): Plan {
+  if (typeof size !== 'number' || !Number.isSafeInteger(size) || size < 0) return deny('Give a file (a File or Blob).', 'invalid');
+  const x = transferHttp(m, req, u, ['POST', 'PUT'], 'upload');
+  if ('kind' in x) return x;
+  const max = x.api.maxUpload ? x.api.maxUpload : DEFAULT_MAX_UPLOAD;
+  if (size > max) return deny(`The file is larger than the ${max} bytes ${m.id} may upload to ${x.api.name}.`, 'invalid');
+  const { name, method, path, query, headers, env } = x.params as { name: string; method: string; path: string; query?: string; headers?: Record<string, string>; env?: string };
+  return { kind: 'transfer', transfer: 'upload', body: { kind: 'upload', plugin: m.id, name, method, path, query, headers, size, ...(env ? { env } : {}), ...(stream ? { stream: true } : {}), admin: x.admin }, admin: x.admin, size };
+}
+
+/** Decision for plugins.audit.list: the plugin's own entries only. */
+function authorizeAuditList(m: BrokerManifest, a: Record<string, unknown>): Plan {
+  const params: Record<string, unknown> = { plugin: m.id };
+  for (const k of ['user', 'action', 'text', 'cursor'] as const) {
+    if (a[k] === undefined || a[k] === null || a[k] === '') continue;
+    const v = str(a[k], 256);
+    if (v === null) return deny(`${k} must be a short string.`, 'invalid');
+    params[k] = v;
+  }
+  for (const k of ['since', 'until'] as const) {
+    if (a[k] === undefined || a[k] === null || a[k] === '') continue;
+    const v = a[k];
+    if (typeof v === 'number' && Number.isFinite(v)) params[k] = v;
+    else if (typeof v === 'string' && v.length <= 40) params[k] = v;
+    else return deny(`${k} must be a time (milliseconds or ISO 8601).`, 'invalid');
+  }
+  if (a.limit !== undefined) {
+    if (!Number.isInteger(a.limit) || (a.limit as number) < 1 || (a.limit as number) > MAX_AUDIT_LIMIT) return deny(`limit must be between 1 and ${MAX_AUDIT_LIMIT}.`, 'invalid');
+    params.limit = a.limit;
+  }
+  return { kind: 'call', method: 'plugins.audit.list', params, admin: false };
+}
+
+/** Largest file sdk.saveFile may save: it is held in memory twice (the frame's copy and the app's Blob). */
+export const MAX_SAVE = 64 << 20;
+
+/**
+ * A file name safe to offer to the browser, as the daemon cleans download names (server/internal/server/transfer.go):
+ * no path, control or bidi characters, no characters that Windows or shells treat specially, no leading dots, at most
+ * 200 bytes; "download" when nothing is left.
+ */
+export function sanitizeFilename(name: string): string {
+  let n = name.replace(/\p{Cc}|[\u2028\u2029\u202a-\u202e\u2066-\u2069]/gu, '_');
+  n = n.slice(Math.max(n.lastIndexOf('/'), n.lastIndexOf('\\')) + 1);
+  n = n.replace(/[<>:"/\\|?*;%`$]/g, '_').trim().replace(/^\.+/, '').replace(/[. ]+$/, '');
+  const enc = new TextEncoder();
+  while (enc.encode(n).length > 200) n = Array.from(n).slice(0, -1).join('');
+  return n || 'download';
+}
+
+/** A MIME type, or the generic one. */
+const MIME_RE = /^[a-zA-Z0-9][a-zA-Z0-9!#$&^_.+-]{0,60}\/[a-zA-Z0-9][a-zA-Z0-9!#$&^_.+-]{0,60}$/;
+
+/** Decision for sdk.saveFile(filename, data, mime?). */
+export function authorizeSave(a: Record<string, unknown>): Plan {
+  if (typeof a.filename !== 'string' || !a.filename || a.filename.length > 1024) return deny('Give a file name.', 'invalid');
+  const d = a.data;
+  let size: number;
+  if (typeof d === 'string') size = new TextEncoder().encode(d).length;
+  else if (d instanceof Uint8Array) size = d.length;
+  else if (typeof Blob !== 'undefined' && d instanceof Blob) size = d.size;
+  else return deny('The data must be a string, a Uint8Array or a Blob.', 'invalid');
+  if (size > MAX_SAVE) return deny(`The file is larger than ${MAX_SAVE >> 20} MiB. Use sdk.api.download to stream a large file from a service.`, 'invalid');
+  let mime = 'application/octet-stream';
+  if (a.mime !== undefined && a.mime !== null && a.mime !== '') {
+    if (typeof a.mime !== 'string' || !MIME_RE.test(a.mime)) return deny('The MIME type is not valid.', 'invalid');
+    mime = a.mime;
+  }
+  return { kind: 'save', filename: sanitizeFilename(a.filename), mime, data: d, size };
+}
+
+/**
+ * Rate limit of sdk.saveFile for one frame: at most `count` files and `bytes` bytes in any `windowMs`. A plugin
+ * does not need a user gesture to start a download, so this keeps it from flooding the browser with files.
+ */
+export class SaveLimiter {
+  private log: { at: number; size: number }[] = [];
+  private count: number;
+  private windowMs: number;
+  private bytes: number;
+  constructor(count = 10, windowMs = 30_000, bytes = 256 << 20) {
+    this.count = count;
+    this.windowMs = windowMs;
+    this.bytes = bytes;
+  }
+  /** Records the file and returns true when it may be saved now. */
+  allow(size: number, now = Date.now()): boolean {
+    this.log = this.log.filter((e) => now - e.at < this.windowMs);
+    if (this.log.length >= this.count || this.log.reduce((n, e) => n + e.size, 0) + size > this.bytes) return false;
+    this.log.push({ at: now, size });
+    return true;
+  }
 }
 
 /** A relative asset path inside the plugin folder. */
@@ -249,7 +421,9 @@ export function authorize(m: BrokerManifest, op: FrameOp | string, args: Record<
       if (c.pty) return deny(`${c.name} is a terminal command: open it with sdk.api.pty.`, 'invalid');
       const list = argList(a.args);
       if (!list) return deny('Command arguments must be a list of at most 16 strings.', 'invalid');
-      return { kind: 'call', method: 'plugins.exec', params: { plugin: m.id, command: c.name, args: list }, admin: needsAdmin(c, u) };
+      const env = remoteEnv(m, c, a.env);
+      if (typeof env === 'object' && env) return env;
+      return { kind: 'call', method: 'plugins.exec', params: { plugin: m.id, command: c.name, args: list, ...(env ? { env } : {}) }, admin: env ? false : needsAdmin(c, u) };
     }
     case 'readFile':
     case 'listDir':
@@ -266,20 +440,45 @@ export function authorize(m: BrokerManifest, op: FrameOp | string, args: Record<
       const tilde = path === '~' || path.startsWith('~/');
       const folder = tilde && !u.home ? { path } : matchFolder(path, declared, u.home);
       if (!folder) return deny(`${m.id} did not declare that it may ${write ? 'write' : 'read'} ${path}.`);
-      const admin = needsAdmin(folder, u);
+      // An environment (a paired server): the folder lives there, so ~ means nothing here, and the call runs as the
+      // mapped user on that server, under its manifest: no administrator rights apply on this side.
+      const env = envId(a.env);
+      if (env === null) return deny('env must be the id of an environment.', 'invalid');
+      if (env) {
+        if (tilde) return deny('A path on an environment must be absolute (~ is not expanded there).', 'invalid');
+        const remote = [...(m.capabilities?.http ?? []), ...(m.capabilities?.commands ?? [])].some((x) => x.remote);
+        if (!remote) return deny(`${m.id} does not allow targeting an environment.`);
+      }
+      const admin = env ? false : needsAdmin(folder, u);
+      const e = env ? { env } : {};
       if (op === 'writeFile') {
         const data = str(a.data, Math.ceil((MAX_WRITE * 4) / 3) + 4);
         if (data === null) return deny('The data to write is missing or too large.', 'invalid');
-        return { kind: 'call', method: 'plugins.writeFile', params: { plugin: m.id, path, data, b64: a.b64 === true }, admin };
+        return { kind: 'call', method: 'plugins.writeFile', params: { plugin: m.id, path, data, b64: a.b64 === true, ...e }, admin };
       }
-      if (op === 'mkdir' || op === 'remove') return { kind: 'call', method: `plugins.${op}`, params: { plugin: m.id, path }, admin };
+      if (op === 'mkdir' || op === 'remove') return { kind: 'call', method: `plugins.${op}`, params: { plugin: m.id, path, ...e }, admin };
       const method = op === 'readFile' ? 'plugins.readFile' : 'plugins.listDir';
-      return { kind: 'call', method, params: { plugin: m.id, path, ...(op === 'readFile' && a.b64 === true ? { b64: true } : {}) }, admin };
+      return { kind: 'call', method, params: { plugin: m.id, path, ...(op === 'readFile' && a.b64 === true ? { b64: true } : {}), ...e }, admin };
     }
     case 'http': {
       const r = httpRequest(m, a, u);
       if ('kind' in r) return r;
       return { kind: 'call', method: 'plugins.http', params: r.params, admin: r.admin };
+    }
+    case 'download':
+      return authorizeDownload(m, a, u);
+    case 'saveFile':
+      return authorizeSave(a);
+    case 'auditList':
+      return authorizeAuditList(m, a);
+    case 'envs':
+      return { kind: 'call', method: 'plugins.envs.list', params: {}, admin: false };
+    case 'network': {
+      if (!m.capabilities?.userHosts) return deny(`${m.id} does not declare capabilities.network.userHosts.`);
+      const host = typeof a.host === 'string' ? a.host.trim().toLowerCase() : '';
+      const scheme = a.scheme === 'http' ? 'http' : 'https';
+      if (!host || host.length > 253 || !HOST_RE.test(host)) return deny('Give a host name with an optional port, like registry.example.org:5000.', 'invalid');
+      return { kind: 'network', host, scheme };
     }
     case 'asset':
       if (!validAsset(a.path)) return deny('Give a relative path inside the plugin folder.', 'invalid');
@@ -303,6 +502,7 @@ export function authorize(m: BrokerManifest, op: FrameOp | string, args: Record<
       return { kind: 'openUrl', url };
     }
   }
+  if (op === 'jobs' || op === 'notify') return authorizeJobsOp(m, op, a);
   return deny(`Plugins cannot use ${JSON.stringify(op)}.`);
 }
 
@@ -319,14 +519,24 @@ function externalUrl(v: unknown): string | null {
   return u.href;
 }
 
+/** The environment a command may run on: its id, undefined for none, or a denial. */
+function remoteEnv(m: BrokerManifest, c: BrokerCommand, v: unknown): string | Plan | undefined {
+  const env = envId(v);
+  if (env === null) return deny('env must be the id of an environment.', 'invalid');
+  if (env && !c.remote) return deny(`${m.id} does not allow ${c.name} to run on an environment.`);
+  return env;
+}
+
 /** Decision for a streamed command (plugins.execStream). */
-export function authorizeStream(m: BrokerManifest, cmd: unknown, args: unknown, u: BrokerUser): Plan {
+export function authorizeStream(m: BrokerManifest, cmd: unknown, args: unknown, u: BrokerUser, envArg?: unknown): Plan {
   const c = command(m, cmd);
   if (!c) return deny(`${m.id} does not declare a command ${JSON.stringify(cmd)}.`);
   if (c.pty) return deny(`${c.name} is a terminal command: open it with sdk.api.pty.`, 'invalid');
   const list = argList(args);
   if (!list) return deny('Command arguments must be a list of at most 16 strings.', 'invalid');
-  return { kind: 'stream', method: 'plugins.execStream', params: { plugin: m.id, command: c.name, args: list }, admin: needsAdmin(c, u) };
+  const env = remoteEnv(m, c, envArg);
+  if (typeof env === 'object' && env) return env;
+  return { kind: 'stream', method: 'plugins.execStream', params: { plugin: m.id, command: c.name, args: list, ...(env ? { env } : {}) }, admin: env ? false : needsAdmin(c, u) };
 }
 
 /** Decision for a streamed HTTP request (plugins.httpStream). */
@@ -338,12 +548,14 @@ export function authorizeHttpStream(m: BrokerManifest, req: unknown, u: BrokerUs
 }
 
 /** Decision for a terminal command (plugins.pty): only commands declared `pty: true`. */
-export function authorizePty(m: BrokerManifest, cmd: unknown, args: unknown, cols: unknown, rows: unknown, u: BrokerUser): Plan {
+export function authorizePty(m: BrokerManifest, cmd: unknown, args: unknown, cols: unknown, rows: unknown, u: BrokerUser, envArg?: unknown): Plan {
   const c = command(m, cmd);
   if (!c) return deny(`${m.id} does not declare a command ${JSON.stringify(cmd)}.`);
   if (!c.pty) return deny(`${c.name} is not declared as a terminal (pty) command.`, 'invalid');
   const list = argList(args);
   if (!list) return deny('Command arguments must be a list of at most 16 strings.', 'invalid');
   const size = (v: unknown, d: number) => (Number.isInteger(v) && (v as number) >= 1 && (v as number) <= 1000 ? (v as number) : d);
-  return { kind: 'stream', method: 'plugins.pty', params: { plugin: m.id, command: c.name, args: list, cols: size(cols, 80), rows: size(rows, 24) }, admin: needsAdmin(c, u) };
+  const env = remoteEnv(m, c, envArg);
+  if (typeof env === 'object' && env) return env;
+  return { kind: 'stream', method: 'plugins.pty', params: { plugin: m.id, command: c.name, args: list, cols: size(cols, 80), rows: size(rows, 24), ...(env ? { env } : {}) }, admin: env ? false : needsAdmin(c, u) };
 }

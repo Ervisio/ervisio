@@ -89,6 +89,22 @@ export function describeCaps(caps: Capabilities, contributes: Contributes, t: T)
   if (ard.length) out.push({ key: 'adminRead', hue: 'svc', icon: 'eye', title: t('cap.readRoot'), text: groupNote(ard.map((f) => f.adminUnlessGroup), t).trim() || undefined, codes: ard.map((f) => f.path) });
   if (awr.length) out.push({ key: 'adminWrite', hue: 'svc', icon: 'edit', title: t('cap.writeRoot'), text: groupNote(awr.map((f) => f.adminUnlessGroup), t).trim() || undefined, codes: awr.map((f) => f.path) });
   if (caps.network.length) out.push({ key: 'network', hue: 'sw', icon: 'globe', title: t('cap.network'), text: t('cap.networkText'), codes: caps.network });
+  const jobs = caps.jobs ?? [];
+  if (jobs.length) {
+    // A job whose steps use an admin command or API can run as root without a password prompt, once an administrator approved it.
+    const rootJob = jobs.some((j) =>
+      (j.steps ?? []).some((s) => (s.command && caps.commands.find((c) => c.name === s.command)?.admin) || (s.http && httpApis(caps).find((h) => h.name === s.http?.api)?.admin)),
+    );
+    out.push({
+      key: 'jobs',
+      hue: rootJob ? 'svc' : 'log',
+      icon: 'clock',
+      title: t('cap.jobs'),
+      text: t('cap.jobsText', { count: jobs.length }) + (rootJob ? ' ' + t('cap.jobsRoot') : ''),
+      codes: jobs.map((j) => j.name),
+    });
+  }
+  if (caps.notify) out.push({ key: 'notify', hue: 'sw', icon: 'bell', title: t('cap.notify'), text: t('cap.notifyText') });
   const ui = uiSummary(contributes, t);
   if (ui) out.push({ key: 'ui', hue: 'term', icon: 'grid', title: t('cap.ui'), text: ui });
   if (!out.length) out.push({ key: 'none', hue: 'term', icon: 'check', title: t('cap.none'), text: t('cap.noneText') });

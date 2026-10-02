@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { apiUrl, call, useSession } from '../api';
+import { NetworkApprovalHost } from './networkApproval';
 import type { PluginManifest, PluginPageInfo, PluginSnippet, PluginWidgetInfo } from './types';
 
 export type RegisteredPage = PluginPageInfo;
@@ -86,7 +87,12 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
     const snippets = plugins.flatMap((p) => (p.contributes?.snippets ?? []).map((s) => ({ ...s, plugin: p.id })));
     return { plugins, loading, errors, railPages, pages, widgets, snippets, generation, reload, reportError };
   }, [plugins, loading, errors, generation, reload, reportError]);
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={value}>
+      {children}
+      <NetworkApprovalHost reload={reload} />
+    </Ctx.Provider>
+  );
 }
 
 /** URL of an installed plugin's logo (the version busts the browser cache after an update), or undefined. */

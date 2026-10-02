@@ -61,7 +61,7 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, limit int64, v any) *rpc
 	if err := dec.Decode(v); err != nil {
 		var mbe *http.MaxBytesError
 		if errors.As(err, &mbe) {
-			return rpc.Errorf(rpc.Invalid, "request body too large")
+			return rpc.Errorf(rpc.Invalid, "The request is larger than %d bytes. Send large bodies with plugins.upload.", limit)
 		}
 		if errors.Is(err, io.EOF) {
 			return rpc.Errorf(rpc.Invalid, "empty request body")

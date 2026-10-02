@@ -65,6 +65,7 @@ export function DetailPanel({ p, onClose, onToggle, onUpdate, refresh, busy }: P
     >
       {p.error && <div className="plugins-note is-err">{p.error}</div>}
       {p.blocked && <div className="plugins-note is-warn">{t('blockedText')}</div>}
+      {p.incompatible && <div className="plugins-note is-warn">{p.incompatible}</div>}
       {p.devUnsigned && <div className="plugins-note is-warn">{t('devUnsignedText')}</div>}
       {p.updateAvailable && (
         <div className="plugins-upd">
@@ -79,7 +80,7 @@ export function DetailPanel({ p, onClose, onToggle, onUpdate, refresh, busy }: P
       )}
       <div className="plugins-acts">
         <Button icon="cog" onClick={() => setSettings(true)}>{t('settings')}</Button>
-        <Button icon={p.enabled ? 'pause' : 'play'} disabled={busy || !!p.blocked || !!p.error} onClick={() => onToggle(!p.enabled)}>{p.enabled ? t('disable') : t('enable')}</Button>
+        <Button icon={p.enabled ? 'pause' : 'play'} disabled={busy || !!p.blocked || !!p.incompatible || !!p.error} onClick={() => onToggle(!p.enabled)}>{p.enabled ? t('disable') : t('enable')}</Button>
         {p.location === 'installed' && <Button variant="danger" icon="trash" onClick={() => setConfirm(true)}>{t('uninstall')}</Button>}
         {p.unloadable && <Button variant="danger" icon="close" loading={working} onClick={unload}>{t('unload')}</Button>}
       </div>

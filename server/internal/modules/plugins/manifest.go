@@ -24,6 +24,8 @@ const (
 	maxHTTPRules     = 256
 	maxHTTPHeaders   = 32
 	maxHTTPBodyLimit = 64 << 20
+	// maxHTTPUploadLimit is the largest maxUpload a manifest may ask for.
+	maxHTTPUploadLimit = int64(1) << 40
 )
 
 var (
@@ -43,15 +45,18 @@ var (
 
 // Manifest is manifest.json. Unknown fields are rejected.
 type Manifest struct {
-	ID           string            `json:"id"`
-	Name         string            `json:"name"`
-	Version      string            `json:"version"`
-	Author       string            `json:"author,omitempty"`
-	Description  string            `json:"description,omitempty"`
-	Homepage     string            `json:"homepage,omitempty"`
-	Icon         string            `json:"icon,omitempty"`
-	Color        string            `json:"color,omitempty"`
-	Entry        string            `json:"entry"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Version     string `json:"version"`
+	Author      string `json:"author,omitempty"`
+	Description string `json:"description,omitempty"`
+	Homepage    string `json:"homepage,omitempty"`
+	Icon        string `json:"icon,omitempty"`
+	Color       string `json:"color,omitempty"`
+	Entry       string `json:"entry"`
+	// MinCore and Requires say which Ervisio the plugin needs (corecompat.go).
+	MinCore      string            `json:"minCore,omitempty"`
+	Requires     Requires          `json:"requires,omitempty"`
 	Files        map[string]string `json:"files,omitempty"` // path -> sha256 hex; required for signed plugins
 	Capabilities Capabilities      `json:"capabilities"`
 	Contributes  Contributes       `json:"contributes"`
@@ -65,7 +70,18 @@ type Capabilities struct {
 	HTTP    []HTTPAPI  `json:"http"`
 	Files   FileAccess `json:"files"`
 	Sockets []string   `json:"sockets"`
-	Network []string   `json:"network"`
+	// Network lists the hosts the plugin's frame may connect to. In the
+	// manifest it is a list, or {"hosts": [...], "userHosts": true} (see
+	// netcap.go).
+	Network []string `json:"network"`
+	// UserHosts lets the plugin ask an administrator to approve more hosts.
+	UserHosts bool `json:"userHosts,omitempty"`
+	// Jobs are named sequences of the declared commands and HTTP calls
+	// the daemon runs in the background (see manifest_jobs.go).
+	Jobs []JobDef `json:"jobs,omitempty"`
+	// Notify lets the plugin send notifications through plugins.notify
+	// and job notify steps.
+	Notify bool `json:"notify,omitempty"`
 }
 
 // FileAccess lists folders the plugin reads or edits.
@@ -131,9 +147,15 @@ type HTTPAPI struct {
 	Rules   []HTTPRule `json:"rules"`
 	// MaxBody caps request and response bodies (default 8 MiB, max 64 MiB).
 	MaxBody int64 `json:"maxBody,omitempty"`
+	// MaxUpload caps the size of a file sent with plugins.upload (default
+	// 20 GiB, max 1 TiB). Uploads and downloads are streamed, so it does not
+	// depend on MaxBody.
+	MaxUpload int64 `json:"maxUpload,omitempty"`
 	// TimeoutSec bounds plugins.http, and the wait for the response
 	// headers of plugins.httpStream (default 30, max 600).
 	TimeoutSec int `json:"timeoutSec,omitempty"`
+	// Remote ("docker") lets calls target an environment instead of Socket.
+	Remote string `json:"remote,omitempty"`
 }
 
 // HTTPRule allows Methods on the URL paths matching Path (a regexp that
@@ -158,6 +180,9 @@ type Command struct {
 	TimeoutSec int `json:"timeoutSec,omitempty"`
 	// PTY commands run only through plugins.pty, in a pseudo-terminal.
 	PTY bool `json:"pty,omitempty"`
+	// Remote ("docker") lets the command run against an environment: argv
+	// holds one {env} item, replaced by the endpoint's address.
+	Remote string `json:"remote,omitempty"`
 }
 
 // ArgSpec constrains one {N} slot of argv.
@@ -245,6 +270,7 @@ func (m *Manifest) normalise() {
 	if c.Network == nil {
 		c.Network = []string{}
 	}
+	c.normaliseJobs()
 	if m.Contributes.Pages == nil {
 		m.Contributes.Pages = []Contribution{}
 	}
@@ -353,6 +379,9 @@ func (m *Manifest) validate() error {
 	}
 	if !semverRe.MatchString(m.Version) {
 		return fmt.Errorf("version %q is not a semantic version (like 1.4.0)", m.Version)
+	}
+	if err := m.validateCoreReq(); err != nil {
+		return err
 	}
 	if len(m.Author) > 80 || len(m.Description) > 300 || len(m.Homepage) > 200 {
 		return fmt.Errorf("author, description or homepage is too long")
@@ -464,7 +493,7 @@ func (c *Capabilities) validate() error {
 			return fmt.Errorf("capabilities.network: %q is not a host name (like api.example.org, *.example.org or host:8443)", h)
 		}
 	}
-	return nil
+	return c.validateJobs()
 }
 
 func (c *Command) validate() error {
@@ -526,7 +555,7 @@ func (c *Command) validate() error {
 	if c.TimeoutSec < 0 || c.TimeoutSec > 600 {
 		return fmt.Errorf("timeoutSec must be between 0 and 600")
 	}
-	return nil
+	return c.validateRemote()
 }
 
 func (f Folder) validate() error {
@@ -581,6 +610,9 @@ func (h *HTTPAPI) validate() error {
 		}
 		seen[k] = true
 	}
+	if err := h.validateRemote(); err != nil {
+		return err
+	}
 	if len(h.Rules) == 0 || len(h.Rules) > maxHTTPRules {
 		return fmt.Errorf("rules must hold between 1 and %d entries", maxHTTPRules)
 	}
@@ -605,6 +637,9 @@ func (h *HTTPAPI) validate() error {
 	}
 	if h.MaxBody < 0 || h.MaxBody > maxHTTPBodyLimit {
 		return fmt.Errorf("maxBody must be between 0 and %d", maxHTTPBodyLimit)
+	}
+	if h.MaxUpload < 0 || h.MaxUpload > maxHTTPUploadLimit {
+		return fmt.Errorf("maxUpload must be between 0 and %d", maxHTTPUploadLimit)
 	}
 	if h.TimeoutSec < 0 || h.TimeoutSec > 600 {
 		return fmt.Errorf("timeoutSec must be between 0 and 600")

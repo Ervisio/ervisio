@@ -24,7 +24,10 @@
     "plugpol": "Plugin",
     "hosts": "Host",
     "about": "Informazioni",
-    "browser": "Questo browser"
+    "browser": "Questo browser",
+    "activity": "Registro attività",
+    "channels": "Canali di notifica",
+    "pluginjobs": "Attività dei plugin"
   },
   "note": {
     "default": "Predefinito",
@@ -192,7 +195,10 @@
     "allowGroupsDesc": "Tutti i membri di questi gruppi, compreso il gruppo primario.",
     "allowGroupsHint": "Aggiungi un gruppo e premi Invio",
     "badName": "{name} non è un nome valido (lettere, cifre, _ . @ -)",
-    "removeName": "Rimuovi {name}"
+    "removeName": "Rimuovi {name}",
+    "activity": "Registro attività",
+    "activityDesc": "Chi ha effettuato l'accesso, sbloccato i diritti di amministratore, installato plugin o cambiato impostazioni, e cosa hanno fatto i plugin.",
+    "activityOpen": "Apri il registro attività"
   },
   "plugpol": {
     "unsigned": "Consenti i plugin della community",
@@ -311,5 +317,278 @@
       "at": "Ora",
       "managed": "Non disponibile: gli aggiornamenti di {name} li installa {manager}."
     }
+  },
+  "activity": {
+    "title": "Registro attività",
+    "desc": "Cosa è successo tramite la console e i suoi plugin: accessi, sblocchi da amministratore, installazioni di plugin, impostazioni e ogni modifica fatta da un plugin. I segreti non vengono mai registrati.",
+    "ownOnly": "Vedi la tua attività. Gli amministratori vedono quella di tutti.",
+    "ownOnlyUnlock": "Vedi la tua attività. Sblocca i diritti di amministratore per vedere quella di tutti.",
+    "off": "Il registro attività è spento, quindi le nuove azioni non vengono registrate. Accendilo qui sotto.",
+    "loading": "Caricamento…",
+    "count": "{count} voci",
+    "empty": "Ancora nulla di registrato",
+    "emptyText": "Accessi, modifiche alle impostazioni e azioni dei plugin compaiono qui.",
+    "noMatch": "Nessuna voce corrisponde a questi filtri",
+    "more": "Mostra voci più vecchie",
+    "failed": "Impossibile caricare il registro attività: {error}",
+    "exportCsv": "Esporta CSV",
+    "exportJson": "Esporta JSON",
+    "core": "Console",
+    "admin": "da amministratore",
+    "col": {
+      "time": "Ora",
+      "who": "Chi",
+      "what": "Cosa",
+      "target": "Oggetto",
+      "result": "Esito"
+    },
+    "result": {
+      "ok": "Fatto",
+      "failed": "Fallito",
+      "denied": "Rifiutato",
+      "error": "Errore"
+    },
+    "f": {
+      "text": "Cerca nell'oggetto o nel messaggio",
+      "plugin": "Id del plugin",
+      "user": "Utente",
+      "source": "Origine",
+      "anySource": "Console e plugin",
+      "plugins": "Solo plugin",
+      "console": "Solo console",
+      "result": "Esito",
+      "anyResult": "Qualsiasi esito",
+      "since": "Dal",
+      "until": "Al",
+      "clear": "Azzera i filtri"
+    },
+    "actions": {
+      "command": "Ha eseguito un comando",
+      "pty": "Ha aperto un terminale",
+      "http": "Ha modificato un servizio",
+      "upload": "Ha caricato un file",
+      "download": "Ha scaricato un file",
+      "file_write": "Ha scritto un file",
+      "file_mkdir": "Ha creato una cartella",
+      "file_remove": "Ha rimosso un file o una cartella",
+      "login": "Ha effettuato l'accesso",
+      "login_failed": "Accesso fallito",
+      "logout": "Ha chiuso la sessione",
+      "unlock": "Ha sbloccato i diritti di amministratore",
+      "lock": "Ha bloccato i diritti di amministratore",
+      "plugin_install": "Ha installato un plugin",
+      "plugin_uninstall": "Ha rimosso un plugin",
+      "plugin_enable": "Ha acceso un plugin",
+      "plugin_disable": "Ha spento un plugin",
+      "job_run": "Ha eseguito un job in background",
+      "job_webhook": "Ha eseguito un job da una chiamata webhook",
+      "job_approve": "Ha approvato un job con diritti di amministratore",
+      "notify_channel_add": "Ha aggiunto un canale di notifica",
+      "notify_channel_change": "Ha modificato un canale di notifica",
+      "notify_channel_delete": "Ha eliminato un canale di notifica",
+      "settings": "Ha cambiato un'impostazione"
+    },
+    "on": {
+      "title": "Registra l'attività",
+      "desc": "Mantiene il registro attività. Da spento non si scrive nulla di nuovo; quello che c'è resta finché non scade."
+    },
+    "keep": {
+      "title": "Conserva il registro per",
+      "desc": "I file giornalieri più vecchi vengono eliminati in automatico.",
+      "days": "{count} giorni",
+      "forever": "Per sempre"
+    }
+  },
+  "channels": {
+    "intro": "Invia gli avvisi per email, Telegram, ntfy, Gotify o a qualsiasi servizio che accetta un webhook. {name}, i plugin e le attività dei plugin usano questi canali.",
+    "empty": "Ancora nessun canale.",
+    "add": "Aggiungi canale",
+    "addTitle": "Aggiungi un canale",
+    "editTitle": "Modifica {name}",
+    "dialogText": "Password e token restano sul server, leggibili solo da root, e non vengono più mostrati.",
+    "type": "Tipo",
+    "types": {
+      "email": "Email (SMTP)",
+      "telegram": "Telegram",
+      "webhook": "Webhook",
+      "ntfy": "ntfy",
+      "gotify": "Gotify"
+    },
+    "name": "Nome",
+    "minLevel": "Invia",
+    "levels": {
+      "info": "Tutto",
+      "warn": "Avvisi ed errori",
+      "error": "Solo errori"
+    },
+    "events": "Cosa inviare",
+    "ev": {
+      "alerts": "Avvisi del server (servizi falliti, aggiornamenti, disco, SSH)",
+      "updates": "Nuove versioni di {name}",
+      "plugins": "Messaggi dei plugin",
+      "jobs": "Attività dei plugin che falliscono o si riprendono"
+    },
+    "noEvents": "Non invia nulla",
+    "enabled": "Invia tramite {name}",
+    "enabledShort": "Invia le notifiche tramite questo canale",
+    "test": "Invia prova",
+    "testOk": "Messaggio di prova inviato tramite {name}.",
+    "testFail": "{name} non ha accettato il messaggio di prova",
+    "save": "Salva canale",
+    "saved": "{name} salvato.",
+    "edit": "Modifica",
+    "delete": "Elimina {name}",
+    "deleteTitle": "Eliminare questo canale?",
+    "deleteText": "{name} non riceve più notifiche e la password o il token salvati vengono rimossi.",
+    "deleteAction": "Elimina canale",
+    "secretKept": "Salvato. Lascia vuoto per tenerlo.",
+    "lastOk": "Ultimo messaggio inviato {when}.",
+    "lastFail": "Ultimo tentativo fallito {when}: {error}",
+    "file": "I canali sono salvati in {path}.",
+    "lockedTitle": "Servono i permessi di amministratore",
+    "lockedText": "I canali contengono password e token. Sblocca i permessi di amministratore per vederli e modificarli.",
+    "unlock": "Sblocca",
+    "detail": {
+      "email": "{host}:{port}, a {to}",
+      "telegram": "chat {chat}"
+    },
+    "email": {
+      "host": "Server di posta",
+      "port": "Porta",
+      "security": "Sicurezza",
+      "sec": {
+        "starttls": "STARTTLS",
+        "tls": "TLS",
+        "none": "Nessuna"
+      },
+      "user": "Nome utente",
+      "password": "Password",
+      "from": "Indirizzo mittente",
+      "to": "Invia a",
+      "toHint": "Separa più indirizzi con virgole."
+    },
+    "telegram": {
+      "token": "Token del bot",
+      "tokenHint": "Crea un bot con @BotFather e incolla il suo token.",
+      "chat": "Id della chat",
+      "chatHint": "Un numero (negativo per i gruppi) o @nomecanale. Scrivi prima al bot."
+    },
+    "webhook": {
+      "url": "URL",
+      "urlHint": "L’indirizzo che riceve ogni notifica.",
+      "urlSet": "Salvato: {url}/... Lascia vuoto per tenerlo.",
+      "method": "Metodo",
+      "template": "Corpo (JSON)",
+      "templateHint": "Usa {title}, {body}, {level}, {link}, {source} e {time}. I valori vengono protetti per te.",
+      "headerName": "Intestazione segreta (facoltativa)",
+      "headerValue": "Valore dell’intestazione"
+    },
+    "ntfy": {
+      "server": "Server",
+      "topic": "Argomento",
+      "token": "Token di accesso (facoltativo)"
+    },
+    "gotify": {
+      "server": "Server",
+      "token": "Token dell’applicazione"
+    },
+    "title": "Dove vanno gli avvisi"
+  },
+  "jobs": {
+    "intro": "Attività che i plugin eseguono in background, a orari stabiliti o quando viene chiamato un webhook. Ogni attività gira come l’utente che l’ha creata.",
+    "empty": "Nessun plugin ha ancora creato un’attività.",
+    "lockedTitle": "Servono i permessi di amministratore",
+    "lockedText": "Sblocca i permessi di amministratore per vedere le attività di tutti gli utenti.",
+    "owner": "Gira come {user}",
+    "onDemand": "Su richiesta o via webhook",
+    "everySeconds": "Ogni {n} s",
+    "everyMinutes": "Ogni {n} min",
+    "everyHours": "Ogni {n} h",
+    "everyDays": "Ogni {n} g",
+    "daily": "Ogni giorno alle {times}",
+    "weekly": "{days} alle {times}",
+    "status": {
+      "running": "In corso",
+      "queued": "In attesa",
+      "ok": "Riuscita",
+      "failed": "Fallita",
+      "timeout": "Tempo scaduto",
+      "cancelled": "Annullata",
+      "never": "Mai eseguita",
+      "disabled": "Spenta",
+      "awaiting": "In attesa di approvazione"
+    },
+    "enable": "Esegui {name} in automatico",
+    "admin": "Esegue passaggi con permessi di amministratore. Approvata da {by}, {when}.",
+    "adminStale": "Questa attività è cambiata: il plugin è stato aggiornato o i suoi valori sono stati modificati. Non viene eseguita finché un amministratore non la approva di nuovo.",
+    "adminMissing": "Questa attività esegue passaggi con permessi di amministratore. Non viene eseguita finché un amministratore non la approva.",
+    "approve": {
+      "action": "Controlla e approva",
+      "title": "Approvare {name}?",
+      "text": "{plugin} eseguirà i passaggi qui sotto come root, per {user}, senza chiedere la password: secondo la pianificazione, quando qualcuno la avvia o quando viene chiamato il suo webhook.",
+      "steps": "Eseguito come root",
+      "step": "Passaggio {id}",
+      "values": "Con questi valori",
+      "noValues": "Questa attività non ha valori da impostare.",
+      "note": "L’approvazione vale per questi passaggi e questi valori esatti. Se il plugin li cambia, o cambiano i valori, l’attività si ferma finché un amministratore non la approva di nuovo. Le chiamate al webhook non possono cambiare i valori.",
+      "confirm": "Approva",
+      "done": "{name} approvata."
+    },
+    "lastRun": "Ultima esecuzione {when}",
+    "nextRun": "prossima {when}",
+    "runNow": "Esegui ora",
+    "started": "{name} avviata.",
+    "logs": "Log",
+    "logsTitle": "{name}: esecuzioni",
+    "noRuns": "Ancora nessuna esecuzione.",
+    "noSteps": "Nessun passaggio eseguito.",
+    "close": "Chiudi",
+    "trigger": {
+      "schedule": "Pianificata",
+      "manual": "Avviata da {by}",
+      "webhook": "Webhook"
+    },
+    "step": {
+      "ok": "Fatto",
+      "failed": "Fallito",
+      "skipped": "Saltato",
+      "handled": "Fallito, proseguito",
+      "exit": "codice di uscita {code}",
+      "http": "HTTP {status}",
+      "admin": "da amministratore",
+      "stdout": "Output",
+      "stderr": "Errori",
+      "truncated": "Il log è stato ridotto all’ultima parte."
+    },
+    "delete": "Elimina {name}",
+    "deleteTitle": "Eliminare questa attività?",
+    "deleteText": "{name} smette di girare. Pianificazione, URL dei webhook e log vengono rimossi.",
+    "deleteAction": "Elimina attività",
+    "webhooks": {
+      "title": "URL dei webhook",
+      "none": "Nessun URL webhook.",
+      "unnamed": "URL webhook",
+      "add": "Aggiungi URL webhook",
+      "addTitle": "Aggiungi un URL webhook",
+      "addText": "Un programma chiama l’URL con POST per eseguire subito questa attività.",
+      "label": "Etichetta",
+      "create": "Crea URL",
+      "created": "creato {when}",
+      "used": "ultima chiamata {when}",
+      "unused": "mai chiamato",
+      "regenerate": "Nuovo URL",
+      "revoke": "Revoca URL",
+      "revokeLabel": "Revoca {name}",
+      "revokeTitle": "Revocare questo URL?",
+      "revokeText": "Tutto ciò che lo chiama smette di funzionare.",
+      "urlTitle": "URL del webhook",
+      "urlText": "Copialo adesso. Viene mostrato una sola volta. Se lo perdi, creane uno nuovo.",
+      "url": "URL",
+      "copy": "Copia",
+      "copied": "Copiato.",
+      "done": "Fatto",
+      "curl": "Provalo da un terminale:"
+    },
+    "title": "Attività create dai plugin"
   }
 }

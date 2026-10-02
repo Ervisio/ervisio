@@ -18,6 +18,7 @@ export interface HttpApi {
   headers: string[];
   rules: { methods: string[]; path: string }[];
   maxBody?: number;
+  maxUpload?: number;
   timeoutSec?: number;
 }
 /** A capabilities.files entry: a path, or an object with admin / create (SDK v3). */
@@ -29,6 +30,10 @@ export interface Capabilities {
   files: { read: Folder[]; write: Folder[] };
   sockets: string[];
   network: string[];
+  /** Background jobs (core 0.5): named steps over the plugin's own commands and HTTP APIs. */
+  jobs?: { name: string; steps?: { command?: string; http?: { api: string } }[] }[];
+  /** May send notifications to the administrator's channels (core 0.5). */
+  notify?: boolean;
 }
 export interface Contribution {
   id: string;
@@ -71,6 +76,8 @@ export interface PluginInfo {
   dir?: string;
   updateAvailable?: UpdateInfo;
   blocked?: boolean;
+  /** The plugin needs a newer Ervisio than this one: the daemon's message says which. */
+  incompatible?: string;
   /** Unsigned dev-folder plugin running only because developer mode is on. */
   devUnsigned?: boolean;
   error?: string;
@@ -97,6 +104,8 @@ export interface CatalogEntry {
   visibleTo: { groups: string[] };
   installed: boolean;
   installedVersion?: string;
+  /** Set by the daemon when this Ervisio is older than the plugin needs (minCore / requires). */
+  incompatible?: string;
 }
 export interface CatalogCategory {
   id: string;

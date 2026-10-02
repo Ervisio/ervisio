@@ -2,7 +2,7 @@
  * Frame side of the plugin protocol (web/src/plugins/protocol.ts): requests to the host broker and streams.
  * Runs inside the sandboxed plugin frame, never in the app.
  */
-import type { FrameError, FrameHttpRequest, FrameOp, FrameToHost, HostToFrame } from '../protocol';
+import type { FrameError, FrameHttpRequest, FrameOp, FrameToHost, FrameUploadResult, HostToFrame } from '../protocol';
 
 export class PluginError extends Error {
   code: string;
@@ -54,8 +54,8 @@ function open(m: OpenSpec, h: AnyCallbacks) {
   };
 }
 
-export function openStream(command: string, args: string[], h: StreamCallbacks): { close(): void } {
-  const { close } = open({ command, args }, h);
+export function openStream(command: string, args: string[], h: StreamCallbacks, env?: string): { close(): void } {
+  const { close } = open({ command, args, ...(env ? { env } : {}) }, h);
   return { close };
 }
 
@@ -77,8 +77,8 @@ export interface PtyCallbacks {
   onError?(e: PluginError): void;
 }
 
-export function openPty(command: string, args: string[], cols: number, rows: number, h: PtyCallbacks) {
-  const s = open({ kind: 'pty', command, args, cols, rows }, h);
+export function openPty(command: string, args: string[], cols: number, rows: number, h: PtyCallbacks, env?: string) {
+  const s = open({ kind: 'pty', command, args, cols, rows, ...(env ? { env } : {}) }, h);
   const enc = new TextEncoder();
   return {
     write(data: string | Uint8Array) {
@@ -98,14 +98,93 @@ export function openPty(command: string, args: string[], cols: number, rows: num
   };
 }
 
+export interface UploadHandle {
+  /** Resolves with the service's answer; rejects with code "cancelled" after cancel(). */
+  result: Promise<FrameUploadResult>;
+  cancel(): void;
+}
+
+let nextUid = 1;
+export interface UploadCallbacks {
+  onProgress?(loaded: number, total: number): void;
+  /** Given, the response is streamed: called when the service answers... */
+  onResponseStart?(status: number, headers: Record<string, string>): void;
+  /** ...and with each piece of its body as it arrives. */
+  onResponseData?(chunk: Uint8Array): void;
+}
+const uploads = new Map<number, UploadCallbacks & { resolve(r: FrameUploadResult): void; reject(e: unknown): void }>();
+
+/** plugins.upload: hands the file to the host, which streams it; progress and the result come back as messages. */
+export function openUpload(req: FrameHttpRequest, file: Blob, o: UploadCallbacks = {}): UploadHandle {
+  const uid = nextUid++;
+  const result = new Promise<FrameUploadResult>((resolve, reject) => {
+    uploads.set(uid, { resolve, reject, ...o });
+  });
+  send({ la: 'plugin', t: 'upload-open', uid, req, file, ...(o.onResponseData || o.onResponseStart ? { stream: true } : {}) });
+  return {
+    result,
+    cancel() {
+      if (uploads.has(uid)) send({ la: 'plugin', t: 'upload-cancel', uid });
+    },
+  };
+}
+
+export interface DownloadDone {
+  ok: boolean;
+  bytes: number;
+  error?: string;
+}
+const downloads = new Map<number, (d: DownloadDone) => void>();
+let nextDid = 1;
+
+/** Remembers a download's onDone; the returned id goes to the host with the download request. */
+export function watchDownload(onDone: (d: DownloadDone) => void): number {
+  const did = nextDid++;
+  downloads.set(did, onDone);
+  return did;
+}
+
+/** The download request failed to start: no end will be reported. */
+export function unwatchDownload(did: number): void {
+  downloads.delete(did);
+}
+
 /** Handles responses and stream events; returns false for other messages. */
 export function handleReply(m: HostToFrame): boolean {
+  if (m.t === 'download-done') {
+    const cb = downloads.get(m.did);
+    downloads.delete(m.did);
+    try {
+      cb?.({ ok: m.ok, bytes: m.bytes, ...(m.error ? { error: m.error } : {}) });
+    } catch (e) {
+      console.warn(e);
+    }
+    return true;
+  }
   if (m.t === 'res') {
     const p = pending.get(m.id);
     pending.delete(m.id);
     if (p) {
       if (m.ok) p.resolve(m.value);
       else p.reject(new PluginError(m.error));
+    }
+    return true;
+  }
+  if (m.t === 'upload') {
+    const u = uploads.get(m.uid);
+    if (!u) return true;
+    if (m.ev === 'progress' || m.ev === 'start' || m.ev === 'data') {
+      try {
+        if (m.ev === 'progress') u.onProgress?.(m.loaded, m.total);
+        else if (m.ev === 'start') u.onResponseStart?.(m.status, m.headers);
+        else u.onResponseData?.(m.chunk);
+      } catch (e) {
+        console.warn(e);
+      }
+    } else {
+      uploads.delete(m.uid);
+      if (m.ev === 'done') u.resolve(m.result);
+      else u.reject(new PluginError(m.error));
     }
     return true;
   }

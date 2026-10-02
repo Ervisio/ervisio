@@ -78,7 +78,7 @@ export function Security({ plugins, busyId, onToggle }: Props) {
                   {flags.map(([f, detail], i) => (
                     <td key={i} className="cc"><Dot on={f} hot={i === 0} label={`${cols[i]}: ${f ? t('yes') : t('no')}`} detail={f ? detail || undefined : undefined} /></td>
                   ))}
-                  <td><Switch checked={p.enabled} disabled={busyId === p.id || !!p.blocked || !!p.error} onChange={(on) => onToggle(p, on)} aria-label={t('toggle', { name: p.name })} /></td>
+                  <td><Switch checked={p.enabled} disabled={busyId === p.id || !!p.blocked || !!p.incompatible || !!p.error} onChange={(on) => onToggle(p, on)} aria-label={t('toggle', { name: p.name })} /></td>
                 </tr>
               );
             })}

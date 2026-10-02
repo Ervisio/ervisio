@@ -59,11 +59,21 @@ prints a one-time sign-in URL instead of asking for a password.
 | Streams | `GET /api/ws` (WebSocket), multiplexed channels, see below |
 | Downloads | `GET /api/files/download?path=…&admin=0|1` (streamed) |
 | Uploads | `POST /api/files/upload?path=…&admin=0|1` raw body (streamed) |
+| Plugin transfers | `POST /api/plugins/transfer` asks for a one-time link; `GET` (download) or `POST` (upload) `/api/plugins/transfer/<token>` streams the file between the browser and a plugin's HTTP API or command (`docs/api/plugins.md`, "Large transfers") |
+| Activity log | `audit.list` / `plugins.audit.list` (answered by the daemon, which owns `/var/lib/ervisio/audit`), `GET /api/audit/export?format=csv|json` (`docs/api/plugins.md`, "Activity log") |
 | Plugin assets | `GET /plugins/<id>/<file>` (only plugins the user may use) |
 | Plugin frame | `GET /plugin-frame/<id>`: host page of a plugin's sandboxed iframe (`docs/api/plugins.md`, "Isolation") |
+| Webhooks | `POST /hooks/<plugin>/<token>`: runs a plugin job instance. No session, no CSRF header: the random token is the credential (`docs/api/jobs.md`) |
 
 Every POST must carry `X-Requested-With: ervisio` (CSRF) and JSON bodies `Content-Type: application/json`.
 Exact shapes, HTTP statuses and failure reasons: `docs/api/auth.md`.
+
+A few `/api/rpc` methods are answered by **ervisiod itself** instead of a bridge, because they must work with no page
+open: `plugins.jobs.*`, `plugins.notify`, `notify.*` and `jobs.*` (`docs/api/jobs.md`, `docs/api/notify.md`). The daemon
+keeps the job instances (`/var/lib/ervisio/jobs`) and the notification channels (`/etc/ervisio/notify.json`, 0600),
+runs the scheduler, and runs each step through a bridge: the owner's user bridge, or a root bridge it starts directly
+(no sudo, no password) for jobs an administrator approved: in Settings › Plugin jobs (`jobs.approve`), from a session
+whose administrator rights are unlocked, never from a plugin.
 
 Error codes (string): `needs_admin`, `forbidden`, `not_found`, `invalid`, `conflict`, `unavailable`,
 `internal`, `unauthenticated`. The web client reacts to `needs_admin` by showing the
@@ -209,6 +219,14 @@ runs in an `<iframe sandbox="allow-scripts allow-forms">` (opaque origin, strict
 `postMessage` broker that allows the declared commands and folders (`web/src/plugins`; plugin-facing docs in the
 SDK repository). Signed plugins carry `manifest.sig` (ed25519, team key: `docs/PLUGIN-SIGNING.md`); unsigned ones are
 blocked by default. The remote catalog must be signed by the same key (`catalog.sig`), or it is ignored.
+
+**Environments** are the one place where the daemon itself keeps credentials and connections for users: remote Docker
+hosts (tcp+TLS, SSH, Portainer agent, another Ervisio server) that a plugin capability can target. The daemon
+(`server/internal/envs`, `server/internal/server/envs.go`) answers `envs.*` and `plugins.envs.list` itself, hands the
+user's bridge a `0600` tunnel socket owned by the user (or, for another Ervisio server, a bridge running there over a
+pinned, upgraded connection) and the bridge never sees a secret. Full design and security model:
+`docs/api/environments.md`. Hosts a plugin may reach beyond its manifest are approved one by one by an administrator
+(`capabilities.network.userHosts`, `plugins.network.*`).
 
 ## Releases and self-update
 

@@ -62,7 +62,21 @@ type Config struct {
 	Plugins   Plugins `toml:"plugins"`
 	Updates   Updates `toml:"updates"`
 	Web       Web     `toml:"web"`
+	Audit     Audit   `toml:"audit"`
 }
+
+// Audit holds the activity log settings (internal/audit).
+type Audit struct {
+	// Enabled records sign-ins, administrator unlocks, plugin installs,
+	// settings changes and every mutating plugin call.
+	Enabled bool `toml:"enabled"`
+	// RetentionDays is how long daily log files are kept (0 = forever).
+	RetentionDays int `toml:"retention_days"`
+}
+
+// AuditEnabled and AuditRetentionDays make *Config an audit.Config.
+func (c *Config) AuditEnabled() bool      { return c.Audit.Enabled }
+func (c *Config) AuditRetentionDays() int { return c.Audit.RetentionDays }
 
 // Login holds sign-in page and brute-force settings.
 type Login struct {
@@ -165,6 +179,7 @@ func Default() *Config {
 		Plugins: Plugins{AllowUnsigned: false, CatalogURL: brand.PluginCatalogURL},
 		Updates: Updates{Channel: "stable", AutoCheck: true, AutoInstall: false, AutoInstallAt: "03:30"},
 		Web:     Web{TrustedProxies: []string{"127.0.0.0/8", "::1/128"}},
+		Audit:   Audit{Enabled: true, RetentionDays: 90},
 	}
 }
 

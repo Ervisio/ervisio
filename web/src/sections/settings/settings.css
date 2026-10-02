@@ -107,6 +107,7 @@
 }
 @media (max-width: 700px) {
   .st-row { flex-wrap: wrap; }
+  .st-row > .st-tx { flex: 1 1 140px; }
   .st-ctl { justify-content: flex-start; }
 }
 @media (prefers-reduced-motion: reduce) { .st-scroll { scroll-behavior: auto; } }
@@ -185,3 +186,77 @@
 
 .st-brand { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
 .st-brand small { color: var(--ink2); font-size: 13px; }
+
+/* activity log */
+.st-act { display: flex; flex-direction: column; gap: 12px; }
+.st-act-note { margin: 0; color: var(--ink3); font-size: 13px; }
+.st-act-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.st-act-filters > .ui-field { flex: 1 1 150px; min-width: 130px; }
+.st-act-filters .ui-in { min-width: 0; }
+.st-act-date { display: flex; flex-direction: column; gap: 3px; flex: 1 1 130px; font-size: 11.5px; font-weight: 700; color: var(--ink3); }
+.st-act-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.st-act-count { font-size: 13px; font-weight: 700; color: var(--ink3); }
+.st-act-export { display: flex; gap: 8px; flex-wrap: wrap; }
+.st-act-who, .st-act-what, .st-act-result { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.st-act-who small, .st-act-what small, .st-act-result small, .st-act-target small { color: var(--ink3); font-size: 11.5px; }
+.st-act-who b, .st-act-what b { font-weight: 700; overflow-wrap: anywhere; }
+.st-act-result .ui-badge { align-self: flex-start; }
+.st-act-target { display: flex; flex-direction: column; gap: 2px; font: 12.5px var(--mono); overflow-wrap: anywhere; word-break: break-all; min-width: 0; }
+.st-act-target small { font-family: inherit; }
+.st-act-more { display: flex; justify-content: center; padding-top: 4px; }
+.st-act-card { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.st-act-card .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.st-act-card .top b { font-weight: 700; }
+.st-act-card .meta { color: var(--ink3); font-size: 11.5px; overflow-wrap: anywhere; }
+/* notification channels and plugin jobs (Settings) */
+.st-note { color: var(--ink3); font-size: 13px; margin: 0 0 10px; max-width: 70ch; }
+.st-job { border-radius: 16px; background: var(--sunk); padding: 14px 16px; margin: 0 0 10px; display: flex; flex-direction: column; gap: 10px; }
+.st-job-hd { display: flex; align-items: center; gap: 12px; }
+.st-job-hd .grow { flex: 1; min-width: 0; }
+.st-job-hd b { font-weight: 700; display: block; overflow-wrap: anywhere; }
+.st-job-hd small { color: var(--ink3); font-size: 12.5px; display: block; overflow-wrap: anywhere; }
+.st-job-hd .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.st-job-meta { display: flex; gap: 8px 14px; flex-wrap: wrap; align-items: center; }
+.st-job-meta small { color: var(--ink2); font-size: 12.5px; }
+.st-job-last { color: var(--ink3); font-size: 12.5px; overflow-wrap: anywhere; }
+.st-job-last--err { color: var(--err); }
+.st-job-act { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.st-job .st-warn { margin: 0; }
+.st-warn--soft { background: var(--surface); color: var(--ink2); }
+.st-warn:has(> .ui-btn) { flex-wrap: wrap; }
+.st-warn:has(> .ui-btn) > .grow { flex: 1 1 220px; min-width: 0; }
+.st-warn > .ui-btn { flex: none; align-self: center; margin-left: auto; }
+.st-approve { display: grid; gap: 8px; min-width: 0; }
+.st-approve ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.st-approve li { display: grid; gap: 4px; min-width: 0; }
+.st-approve dl { margin: 0; display: grid; gap: 4px; }
+.st-approve dl > div { display: flex; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.st-approve dt { font-weight: 600; }
+.st-approve dd { margin: 0; overflow-wrap: anywhere; min-width: 0; }
+.st-approve dd code { font: 12.5px var(--mono); }
+.st-job-hooks { display: flex; flex-direction: column; gap: 6px; padding-top: 4px; border-top: 1px solid var(--surface); }
+.st-job-hooks > b { font-size: 13px; }
+.st-job-hooks > small { color: var(--ink3); }
+.st-job-hooks .st-host { margin: 0; padding: 6px 0; }
+.st-job-hooks .st-host:hover { background: none; }
+.st-form { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; min-width: 0; }
+.st-form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.st-form-set { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.st-form-set legend { font-size: 13px; font-weight: 700; padding: 0; margin-bottom: 6px; float: left; width: 100%; }
+.st-code { display: block; padding: 8px 10px; border-radius: 10px; background: var(--sunk); font: 12.5px var(--mono); overflow-wrap: anywhere; user-select: all; }
+.st-runs { display: grid; grid-template-columns: 220px 1fr; gap: 16px; margin-top: 12px; min-width: 0; }
+.st-runlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 420px; overflow: auto; }
+.st-runlist button { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; width: 100%; text-align: left; padding: 8px 10px; border-radius: 12px; font-size: 13px; }
+.st-runlist button:hover { background: var(--sunk); }
+.st-runlist button[aria-current='true'] { background: var(--sunk); box-shadow: inset 0 0 0 2px var(--ink3); }
+.st-runlist small { color: var(--ink3); }
+.st-runbody { min-width: 0; max-height: 420px; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+.st-step { border-radius: 12px; background: var(--sunk); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.st-step-hd { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.st-step-hd small { color: var(--ink3); }
+.st-log { margin: 0; padding: 8px 10px; border-radius: 10px; background: var(--surface); font: 12px/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 200px; overflow: auto; }
+.st-log--err { color: var(--err); }
+@media (max-width: 700px) {
+  .st-runs { grid-template-columns: 1fr; }
+  .st-runlist { max-height: 160px; }
+}

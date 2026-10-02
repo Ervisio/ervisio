@@ -1,9 +1,11 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -26,9 +28,15 @@ const (
 	// maxSessionConns bounds concurrent WebSockets per session (one per
 	// browser tab is normal).
 	maxSessionConns = 8
-	// wsReadLimit bounds one client frame. Stream inputs are terminal keys,
-	// pastes and resizes; uploads go through HTTP.
+	// wsReadLimit bounds one client frame, except the "open" of a stream.
+	// Stream inputs are terminal keys, pastes and resizes; uploads go
+	// through HTTP.
 	wsReadLimit = 512 << 10
+	// wsOpenLimit bounds the frame that opens a stream: it carries the
+	// params, which for plugins.httpStream hold the request body as base64
+	// (up to 8 MiB, the default maxBody, is 11.2 MiB). Larger bodies use
+	// plugins.upload.
+	wsOpenLimit = 12 << 20
 	// inputQueueLen bounds input frames queued per channel (the bridge
 	// window is rpc.Window frames on top of it).
 	inputQueueLen = rpc.Window
@@ -63,6 +71,8 @@ type wsConn struct {
 	sess *Session
 	c    *websocket.Conn
 	ctx  context.Context
+	// ip is the client address, for the activity log.
+	ip string
 
 	mu       sync.Mutex
 	channels map[int64]*wsChannel
@@ -89,10 +99,10 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request, sess *Session)
 	if err != nil {
 		return // Accept already wrote the response
 	}
-	c.SetReadLimit(wsReadLimit)
+	c.SetReadLimit(wsOpenLimit)
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	wc := &wsConn{s: s, sess: sess, c: c, ctx: ctx, channels: map[int64]*wsChannel{}}
+	wc := &wsConn{s: s, sess: sess, c: c, ctx: ctx, ip: s.realClientIP(r), channels: map[int64]*wsChannel{}}
 	go func() {
 		select {
 		case <-sess.Done():
@@ -148,22 +158,34 @@ func (wc *wsConn) sendError(ch int64, e *rpc.Error) {
 
 func (wc *wsConn) readLoop() error {
 	for {
-		typ, data, err := wc.c.Read(wc.ctx)
+		typ, data, release, err := wc.readFrame()
 		if err != nil {
 			return err
 		}
 		if typ != websocket.MessageText {
+			release()
 			continue
 		}
 		var f wsFrame
 		if err := json.Unmarshal(data, &f); err != nil || f.Ch <= 0 {
+			release()
 			wc.sendError(0, rpc.Errorf(rpc.Invalid, "invalid frame"))
 			continue
+		}
+		large := len(data) > wsReadLimit
+		data = nil
+		if f.Op != "open" {
+			release()
+			if large { // a frame that repeated "op" to pass opensStream
+				wc.c.Close(websocket.StatusMessageTooBig, "frame too large")
+				return errFrameTooBig
+			}
 		}
 		switch f.Op {
 		case "open":
 			wc.sess.touch(time.Now())
 			wc.open(&f)
+			release()
 		case "input":
 			wc.input(&f)
 		case "close":
@@ -172,6 +194,78 @@ func (wc *wsConn) readLoop() error {
 			wc.sendError(f.Ch, rpc.Errorf(rpc.Invalid, "unknown op %q", f.Op))
 		}
 	}
+}
+
+// errFrameTooBig ends a connection that sent a frame over its limit.
+var errFrameTooBig = errors.New("frame too large")
+
+// readFrame reads one client message. A frame may be up to wsReadLimit,
+// except the "open" of a stream, which may be up to wsOpenLimit: the first
+// wsReadLimit bytes are read, and only a frame whose "op" (before its
+// params) is "open" is read further, so other frames never make the daemon
+// buffer more than wsReadLimit (security review M3). A large open frame
+// takes one of the session's large-body slots; release gives it back (it is
+// a no-op for the others).
+func (wc *wsConn) readFrame() (websocket.MessageType, []byte, func(), error) {
+	noop := func() {}
+	typ, r, err := wc.c.Reader(wc.ctx)
+	if err != nil {
+		return 0, nil, noop, err
+	}
+	head, err := io.ReadAll(io.LimitReader(r, wsReadLimit+1))
+	if err != nil {
+		return 0, nil, noop, err
+	}
+	if len(head) <= wsReadLimit {
+		return typ, head, noop, nil
+	}
+	if typ != websocket.MessageText || !opensStream(head) {
+		wc.c.Close(websocket.StatusMessageTooBig, "frame too large")
+		return 0, nil, noop, errFrameTooBig
+	}
+	release, e := wc.sess.acquireBig(wc.ctx)
+	if e != nil {
+		wc.c.Close(websocket.StatusTryAgainLater, "too many large requests")
+		return 0, nil, noop, errors.New(e.Message)
+	}
+	rest, err := io.ReadAll(io.LimitReader(r, wsOpenLimit-int64(len(head))+1))
+	if err != nil {
+		release()
+		return 0, nil, noop, err
+	}
+	if len(head)+len(rest) > wsOpenLimit {
+		release()
+		wc.c.Close(websocket.StatusMessageTooBig, "frame too large")
+		return 0, nil, noop, errFrameTooBig
+	}
+	return typ, append(head, rest...), release, nil
+}
+
+// opensStream reports whether the start of a frame is an object whose
+// top-level "op" is "open", found before the end of head (the SDK writes
+// ch and op first). A frame that repeats "op" is caught again after the
+// whole frame is parsed (readLoop: only "open" may be large).
+func opensStream(head []byte) bool {
+	dec := json.NewDecoder(bytes.NewReader(head))
+	if t, err := dec.Token(); err != nil || t != json.Delim('{') {
+		return false
+	}
+	for dec.More() {
+		k, err := dec.Token()
+		if err != nil {
+			return false
+		}
+		key, _ := k.(string)
+		if key == "op" {
+			v, err := dec.Token()
+			return err == nil && v == "open"
+		}
+		var skip json.RawMessage
+		if err := dec.Decode(&skip); err != nil {
+			return false
+		}
+	}
+	return false
 }
 
 func (wc *wsConn) open(f *wsFrame) {
@@ -187,7 +281,7 @@ func (wc *wsConn) open(f *wsFrame) {
 		wc.sendError(f.Ch, rpc.Errorf(rpc.Unavailable, "too many open channels"))
 		return
 	}
-	p, isAdmin, e := wc.s.route(wc.ctx, wc.sess, f.Method, f.Admin)
+	p, isAdmin, params, relEnv, e := wc.s.routeWithEnv(wc.ctx, wc.sess, f.Method, f.Params, f.Admin)
 	if e != nil {
 		wc.sess.releaseChannel()
 		wc.sendError(f.Ch, e)
@@ -196,10 +290,13 @@ func (wc *wsConn) open(f *wsFrame) {
 	hold := wc.sess.hold(p, isAdmin)
 	release := func() {
 		hold()
+		relEnv()
 		wc.sess.releaseChannel()
 	}
-	st, err := p.Stream(wc.ctx, f.Method, f.Params)
+	rec := wc.s.auditBegin(wc.sess, wc.ip, f.Method, f.Params, isAdmin)
+	st, err := p.Stream(wc.ctx, f.Method, params)
 	if err != nil {
+		rec.streamDone(err)
 		release()
 		wc.sendError(f.Ch, rpc.ToError(err, false))
 		return
@@ -231,8 +328,10 @@ func (wc *wsConn) open(f *wsFrame) {
 		defer release()
 		defer st.Close()
 		for ev := range st.Events() {
+			rec.observe(ev)
 			wc.send(&wsFrame{Ch: id, Op: "data", Data: ev.Data, B64: ev.B64})
 		}
+		rec.streamDone(st.Err())
 		wc.mu.Lock()
 		if wc.channels[id] == ch {
 			delete(wc.channels, id)

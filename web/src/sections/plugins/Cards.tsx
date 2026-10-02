@@ -28,7 +28,7 @@ export function PluginCard({ p, active, onOpen, onToggle, busy }: { p: PluginInf
           <small>{p.author ? `${p.author}, ` : ''}v{p.version}</small>
         </div>
         <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-          <Switch checked={p.enabled} disabled={busy || !!p.blocked || !!p.error} onChange={onToggle} aria-label={t('toggle', { name: p.name })} />
+          <Switch checked={p.enabled} disabled={busy || !!p.blocked || !!p.incompatible || !!p.error} onChange={onToggle} aria-label={t('toggle', { name: p.name })} />
         </span>
       </div>
       <p>{p.error ? p.error : p.description || t('noDescription')}</p>
@@ -36,6 +36,7 @@ export function PluginCard({ p, active, onOpen, onToggle, busy }: { p: PluginInf
         {p.error ? <Badge tone="err">{t('broken')}</Badge> : <TrustBadge p={p} />}
         {p.updateAvailable && <Badge tone="info" className="plugins-badge">{t('updateBadge', { version: p.updateAvailable.version })}</Badge>}
         {p.blocked && <Badge tone="warn">{t('blocked')}</Badge>}
+        {p.incompatible && <Badge tone="warn">{t('incompatible')}</Badge>}
         {p.devUnsigned ? <Badge tone="warn">{t('devUnsignedBadge')}</Badge> : p.location === 'dev' && <Badge tone="neutral">{t('devBadge')}</Badge>}
       </div>
     </div>

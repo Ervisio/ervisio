@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ervisio/ervisio/server/internal/account"
+	"github.com/ervisio/ervisio/server/internal/audit"
 	"github.com/ervisio/ervisio/server/internal/pam"
 	"github.com/ervisio/ervisio/server/internal/rpc"
 	"github.com/ervisio/ervisio/server/internal/sshauth"
@@ -201,8 +202,15 @@ func (s *Server) handleLoginKey(w http.ResponseWriter, r *http.Request) {
 	}
 	result := attemptFailed
 	defer func() { att.done(result) }()
+	// A name that is not a valid user name is never written to the log or
+	// the activity log as given (it is the caller's text).
+	who := req.User
+	if !account.ValidName(who) {
+		who = ""
+	}
 	refuse := func(e *rpc.Error, why string) {
-		s.log.Printf("login %q from %s method=ssh-key refused: %s", req.User, ip, why)
+		s.log.Printf("login %q from %s method=ssh-key refused: %s", who, ip, why)
+		s.auditCore(who, ip, "login.failed", "ssh-key", audit.Denied, why)
 		if d := time.Until(start.Add(keyFailMinDelay)); d > 0 {
 			t := time.NewTimer(d)
 			select {
@@ -311,6 +319,7 @@ func (s *Server) handleLoginKey(w http.ResponseWriter, r *http.Request) {
 	}
 	s.setCookie(w, r, token, maxAge)
 	s.log.Printf("login %q from %s method=ssh-key key=%s", a.Name, ip, fp)
+	s.auditCore(a.Name, ip, "login", "ssh-key "+fp, audit.OK, "")
 	writeJSON(w, http.StatusOK, s.info(sess))
 }
 

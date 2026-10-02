@@ -132,22 +132,57 @@ type rpcRequest struct {
 	Admin  bool            `json:"admin"`
 }
 
-// MaxRPCBody bounds /api/rpc request bodies.
-const MaxRPCBody = 1 << 20
+// MaxRPCBody bounds /api/rpc request bodies. It carries a plugins.http body of
+// up to 8 MiB (the default maxBody) as base64 (11.2 MiB), and stays under the
+// 16 MiB protocol line to the bridge. Larger bodies use plugins.upload.
+const MaxRPCBody = 12 << 20
 
 func (s *Server) handleRPC(w http.ResponseWriter, r *http.Request, sess *Session) {
+	// A large body (or one of unknown length) takes one of the session's
+	// large-body slots for the whole call: it stays in memory until then.
+	if r.ContentLength < 0 || r.ContentLength > bigBody {
+		release, e := sess.acquireBig(r.Context())
+		if e != nil {
+			writeError(w, e)
+			return
+		}
+		defer release()
+	}
 	var req rpcRequest
 	if e := decodeJSON(w, r, MaxRPCBody, &req); e != nil {
 		writeError(w, e)
 		return
 	}
-	p, isAdmin, e := s.route(r.Context(), sess, req.Method, req.Admin)
+	// The activity log is read by the daemon itself (it is root's).
+	if req.Method == "audit.list" || req.Method == "plugins.audit.list" {
+		s.handleAuditList(w, sess, req.Method, req.Params)
+		return
+	}
+	if s.handleLocalRPC(w, r, sess, req) {
+		return
+	}
+	if res, e, ok := s.envsCall(r.Context(), sess, req.Method, req.Params); ok {
+		if e != nil {
+			writeError(w, e)
+			return
+		}
+		writeJSON(w, http.StatusOK, struct {
+			Result any `json:"result"`
+		}{res})
+		return
+	}
+	p, isAdmin, params, relEnv, e := s.routeWithEnv(r.Context(), sess, req.Method, req.Params, req.Admin)
 	if e != nil {
 		writeError(w, e)
 		return
 	}
+	defer relEnv()
 	defer sess.hold(p, isAdmin)()
-	res, err := p.Call(r.Context(), req.Method, req.Params)
+	rec := s.auditBegin(sess, s.realClientIP(r), req.Method, req.Params, isAdmin)
+	res, err := p.Call(r.Context(), req.Method, params)
+	if err == nil || r.Context().Err() == nil {
+		rec.callDone(res, err)
+	}
 	if err != nil {
 		if r.Context().Err() != nil {
 			return // client went away

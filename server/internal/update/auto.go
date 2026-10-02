@@ -21,6 +21,9 @@ type Auto struct {
 	Now     func() time.Time
 	// CheckEvery is the auto_check period (default 6h).
 	CheckEvery time.Duration
+	// Notify, when set, is told once about each new release found by the
+	// check (the daemon sends it to the notification channels).
+	Notify func(version, current string)
 
 	lastCheck   time.Time
 	lastNotice  string
@@ -80,6 +83,9 @@ func (a *Auto) Tick(ctx context.Context) {
 		case Newer(rel.Version(), a.Updater.Current) && rel.Version() != a.lastNotice:
 			a.lastNotice = rel.Version()
 			a.logf("update available: %s (running %s)", rel.Version(), a.Updater.Current)
+			if a.Notify != nil {
+				a.Notify(rel.Version(), a.Updater.Current)
+			}
 		}
 	}
 	// A package manager installs the updates of a packaged Ervisio.

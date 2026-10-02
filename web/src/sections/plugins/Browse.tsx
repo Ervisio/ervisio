@@ -65,6 +65,8 @@ export function Browse({ catalog, query, busyId, onInstall }: Props) {
               </div>
               {e.installed ? (
                 <span className="plugins-installed"><Icon name="check" size={14} /> {t('installed')}</span>
+              ) : e.incompatible ? (
+                <span className="plugins-muted" title={e.incompatible}>{t('incompatible')}</span>
               ) : (
                 <Button variant="primary" size="sm" loading={busyId === e.id} onClick={() => onInstall(e)}>{t('install')}</Button>
               )}

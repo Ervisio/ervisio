@@ -1,0 +1,201 @@
+{
+  "group": "Ambienti",
+  "cancel": "Annulla",
+  "back": "Indietro",
+  "next": "Avanti",
+  "saving": "Salvataggio…",
+  "list": {
+    "title": "Host Docker",
+    "desc": "Host Docker remoti che i plugin come Docker possono gestire, oltre a questa macchina.",
+    "empty": "Nessun ambiente",
+    "emptyText": "Aggiungi un host Docker remoto per gestirlo da qui. Questa macchina è sempre disponibile.",
+    "failed": "Impossibile caricare gli ambienti",
+    "retry": "Riprova"
+  },
+  "status": { "online": "Online", "offline": "Non raggiungibile", "unknown": "Non verificato" },
+  "kind": {
+    "tcp-tls": {
+      "name": "Docker su TLS",
+      "desc": "Il demone Docker è in ascolto su una porta TCP con TLS e certificati client (dockerd --tlsverify).",
+      "addressPlaceholder": "10.0.0.5:2376",
+      "addressHint": "Host e porta dell'API Docker, di solito 2376.",
+      "insecure": "tcp semplice, senza cifratura (non sicuro)",
+      "insecureWarn": "Chiunque sia sul percorso di rete può leggere questa connessione e inviare comandi a Docker, cioè avere root su quella macchina. Usalo solo su una rete chiusa e fidata.",
+      "insecureTag": "tcp semplice",
+      "skipTag": "certificato non verificato",
+      "noCreds": "Il tcp semplice non ha certificati da impostare."
+    },
+    "ssh": {
+      "name": "SSH",
+      "desc": "Raggiunge il socket Docker di un host Linux via SSH con una chiave. Docker non deve ascoltare in rete e sull'host non si installa nulla.",
+      "addressPlaceholder": "server.lan:22",
+      "addressHint": "Host e porta del server SSH.",
+      "userHint": "L'account deve poter usare Docker (gruppo docker) e sshd deve consentire l'inoltro dei socket."
+    },
+    "portainer-agent": {
+      "name": "Agente Portainer",
+      "desc": "Un host che esegue già l'agente Portainer. L'API Docker si raggiunge tramite l'agente sulla sua porta TLS.",
+      "addressPlaceholder": "10.0.0.7:9001",
+      "addressHint": "Host e porta dell'agente, di solito 9001."
+    },
+    "ervisio": {
+      "name": "Un altro server Ervisio",
+      "desc": "Un altro server con Ervisio. Le chiamate vengono eseguite là, con i suoi plugin e le sue regole, come un utente scelto durante l'abbinamento.",
+      "addressPlaceholder": "https://server.lan:9090",
+      "addressHint": "L'indirizzo della console web dell'altro server.",
+      "plain": "Consenti http semplice (non sicuro)",
+      "plainWarn": "La credenziale di abbinamento e ogni chiamata viaggiano in chiaro. Usalo solo verso un server su questa macchina o su una rete chiusa."
+    }
+  },
+  "field": {
+    "name": "Nome",
+    "namePlaceholder": "Server di build",
+    "kind": "Che tipo di host è?",
+    "address": "Indirizzo",
+    "serverUrl": "Indirizzo del server",
+    "sshUser": "Utente SSH",
+    "trust": "Come fidarsi del server",
+    "ca": "Certificato CA",
+    "caHint": "Testo PEM della CA che ha firmato il certificato del server. Lascia vuoto per usare le autorità fidate di questa macchina.",
+    "clientCert": "Certificato client",
+    "clientCertHint": "Testo PEM (cert.pem). Lascia vuoti certificato e chiave se il demone non ne chiede uno.",
+    "clientKey": "Chiave client",
+    "clientKeyHint": "Testo PEM (key.pem). Viene salvata su questo server, leggibile solo da root, e non viene più mostrata.",
+    "keepSecret": "Già salvata. Lascia vuoto per mantenerla.",
+    "sshKey": "Chiave privata",
+    "sshKeyHint": "Chiave privata PEM o OpenSSH (id_ed25519). Salvata su questo server, leggibile solo da root, e non più mostrata.",
+    "passphrase": "Passphrase della chiave",
+    "passphraseHint": "Solo se la chiave è protetta. Viene salvata cifrata, perché le attività in background la usano anche senza di te.",
+    "socketPath": "Socket Docker sull'host",
+    "socketPathHint": "Lascia vuoto per /var/run/docker.sock.",
+    "agentSecret": "Segreto dell'agente",
+    "agentSecretHint": "L'AGENT_SECRET impostato sull'agente. Senza, l'agente si lega al primo server che lo contatta e rifiuta gli altri: è meglio impostarne uno.",
+    "token": "Token di abbinamento",
+    "tokenHint": "Crealo sull'altro server in Impostazioni > Ambienti > Abbina un altro server. Vale una volta sola e per 15 minuti.",
+    "pairedHint": "Abbinato a {name}. Per cambiare l'abbinamento, rimuovi questo ambiente e aggiungilo di nuovo."
+  },
+  "trust": {
+    "ca": "La mia CA",
+    "pin": "Fissa il certificato",
+    "skip": "Non verificare",
+    "pinHint": "Verifica la connessione qui sotto e conferma l'impronta del certificato. Ervisio rifiuterà qualsiasi altro certificato.",
+    "skipWarn": "Senza verifica, chiunque sia tra questo server e l'host può spacciarsi per esso. Meglio una CA o un certificato fissato."
+  },
+  "probe": {
+    "tls": "Verifica la connessione e mostra il certificato",
+    "ssh": "Verifica la connessione e mostra la chiave dell'host",
+    "checking": "Verifica…",
+    "tlsFound": "Il server ha presentato questo certificato (SHA-256):",
+    "sshFound": "Il server ha presentato questa chiave host (SHA-256):",
+    "verify": {
+      "tcp-tls": "Confrontala con quella sull'host Docker (openssl x509 -in server-cert.pem -noout -fingerprint -sha256).",
+      "ssh": "Confrontala con la chiave dell'host (ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub, o il file ECDSA o RSA).",
+      "portainer-agent": "Gli agenti usano un certificato autofirmato. Confrontala con quella che l'agente scrive nel log, se puoi.",
+      "ervisio": "Confrontala con l'impronta mostrata sull'altro server quando hai creato il token di abbinamento."
+    },
+    "confirm": "L'ho verificata, è il server giusto",
+    "pinned": "Un'impronta è già fissata. Verifica di nuovo la connessione solo se l'host è cambiato.",
+    "current": "Impronta fissata:",
+    "plainServer": "Questo server usa http semplice, quindi non c'è nulla da fissare.",
+    "localHttp": "L'http semplice verso questa macchina va bene. Altrove serve la casella qui sopra."
+  },
+  "section": { "connection": "Connessione", "credentials": "Credenziali", "access": "Chi può usarlo" },
+  "access": {
+    "who": "Chi può usare questo ambiente",
+    "all": "Tutti quelli che possono usare il plugin",
+    "restricted": "Solo questi utenti e gruppi",
+    "hint": "La visibilità del plugin continua ad applicarsi in aggiunta.",
+    "users": "Utenti",
+    "usersHint": "Aggiungi un nome utente e premi Invio",
+    "groups": "Gruppi",
+    "groupsHint": "Aggiungi un nome gruppo e premi Invio",
+    "restrictedShort": "limitato"
+  },
+  "pem": { "choose": "Scegli file…", "tooBig": "{name} è troppo grande per un certificato o una chiave." },
+  "add": {
+    "action": "Aggiungi ambiente",
+    "title": "Aggiungi un ambiente",
+    "step": {
+      "kind": "Passo {n} di {total}: nome e tipo",
+      "connection": "Passo {n} di {total}: connessione",
+      "access": "Passo {n} di {total}: credenziali e accesso"
+    }
+  },
+  "edit": { "action": "Modifica {name}", "title": "Modifica {name}", "save": "Salva le modifiche" },
+  "save": {
+    "added": "{name} aggiunto",
+    "updated": "{name} aggiornato",
+    "savedButOffline": "{name} salvato, ma non è raggiungibile"
+  },
+  "test": {
+    "action": "Verifica {name} ora",
+    "ok": "{name} risponde in {ms} ms",
+    "failed": "{name} non è raggiungibile"
+  },
+  "remove": {
+    "action": "Rimuovi {name}",
+    "title": "Rimuovere {name}?",
+    "text": "I plugin non potranno più usarlo. Le credenziali salvate vengono cancellate da questo server. L'host remoto non viene modificato.",
+    "textPaired": "I plugin non potranno più usarlo. L'abbinamento viene revocato sull'altro server e la credenziale salvata qui viene cancellata.",
+    "confirm": "Rimuovi ambiente",
+    "done": "{name} rimosso"
+  },
+  "pair": {
+    "title": "Abbina un altro server",
+    "desc": "Permetti a un altro server Ervisio di usare i plugin di questo server, come Docker, tramite un abbinamento.",
+    "none": "Nessun server è abbinato a questo.",
+    "create": "Crea token di abbinamento",
+    "dialogTitle": "Abbina un altro server",
+    "dialogText": "Crea un token monouso, poi incollalo sull'altro server in Impostazioni > Ambienti > Aggiungi ambiente > Un altro server Ervisio.",
+    "user": "Esegui le chiamate come questo utente",
+    "userHint": "Ogni chiamata dell'altro server viene eseguita su questa macchina come questo utente Linux, con i suoi permessi e con le regole di questo server. Non ottiene mai diritti di amministratore.",
+    "securityNote": "Chi possiede l'abbinamento può fare su questa macchina ciò che {user} può fare con i plugin installati qui, per esempio gestire Docker. Abbina solo server che controlli. Puoi revocarlo in qualsiasi momento.",
+    "createToken": "Crea token",
+    "tokenText": "Incolla questo token sull'altro server. Vale una volta sola e scade tra {minutes} minuti.",
+    "copy": "Copia token",
+    "copied": "Token copiato",
+    "copyFailed": "Impossibile copiare. Seleziona il token e copialo a mano.",
+    "expiresIn": "Scade tra {time}",
+    "expired": "Il token è scaduto. Chiudi questa finestra e creane uno nuovo.",
+    "fingerprint": "Impronta del certificato di {server} (l'altro server ti chiede di confermarla):",
+    "fingerprintHint": "L'altro server mostra l'impronta che ha trovato. Devono coincidere.",
+    "noTls": "Nessun TLS su questo server",
+    "noTlsHint": "Questo server usa http semplice, quindi non c'è un certificato da confrontare. Abbina solo su una rete di cui ti fidi.",
+    "runsAsNote": "Le chiamate verranno eseguite come {user} su questa macchina.",
+    "done": "Fatto",
+    "runsAs": "esegue come {user}",
+    "created": "abbinato il {date}",
+    "lastUsed": "ultimo uso {date}",
+    "lastVia": "tramite {via}",
+    "neverUsed": "mai usato",
+    "revoke": "Revoca l'abbinamento con {name}",
+    "revokeTitle": "Revocare l'abbinamento con {name}?",
+    "revokeText": "{name} non potrà più usare questo server. Le sue connessioni si chiudono subito. Può abbinarsi di nuovo con un nuovo token.",
+    "revokeConfirm": "Revoca abbinamento",
+    "revoked": "Abbinamento con {name} revocato"
+  },
+  "network": {
+    "title": "Consentire a {plugin} di connettersi a un nuovo indirizzo?",
+    "text": "{plugin} chiede di raggiungere un indirizzo che non fa parte dei suoi permessi.",
+    "exact": "Solo questo host e questa porta. Gli altri indirizzi restano bloccati.",
+    "allow": "Consenti le connessioni a questo indirizzo",
+    "deny": "Non consentire",
+    "close": "Chiudi",
+    "https": "https, cifrato",
+    "http": "http, non cifrato",
+    "plainOk": "So che il traffico verso questo indirizzo non è cifrato",
+    "needAdmin": "Solo un amministratore può approvarlo. Chiedi a uno di aprire il plugin e consentirlo."
+  },
+  "hosts": {
+    "title": "Indirizzi di rete approvati",
+    "desc": "Indirizzi che i plugin hanno chiesto oltre ai propri permessi e che un amministratore ha approvato. Una revoca vale dal prossimo caricamento del plugin.",
+    "none": "Nessun indirizzo aggiuntivo è stato approvato.",
+    "for": "per {plugin}",
+    "by": "approvato da {by} il {date}",
+    "revoke": "Revoca {host}",
+    "revokeTitle": "Revocare {host}?",
+    "revokeText": "{plugin} non potrà più connettersi. Può chiederlo di nuovo.",
+    "revokeConfirm": "Revoca indirizzo",
+    "revoked": "{host} revocato"
+  }
+}

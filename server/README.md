@@ -44,7 +44,11 @@ Every request without a valid session cookie is treated as signed in as the daem
 (one shared session, created at start). No password is needed, so you can test RPC and streams
 with curl or `devclient`. It refuses to start without `--dev` and only binds loopback addresses.
 POSTs still need `X-Requested-With: ervisio`. Admin calls still need a real unlock (sudo
-password), so they answer `needs_admin`.
+password), so they answer `needs_admin`, except the daemon's own admin-level methods (`notify.*`,
+`jobs.*`, see `docs/api/jobs.md`), which a `--dev-insecure-noauth` session may call: a dev daemon is not root
+and has no admin bridge to unlock. Plugin jobs and notification channels are kept in
+`$TMPDIR/ervisio-dev-state-<uid>` unless you pass `--dev-state-dir DIR`. Steps that need
+administrator rights fail in dev: they run only when the daemon is root.
 
 ```sh
 curl -s -X POST -H 'X-Requested-With: ervisio' -H 'Content-Type: application/json' \

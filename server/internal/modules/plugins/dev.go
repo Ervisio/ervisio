@@ -10,8 +10,16 @@ import (
 	"github.com/ervisio/ervisio/server/internal/brand"
 )
 
+// DevFile, when set (dev only, --dev-state-dir), is where plugins.loadDev keeps
+// its list instead of ~/.config/ervisio/plugins-dev.json, so tests and agents
+// never touch the user's own file.
+var DevFile string
+
 // devFile holds the plugin folders the user loaded with plugins.loadDev.
 func devFile() string {
+	if DevFile != "" {
+		return DevFile
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""

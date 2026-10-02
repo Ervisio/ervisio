@@ -49,6 +49,9 @@ func authorize(c *rpc.Call, id string) (*Found, caller, error) {
 	if trust(pol, f) == trustBlocked {
 		return nil, caller{}, rpc.Errorf(rpc.Forbidden, "%s is not signed and this server only runs signed plugins.", m.Name)
 	}
+	if msg := m.CoreProblem(); msg != "" {
+		return nil, caller{}, rpc.Errorf(rpc.Forbidden, "%s", msg)
+	}
 	who := currentCaller(c.Admin)
 	if !who.canSee(m) {
 		return nil, caller{}, rpc.Errorf(rpc.Forbidden, "%s is not available to your account.", m.Name)
@@ -82,6 +85,17 @@ func access(_ context.Context, c *rpc.Call) (any, error) {
 	for _, h := range f.M.Capabilities.Network {
 		if NetworkHostRe.MatchString(h) {
 			net = append(net, h)
+		}
+	}
+	// Hosts an administrator approved for this plugin (userhosts.go); an
+	// http approval is written with its scheme, the rest are https.
+	if f.M.Capabilities.UserHosts {
+		for _, a := range approvedFor(f.M.ID) {
+			if a.Scheme == "http" {
+				net = append(net, "http://"+a.Host)
+			} else {
+				net = append(net, a.Host)
+			}
 		}
 	}
 	return AccessInfo{ID: f.M.ID, Network: net}, nil

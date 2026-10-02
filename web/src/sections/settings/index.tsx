@@ -7,9 +7,16 @@ import { useTheme } from '../../theme';
 import { BrandLockup, Button, Icon, Input, Segmented, Select, Switch, toast, type HueId, type IconName } from '../../ui';
 import { RefreshSelect } from '../../lib/RefreshSelect';
 import { REFRESH_KEY } from '../../lib/refresh';
+import { ActivityLog } from './ActivityLog';
 import { ColourBlock, ThemeGrid } from './Appearance';
+import { ChannelsBlock } from './Channels';
+import { EnvironmentsBlock } from './Environments';
 import { HostsBlock, type HostEntry } from './Hosts';
+import { NetworkHostsBlock } from './NetworkHosts';
+import { PairingBlock } from './Pairing';
+import type { EnvList } from './envs';
 import { NameList } from './NameList';
+import { PluginJobsBlock } from './PluginJobs';
 import { usePrefSave, useServerConfig } from './save';
 import { UpdatesBlock } from './Updates';
 import { updateStatus } from './updates';
@@ -46,6 +53,7 @@ const toGoDur = (v: string) => v;
 
 export default function SettingsPage() {
   const t = useT('settings');
+  const te = useT('envs');
   const { session, host, isUnlocked } = useSession();
   const { prefs } = usePrefs();
   const th = useTheme();
@@ -53,6 +61,8 @@ export default function SettingsPage() {
   const save = usePrefSave();
   const loc = useLocation();
   const isAdmin = !!session && (session.isAdmin || session.canSudo || !!session.isRoot);
+  // What the daemon shows in the activity log: everyone's entries to root and to an unlocked administrator.
+  const canSeeAll = !!session && (!!session.isRoot || isUnlocked);
   const server = useServerConfig(isAdmin);
   // A packaged install (.deb, .rpm, AUR) is updated by its package manager: no automatic install here.
   const [managedBy, setManagedBy] = useState('');
@@ -65,6 +75,9 @@ export default function SettingsPage() {
     };
   }, [isAdmin]);
   const [q, setQ] = useState('');
+  // Environments: the list loads itself; the pairings come with it. Bumping the revision reloads.
+  const [envData, setEnvData] = useState<EnvList | null>(null);
+  const [envRev, setEnvRev] = useState(0);
   const [active, setActive] = useState('appearance');
   const [recentOn, setRecentOn] = useState(recentUsersEnabled);
   const setRecent = (on: boolean) => {
@@ -163,6 +176,27 @@ export default function SettingsPage() {
         { id: 'recentusers', title: t('browser.recent.title'), desc: t('browser.recent.desc'), words: 'sign-in login accounts names privacy shared', control: <Switch aria-label={t('browser.recent.title')} checked={recentOn} onChange={setRecent} /> },
       ],
     },
+    {
+      id: 'activity', part: 'you', icon: 'clock', hue: 'log', title: t('groups.activity'),
+      rows: [
+        {
+          id: 'activitylog', title: t('activity.title'), desc: t('activity.desc'), words: 'audit history who did what log export csv json plugins sign-in cronologia attivita',
+          block: <ActivityLog canSeeAll={canSeeAll} canUnlock={!!session?.canSudo} />,
+        },
+        ...(isAdmin
+          ? [
+              {
+                id: 'auditon', title: t('activity.on.title'), desc: t('activity.on.desc'), cfgKey: 'audit.enabled = ' + String(server.get('audit.enabled', true)),
+                control: <Switch aria-label={t('activity.on.title')} disabled={srvDisabled} checked={server.get('audit.enabled', true)} onChange={(v) => void sv('audit.enabled', v, t('activity.on.title'))} />,
+              },
+              {
+                id: 'auditkeep', title: t('activity.keep.title'), desc: t('activity.keep.desc'), cfgKey: `audit.retention_days = ${server.get('audit.retention_days', 90)}`, words: 'retention days delete old',
+                control: <Select compact aria-label={t('activity.keep.title')} disabled={srvDisabled} value={String(server.get('audit.retention_days', 90))} options={withCurrent(['30', '90', '180', '365', '0'].map((n) => ({ value: n, label: n === '0' ? t('activity.keep.forever') : t('activity.keep.days', { count: Number(n) }) })), String(server.get('audit.retention_days', 90)))} onChange={(v) => void sv('audit.retention_days', Number(v), t('activity.keep.title'))} />,
+              },
+            ]
+          : []),
+      ],
+    },
   ];
 
   const serverTop = (
@@ -191,6 +225,7 @@ export default function SettingsPage() {
           { id: 'showip', title: t('signin.showIp'), desc: t('signin.showIpDesc'), cfgKey: 'login.show_ip = ' + String(server.get('login.show_ip', true)), control: <Switch aria-label={t('signin.showIp')} disabled={srvDisabled} checked={server.get('login.show_ip', true)} onChange={(v) => void sv('login.show_ip', v, t('signin.showIp'))} /> },
           { id: 'timeout', title: t('signin.timeout'), cfgKey: `session.timeout = "${server.get('session.timeout', '12h')}"`, control: <Select compact aria-label={t('signin.timeout')} disabled={srvDisabled} value={normDur(server.get('session.timeout', '12h'))} options={withCurrent(durOptions, server.get('session.timeout', '12h'))} onChange={(v) => void sv('session.timeout', toGoDur(v), t('signin.timeout'))} /> },
           { id: 'unlock', title: t('signin.unlock'), desc: t('signin.unlockDesc'), cfgKey: `session.admin_unlock = "${server.get('session.admin_unlock', '5m')}"`, control: <Select compact aria-label={t('signin.unlock')} disabled={srvDisabled} value={server.get('session.admin_unlock', '5m')} options={withCurrent(unlockOptions, server.get('session.admin_unlock', '5m'))} onChange={(v) => void sv('session.admin_unlock', v, t('signin.unlock'))} /> },
+          { id: 'activitylink', title: t('signin.activity'), desc: t('signin.activityDesc'), words: 'audit history who did what', control: <Button icon="clock" onClick={() => go('activity')}>{t('signin.activityOpen')}</Button> },
           { id: 'failures', title: t('signin.failures'), desc: t('signin.failuresDesc'), cfgKey: `login.max_failures = ${server.get('login.max_failures', 5)}`, control: <Select compact aria-label={t('signin.failures')} disabled={srvDisabled} value={String(server.get('login.max_failures', 5))} options={withCurrent(['3', '5', '10', '20'].map((n) => ({ value: n, label: t('signin.attempts', { count: Number(n) }) })), String(server.get('login.max_failures', 5)))} onChange={(v) => void sv('login.max_failures', Number(v), t('signin.failures'))} /> },
         ],
       },
@@ -213,7 +248,27 @@ export default function SettingsPage() {
         rows: [
           { id: 'unsigned', title: t('plugpol.unsigned'), desc: t('plugpol.unsignedDesc', { name: Name }), cfgKey: 'plugins.allow_unsigned = ' + String(server.get('plugins.allow_unsigned', false)), control: <Switch aria-label={t('plugpol.unsigned')} disabled={srvDisabled} checked={server.get('plugins.allow_unsigned', false)} onChange={(v) => void sv('plugins.allow_unsigned', v, t('plugpol.unsigned'))} /> },
           { id: 'dev', title: t('plugpol.dev'), desc: t('plugpol.devDesc'), cfgKey: 'plugins.dev = ' + String(server.get('plugins.dev', false)), control: <Switch aria-label={t('plugpol.dev')} disabled={srvDisabled} checked={server.get('plugins.dev', false)} onChange={(v) => void sv('plugins.dev', v, t('plugpol.dev'))} /> },
+          { id: 'netHosts', title: te('hosts.title'), desc: te('hosts.desc'), words: 'network hosts approved registry allow rete host approvati', block: <NetworkHostsBlock disabled={srvDisabled} /> },
           { id: 'catalog', title: t('plugpol.catalog'), desc: t('plugpol.catalogDesc'), cfgKey: `plugins.catalog_url = "${server.get('plugins.catalog_url', '')}"`, control: <CommitInput disabled={srvDisabled} allowEmpty value={server.get('plugins.catalog_url', '')} label={t('plugpol.catalog')} onCommit={(v) => void sv('plugins.catalog_url', v, t('plugpol.catalog'))} /> },
+        ],
+      },
+      {
+        id: 'channels', part: 'server', icon: 'bell', hue: 'log', title: t('groups.channels'), admin: true,
+        rows: [
+          { id: 'channellist', title: t('channels.title'), words: 'notifications alerts email smtp telegram webhook ntfy gotify slack discord notifiche avvisi', block: <ChannelsBlock /> },
+        ],
+      },
+      {
+        id: 'pluginjobs', part: 'server', icon: 'clock', hue: 'plg', title: t('groups.pluginjobs'), admin: true,
+        rows: [
+          { id: 'joblist', title: t('jobs.title'), words: 'background schedule cron webhook automation plugins jobs attività pianificate', block: <PluginJobsBlock /> },
+        ],
+      },
+      {
+        id: 'envs', part: 'server', icon: 'link', hue: 'term', title: te('group'), admin: true,
+        rows: [
+          { id: 'envlist', title: te('list.title'), desc: te('list.desc'), words: 'environments docker remote host tcp tls ssh portainer agent ervisio endpoint ambienti', block: <EnvironmentsBlock key={envRev} disabled={srvDisabled} onData={setEnvData} /> },
+          { id: 'envpair', title: te('pair.title'), desc: te('pair.desc'), words: 'pairing pair token another server abbina server', block: <PairingBlock pairings={envData?.pairings ?? []} disabled={srvDisabled} onChange={() => setEnvRev((n) => n + 1)} /> },
         ],
       },
       {

@@ -13,11 +13,16 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/ervisio/ervisio/server/internal/account"
+	"github.com/ervisio/ervisio/server/internal/audit"
+	"github.com/ervisio/ervisio/server/internal/brand"
 	"github.com/ervisio/ervisio/server/internal/config"
+	"github.com/ervisio/ervisio/server/internal/jobs"
+	"github.com/ervisio/ervisio/server/internal/notify"
 	"github.com/ervisio/ervisio/server/internal/sshauth"
 )
 
@@ -43,6 +48,9 @@ type Options struct {
 	// DevPluginsDir (dev only) is the repository's ./plugins folder, passed
 	// to the bridges so they list its plugins.
 	DevPluginsDir string
+	// DevPluginsFile (dev only, with --dev-state-dir) keeps the list of
+	// plugins.loadDev folders, instead of ~/.config/ervisio/plugins-dev.json.
+	DevPluginsFile string
 	// SessionHelper is the daemon's own binary, started as
 	// `--pam-session-helper` to open a PAM session around each user bridge
 	// (not used in --dev). "" = no PAM session.
@@ -50,8 +58,25 @@ type Options struct {
 	// DevAuthorizedKeys (dev only) replaces the authorized_keys files for
 	// SSH-key sign-in, so the flow can be tried without touching ~/.ssh.
 	DevAuthorizedKeys string
-	Logger            *log.Logger
+	// StateDir keeps the daemon's state: the activity log (StateDir/audit)
+	// and the plugin job instances (StateDir/jobs). "" = /var/lib/ervisio;
+	// --dev-state-dir in dev.
+	StateDir string
+	// NotifyFile is the notification channels file, which holds secrets
+	// (0600). "" = notify.json next to the configuration file.
+	NotifyFile string
+	// EnvsDir and TunnelDir override where environments are stored
+	// (default /var/lib/ervisio/envs) and where their per-user tunnel sockets
+	// live (default /run/ervisio/tunnels).
+	EnvsDir, TunnelDir string
+	Logger             *log.Logger
 }
+
+// configAudit gives the activity log the live configuration.
+type configAudit struct{ h *configHolder }
+
+func (c configAudit) AuditEnabled() bool      { return c.h.get().Audit.Enabled }
+func (c configAudit) AuditRetentionDays() int { return c.h.get().Audit.RetentionDays }
 
 // Server is the daemon.
 type Server struct {
@@ -60,6 +85,9 @@ type Server struct {
 	cfg      *configHolder
 	sessions *store
 	limiter  *limiter
+	// audit is the activity log; transfers the one-time plugin transfers.
+	audit     *audit.Log
+	transfers *transferStore
 	// challenges holds outstanding SSH-key sign-in nonces.
 	challenges *sshauth.Store
 	pamSem     chan struct{}
@@ -77,6 +105,14 @@ type Server struct {
 	baseCtx context.Context
 	cancel  context.CancelFunc
 	vite    http.Handler
+
+	// jobs runs plugin job instances; notifier sends notifications
+	// (jobsglue.go). jobs is nil when its state file cannot be read.
+	jobs     *jobs.Manager
+	notifier *notify.Service
+	jobPool  *bridgePool
+	// env is the environments feature (envs.go).
+	env *envState
 }
 
 // New validates options and loads the configuration.
@@ -117,6 +153,16 @@ func New(opts Options) (*Server, error) {
 		cancel:     cancel,
 	}
 	s.checker.keyAuth = s.keyAuthorized
+	stateDir := opts.StateDir
+	if stateDir == "" {
+		stateDir = brand.StateDir
+	}
+	s.audit = audit.New(filepath.Join(stateDir, "audit"), configAudit{holder})
+	s.transfers = newTransferStore()
+	if err := s.initJobs(); err != nil {
+		opts.Logger.Printf("background jobs are off: %v", err)
+	}
+	s.env = s.newEnvState()
 	if opts.Dev {
 		if s.devUser, err = account.Current(); err != nil {
 			cancel()
@@ -164,8 +210,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/auth/lock", s.authed(s.csrfS(s.handleLock)))
 	mux.HandleFunc("POST /api/rpc", s.authed(s.csrfS(s.handleRPC)))
 	mux.HandleFunc("GET /api/ws", s.authed(s.handleWS))
+	mux.HandleFunc("POST /api/plugins/transfer", s.authed(s.csrfS(s.handleTransferStart)))
+	mux.HandleFunc("GET /api/plugins/transfer/{token}", s.authed(s.handleTransfer))
+	mux.HandleFunc("GET /api/plugins/transfer/{token}/status", s.authed(s.handleTransferStatus))
+	mux.HandleFunc("POST /api/plugins/transfer/{token}", s.authed(s.csrfS(s.handleTransfer)))
+	mux.HandleFunc("GET /api/audit/export", s.authed(s.handleAuditExport))
 	mux.HandleFunc("GET /api/files/download", s.authed(s.handleDownload))
 	mux.HandleFunc("POST /api/files/upload", s.authed(s.csrfS(s.handleUpload)))
+	s.registerPair(mux)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errNotFound)
 	})
@@ -174,6 +226,9 @@ func (s *Server) Handler() http.Handler {
 	}
 	mux.HandleFunc("GET /plugins/{id}/{file...}", s.authed(s.handlePlugin))
 	mux.HandleFunc("GET /plugin-frame/{id}", s.authed(s.handlePluginFrame))
+	// Webhooks of plugin jobs: no session and no CSRF header by design,
+	// the random token in the path is the credential (docs/api/jobs.md).
+	mux.HandleFunc("POST /hooks/{plugin}/{token}", s.handleHook)
 	mux.Handle("/", s.webHandler())
 	var h http.Handler = mux
 	if s.opts.Dev {
@@ -240,6 +295,16 @@ func (s *Server) Run(ctx context.Context) error {
 	var redirect *http.Server
 
 	go s.janitor(ctx)
+	go s.audit.Prune()
+	// Background work (jobs, webhooks) records to the same log through audit.Record.
+	s.audit.Errorf = s.log.Printf
+	audit.SetDefault(s.audit)
+	defer audit.ClearDefault(s.audit)
+	if s.jobs != nil {
+		go s.jobs.Run(ctx)
+	}
+	go s.runAlertWatch(ctx)
+	go s.envLoop(ctx)
 
 	errCh := make(chan error, 2)
 	if s.opts.Dev {
@@ -279,6 +344,13 @@ func (s *Server) shutdown(srv, redirect *http.Server) {
 	sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	s.cancel() // ends websocket handlers and in-flight calls
+	if s.jobs != nil {
+		s.jobs.CancelAll()
+		s.jobs.Wait()
+	}
+	if s.jobPool != nil {
+		s.jobPool.closeAll()
+	}
 	_ = srv.Shutdown(sctx)
 	if redirect != nil {
 		_ = redirect.Shutdown(sctx)
@@ -312,6 +384,7 @@ func (s *Server) janitor(ctx context.Context) {
 			s.sessions.expire(time.Now(), cfg.Session.Timeout.Duration, cfg.Session.AdminUnlock.Duration)
 			s.limiter.gc()
 			s.challenges.Prune()
+			s.transfers.gc()
 			go s.revalidateAll(time.Now(), revalidateEvery)
 		}
 	}

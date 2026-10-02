@@ -12,9 +12,10 @@ import { createRoot } from 'react-dom/client';
 import tokensCss from '../../styles/tokens.css?inline';
 import uiCss from '../../ui/ui.css?inline';
 import frameCss from './frame.css?inline';
-import type { FrameHttpRequest, FrameHttpResult, FrameTheme, FrameView, HostToFrame } from '../protocol';
-import { handleReply, openHttpStream, openPty, openStream, PluginError, request, send, type HttpStreamCallbacks, type PtyCallbacks } from './channel';
+import type { FrameHttpRequest, FrameHttpResult, FrameTheme, FrameUploadResult, FrameView, HostToFrame } from '../protocol';
+import { handleReply, openHttpStream, unwatchDownload, watchDownload, type DownloadDone, openPty, openStream, openUpload, PluginError, request, send, type HttpStreamCallbacks, type PtyCallbacks, type UploadCallbacks } from './channel';
 import { getLang, setLang, subscribeLang } from './i18n-shim';
+import { jobsApi, notifyApi } from './jobs';
 import * as kit from './kit';
 
 type ViewDef<S> = ComponentType<{ sdk: S }> | { render(container: HTMLElement, sdk: S): void | (() => void) };
@@ -37,6 +38,11 @@ function applyTheme(t: FrameTheme) {
 
 /* ---------- helpers ---------- */
 const b64ToBytes = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+/** The env option of a files call. */
+function envArg(o?: { env?: string }): { env?: string } {
+  return o && o.env ? { env: o.env } : {};
+}
+
 function bytesToB64(u: Uint8Array): string {
   let s = '';
   for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000));
@@ -50,6 +56,8 @@ interface HttpOptions {
   query?: Record<string, string | string[]> | string;
   headers?: Record<string, string>;
   body?: string | Uint8Array | object;
+  /** Id of an environment (sdk.envs.list()). */
+  env?: string;
 }
 
 function httpRequest(name: string, o: HttpOptions): FrameHttpRequest {
@@ -64,6 +72,7 @@ function httpRequest(name: string, o: HttpOptions): FrameHttpRequest {
   const req: FrameHttpRequest = { name, method: String(o.method ?? 'GET').toUpperCase(), path: String(o.path ?? '') };
   if (query) req.query = query;
   if (o.headers) req.headers = { ...o.headers };
+  if (o.env) req.env = String(o.env);
   const b = o.body;
   if (typeof b === 'string' || b instanceof Uint8Array) req.body = b;
   else if (b !== undefined && b !== null) {
@@ -73,9 +82,26 @@ function httpRequest(name: string, o: HttpOptions): FrameHttpRequest {
   return req;
 }
 
+/** Options of sdk.api.upload. With onResponseData or onResponseStart the response is streamed and the result's body is empty. */
+interface UploadOptions {
+  onProgress?(p: { loaded: number; total: number }): void;
+  onResponseStart?(status: number, headers: Record<string, string>): void;
+  onResponseData?(chunk: Uint8Array): void;
+}
+
+const saveFile = (filename: string, data: string | Uint8Array | Blob, mime?: string) =>
+  request<{ filename: string; size: number }>('saveFile', { filename, data, ...(mime ? { mime } : {}) });
+
+/** The file name of a download: a string, or taken from the path when the plugin gives none. */
+const downloadName = (name: unknown, req: { path?: string }): string => {
+  if (typeof name === 'string' && name) return name;
+  const last = String(req.path ?? '').split('/').filter(Boolean).pop();
+  return last || 'download';
+};
+
 const textDecoder = new TextDecoder();
 const textEncoder = new TextEncoder();
-function httpResponse(r: FrameHttpResult) {
+function httpResponse(r: FrameHttpResult & { truncated?: boolean }) {
   const body = r.text ?? textDecoder.decode(r.bytes ?? new Uint8Array());
   return {
     status: r.status,
@@ -86,54 +112,126 @@ function httpResponse(r: FrameHttpResult) {
   };
 }
 
+/** One line of the activity log. */
+interface AuditEntry {
+  time: string;
+  user: string;
+  ip?: string;
+  source: 'plugin' | 'core';
+  plugin?: string;
+  action: string;
+  via?: string;
+  target?: string;
+  result: 'ok' | 'failed' | 'denied' | 'error';
+  code?: number;
+  bytes?: number;
+  admin?: boolean;
+  detail?: string;
+}
+
+/** A download request; with onDone the host also reports how the browser's fetch ended (`did` names it). */
+async function startDownload(args: Record<string, unknown>, onDone?: (r: DownloadDone) => void) {
+  const did = typeof onDone === 'function' ? watchDownload(onDone) : 0;
+  try {
+    return await request<{ filename: string; size?: number; status?: number }>('download', did ? { ...args, did } : args);
+  } catch (e) {
+    if (did) unwatchDownload(did);
+    throw e;
+  }
+}
+
 /* ---------- SDK ---------- */
-function makeSdk(plugin: { id: string; name: string; version: string }, view: FrameView) {
+function makeSdk(plugin: { id: string; name: string; version: string }, view: FrameView, appOrigin: string) {
   const pages = new Map<string, ViewDef<unknown>>();
   const widgets = new Map<string, ViewDef<unknown>>();
   const strings: Record<string, Record<string, string>> = {};
   const assets = new Map<string, Promise<string>>();
   const sdk = {
     version: 3 as const,
+    /** The console's origin as the user reaches it, for building URLs such as webhooks (location.origin is opaque in a frame). */
+    appOrigin,
     plugin,
     view,
     react: React,
     ui: kit,
     api: {
-      exec: (command: string, args: string[] = []) => request<{ stdout: string; stderr: string; exitCode: number; truncated?: boolean }>('exec', { command, args }),
-      execStream: (command: string, args: string[], h: Parameters<typeof openStream>[2]) => openStream(command, args ?? [], h ?? {}),
+      exec: (command: string, args: string[] = [], o?: { env?: string }) =>
+        request<{ stdout: string; stderr: string; exitCode: number; truncated?: boolean }>('exec', { command, args, ...(o?.env ? { env: o.env } : {}) }),
+      execStream: (command: string, args: string[], h: Parameters<typeof openStream>[2], o?: { env?: string }) => openStream(command, args ?? [], h ?? {}, o?.env),
       async http(name: string, o: HttpOptions) {
         return httpResponse(await request<FrameHttpResult>('http', httpRequest(name, o) as unknown as Record<string, unknown>));
       },
       httpStream: (name: string, o: HttpOptions, h: HttpStreamCallbacks) => openHttpStream(httpRequest(name, o), h ?? {}),
-      pty: (command: string, args: string[], o: { cols?: number; rows?: number } & PtyCallbacks) =>
-        openPty(command, args ?? [], Math.floor(o?.cols ?? 80), Math.floor(o?.rows ?? 24), o ?? {}),
+      /** SDK 0.2: the browser saves the response of a GET as a file; it streams, there is no size limit. Resolves when the download starts. */
+      async download(name: string, o: HttpOptions, filename?: string, d?: { onDone?: (r: DownloadDone) => void }) {
+        const req = httpRequest(name, { ...o, method: o?.method ?? 'GET' });
+        return startDownload({ req, filename: downloadName(filename, req) }, d?.onDone);
+      },
+      /** SDK 0.2: same for the standard output of a declared command. */
+      async downloadCommand(command: string, args: string[], filename?: string, o?: { env?: string; onDone?: (r: DownloadDone) => void }) {
+        return startDownload({ command, args: args ?? [], filename: downloadName(filename, { path: command }), ...(o?.env ? { env: o.env } : {}) }, o?.onDone);
+      },
+      /** SDK 0.2: sends a File or Blob as the body of a POST or PUT, streamed with progress; cancel() stops it. */
+      upload(name: string, o: HttpOptions, file: Blob, opts?: UploadOptions | ((p: { loaded: number; total: number }) => void)) {
+        if (!(file instanceof Blob)) throw new PluginError({ code: 'invalid', message: 'Give a File or Blob.' });
+        const req = httpRequest(name, { ...o, method: o?.method ?? 'POST', body: undefined });
+        const u: UploadOptions = typeof opts === 'function' ? { onProgress: opts } : opts ?? {};
+        const cb: UploadCallbacks = {
+          onProgress: u.onProgress ? (loaded, total) => u.onProgress!({ loaded, total }) : undefined,
+          onResponseStart: u.onResponseStart,
+          onResponseData: u.onResponseData,
+        };
+        const h = openUpload(req, file, cb);
+        const done = h.result.then((r: FrameUploadResult) => ({ ...httpResponse(r), truncated: !!r.truncated }));
+        return Object.assign(done, { cancel: h.cancel });
+      },
+      /** SDK 0.2: saves data the plugin holds in memory (a string, bytes or a Blob, at most 64 MiB) as a browser download. */
+      saveFile: (filename: string, data: string | Uint8Array | Blob, mime?: string) => saveFile(filename, data, mime),
+      pty: (command: string, args: string[], o: { cols?: number; rows?: number; env?: string } & PtyCallbacks) =>
+        openPty(command, args ?? [], Math.floor(o?.cols ?? 80), Math.floor(o?.rows ?? 24), o ?? {}, o?.env),
+      /** Background jobs and notifications (SDK 0.2; needs capabilities.jobs / capabilities.notify). */
+      jobs: jobsApi,
+      notify: notifyApi,
       call: () => Promise.reject(new PluginError({ code: 'forbidden', message: 'sdk.api.call is not available to plugins (SDK v2+): use sdk.api.exec with a declared command.' })),
       stream: () => {
         throw new PluginError({ code: 'forbidden', message: 'sdk.api.stream is not available to plugins (SDK v2+): use sdk.api.execStream.' });
       },
     },
+    saveFile,
+    /** SDK 0.2: this plugin's entries of the activity log, newest first. Everyone sees their own; administrators see all users. */
+    audit: {
+      list: (q: { user?: string; action?: string; text?: string; since?: number | string; until?: number | string; limit?: number; cursor?: string } = {}) =>
+        request<{ entries: AuditEntry[]; next: string; enabled: boolean }>('auditList', { ...q }),
+    },
     files: {
-      async read(path: string): Promise<string> {
-        const r = await request<{ data: string; b64?: boolean }>('readFile', { path });
+      async read(path: string, o?: { env?: string }): Promise<string> {
+        const r = await request<{ data: string; b64?: boolean }>('readFile', { path, ...envArg(o) });
         return r.b64 ? new TextDecoder().decode(b64ToBytes(r.data)) : r.data;
       },
-      async readBytes(path: string): Promise<Uint8Array> {
-        const r = await request<{ data: string; b64?: boolean }>('readFile', { path, b64: true });
+      async readBytes(path: string, o?: { env?: string }): Promise<Uint8Array> {
+        const r = await request<{ data: string; b64?: boolean }>('readFile', { path, b64: true, ...envArg(o) });
         return r.b64 ? b64ToBytes(r.data) : new TextEncoder().encode(r.data);
       },
-      async write(path: string, data: string | Uint8Array): Promise<void> {
-        await request('writeFile', typeof data === 'string' ? { path, data } : { path, data: bytesToB64(data), b64: true });
+      async write(path: string, data: string | Uint8Array, o?: { env?: string }): Promise<void> {
+        await request('writeFile', { ...(typeof data === 'string' ? { path, data } : { path, data: bytesToB64(data), b64: true }), ...envArg(o) });
       },
-      async list(path: string) {
-        const r = await request<{ entries: { name: string; type: string; size: number; mtime: number }[] }>('listDir', { path });
+      async list(path: string, o?: { env?: string }) {
+        const r = await request<{ entries: { name: string; type: string; size: number; mtime: number }[] }>('listDir', { path, ...envArg(o) });
         return r.entries ?? [];
       },
-      async mkdir(path: string): Promise<void> {
-        await request('mkdir', { path });
+      async mkdir(path: string, o?: { env?: string }): Promise<void> {
+        await request('mkdir', { path, ...envArg(o) });
       },
-      async remove(path: string): Promise<void> {
-        await request('remove', { path });
+      async remove(path: string, o?: { env?: string }): Promise<void> {
+        await request('remove', { path, ...envArg(o) });
       },
+    },
+    envs: {
+      list: () => request<unknown[]>('envs'),
+    },
+    network: {
+      request: (host: string, o?: { scheme?: 'https' | 'http' }) =>
+        request<{ host: string; approved: true; reloading: boolean }>('network', { host, ...(o?.scheme ? { scheme: o.scheme } : {}) }),
     },
     asset(path: string): Promise<string> {
       let p = assets.get(path);
@@ -219,7 +317,7 @@ async function start(m: Extract<HostToFrame, { t: 'init' }>) {
   applyTheme(m.theme);
   document.documentElement.dataset.view = m.view.kind;
   document.documentElement.lang = getLang();
-  const { sdk, pages, widgets } = makeSdk(m.plugin, m.view);
+  const { sdk, pages, widgets } = makeSdk(m.plugin, m.view, m.appOrigin);
   const url = URL.createObjectURL(new Blob([m.code], { type: 'text/javascript' }));
   const mod = (await import(/* @vite-ignore */ url)) as { default?: unknown; activate?: unknown };
   URL.revokeObjectURL(url);

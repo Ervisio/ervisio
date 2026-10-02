@@ -285,7 +285,7 @@ give root), 409 `conflict` (an unlock is already running), 429 (rate limited), 5
 
 ## `POST /api/rpc`
 
-Request `{"method":"services.list","params":{…},"admin":false}` (body ≤ 1 MiB) →
+Request `{"method":"services.list","params":{…},"admin":false}` (body ≤ 12 MiB, so a `plugins.http` request body of 8 MiB fits as base64; larger bodies are 400 `invalid` and use `plugins.upload`; a session runs at most 2 calls with a body over 1 MiB, or of unknown length, at once: more wait up to 30 s, then 503 `unavailable`) →
 200 `{"result":…}` or an error as above. Routing: root bridge when `admin:true` or the method is
 admin-level; if not unlocked → 403 `needs_admin` with `data.method`. Unknown method → 404
 `not_found`. Calling a stream method here → 400 `invalid`.
@@ -293,7 +293,11 @@ admin-level; if not unlocked → 403 `needs_admin` with `data.method`. Unknown m
 ## `GET /api/ws`
 
 WebSocket, frames as in ARCHITECTURE.md. Notes:
-- Limits: frames ≤ 512 KiB (a bigger frame closes the socket with 1009); up to 64 open channels
+- Limits: frames ≤ 512 KiB, except the `open` frame of a stream, which carries the params and may be up to 12 MiB
+  (a `plugins.httpStream` request body of up to 8 MiB as base64); a bigger frame closes the socket with 1009. The daemon
+  reads only the first 512 KiB of a frame before it knows: `"op":"open"` must come before `params` (the web client
+  writes `ch` and `op` first). A frame over 512 KiB takes one of the session's 2 large-body slots (shared with
+  `/api/rpc`) while it is opened; up to 64 open channels
   per connection and 128 per session; up to 8 WebSockets per session (more → 503 before the
   upgrade); `ch` must be a positive integer.
 - Errors not tied to a channel (bad JSON) are sent with `"ch":0`.

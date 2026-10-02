@@ -287,3 +287,42 @@ Scope: commits 546a7dd, 80e4579 and dfc3e80. That covers SSH-key sign-in (`serve
   address, or host networking with `tls.mode = "http"`. The Caddy upstream uses
   `tls_insecure_skip_verify`, which is acceptable on a local bridge but should be documented as
   such.
+
+## Core 0.5 review (2026-10-02)
+
+Scope: the 0.5 work on `integrate/0.5` (transfers, activity log, jobs, webhooks, notifications, environments,
+pairing, approved hosts). Fixed on `fix/0.5-security`; each fix has a regression test that fails without it.
+
+| # | Sev | Weakness | Fix and test |
+|---|---|---|---|
+| H1 | High | `envs/tunnel.go`: root chmod/chown'ed the tunnel socket by path inside the user's own 0700 folder; a symlink swapped in gave the user any file. | Folders are root's (0711); the socket is bound in a root-only staging folder, given its mode and owner (`Lchown`) there, renamed into place and checked with `Lstat`; an old user-owned folder is replaced. `TestTunnelFolderIsTheDaemonsAndReplacesAnOldOne`. |
+| H2 | High | A root job was approved by any `wheel`/`sudo`/`admin` member through `plugins.jobs.create` with `confirmAdmin`, which a plugin frame could pass; the daemon then ran it as root without sudo. | Plugin-scoped methods never approve (`confirmAdmin` ignored, dropped by the broker); the instance waits for approval. `jobs.approve` (admin level, root or unlocked session) approves it, from Settings › Plugin jobs with a confirmation dialog. `TestRootJobNeedsAnUnlockedApproval`, `TestAdminInstanceNeedsApprovalByAnAdministrator`. |
+| M1 | Medium | Webhook params replaced the approved params of a root job. | The approval signature covers the param values; a webhook call that sets any param of an admin instance is refused (400). `TestWebhookCannotOverrideApprovedParams`, `TestApprovalCoversParamValues`. |
+| M2 | Medium | One notification budget per plugin, shared by all users and job steps; anyone could spoof a plugin's messages. | Budget per plugin and sender (`user:<name>`, `job:<instance>`); the source names the user or the job and owner. `TestPluginRateLimitIsPerSender`. |
+| M3 | Medium | 12 MiB bodies without a per-session bound; every WebSocket frame could be 12 MiB. | 2 concurrent bodies over 1 MiB per session (`/api/rpc` and stream opens); frames are read past 512 KiB only when `op` is `open`. `TestLargeBodySlotsPerSession`, `TestWSLargeInputFrameIsNotBuffered`, `TestOpensStream`. |
+| L1 | Low | Audit redaction missed `--flag=KEY=VALUE`, `-p x`, URL passwords with `/`, `Bearer x`. | Redacted. `TestCommandTargetHidesMoreSecrets`. |
+| L2 | Low | CSV formula injection in some columns; raw user names and plugin ids from requests in the logs. | `csvSafe` on every text column; request names logged only when name-like; no invalid user name in the key sign-in log. `TestCSVRecordQuotesEveryTextColumn`, `TestAuditKeepsOnlyNameLikeValues`, `TestKeyLoginDoesNotLogAnInvalidName`. |
+| L3 | Low | `envSocket`/`env`/`via` stripped by exact key while JSON matches any case. | Dropped under case folding; a browser call's origin is always empty. `TestEnvKeysAreStrippedInAnyCase`, `TestBrowserCannotForgeAuditOrigin`. |
+| L4 | Low | A stored channel secret followed an edited server/URL. | Kept only for the same destination; webhook errors show scheme and host only. `TestStoredSecretsDoNotFollowANewServer` and siblings, `TestRedactHidesAReencodedWebhookURL`. |
+| L5 | Low | Second manifest lookup in a run could be nil (panic in a goroutine). | The run uses what it checked; a panic fails the run. `TestManifestGoneDuringRunDoesNotPanic`, `TestPanicInARunFailsTheRun`. |
+| L6 | Low | A session's transfers outlived it. | They end with the session. `TestTransfersEndWithTheSession`. |
+| — | Low | Job bridges started under the pool's global lock; an http host approval satisfied https and added `ws://`; claimed pairing names logged as facts. | Started outside the lock; scheme-exact approvals, `http://` only; logs say "calls itself" with the pairing id or pinned certificate. `TestBridgePoolStartsOutsideItsLock`, `TestHTTPApprovalDoesNotAllowWS`. `plugins-hosts.json` stays 0644: every user's bridge reads it and it holds nothing secret. |
+| — | Bug | An abandoned upload left the bridge's request to the service waiting for the rest of the body (Docker kept the container locked). | The daemon closes the stream when the browser goes away; the bridge gives up after 2 minutes without data. `TestAbandonedUploadClosesTheServiceConnection`, `TestUploadStalledClosesTheRequest`. |
+
+## 0.5 follow-ups: security notes (`feat/0.5-followups`)
+
+* **Files over a pairing** (`plugins.readFile/writeFile/listDir/mkdir/remove` with `env`). Added to `pairAllowed` and to
+  `envMethods`, so every existing property holds for them: `env`, `envSocket` and `via` are stripped from a browser's params
+  in any case (`TestFilesMethodsTakeEnvLikeTheOthers`), the access list and `plugins.envCheck` run on this server first, and the
+  paired server's own user bridge executes the call under its own manifest (never the root bridge: an `admin` folder needs
+  the mapped user to be root or in `adminUnlessGroup`, else `needs_admin`; checked live, nothing escalates). `envCheck`
+  refuses the tunnel kinds for files (`TestEnvCheckFiles`). Writes, folders and removals are audited on both servers (the
+  paired side with `origin` = `via <server> by <user>`); reads are not audited anywhere, as before.
+* **`plugins.envs.list` address**: `host:port`, `user@host:port` (ssh) or the URL host of an Ervisio server, never a path,
+  credential or secret (`TestDisplayAddressIsNonSecret`). Shown only to users who may use the environment (the access list
+  already filters the list).
+* **Download status** is bound to the session that started the transfer (another session, an unknown token and an upload all
+  answer `not_found`), holds only `ok`, byte count and a fixed message, and is forgotten after five minutes.
+* **Job step `timeoutSec`**: honoured by the bridge only for a command that a step of the manifest declares with at least that
+  value, so a caller of `plugins.exec` cannot lengthen a command beyond what the manifest says.
+* **`minCore`** is checked on install, enable, every authorized call and job resolution, not only in the UI.

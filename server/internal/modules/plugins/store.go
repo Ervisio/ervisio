@@ -295,6 +295,8 @@ type Info struct {
 	// DevUnsigned: a dev-folder plugin without a valid signature that runs
 	// only because developer mode is on (shown with an "Unsigned, dev" badge).
 	DevUnsigned bool `json:"devUnsigned,omitempty"`
+	// Incompatible: the plugin needs a newer Ervisio than this one (the message says which).
+	Incompatible string `json:"incompatible,omitempty"`
 	// Error: the folder holds a plugin that could not be loaded.
 	Error string `json:"error,omitempty"`
 }
@@ -350,6 +352,10 @@ func list(adminBridge bool) []Info {
 			in.Enabled = false
 		case trustDevUnsigned:
 			in.DevUnsigned = true
+		}
+		if msg := m.CoreProblem(); msg != "" {
+			in.Incompatible = msg
+			in.Enabled = false
 		}
 		if e := cat.find(m.ID); e != nil && compareSemver(e.Version, m.Version) > 0 && f.Location != LocDev {
 			in.UpdateAvailable = &UpdateInfo{Version: e.Version, Notes: e.Notes, NewPermissions: !sameJSON(e.Capabilities, m.Capabilities), Source: e.Source, SHA256: e.SHA256}

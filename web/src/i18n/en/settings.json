@@ -24,7 +24,10 @@
     "plugpol": "Plugins",
     "hosts": "Hosts",
     "about": "About",
-    "browser": "This browser"
+    "browser": "This browser",
+    "activity": "Activity log",
+    "channels": "Notification channels",
+    "pluginjobs": "Plugin jobs"
   },
   "note": {
     "default": "Default",
@@ -192,7 +195,10 @@
     "allowGroupsDesc": "Everyone in one of these groups, including their primary group.",
     "allowGroupsHint": "Add a group name and press Enter",
     "badName": "{name} is not a valid name (letters, digits, _ . @ -)",
-    "removeName": "Remove {name}"
+    "removeName": "Remove {name}",
+    "activity": "Activity log",
+    "activityDesc": "Who signed in, unlocked administrator rights, installed plugins or changed settings, and what plugins did.",
+    "activityOpen": "Open the activity log"
   },
   "plugpol": {
     "unsigned": "Allow community plugins",
@@ -311,5 +317,278 @@
       "at": "Time",
       "managed": "Not available: {manager} installs the updates of {name}."
     }
+  },
+  "activity": {
+    "title": "Activity log",
+    "desc": "What happened through the console and its plugins: sign-ins, administrator unlocks, plugin installs, settings, and every change a plugin made. Secrets are never recorded.",
+    "ownOnly": "You see your own activity. Administrators see everyone's.",
+    "ownOnlyUnlock": "You see your own activity. Unlock administrator rights to see everyone's.",
+    "off": "The activity log is off, so new actions are not recorded. Turn it on below.",
+    "loading": "Loading…",
+    "count": "{count} entries",
+    "empty": "Nothing recorded yet",
+    "emptyText": "Sign-ins, settings changes and plugin actions appear here.",
+    "noMatch": "No entry matches these filters",
+    "more": "Show older entries",
+    "failed": "Couldn't load the activity log: {error}",
+    "exportCsv": "Export CSV",
+    "exportJson": "Export JSON",
+    "core": "Console",
+    "admin": "as administrator",
+    "col": {
+      "time": "Time",
+      "who": "Who",
+      "what": "What",
+      "target": "Target",
+      "result": "Result"
+    },
+    "result": {
+      "ok": "Done",
+      "failed": "Failed",
+      "denied": "Refused",
+      "error": "Error"
+    },
+    "f": {
+      "text": "Search target or message",
+      "plugin": "Plugin id",
+      "user": "User",
+      "source": "Source",
+      "anySource": "Console and plugins",
+      "plugins": "Plugins only",
+      "console": "Console only",
+      "result": "Result",
+      "anyResult": "Any result",
+      "since": "From",
+      "until": "To",
+      "clear": "Clear filters"
+    },
+    "actions": {
+      "command": "Ran a command",
+      "pty": "Opened a terminal",
+      "http": "Changed a service",
+      "upload": "Uploaded a file",
+      "download": "Downloaded a file",
+      "file_write": "Wrote a file",
+      "file_mkdir": "Created a folder",
+      "file_remove": "Removed a file or folder",
+      "login": "Signed in",
+      "login_failed": "Sign-in failed",
+      "logout": "Signed out",
+      "unlock": "Unlocked administrator rights",
+      "lock": "Locked administrator rights",
+      "plugin_install": "Installed a plugin",
+      "plugin_uninstall": "Removed a plugin",
+      "plugin_enable": "Turned a plugin on",
+      "plugin_disable": "Turned a plugin off",
+      "job_run": "Ran a background job",
+      "job_webhook": "Ran a job from a webhook call",
+      "job_approve": "Approved a job to run as administrator",
+      "notify_channel_add": "Added a notification channel",
+      "notify_channel_change": "Changed a notification channel",
+      "notify_channel_delete": "Deleted a notification channel",
+      "settings": "Changed a setting"
+    },
+    "on": {
+      "title": "Record activity",
+      "desc": "Keep the activity log. When off, nothing new is written; what is already there stays until it expires."
+    },
+    "keep": {
+      "title": "Keep the log for",
+      "desc": "Older daily files are deleted automatically.",
+      "days": "{count} days",
+      "forever": "Keep forever"
+    }
+  },
+  "channels": {
+    "intro": "Send alerts to email, Telegram, ntfy, Gotify or any service that takes a webhook. {name}, plugins and plugin jobs use these channels.",
+    "empty": "No channels yet.",
+    "add": "Add channel",
+    "addTitle": "Add a channel",
+    "editTitle": "Edit {name}",
+    "dialogText": "Passwords and tokens are stored on the server, readable by root only, and never shown again.",
+    "type": "Type",
+    "types": {
+      "email": "Email (SMTP)",
+      "telegram": "Telegram",
+      "webhook": "Webhook",
+      "ntfy": "ntfy",
+      "gotify": "Gotify"
+    },
+    "name": "Name",
+    "minLevel": "Send",
+    "levels": {
+      "info": "Everything",
+      "warn": "Warnings and errors",
+      "error": "Errors only"
+    },
+    "events": "What to send",
+    "ev": {
+      "alerts": "Server alerts (failed services, updates, disk, SSH)",
+      "updates": "New {name} versions",
+      "plugins": "Messages from plugins",
+      "jobs": "Plugin jobs that fail or recover"
+    },
+    "noEvents": "Sends nothing",
+    "enabled": "Send through {name}",
+    "enabledShort": "Send notifications through this channel",
+    "test": "Send test",
+    "testOk": "Test message sent through {name}.",
+    "testFail": "{name} did not accept the test message",
+    "save": "Save channel",
+    "saved": "Saved {name}.",
+    "edit": "Edit",
+    "delete": "Delete {name}",
+    "deleteTitle": "Delete this channel?",
+    "deleteText": "{name} stops receiving notifications and its saved password or token is removed.",
+    "deleteAction": "Delete channel",
+    "secretKept": "Saved. Leave empty to keep it.",
+    "lastOk": "Last message sent {when}.",
+    "lastFail": "Last attempt failed {when}: {error}",
+    "file": "Channels are stored in {path}.",
+    "lockedTitle": "Administrator rights needed",
+    "lockedText": "Channels hold passwords and tokens. Unlock administrator rights to see and change them.",
+    "unlock": "Unlock",
+    "detail": {
+      "email": "{host}:{port}, to {to}",
+      "telegram": "chat {chat}"
+    },
+    "email": {
+      "host": "Mail server",
+      "port": "Port",
+      "security": "Security",
+      "sec": {
+        "starttls": "STARTTLS",
+        "tls": "TLS",
+        "none": "None"
+      },
+      "user": "User name",
+      "password": "Password",
+      "from": "From address",
+      "to": "Send to",
+      "toHint": "Separate several addresses with commas."
+    },
+    "telegram": {
+      "token": "Bot token",
+      "tokenHint": "Create a bot with @BotFather and paste its token.",
+      "chat": "Chat id",
+      "chatHint": "A number (negative for groups) or @channelname. Write to the bot first."
+    },
+    "webhook": {
+      "url": "URL",
+      "urlHint": "The address that receives each notification.",
+      "urlSet": "Saved: {url}/... Leave empty to keep it.",
+      "method": "Method",
+      "template": "Body (JSON)",
+      "templateHint": "Use {title}, {body}, {level}, {link}, {source} and {time}. The values are escaped for you.",
+      "headerName": "Secret header (optional)",
+      "headerValue": "Header value"
+    },
+    "ntfy": {
+      "server": "Server",
+      "topic": "Topic",
+      "token": "Access token (optional)"
+    },
+    "gotify": {
+      "server": "Server",
+      "token": "Application token"
+    },
+    "title": "Where alerts go"
+  },
+  "jobs": {
+    "intro": "Jobs that plugins run in the background, on a schedule or when a webhook is called. Each job runs as the user who created it.",
+    "empty": "No plugin has created a job yet.",
+    "lockedTitle": "Administrator rights needed",
+    "lockedText": "Unlock administrator rights to see the jobs of all users.",
+    "owner": "Runs as {user}",
+    "onDemand": "On demand or by webhook",
+    "everySeconds": "Every {n} s",
+    "everyMinutes": "Every {n} min",
+    "everyHours": "Every {n} h",
+    "everyDays": "Every {n} d",
+    "daily": "Every day at {times}",
+    "weekly": "{days} at {times}",
+    "status": {
+      "running": "Running",
+      "queued": "Waiting",
+      "ok": "Succeeded",
+      "failed": "Failed",
+      "timeout": "Timed out",
+      "cancelled": "Cancelled",
+      "never": "Never run",
+      "disabled": "Off",
+      "awaiting": "Waiting for approval"
+    },
+    "enable": "Run {name} automatically",
+    "admin": "Runs steps with administrator rights. Approved by {by}, {when}.",
+    "adminStale": "This job changed: the plugin was updated or its values were changed. It does not run until an administrator approves it again.",
+    "adminMissing": "This job runs steps with administrator rights. It does not run until an administrator approves it.",
+    "approve": {
+      "action": "Review and approve",
+      "title": "Approve {name}?",
+      "text": "{plugin} will run the steps below as root, for {user}, without asking for a password: on its schedule, when someone runs it, or when its webhook is called.",
+      "steps": "Runs as root",
+      "step": "Step {id}",
+      "values": "With these values",
+      "noValues": "This job has no values to set.",
+      "note": "The approval covers these exact steps and values. If the plugin changes them, or the values change, the job stops until an administrator approves it again. Webhook calls cannot change the values.",
+      "confirm": "Approve",
+      "done": "Approved {name}."
+    },
+    "lastRun": "Last run {when}",
+    "nextRun": "next run {when}",
+    "runNow": "Run now",
+    "started": "Started {name}.",
+    "logs": "Logs",
+    "logsTitle": "{name}: runs",
+    "noRuns": "No runs yet.",
+    "noSteps": "No step ran.",
+    "close": "Close",
+    "trigger": {
+      "schedule": "Schedule",
+      "manual": "Started by {by}",
+      "webhook": "Webhook"
+    },
+    "step": {
+      "ok": "Done",
+      "failed": "Failed",
+      "skipped": "Skipped",
+      "handled": "Failed, went on",
+      "exit": "exit code {code}",
+      "http": "HTTP {status}",
+      "admin": "as administrator",
+      "stdout": "Output",
+      "stderr": "Errors",
+      "truncated": "The log was cut to its last part."
+    },
+    "delete": "Delete {name}",
+    "deleteTitle": "Delete this job?",
+    "deleteText": "{name} stops running. Its schedule, webhook URLs and logs are removed.",
+    "deleteAction": "Delete job",
+    "webhooks": {
+      "title": "Webhook URLs",
+      "none": "No webhook URL.",
+      "unnamed": "Webhook URL",
+      "add": "Add webhook URL",
+      "addTitle": "Add a webhook URL",
+      "addText": "A program calls the URL with POST to run this job now.",
+      "label": "Label",
+      "create": "Create URL",
+      "created": "created {when}",
+      "used": "last called {when}",
+      "unused": "never called",
+      "regenerate": "New URL",
+      "revoke": "Revoke URL",
+      "revokeLabel": "Revoke {name}",
+      "revokeTitle": "Revoke this URL?",
+      "revokeText": "Anything that calls it stops working.",
+      "urlTitle": "Webhook URL",
+      "urlText": "Copy it now. It is shown only once. If you lose it, make a new one.",
+      "url": "URL",
+      "copy": "Copy",
+      "copied": "Copied.",
+      "done": "Done",
+      "curl": "Try it from a terminal:"
+    },
+    "title": "Jobs created by plugins"
   }
 }

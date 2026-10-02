@@ -30,6 +30,9 @@ func Register(r *rpc.Registry) {
 		if f == nil {
 			return nil, rpc.Errorf(rpc.NotFound, "There is no plugin %q.", p.ID)
 		}
+		if msg := f.M.CoreProblem(); msg != "" && p.Enabled {
+			return nil, rpc.Errorf(rpc.Conflict, "%s", msg)
+		}
 		st := readState()
 		st.Enabled[p.ID] = p.Enabled
 		if err := writeState(st); err != nil {
@@ -103,6 +106,30 @@ func Register(r *rpc.Registry) {
 		return runHTTPStream(ctx, c, s, p)
 	})
 
+	// Large transfers: streamed GET downloads (HTTP API or command output)
+	// and uploads as a request body (see transfer.go).
+	r.Stream("plugins.httpDownload", rpc.User, func(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
+		var p HTTPParams
+		if err := c.Bind(&p); err != nil {
+			return err
+		}
+		return runHTTPDownload(ctx, c, s, p)
+	})
+	r.Stream("plugins.execDownload", rpc.User, func(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
+		var p ExecParams
+		if err := c.Bind(&p); err != nil {
+			return err
+		}
+		return runExecDownload(ctx, c, s, p)
+	})
+	r.Stream("plugins.httpUpload", rpc.User, func(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
+		var p UploadParams
+		if err := c.Bind(&p); err != nil {
+			return err
+		}
+		return runHTTPUpload(ctx, c, s, p)
+	})
+
 	// Plugin-scoped file access: only inside capabilities.files, with the
 	// user's own rights, or on the root bridge for folders declared admin
 	// (see files.go).
@@ -114,6 +141,9 @@ func Register(r *rpc.Registry) {
 
 	// Used by the daemon before serving plugin assets or the plugin frame.
 	r.Handle("plugins.access", rpc.User, access)
+
+	// Environments (envbridge.go) and user-approved network hosts (userhosts.go).
+	registerEnvs(r)
 
 	r.Handle("plugins.loadDev", rpc.User, func(ctx context.Context, c *rpc.Call) (any, error) {
 		var p struct {
