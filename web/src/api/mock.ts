@@ -73,6 +73,9 @@ export async function mockAuth(path: string, body: any): Promise<any> {
 
 const cfg: Record<string, unknown> = rd('config', {
   allow_root: false,
+  'auth.allow_users': [] as string[],
+  'auth.allow_groups': [] as string[],
+  'auth.admins_only': false,
   'login.show_ip': true,
   'login.max_failures': 5,
   'session.timeout': '12h',
@@ -91,9 +94,9 @@ const cfg: Record<string, unknown> = rd('config', {
 });
 
 const MOCK_KEYS = [
-  { key: 'listen', type: 'string', restart: true }, { key: 'allow_root', type: 'bool' }, { key: 'login.show_ip', type: 'bool' },
+  { key: 'listen', type: 'string', restart: true }, { key: 'allow_root', type: 'bool' }, { key: 'auth.allow_users', type: 'list' }, { key: 'auth.allow_groups', type: 'list' }, { key: 'auth.admins_only', type: 'bool' }, { key: 'login.show_ip', type: 'bool' },
   { key: 'login.max_failures', type: 'int' }, { key: 'session.timeout', type: 'duration' }, { key: 'session.admin_unlock', type: 'duration' },
-  { key: 'tls.mode', type: 'enum', values: ['self-signed', 'letsencrypt', 'custom'], restart: true }, { key: 'tls.redirect', type: 'bool', restart: true },
+  { key: 'tls.mode', type: 'enum', values: ['self-signed', 'letsencrypt', 'custom', 'http'], restart: true }, { key: 'tls.redirect', type: 'bool', restart: true },
   { key: 'tls.cert', type: 'path', restart: true }, { key: 'tls.key', type: 'path', restart: true },
   { key: 'plugins.allow_unsigned', type: 'bool' }, { key: 'plugins.dev', type: 'bool' },
   { key: 'updates.channel', type: 'enum', values: ['stable', 'prerelease'] }, { key: 'updates.auto_check', type: 'bool' },

@@ -58,6 +58,8 @@ func unknownUser(err error) bool {
 // "" when it may, or the reason to end the session:
 //   - the account was removed or its uid changed;
 //   - its login shell is no longer allowed (set to nologin…);
+//   - the sign-in allowlist (auth.allow_*, auth.admins_only) no longer
+//     admits it;
 //   - it lost a group it had at sign-in;
 //   - (shadow readable, i.e. the daemon runs as root) the password was
 //     locked or changed, or the account expired;
@@ -91,6 +93,9 @@ func (s *Server) revalidate(sess *Session, full bool) string {
 	}
 	if !account.ShellAllowed(a.Shell) {
 		return fmt.Sprintf("the account's login shell %q is no longer allowed", a.Shell)
+	}
+	if !s.opts.NoAuth && !signInAllowed(s.Config(), a) {
+		return "the account is no longer allowed to sign in (auth.allow_users, auth.allow_groups, auth.admins_only)"
 	}
 	for _, g := range sess.Account.Groups {
 		if !slices.Contains(a.Groups, g) {

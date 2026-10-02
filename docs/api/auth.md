@@ -46,6 +46,9 @@ Failures:
 | 401 | `{"error":{"code":"unauthenticated","message":"wrong user name or password"}}` — also when the password is right but the account may not sign in: PAM account check refused (locked, expired, password change required), login shell `nologin`/`false`/restricted or not in `/etc/shells`, or a uid-0 alias with `allow_root = false`. The precise reason is only in the server log, so the answer is no password oracle. |
 | 403 | `code:"forbidden"`, `data.reason:"root_disabled"` — the user name is `root` and `allow_root=false` (checked before any password check) |
 | 403 | `code:"forbidden"`, `data.reason:"dev_mode_user"` — `--dev` only allows the daemon's user |
+
+Sign-in allowlist (`auth.allow_users`, `auth.allow_groups`, `auth.admins_only`, `docs/api/config.md`): a password
+sign-in refused by it gets the same generic 401 as above (after PAM accepted the password; reason in the log only).
 | 429 | `code:"forbidden"`, `data:{"reason":"rate_limited","retryAfter":<seconds>}` + `Retry-After` header |
 | 429 | `code:"forbidden"`, `data:{"reason":"busy","retryAfter":1}` — two attempts from this client are already being checked |
 | 503 | `code:"unavailable"`, `data.reason:"busy"` — every PAM slot (8) stayed busy for 5 s |
@@ -154,6 +157,7 @@ Failures:
 | 401 | `unauthenticated`, `data.reason:"challenge_invalid"` |
 | 400 | `invalid`, `data.reason:"unsupported_key"` |
 | 403 | `forbidden`, `data.reason:"ssh_keys_disabled"` / `"root_disabled"` / `"dev_mode_user"` |
+| 403 | `forbidden`, `data.reason:"not_allowed"`: "This account may not sign in to LinuxAdmin": the key signature verified and the key is listed, but the sign-in allowlist refuses the account. Only someone holding a key of the account sees it. |
 | 429 / 503 | as for `/api/auth/login` (rate limit shared with password attempts, PAM slots) |
 
 Every refused key sign-in counts as a failed attempt in the same per-client limiter as passwords

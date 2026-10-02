@@ -22,8 +22,8 @@
 #
 # writes the PAM service for this distribution and the systemd unit, makes
 # sure sudo is installed, and starts linuxadmin.service. On a first install it
-# asks a few questions (port, who can reach it, root sign-in, admin unlock time,
-# TLS, Caddy) and writes /etc/linuxadmin/linuxadmin.conf; answers come from the
+# asks a few questions (port, who can reach it, root sign-in, who may sign in,
+# admin unlock time, TLS, Caddy) and writes /etc/linuxadmin/linuxadmin.conf; answers come from the
 # terminal even when the script is piped, and --yes or no terminal means the
 # defaults. Running it again upgrades or repairs the installation and keeps the
 # configuration. LinuxAdmin installed this way
@@ -48,10 +48,14 @@
 #   --port N                   port to listen on (default 9090; asked when it is in use)
 #   --listen all|local|IP      listen on all interfaces (default), on 127.0.0.1 only, or on one address
 #   --allow-root               allow signing in as root (default: no); --no-allow-root
+#   --allow-users a,b          only these users may sign in (auth.allow_users)
+#   --allow-groups g1,g2       members of these groups may sign in (auth.allow_groups)
+#   --admins-only              only administrators (sudo, wheel, admin) may sign in (auth.admins_only);
+#                              the three options add up; none of them = every local account
 #   --admin-unlock D           how long administrator rights stay unlocked: 5m (default), 15m, 1h,
 #                              any 30s-24h, or signout (until sign-out)
 #   --tls-cert F --tls-key F   use your own certificate instead of the self-signed one
-#   --behind-proxy             a reverse proxy on this machine fronts LinuxAdmin (listens on 127.0.0.1)
+#   --behind-proxy             a reverse proxy on this machine fronts LinuxAdmin (plain HTTP on 127.0.0.1)
 #   --origin URL               browser origin to accept (web.allowed_origins), e.g. https://admin.example.org
 #   --trusted-proxy ADDR       address or CIDR of a reverse proxy to trust (web.trusted_proxies)
 #   --caddy | --no-caddy       set up (or never touch) a Caddy found on this machine or in Docker
@@ -230,6 +234,16 @@ opt_set() {
 			;;
 		esac
 		;;
+	--allow-users)
+		parse_names "$2" || die "--allow-users: '$PN_BAD' is not a valid user name."
+		# shellcheck disable=SC2086
+		F_AUSERS="$(list_add_all "$F_AUSERS" $PN_OUT)"
+		;;
+	--allow-groups)
+		parse_names "$2" || die "--allow-groups: '$PN_BAD' is not a valid group name."
+		# shellcheck disable=SC2086
+		F_AGROUPS="$(list_add_all "$F_AGROUPS" $PN_OUT)"
+		;;
 	--tls-cert) F_CERT=$2 ;;
 	--tls-key) F_KEY=$2 ;;
 	--origin)
@@ -271,9 +285,13 @@ Configuration (first install; asked unless given here, --yes takes the defaults)
   --port N                   port to listen on (default 9090; asked again when it is in use)
   --listen all|local|IP      all interfaces (default), 127.0.0.1 only, or one address
   --allow-root               allow signing in as root (default: no); --no-allow-root
+  --allow-users a,b          only these users may sign in
+  --allow-groups g1,g2       members of these groups may sign in
+  --admins-only              only administrators (sudo, wheel, admin) may sign in
+                             (these three add up; none of them = every local account)
   --admin-unlock D           5m (default), 15m, 1h, any 30s-24h, or signout (until sign-out)
   --tls-cert F --tls-key F   use your own certificate instead of the self-signed one
-  --behind-proxy             a reverse proxy on this machine fronts LinuxAdmin (listens on 127.0.0.1)
+  --behind-proxy             a reverse proxy on this machine fronts LinuxAdmin (plain HTTP on 127.0.0.1)
   --origin URL               browser origin to accept (web.allowed_origins)
   --trusted-proxy ADDR       address or CIDR of a reverse proxy to trust (web.trusted_proxies)
   --caddy | --no-caddy       set up (or never touch) a Caddy found on this machine or in Docker
@@ -968,7 +986,7 @@ toml_list() {
 
 # Defaults for the questions: the built-in ones, or what the existing file says.
 load_current() {
-	D_PORT=9090 D_HOST=0.0.0.0 D_ROOT=false D_UNLOCK=5m D_TLS=self-signed D_CERT='' D_KEY='' D_ORIGINS='' D_PROXIES=''
+	D_PORT=9090 D_HOST=0.0.0.0 D_ROOT=false D_UNLOCK=5m D_TLS=self-signed D_CERT='' D_KEY='' D_ORIGINS='' D_PROXIES='' D_AUSERS='' D_AGROUPS='' D_ADMINS=false
 	CFG_EXISTS=0
 	[ -f "$CONF_FILE" ] || return 0
 	CFG_EXISTS=1
@@ -988,6 +1006,9 @@ load_current() {
 	D_KEY="$(conf_get tls key | tr -d "\"'")"
 	D_ORIGINS="$(conf_get web allowed_origins | tr -d '[]"' | tr ',' ' ' | tr -s ' ' | sed 's/^ //;s/ $//')"
 	D_PROXIES="$(conf_get web trusted_proxies | tr -d '[]"' | tr ',' ' ' | tr -s ' ' | sed 's/^ //;s/ $//')"
+	D_AUSERS="$(conf_get auth allow_users | tr -d '[]"' | tr ',' ' ' | tr -s ' ' | sed 's/^ //;s/ $//')"
+	D_AGROUPS="$(conf_get auth allow_groups | tr -d '[]"' | tr ',' ' ' | tr -s ' ' | sed 's/^ //;s/ $//')"
+	[ "$(conf_get auth admins_only)" = true ] && D_ADMINS=true
 	return 0
 }
 
@@ -1026,6 +1047,107 @@ valid_domain() {
 	printf '%s\n' "$1" | grep -Eq '^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$'
 }
 
+# list_add_all "a b" c d: the list with each further name appended once.
+list_add_all() {
+	laa_l=$1
+	shift
+	for laa_n in "$@"; do laa_l="$(list_add "$laa_l" "$laa_n")"; done
+	printf '%s\n' "$laa_l"
+}
+
+# valid_name NAME: a user or group name as the daemon accepts it (auth.allow_users).
+valid_name() {
+	printf '%s\n' "$1" | grep -Eq '^[A-Za-z0-9_][A-Za-z0-9_.@-]{0,63}\$?$'
+}
+
+# parse_names "a, b c": sets PN_OUT to the names separated by spaces, without
+# duplicates. Returns 1 and sets PN_BAD when one is not a valid name.
+parse_names() {
+	PN_BAD=
+	PN_OUT=
+	for pn_n in $(printf '%s\n' "$1" | tr ',' ' '); do
+		if ! valid_name "$pn_n"; then
+			PN_BAD=$pn_n
+			return 1
+		fi
+		PN_OUT="$(list_add "$PN_OUT" "$pn_n")"
+	done
+	return 0
+}
+
+# auth_text: the sign-in policy in words.
+auth_text() {
+	at_out=
+	[ -n "$C_AUSERS" ] && at_out="users $C_AUSERS"
+	[ -n "$C_AGROUPS" ] && at_out="${at_out:+$at_out; }groups $C_AGROUPS"
+	[ "$C_ADMINS" = true ] && at_out="${at_out:+$at_out; }administrators (sudo, wheel, admin)"
+	[ -n "$at_out" ] || at_out="every local account"
+	printf '%s\n' "$at_out"
+}
+
+# auth_covers USER: success when the sign-in policy lets USER in.
+auth_covers() {
+	case " $C_AUSERS " in *" $1 "*) return 0 ;; esac
+	ac_groups=" $(id -nG "$1" 2>/dev/null | tr '\n' ' ')"
+	for ac_g in $C_AGROUPS; do
+		case $ac_groups in *" $ac_g "*) return 0 ;; esac
+	done
+	if [ "$C_ADMINS" = true ]; then
+		case $ac_groups in *" sudo "* | *" wheel "* | *" admin "*) return 0 ;; esac
+	fi
+	return 1
+}
+
+# auth_warnings: points out policies that would lock people out.
+auth_warnings() {
+	[ -n "$C_AUSERS$C_AGROUPS" ] || [ "$C_ADMINS" = true ] || return 0
+	if have getent; then
+		for aw_u in $C_AUSERS; do
+			getent passwd "$aw_u" >/dev/null 2>&1 || say "  Note: there is no user '$aw_u' on this machine (yet)."
+		done
+		for aw_g in $C_AGROUPS; do
+			getent group "$aw_g" >/dev/null 2>&1 || say "  Note: there is no group '$aw_g' on this machine (yet)."
+		done
+		if [ "$C_ADMINS" = true ] && [ "$C_ROOT" != true ] && ! getent group sudo wheel admin 2>/dev/null | awk -F: '$4 != "" { f = 1 } END { exit !f }'; then
+			say "  Note: no account is in the sudo, wheel or admin group, so nobody could sign in with 'only administrators'."
+		fi
+	fi
+	aw_me="${SUDO_USER:-}"
+	if [ -n "$aw_me" ] && [ "$aw_me" != root ] && ! auth_covers "$aw_me"; then
+		say "  Note: your own account '$aw_me' is not covered, so you could not sign in to LinuxAdmin yourself."
+	fi
+	return 0
+}
+
+# render_auth: the [auth] keys of a first-install configuration file.
+render_auth() {
+	cat <<'CONF'
+# Sign in with an SSH key listed in the user's ~/.ssh/authorized_keys.
+# ssh_keys = true
+# Who may sign in. With none of the three below set, every local account may.
+# Otherwise an account must be listed in allow_users, be in one of the
+# allow_groups (primary or supplementary group), or, with admins_only, be an
+# administrator (member of sudo, wheel or admin; root when allow_root is on).
+CONF
+	if [ -n "$C_AUSERS" ]; then
+		# shellcheck disable=SC2086
+		printf 'allow_users = %s\n' "$(toml_list $C_AUSERS)"
+	else
+		printf '# allow_users = ["alice", "bob"]\n'
+	fi
+	if [ -n "$C_AGROUPS" ]; then
+		# shellcheck disable=SC2086
+		printf 'allow_groups = %s\n' "$(toml_list $C_AGROUPS)"
+	else
+		printf '# allow_groups = ["wheel", "operators"]\n'
+	fi
+	if [ "$C_ADMINS" = true ]; then
+		printf 'admins_only = true\n'
+	else
+		printf '# admins_only = false\n'
+	fi
+}
+
 # Writes the commented configuration file (stdout) for a first install.
 render_config() {
 	cat <<CONF
@@ -1048,6 +1170,9 @@ allow_root = $C_ROOT
 # Failed sign-ins per client address in 15 minutes before it is blocked.
 # max_failures = 5
 
+[auth]
+$(render_auth)
+
 [session]
 # Idle time before a session ends.
 # timeout = "12h"
@@ -1057,8 +1182,10 @@ admin_unlock = "$C_UNLOCK"
 
 [tls]
 # "self-signed": a certificate is created on first start (/etc/linuxadmin/tls).
-# "custom": use cert and key below. LinuxAdmin always speaks HTTPS, also
-# behind a reverse proxy. Restart.
+# "custom": use cert and key below.
+# "http": plain HTTP, only allowed while listen is 127.0.0.1 or [::1], for a
+# reverse proxy on this machine that provides HTTPS (and sends
+# X-Forwarded-Proto, so the session cookie stays Secure). Restart.
 mode = "$C_TLS"
 # Plain HTTP on the same port is redirected to HTTPS.
 # redirect = true
@@ -1122,11 +1249,13 @@ write_config() {
 		say "  [dry-run] listen = \"$C_HOST:$C_PORT\", allow_root = $C_ROOT, session.admin_unlock = \"$C_UNLOCK\", tls.mode = \"$C_TLS\""
 		[ -n "$C_ORIGINS" ] && say "  [dry-run] web.allowed_origins = $C_ORIGINS"
 		[ -n "$C_PROXIES" ] && say "  [dry-run] web.trusted_proxies = $C_PROXIES"
+		say "  [dry-run] who may sign in: $(auth_text)"
 		return 0
 	fi
 	wc_bak="$CONF_FILE.linuxadmin-backup-$(date +%Y%m%d-%H%M%S)"
 	cp -p "$CONF_FILE" "$wc_bak"
 	say "Backup: $wc_bak"
+	WC_BAK=$wc_bak
 	conf_set '' listen "\"$C_HOST:$C_PORT\""
 	conf_set '' allow_root "$C_ROOT"
 	conf_set session admin_unlock "\"$C_UNLOCK\""
@@ -1135,6 +1264,13 @@ write_config() {
 		conf_set tls cert "\"$C_CERT\""
 		conf_set tls key "\"$C_KEY\""
 	fi
+	if [ -n "$C_AUSERS$C_AGROUPS" ] || [ "$C_ADMINS" = true ] || [ -n "$(conf_get auth allow_users)$(conf_get auth allow_groups)$(conf_get auth admins_only)" ]; then
+		# shellcheck disable=SC2086
+		conf_set auth allow_users "$(toml_list $C_AUSERS)"
+		# shellcheck disable=SC2086
+		conf_set auth allow_groups "$(toml_list $C_AGROUPS)"
+		conf_set auth admins_only "$C_ADMINS"
+	fi
 	# shellcheck disable=SC2086
 	[ -n "$C_ORIGINS" ] && conf_set web allowed_origins "$(toml_list $C_ORIGINS)"
 	# shellcheck disable=SC2086
@@ -1142,12 +1278,47 @@ write_config() {
 	return 0
 }
 
+# check_config: runs `linuxadmind --check-config` on the file before the
+# service is (re)started. When the file the installer just wrote is not valid
+# the previous one is put back (a first install removes it).
+check_config() {
+	[ "$DRY" = 1 ] && return 0
+	[ -f "$CONF_FILE" ] || return 0
+	if ! "$BIN_LINK" --help 2>&1 | grep -q -- '-check-config'; then
+		say "This version cannot check the configuration beforehand (no --check-config); continuing."
+		return 0
+	fi
+	step "Checking $CONF_FILE"
+	if "$BIN_LINK" --check-config "$CONF_FILE" >"$TMPD/check.out" 2>&1; then
+		say "$(head -n 1 "$TMPD/check.out")"
+		return 0
+	fi
+	sed 's/^/  | /' "$TMPD/check.out" >&2
+	case $CFG_MODE in
+	change)
+		if [ -n "$WC_BAK" ] && cp -p "$WC_BAK" "$CONF_FILE"; then
+			die "The changed configuration is not valid (see above). Your previous configuration is back in place; the service was not restarted."
+		fi
+		die "The changed configuration is not valid (see above) and the backup $WC_BAK could not be restored. Fix $CONF_FILE, then: systemctl restart linuxadmin"
+		;;
+	new)
+		rm -f "$CONF_FILE"
+		die "The configuration the installer wrote is not valid (see above) and was removed; the service was not started. Run the installer again with other options."
+		;;
+	*) die "$CONF_FILE is not valid (see above). Fix it, then: systemctl restart linuxadmin (the service was not restarted)." ;;
+	esac
+}
+
 # ---------------------------------------------------------------- Caddy
 #
-# LinuxAdmin only serves HTTPS (self-signed by default); there is no plain
-# HTTP mode. Behind Caddy the proxy therefore connects with HTTPS and does not
-# check the certificate (tls_insecure_skip_verify): the hop is on this machine
-# (or on the Docker bridge), and the browser sees Caddy's own certificate.
+# Without a proxy LinuxAdmin serves HTTPS (self-signed by default). Behind a
+# proxy on this machine it serves plain HTTP on 127.0.0.1 (tls.mode = "http"):
+# the hop never leaves the machine, and the proxy provides the certificate the
+# browser sees. A Caddy in a Docker container cannot reach the host's
+# 127.0.0.1, so LinuxAdmin then listens on the Docker bridge or on all
+# interfaces and keeps HTTPS: Caddy connects with TLS and does not check the
+# certificate (tls_insecure_skip_verify). A container with host networking
+# counts as this machine.
 
 dk() { DOCKER_HOST='' DOCKER_CONTEXT='' docker -H unix:///var/run/docker.sock "$@"; }
 
@@ -1315,7 +1486,11 @@ caddy_find_proxy() {
 
 # caddy_directive: the reverse_proxy directive for LinuxAdmin.
 caddy_directive() {
-	printf 'reverse_proxy https://%s:%s {\n\ttransport http {\n\t\ttls_insecure_skip_verify\n\t}\n}\n' "$UPHOST" "$C_PORT"
+	if [ "$C_TLS" = http ]; then
+		printf 'reverse_proxy %s:%s\n' "$UPHOST" "$C_PORT"
+	else
+		printf 'reverse_proxy https://%s:%s {\n\ttransport http {\n\t\ttls_insecure_skip_verify\n\t}\n}\n' "$UPHOST" "$C_PORT"
+	fi
 }
 
 # caddy_plan: decides what to do with Caddy. Sets C_HOST, C_ORIGINS,
@@ -1327,11 +1502,13 @@ caddy_plan() {
 	native)
 		UPHOST=127.0.0.1
 		C_HOST=127.0.0.1
+		C_TLS=http
 		;;
 	docker)
 		if [ "$CD_HOSTNET" = 1 ]; then
 			UPHOST=127.0.0.1
 			C_HOST=127.0.0.1
+			C_TLS=http
 		elif [ -n "$CD_GW" ]; then
 			# Inside the container 127.0.0.1 is the container itself: Caddy has to
 			# reach the host through the Docker bridge, so LinuxAdmin must listen
@@ -1563,7 +1740,7 @@ decide_config() {
 	CFG_MODE=new
 	PROXY='' CADDY_KIND='' CADDY_ACTION=none
 	C_PORT=$D_PORT C_HOST=$D_HOST C_ROOT=$D_ROOT C_UNLOCK=$D_UNLOCK C_TLS=$D_TLS C_CERT=$D_CERT C_KEY=$D_KEY
-	C_ORIGINS=$D_ORIGINS C_PROXIES=$D_PROXIES
+	C_ORIGINS=$D_ORIGINS C_PROXIES=$D_PROXIES C_AUSERS=$D_AUSERS C_AGROUPS=$D_AGROUPS C_ADMINS=$D_ADMINS
 	ENABLE=1 START=1
 	[ "$NO_ENABLE" = 1 ] && ENABLE=0
 	[ "$NO_START" = 1 ] && START=0
@@ -1613,10 +1790,11 @@ decide_config() {
 		caddy_plan
 	elif [ "$F_PROXY" = 1 ] || { [ "$TTY_OK" = 1 ] && [ -z "$F_LISTEN" ] && ask "Will LinuxAdmin sit behind another reverse proxy (nginx, Apache, Traefik...)? [y/N]" n; }; then
 		PROXY=other
-		C_TLS=self-signed
+		C_TLS=http
 		C_HOST=127.0.0.1
 		if [ "$TTY_OK" = 1 ] && ! ask "Does the proxy run on this machine? [Y/n]" y; then
 			C_HOST=0.0.0.0
+			C_TLS=self-signed
 			ask_value "Address of the proxy (for trusted_proxies, e.g. 10.0.0.5 or 10.0.0.0/24)" "10.0.0.1"
 			valid_proxy_addr "$REPLY" && C_PROXIES="$(list_add "${C_PROXIES:-127.0.0.0/8 ::1/128}" "$REPLY")"
 		fi
@@ -1671,6 +1849,17 @@ decide_config() {
 		if ! valid_path "$C_CERT" || ! valid_path "$C_KEY"; then die "--tls-cert and --tls-key need plain absolute paths."; fi
 		{ [ -r "$C_CERT" ] && [ -r "$C_KEY" ]; } || [ "$DRY" = 1 ] || die "Cannot read $C_CERT or $C_KEY."
 	fi
+	case $C_TLS in
+	http)
+		case $C_HOST in
+		127.* | '[::1]') ;;
+		*)
+			say "Plain HTTP is only possible on 127.0.0.1; with this listen address LinuxAdmin keeps HTTPS (self-signed)."
+			C_TLS=self-signed
+			;;
+		esac
+		;;
+	esac
 	C_LISTEN="$C_HOST:$C_PORT"
 
 	# Sign-in
@@ -1684,6 +1873,44 @@ decide_config() {
 	elif [ "$TTY_OK" = 1 ]; then
 		if [ "$C_ROOT" = true ]; then ar_def=y; else ar_def=n; fi
 		if ask "Allow signing in as root? [$(if [ $ar_def = y ]; then echo Y/n; else echo y/N; fi)]" "$ar_def"; then C_ROOT=true; else C_ROOT=false; fi
+	fi
+	if [ -n "$F_AUSERS$F_AGROUPS" ] || [ "$F_ADMINS" = 1 ]; then
+		# Options replace what the file says.
+		C_AUSERS=$F_AUSERS C_AGROUPS=$F_AGROUPS C_ADMINS=false
+		[ "$F_ADMINS" = 1 ] && C_ADMINS=true
+	elif [ "$TTY_OK" = 1 ]; then
+		if [ -n "$C_AUSERS$C_AGROUPS" ]; then wa_def=3; elif [ "$C_ADMINS" = true ]; then wa_def=2; else wa_def=1; fi
+		ask_choice "Who may sign in?" "$wa_def" "every local account" "only administrators (members of sudo, wheel or admin$(if [ "$C_ROOT" = true ]; then echo ', and root'; fi))" "only these users or groups, which you name next"
+		case $CHOICE in
+		1) C_AUSERS='' C_AGROUPS='' C_ADMINS=false ;;
+		2) C_AUSERS='' C_AGROUPS='' C_ADMINS=true ;;
+		3)
+			C_ADMINS=false
+			wa_u="${C_AUSERS:-${SUDO_USER:-}}"
+			[ "$wa_u" = root ] && wa_u=
+			wa_g=$C_AGROUPS
+			while :; do
+				ask_value "Users who may sign in (names separated by spaces or commas, - for none)" "${wa_u:--}"
+				wa_ru=$REPLY
+				ask_value "Groups whose members may sign in (names separated by spaces or commas, - for none)" "${wa_g:--}"
+				wa_rg=$REPLY
+				[ "$wa_ru" = - ] && wa_ru=
+				[ "$wa_rg" = - ] && wa_rg=
+				if ! parse_names "$wa_ru"; then
+					say "'$PN_BAD' is not a valid user name."
+					continue
+				fi
+				C_AUSERS=$PN_OUT
+				if ! parse_names "$wa_rg"; then
+					say "'$PN_BAD' is not a valid group name."
+					continue
+				fi
+				C_AGROUPS=$PN_OUT
+				[ -n "$C_AUSERS$C_AGROUPS" ] && break
+				say "Name at least one user or group (or go back and choose another answer with Ctrl-C)."
+			done
+			;;
+		esac
 	fi
 	if [ -n "$F_UNLOCK" ]; then
 		C_UNLOCK=$F_UNLOCK
@@ -1708,14 +1935,24 @@ decide_config() {
 	step "Summary"
 	say "  Listen:            $C_HOST:$C_PORT$(if [ "$C_HOST" = 0.0.0.0 ]; then echo ' (all interfaces)'; elif [ "$C_HOST" = 127.0.0.1 ]; then echo ' (this machine only)'; fi)"
 	say "  Sign in as root:   $(if [ "$C_ROOT" = true ]; then echo yes; else echo no; fi)"
+	say "  Who may sign in:   $(auth_text)"
+	auth_warnings
 	say "  Admin unlock:      $(if [ "$C_UNLOCK" = 0s ]; then echo 'until sign-out'; else echo "$C_UNLOCK of inactivity"; fi)"
-	say "  TLS:               $C_TLS$(if [ "$C_TLS" = custom ]; then echo " ($C_CERT)"; fi)"
+	say "  TLS:               $C_TLS$(if [ "$C_TLS" = custom ]; then echo " ($C_CERT)"; elif [ "$C_TLS" = http ]; then echo ' (plain HTTP on this machine; the proxy adds HTTPS)'; fi)"
 	if [ "$PROXY" = caddy ]; then
-		say "  Caddy:             $CADDY_ACTION $CADDY_DOMAIN -> https://$UPHOST:$C_PORT (certificate not checked: it is this machine)"
+		if [ "$C_TLS" = http ]; then
+			say "  Caddy:             $CADDY_ACTION $CADDY_DOMAIN -> http://$UPHOST:$C_PORT (plain HTTP, never leaves this machine)"
+		else
+			say "  Caddy:             $CADDY_ACTION $CADDY_DOMAIN -> https://$UPHOST:$C_PORT (certificate not checked: it is this machine)"
+		fi
 		case $CADDY_ACTION in manual) say "                     (the Caddyfile is not edited: ${CADDY_WHY:-the snippet is printed})" ;; *) say "                     ($CADDY_CF is backed up, validated, rolled back on errors, then Caddy is reloaded)" ;; esac
 		[ "$CADDY_KIND" = docker ] && [ "$C_HOST" = 0.0.0.0 ] && say "                     (Caddy is in Docker: LinuxAdmin listens on all interfaces so the container can reach it)"
 	elif [ "$PROXY" = other ]; then
-		say "  Reverse proxy:     yes; point it at https://127.0.0.1:$C_PORT and let it skip certificate checks (self-signed)"
+		if [ "$C_TLS" = http ]; then
+			say "  Reverse proxy:     yes; point it at http://127.0.0.1:$C_PORT (plain HTTP) and let it send X-Forwarded-Proto and X-Forwarded-Host"
+		else
+			say "  Reverse proxy:     yes; point it at https://$C_HOST:$C_PORT and let it skip certificate checks (self-signed)"
+		fi
 	fi
 	[ -n "$C_ORIGINS" ] && say "  Allowed origins:   $C_ORIGINS"
 	[ -n "$PROXY" ] && say "  Trusted proxies:   ${C_PROXIES:-127.0.0.0/8 ::1/128}"
@@ -1906,6 +2143,8 @@ start_service() {
 
 print_access() {
 	read_listen
+	pa_s=https
+	[ "$(tls_mode)" = http ] && pa_s=http
 	step "Open LinuxAdmin"
 	[ "$START" = 0 ] && say "(after you start the service)"
 	if [ "$CADDY_DONE" = 1 ]; then
@@ -1915,18 +2154,22 @@ print_access() {
 	case $LISTEN_HOST in
 	local) ;;
 	'' | 0.0.0.0 | '[::]' | '::')
-		say "  https://$(uname -n):$PORT"
+		say "  $pa_s://$(uname -n):$PORT"
 		if have ip; then
 			ip -o addr show scope global 2>/dev/null | awk '
 				$2 ~ /^(docker|br-|veth|virbr|cni|flannel|cali|podman|lxc|tun|wg)/ { next }
 				{ split($4, a, "/"); if ($3 == "inet") print a[1]; else if ($3 == "inet6") print "[" a[1] "]" }' |
-				while read -r pa_ip; do say "  https://$pa_ip:$PORT"; done
+				while read -r pa_ip; do say "  $pa_s://$pa_ip:$PORT"; done
 		fi
 		;;
-	*) say "  https://$LISTEN_HOST:$PORT" ;;
+	*) say "  $pa_s://$LISTEN_HOST:$PORT" ;;
 	esac
 	say "Sign in with a Linux account."
 	[ "$DRY" = 1 ] && return 0
+	if [ "$(tls_mode)" = http ]; then
+		say "LinuxAdmin serves plain HTTP on $LISTEN_HOST for the reverse proxy; the proxy provides HTTPS."
+		return 0
+	fi
 	if [ "$(tls_mode)" != self-signed ]; then
 		say "TLS uses the certificate configured in $CONF_FILE."
 		return 0
@@ -2002,6 +2245,7 @@ do_install() {
 	step "System files"
 	install_pam "$SRC"
 	write_config
+	check_config
 	install_unit "$SRC"
 	start_service
 	report_admin_group
@@ -2069,7 +2313,7 @@ main() {
 	set -u
 	WANT_VERSION='' PRERELEASE=0 FROM='' UNINSTALL=0 PURGE=0 OPEN_FW=0 DRY=0 YES=0 SKIP_SIG=0
 	PARTIAL='' TMPD='' PREVIOUS='' VERSION=''
-	F_PORT='' F_LISTEN='' F_ROOT='' F_UNLOCK='' F_CERT='' F_KEY='' F_PROXY=0 F_ORIGINS='' F_TRUSTED='' F_DOMAIN=''
+	F_PORT='' F_LISTEN='' F_ROOT='' F_UNLOCK='' F_CERT='' F_KEY='' F_PROXY=0 F_ORIGINS='' F_TRUSTED='' F_DOMAIN='' F_AUSERS='' F_AGROUPS='' F_ADMINS=0 WC_BAK=''
 	CADDY_MODE=auto NO_ENABLE=0 NO_START=0 RECONF=0 CFG_REQUESTED=0
 	TTY_OK=0 C_LISTEN='' C_TLS='' PROXY='' CADDY_DOMAIN='' CADDY_DONE=0 ENABLE=1 START=1
 	CADDY_KIND='' CADDY_ACTION=none CFG_MODE=keep
@@ -2094,14 +2338,15 @@ main() {
 		--dry-run) DRY=1 ;;
 		-y | --yes) YES=1 ;;
 		--insecure-skip-signature) SKIP_SIG=1 ;;
-		--port | --listen | --admin-unlock | --tls-cert | --tls-key | --origin | --trusted-proxy | --domain)
+		--port | --listen | --admin-unlock | --tls-cert | --tls-key | --origin | --trusted-proxy | --domain | --allow-users | --allow-groups)
 			[ $# -ge 2 ] || die "$1 needs a value."
 			opt_set "$1" "$2"
 			shift
 			;;
-		--port=* | --listen=* | --admin-unlock=* | --tls-cert=* | --tls-key=* | --origin=* | --trusted-proxy=* | --domain=*)
+		--port=* | --listen=* | --admin-unlock=* | --tls-cert=* | --tls-key=* | --origin=* | --trusted-proxy=* | --domain=* | --allow-users=* | --allow-groups=*)
 			opt_set "${1%%=*}" "${1#*=}"
 			;;
+		--admins-only) F_ADMINS=1 CFG_REQUESTED=1 ;;
 		--allow-root) F_ROOT=true CFG_REQUESTED=1 ;;
 		--no-allow-root) F_ROOT=false CFG_REQUESTED=1 ;;
 		--behind-proxy) F_PROXY=1 CFG_REQUESTED=1 ;;

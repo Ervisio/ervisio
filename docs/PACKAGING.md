@@ -77,15 +77,25 @@ install section lists the options. In short:
 - **First install** (no `/etc/linuxadmin/linuxadmin.conf`): asks for the port (default 9090, checked with
   `ss`, `netstat` or `/proc/net/tcp`; a systemd socket such as `cockpit.socket` is named), the proxy setup (Caddy or
   another reverse proxy), who can reach the console (`listen`), TLS (`tls.mode`, `tls.cert`, `tls.key`),
-  `allow_root`, `session.admin_unlock` (5m, 15m, 1h or `0s` = until sign-out), and whether to enable and start the
+  `allow_root`, who may sign in (`auth.allow_users`, `auth.allow_groups`, `auth.admins_only`: every local account,
+  only administrators, or named users and groups; options `--allow-users`, `--allow-groups`, `--admins-only`),
+  `session.admin_unlock` (5m, 15m, 1h or `0s` = until sign-out), and whether to enable and start the
   service. It prints a summary, asks for confirmation, and writes a fully commented config file.
 - **Installed already**: the config file is kept. `--reconfigure` or any configuration option sets only the keys the
   questions cover (an awk edit that keeps everything else, comments included) after copying the file to
   `linuxadmin.conf.linuxadmin-backup-<date>`.
-- Not asked, because the daemon has no key for it: who may sign in. Every account with a login shell in
-  `/etc/shells` can (`nologin`, `false`, `git-shell`, `rbash` are refused); `allow_root` is the only switch.
-- The daemon serves HTTPS only (`tls.mode` is `self-signed`, `letsencrypt` (not implemented) or `custom`), so behind
-  a reverse proxy the proxy has to speak HTTPS to it and skip verification of the self-signed certificate.
+- Who may sign in: with nothing set, every account with a login shell in `/etc/shells` can (`nologin`, `false`,
+  `git-shell`, `rbash` are refused). The summary warns when the policy would lock out the person running the
+  installer (`SUDO_USER`) or leaves no administrator.
+- `tls.mode` is `self-signed`, `letsencrypt` (not implemented), `custom` or `http`. With a proxy on this machine
+  (native Caddy, Caddy in Docker with `network_mode: host`, or "another reverse proxy on this machine") the installer
+  sets `tls.mode = "http"` and `listen = "127.0.0.1:PORT"`: the proxy talks plain HTTP to loopback and keeps the
+  session cookie `Secure` through `X-Forwarded-Proto`. Caddy in a bridged Docker container cannot reach the host's
+  loopback, so that case keeps HTTPS and `tls_insecure_skip_verify`. A proxy on another machine also keeps HTTPS.
+- **Config check.** After writing or changing the file, and before the service is restarted, the installer runs
+  `linuxadmind --check-config /etc/linuxadmin/linuxadmin.conf`. When it fails, the backup is put back (a first
+  install removes the file), the errors are printed and the installer stops without restarting. Packages can run the
+  same command in their post-install scripts or `ExecStartPre`.
 
 **Signature check.** In order: `openssl` (3 or newer), an `openssl3` binary, `python3`, `python`, `python2`. Each
 candidate must verify the RFC 8032 test 2 vector and refuse a wrong message before it is trusted. OpenSSL 1.0.2 and

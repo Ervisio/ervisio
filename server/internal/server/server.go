@@ -185,6 +185,13 @@ func (s *Server) Handler() http.Handler {
 // every bridge.
 func (s *Server) Run(ctx context.Context) error {
 	addr := s.ListenAddr()
+	plain := !s.opts.Dev && s.Config().TLS.Mode == config.TLSHTTP
+	if plain {
+		// Also covers --listen overriding the configured address.
+		if err := config.ValidatePlainHTTPListen(addr); err != nil {
+			return fmt.Errorf("tls.mode: %w", err)
+		}
+	}
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
@@ -222,6 +229,9 @@ func (s *Server) Run(ctx context.Context) error {
 	errCh := make(chan error, 2)
 	if s.opts.Dev {
 		s.log.Printf("listening on http://%s (dev mode)", ln.Addr())
+		go func() { errCh <- srv.Serve(ln) }()
+	} else if plain {
+		s.log.Printf("listening on http://%s (tls.mode = http: plain HTTP for a reverse proxy on this machine)", ln.Addr())
 		go func() { errCh <- srv.Serve(ln) }()
 	} else {
 		tlsCfg, err := s.tlsConfig()

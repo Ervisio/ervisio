@@ -147,3 +147,99 @@ func TestUpdatesKeys(t *testing.T) {
 		t.Fatalf("load updates: %+v %v", c.Updates, err)
 	}
 }
+
+func TestAuthAllowlistKeys(t *testing.T) {
+	c := Default()
+	if c.Auth.Restricted() {
+		t.Fatal("default must allow everyone")
+	}
+	if v := c.Values()["auth.allow_users"]; v == nil {
+		t.Fatal("empty list must be [] in JSON, not null")
+	}
+	if err := c.Set("auth.allow_users", []any{"alice", " bob "}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Set("auth.allow_groups", []any{"wheel", "Domain_Users@corp"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Set("auth.admins_only", true); err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Auth.AllowUsers; len(got) != 2 || got[1] != "bob" || !c.Auth.Restricted() {
+		t.Fatalf("got %+v", c.Auth)
+	}
+	for _, bad := range []any{[]any{"a b"}, []any{"-x"}, []any{""}, []any{"a;rm"}, []any{"x", "x"}, []any{1.0}, "alice", []any{strings.Repeat("a", 70)}} {
+		if err := c.Set("auth.allow_users", bad); err == nil {
+			t.Errorf("%v accepted", bad)
+		}
+	}
+	// Round trip through the file.
+	p := filepath.Join(t.TempDir(), "c.conf")
+	if err := Save(p, c); err != nil {
+		t.Fatal(err)
+	}
+	got, _, _, err := Load(p)
+	if err != nil || len(got.Auth.AllowUsers) != 2 || got.Auth.AllowGroups[0] != "wheel" || !got.Auth.AdminsOnly {
+		t.Fatalf("%v %+v", err, got)
+	}
+	cl := got.Clone()
+	cl.Auth.AllowUsers[0] = "zed"
+	if got.Auth.AllowUsers[0] != "alice" {
+		t.Fatal("Clone shares the allow_users slice")
+	}
+}
+
+func TestPlainHTTPMode(t *testing.T) {
+	ok := []string{"127.0.0.1:9090", "127.5.5.5:80", "[::1]:9090"}
+	bad := []string{"0.0.0.0:9090", ":9090", "192.168.1.5:9090", "[::]:9090", "[2001:db8::1]:9090", "localhost:9090"}
+	for _, l := range ok {
+		c := Default()
+		c.Listen, c.TLS.Mode = l, "http"
+		if err := c.Validate(); err != nil {
+			t.Errorf("%s: %v", l, err)
+		}
+	}
+	for _, l := range bad {
+		c := Default()
+		c.Listen, c.TLS.Mode = l, "http"
+		if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "loopback") {
+			t.Errorf("%s accepted or unclear error: %v", l, err)
+		}
+	}
+	// Other modes do not care.
+	c := Default()
+	c.Listen = "0.0.0.0:9090"
+	if err := c.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	// Loading a file applies the same rule.
+	p := filepath.Join(t.TempDir(), "c.conf")
+	os.WriteFile(p, []byte("[tls]\nmode = \"http\"\n"), 0o644)
+	if _, _, _, err := Load(p); err == nil {
+		t.Fatal("default listen 0.0.0.0 with plain http must be rejected")
+	}
+}
+
+func TestCheck(t *testing.T) {
+	dir := t.TempDir()
+	write := func(s string) string {
+		p := filepath.Join(dir, "c.conf")
+		os.WriteFile(p, []byte(s), 0o644)
+		return p
+	}
+	if _, err := Check(filepath.Join(dir, "missing.conf")); err == nil {
+		t.Fatal("missing file must fail")
+	}
+	if w, err := Check(write("listen = \"127.0.0.1:9090\"\nbogus = 1\n[tls]\nmode = \"http\"\n")); err != nil || len(w) != 1 {
+		t.Fatalf("%v %v", w, err)
+	}
+	if _, err := Check(write("[tls]\nmode = \"custom\"\n")); err == nil {
+		t.Fatal("custom without cert must fail")
+	}
+	if _, err := Check(write("[tls]\nmode = \"custom\"\ncert = \"/nonexistent/a.crt\"\nkey = \"/nonexistent/a.key\"\n")); err == nil {
+		t.Fatal("custom with missing files must fail")
+	}
+	if _, err := Check(write("listen = [")); err == nil {
+		t.Fatal("syntax error must fail")
+	}
+}

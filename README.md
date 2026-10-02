@@ -159,10 +159,11 @@ sudo sh install.sh
 3. Who can reach LinuxAdmin: all interfaces (default) or only this machine (`127.0.0.1`). A reverse proxy decides this by itself.
 4. TLS: a self-signed certificate (default) or your own certificate and key files.
 5. Allow signing in as root (default: no).
-6. How long administrator rights stay unlocked: 5 minutes (default), 15 minutes, 1 hour, or until sign-out.
-7. Start at boot and start now (default: yes to both).
+6. Who may sign in: every local account (default), only administrators (members of `sudo`, `wheel` or `admin`), or only users and groups you name.
+7. How long administrator rights stay unlocked: 5 minutes (default), 15 minutes, 1 hour, or until sign-out.
+8. Start at boot and start now (default: yes to both).
 
-Then it prints a summary and asks for confirmation before it changes anything, and writes `/etc/linuxadmin/linuxadmin.conf` with a comment for each setting. Any local account with a real login shell can sign in; there is no list of allowed users in the configuration yet. Administrator rights come from sudo (the `wheel` or `sudo` group).
+Then it prints a summary and asks for confirmation before it changes anything, and writes `/etc/linuxadmin/linuxadmin.conf` with a comment for each setting. Unless you restrict it (question 6, `auth.allow_users`, `auth.allow_groups`, `auth.admins_only`), any local account with a real login shell can sign in. Before the service is restarted the script runs `linuxadmind --check-config` on the file and puts the previous one back if it is not valid. Administrator rights come from sudo (the `wheel` or `sudo` group).
 
 On a machine that is already configured, the existing file is kept as it is. `--reconfigure` (or any configuration option below) changes the keys the questions cover, keeps the rest of the file, and saves a backup next to it first.
 
@@ -170,8 +171,8 @@ On a machine that is already configured, the existing file is kept as it is. `--
 
 - If the Caddyfile has a site whose address contains `cockpit` (for example `cockpit.example.org { reverse_proxy localhost:9090 }`), it offers to point that site to LinuxAdmin.
 - Otherwise it asks for a (sub)domain, suggesting `linuxadmin.` plus the domain of your other sites, and adds a new site block at the end of the Caddyfile.
-- The block is `reverse_proxy https://127.0.0.1:PORT` with `transport http { tls_insecure_skip_verify }`. LinuxAdmin only serves HTTPS, so Caddy connects with HTTPS and skips the check of the self-signed certificate on that local hop. Browsers see Caddy's own certificate. WebSockets work through `reverse_proxy` without extra settings. LinuxAdmin then listens on `127.0.0.1` only.
-- Caddy in Docker cannot reach `127.0.0.1` of the host. The script then uses `host.docker.internal` if the container has it in `extra_hosts`, otherwise the gateway address of the container's network (for example `172.17.0.1`), and LinuxAdmin listens on all interfaces so the container can connect. With `network_mode: host` the loopback address is used. Allow the Docker subnet in your firewall if it blocks container-to-host traffic (ufw does by default); the script prints the command. The container's Caddyfile has to be a bind mount from this machine, so the script can edit it.
+- For Caddy on this machine the block is just `reverse_proxy 127.0.0.1:PORT`: LinuxAdmin is set to plain HTTP on `127.0.0.1` (`tls.mode = "http"`), which is only allowed on loopback, and Caddy adds HTTPS. Browsers see Caddy's own certificate. WebSockets work through `reverse_proxy` without extra settings.
+- Caddy in Docker cannot reach `127.0.0.1` of the host. The script then keeps HTTPS: `reverse_proxy https://HOST:PORT` with `transport http { tls_insecure_skip_verify }` (the self-signed certificate is not checked on that local hop). It uses `host.docker.internal` if the container has it in `extra_hosts`, otherwise the gateway address of the container's network (for example `172.17.0.1`), and LinuxAdmin listens on all interfaces so the container can connect. With `network_mode: host` the loopback address is used. Allow the Docker subnet in your firewall if it blocks container-to-host traffic (ufw does by default); the script prints the command. The container's Caddyfile has to be a bind mount from this machine, so the script can edit it.
 - `web.allowed_origins` is set to `https://<domain>` and `web.trusted_proxies` to loopback (plus the Docker subnet for Caddy in Docker).
 - Before editing, the script validates the Caddyfile, saves a copy as `Caddyfile.linuxadmin-backup-<date>` next to it, edits it in place, validates again and restores the copy if Caddy rejects the result. Then it reloads Caddy (`systemctl reload caddy`, or `docker exec ... caddy reload`). If the Caddyfile has something its small parser does not follow (a heredoc, a single-site file without braces, several `reverse_proxy` lines in the Cockpit block, unusual braces), nothing is edited and the block to paste is printed.
 - With `--yes` Caddy is only changed when you pass `--caddy`.
@@ -186,9 +187,10 @@ Options (after `sh -s --` when piping, for example `curl ... | sudo sh -s -- --v
 | `--port N` | port to listen on (default 9090) |
 | `--listen all\|local\|IP` | all interfaces (default), `127.0.0.1` only, or one address |
 | `--allow-root`, `--no-allow-root` | allow signing in as root (default: no) |
+| `--allow-users a,b`, `--allow-groups g1,g2`, `--admins-only` | restrict who may sign in; they add up, and replace the lists in an existing file (none of them: every local account) |
 | `--admin-unlock D` | `5m` (default), `15m`, `1h`, any time from `30s` to `24h`, or `signout` |
 | `--tls-cert FILE --tls-key FILE` | use your own certificate instead of the self-signed one |
-| `--behind-proxy` | another reverse proxy on this machine fronts LinuxAdmin: listen on `127.0.0.1` |
+| `--behind-proxy` | another reverse proxy on this machine fronts LinuxAdmin: plain HTTP on `127.0.0.1` (point the proxy at `http://127.0.0.1:PORT`, send `X-Forwarded-Proto` and the original `Host`) |
 | `--origin URL` | add a browser origin to `web.allowed_origins` (repeatable) |
 | `--trusted-proxy ADDR` | add an address or CIDR to `web.trusted_proxies` (repeatable) |
 | `--caddy`, `--no-caddy` | set up, or never touch, a Caddy found on this machine or in Docker |
@@ -249,13 +251,18 @@ max_failures = 5        # failed attempts per client before a temporary block
 
 [auth]
 ssh_keys = true         # allow signing in with a key from ~/.ssh/authorized_keys
+# Who may sign in. Nothing set = every local account. Otherwise: listed here, in one of
+# these groups, or (admins_only) an administrator (sudo, wheel, admin; root if allow_root).
+allow_users = []
+allow_groups = []
+admins_only = false
 
 [session]
 timeout = "12h"         # idle timeout
 admin_unlock = "5m"     # root bridge stops after this long without admin calls; "0s" = until sign-out
 
 [tls]
-mode = "self-signed"    # self-signed, letsencrypt or custom
+mode = "self-signed"    # self-signed, letsencrypt, custom, or http (plain HTTP, only with listen on 127.0.0.1, behind a reverse proxy)
 redirect = true
 # cert = "/path/to/cert.pem"   # used when mode = "custom"
 # key  = "/path/to/key.pem"
@@ -277,7 +284,7 @@ allowed_origins = []      # e.g. ["https://admin.example.com"]
 trusted_proxies = ["127.0.0.0/8", "::1/128"]
 ```
 
-If you open the console through a reverse proxy (nginx, Caddy) or a domain name and sign-in fails with "cross-origin request refused", either let the proxy pass the original host (`proxy_set_header Host $host;` or `X-Forwarded-Host`) from a trusted address, or add the address you type in the browser to `web.allowed_origins`. The daemon logs the refused origin with `journalctl -u linuxadmin`. Changes to the file apply without a restart.
+If you open the console through a reverse proxy (nginx, Caddy) or a domain name and sign-in fails with "cross-origin request refused", either let the proxy pass the original host (`proxy_set_header Host $host;` or `X-Forwarded-Host`) from a trusted address, or add the address you type in the browser to `web.allowed_origins`. The daemon logs the refused origin with `journalctl -u linuxadmin`. Changes to the file apply without a restart (`listen` and `tls.*` need one). Check a file with `linuxadmind --check-config [path]`: it prints `OK` or the errors and exits 0 or 1.
 
 The `updates` keys control self-update: the release channel, automatic checks, and an optional nightly install. See [docs/RELEASING.md](docs/RELEASING.md) for how releases are built and signed.
 

@@ -6,8 +6,10 @@ import (
 	"math"
 	"net"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -22,7 +24,51 @@ const (
 	Dur      Type = "duration"
 	Enum     Type = "enum"
 	FilePath Type = "path"
+	List     Type = "list" // list of strings
 )
+
+// TLSHTTP is the tls.mode that serves plain HTTP (behind a reverse proxy).
+const TLSHTTP = "http"
+
+var tlsModes = []string{"self-signed", "letsencrypt", "custom", TLSHTTP}
+
+// maxNames bounds auth.allow_users / auth.allow_groups.
+const maxNames = 256
+
+// nameRe is the shape of a user or group name: the portable POSIX set plus
+// the "@" and trailing "$" that domain and Samba accounts use.
+var nameRe = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.@-]{0,63}\$?$`)
+
+func validateNames(v any) error {
+	l := v.([]string)
+	if len(l) > maxNames {
+		return fmt.Errorf("at most %d entries", maxNames)
+	}
+	seen := map[string]bool{}
+	for _, n := range l {
+		if !nameRe.MatchString(n) {
+			return fmt.Errorf("%q is not a valid user or group name (letters, digits, _ . @ -; at most 64 characters)", n)
+		}
+		if seen[n] {
+			return fmt.Errorf("%q is listed twice", n)
+		}
+		seen[n] = true
+	}
+	return nil
+}
+
+// ValidatePlainHTTPListen checks that listen (host:port) is a loopback IP
+// address, the only place tls.mode = "http" may be served from.
+func ValidatePlainHTTPListen(listen string) error {
+	host, _, err := net.SplitHostPort(listen)
+	if err != nil {
+		return errors.New("listen must be host:port")
+	}
+	if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
+		return fmt.Errorf(`"http" (plain HTTP) is only allowed when listen is a loopback address (127.0.0.1 or [::1]), but listen is %q: put a reverse proxy in front, or use another tls.mode`, listen)
+	}
+	return nil
+}
 
 // Key describes one dotted configuration key ("login.show_ip").
 type Key struct {
@@ -67,6 +113,12 @@ var keys = []Key{
 		}},
 	{Name: "auth.ssh_keys", Type: Bool,
 		get: func(c *Config) any { return c.Auth.SSHKeys }, set: func(c *Config, v any) { c.Auth.SSHKeys = v.(bool) }, validate: noCheck},
+	{Name: "auth.allow_users", Type: List,
+		get: func(c *Config) any { return c.Auth.AllowUsers }, set: func(c *Config, v any) { c.Auth.AllowUsers = v.([]string) }, validate: validateNames},
+	{Name: "auth.allow_groups", Type: List,
+		get: func(c *Config) any { return c.Auth.AllowGroups }, set: func(c *Config, v any) { c.Auth.AllowGroups = v.([]string) }, validate: validateNames},
+	{Name: "auth.admins_only", Type: Bool,
+		get: func(c *Config) any { return c.Auth.AdminsOnly }, set: func(c *Config, v any) { c.Auth.AdminsOnly = v.(bool) }, validate: noCheck},
 	{Name: "session.timeout", Type: Dur,
 		get: func(c *Config) any { return c.Session.Timeout }, set: func(c *Config, v any) { c.Session.Timeout = v.(Duration) },
 		validate: durationRange(5*time.Minute, 30*24*time.Hour)},
@@ -79,11 +131,11 @@ var keys = []Key{
 			}
 			return durationRange(30*time.Second, 24*time.Hour)(v)
 		}},
-	{Name: "tls.mode", Type: Enum, Values: []string{"self-signed", "letsencrypt", "custom"}, Restart: true,
+	{Name: "tls.mode", Type: Enum, Values: tlsModes, Restart: true,
 		get: func(c *Config) any { return c.TLS.Mode }, set: func(c *Config, v any) { c.TLS.Mode = v.(string) },
 		validate: func(v any) error {
-			if !slices.Contains([]string{"self-signed", "letsencrypt", "custom"}, v.(string)) {
-				return errors.New("must be self-signed, letsencrypt or custom")
+			if !slices.Contains(tlsModes, v.(string)) {
+				return errors.New("must be self-signed, letsencrypt, custom or http")
 			}
 			return nil
 		}},
@@ -179,6 +231,9 @@ func validatePath(v any) error {
 // Value returns the value of key formatted for JSON (durations as strings).
 func (k Key) Value(c *Config) any {
 	v := k.get(c)
+	if l, ok := v.([]string); ok && l == nil {
+		return []string{} // JSON [] rather than null
+	}
 	if d, ok := v.(Duration); ok {
 		return formatDuration(d.Duration)
 	}
@@ -249,6 +304,27 @@ func (k Key) convert(value any) (any, error) {
 			return nil, err
 		}
 		return d, nil
+	case List:
+		var out []string
+		switch l := value.(type) {
+		case nil:
+		case []string:
+			out = append(out, l...)
+		case []any:
+			for _, e := range l {
+				s, ok := e.(string)
+				if !ok {
+					return nil, errors.New("must be a list of strings")
+				}
+				out = append(out, s)
+			}
+		default:
+			return nil, errors.New("must be a list of strings")
+		}
+		for i, s := range out {
+			out[i] = strings.TrimSpace(s)
+		}
+		return out, nil
 	default: // String, Enum, FilePath
 		s, ok := value.(string)
 		if !ok {

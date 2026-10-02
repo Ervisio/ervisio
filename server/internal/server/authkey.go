@@ -223,6 +223,12 @@ func (s *Server) handleLoginKey(w http.ResponseWriter, r *http.Request) {
 		refuse(errKeyRefused, "key "+fp+": "+err.Error())
 		return
 	}
+	// The key is proven: the allowlist refusal can be explicit.
+	if !signInAllowed(cfg, a) {
+		s.log.Printf("login %q from %s method=ssh-key refused: not allowed by auth.allow_users / auth.allow_groups / auth.admins_only", req.User, ip)
+		writeError(w, errNotAllowed)
+		return
+	}
 	// PAM account management (expired/locked accounts, pam_access…),
 	// without pam_authenticate.
 	release, e := s.pamSlot(r.Context())
@@ -254,7 +260,7 @@ func (s *Server) handleLoginKey(w http.ResponseWriter, r *http.Request) {
 	if req.Remember {
 		maxAge = int(cfg.Session.Timeout.Seconds())
 	}
-	s.setCookie(w, token, maxAge)
+	s.setCookie(w, r, token, maxAge)
 	s.log.Printf("login %q from %s method=ssh-key key=%s", a.Name, ip, fp)
 	writeJSON(w, http.StatusOK, s.info(sess))
 }

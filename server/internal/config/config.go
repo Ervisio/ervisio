@@ -74,6 +74,21 @@ type Auth struct {
 	// authorized_keys (the browser signs a challenge; the private key
 	// never leaves it).
 	SSHKeys bool `toml:"ssh_keys"`
+	// AllowUsers, AllowGroups and AdminsOnly restrict who may sign in. All
+	// empty/false = every local account with a valid login (the default).
+	// Otherwise an account may sign in when it is listed in AllowUsers, is
+	// a member (primary or supplementary) of a group in AllowGroups, or
+	// AdminsOnly is set and it is an administrator (root when allow_root,
+	// or a member of sudo, wheel or admin). Checked for password and SSH-key
+	// sign-in and for every live session (see server.revalidate).
+	AllowUsers  []string `toml:"allow_users"`
+	AllowGroups []string `toml:"allow_groups"`
+	AdminsOnly  bool     `toml:"admins_only"`
+}
+
+// Restricted reports whether any sign-in restriction is configured.
+func (a Auth) Restricted() bool {
+	return len(a.AllowUsers) > 0 || len(a.AllowGroups) > 0 || a.AdminsOnly
 }
 
 // Session holds session lifetimes.
@@ -82,7 +97,9 @@ type Session struct {
 	AdminUnlock Duration `toml:"admin_unlock"`
 }
 
-// TLS holds HTTPS settings. Cert/Key are used when Mode is "custom".
+// TLS holds HTTPS settings. Cert/Key are used when Mode is "custom". Mode
+// "http" serves plain HTTP for a reverse proxy on the same machine and is
+// only accepted when listen is a loopback address.
 type TLS struct {
 	Mode     string `toml:"mode"`
 	Redirect bool   `toml:"redirect"`
@@ -142,6 +159,8 @@ func Default() *Config {
 // Clone returns a deep copy.
 func (c *Config) Clone() *Config {
 	cp := *c
+	cp.Auth.AllowUsers = append([]string(nil), c.Auth.AllowUsers...)
+	cp.Auth.AllowGroups = append([]string(nil), c.Auth.AllowGroups...)
 	cp.Web.AllowedOrigins = append([]string(nil), c.Web.AllowedOrigins...)
 	cp.Web.TrustedProxies = append([]string(nil), c.Web.TrustedProxies...)
 	return &cp
@@ -153,6 +172,11 @@ func (c *Config) Validate() error {
 	for _, k := range Keys() {
 		if err := k.validate(k.get(c)); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", k.Name, err))
+		}
+	}
+	if c.TLS.Mode == TLSHTTP {
+		if err := ValidatePlainHTTPListen(c.Listen); err != nil {
+			errs = append(errs, fmt.Errorf("tls.mode: %w", err))
 		}
 	}
 	for _, o := range c.Web.AllowedOrigins {
@@ -269,4 +293,33 @@ func writeAtomic(path string, data []byte, mode os.FileMode) error {
 		return err
 	}
 	return os.Rename(name, path)
+}
+
+// Check is what `linuxadmind --check-config` runs: it parses and validates
+// the file at path (which must exist) plus the rules that only matter when
+// the daemon starts (a custom certificate must be configured and present).
+// Nothing is started or written.
+func Check(path string) (warnings []string, err error) {
+	cfg, exists, warnings, err := Load(path)
+	if err != nil {
+		return warnings, err
+	}
+	if !exists {
+		return warnings, fmt.Errorf("%s does not exist", path)
+	}
+	var errs []error
+	if cfg.TLS.Mode == "custom" {
+		if cfg.TLS.Cert == "" || cfg.TLS.Key == "" {
+			errs = append(errs, errors.New("tls.mode = custom needs tls.cert and tls.key"))
+		}
+		for _, f := range []string{cfg.TLS.Cert, cfg.TLS.Key} {
+			if f == "" {
+				continue
+			}
+			if _, e := os.Stat(f); e != nil {
+				errs = append(errs, fmt.Errorf("tls: %w", e))
+			}
+		}
+	}
+	return warnings, errors.Join(errs...)
 }

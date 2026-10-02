@@ -89,6 +89,11 @@ func set(key string, value any) (*State, error) {
 	if err := c.Set(key, normalise(value)); err != nil {
 		return nil, rpc.Errorf(rpc.Invalid, "%v", err)
 	}
+	// Cross-key rules (plain HTTP needs a loopback listen address…) are the
+	// caller's mistake, not a server fault.
+	if err := c.Validate(); err != nil {
+		return nil, rpc.Errorf(rpc.Invalid, "%v", err)
+	}
 	if err := cfg.Save(Path, c); err != nil {
 		return nil, err
 	}

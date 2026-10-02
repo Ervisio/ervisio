@@ -154,7 +154,8 @@
     "selfSigned": "Autofirmato",
     "letsencrypt": "Let’s Encrypt",
     "custom": "Personalizzato",
-    "redirect": "Reindirizza HTTP a HTTPS"
+    "redirect": "Reindirizza HTTP a HTTPS",
+    "http": "HTTP semplice (proxy)"
   },
   "hosts": {
     "later": "La gestione di altre macchine arriverà in una versione futura.",
@@ -181,7 +182,17 @@
     "failures": "Blocca dopo i tentativi falliti",
     "failuresDesc": "Per indirizzo, per alcuni minuti.",
     "attempts_one": "{count} tentativo",
-    "attempts_other": "{count} tentativi"
+    "attempts_other": "{count} tentativi",
+    "adminsOnly": "Solo gli amministratori possono accedere",
+    "adminsOnlyDesc": "Membri di sudo, wheel o admin (e root, se consentito). Disattivalo per far entrare ogni account locale.",
+    "allowUsers": "Utenti che possono accedere",
+    "allowUsersDesc": "Ammessi in ogni caso, qualunque sia il loro gruppo. Senza utenti, senza gruppi e con l’interruttore sopra disattivato, può accedere ogni account locale. Le modifiche chiudono anche, entro un minuto, le sessioni di chi perde l’accesso.",
+    "allowUsersHint": "Aggiungi un utente e premi Invio",
+    "allowGroups": "Gruppi che possono accedere",
+    "allowGroupsDesc": "Tutti i membri di questi gruppi, compreso il gruppo primario.",
+    "allowGroupsHint": "Aggiungi un gruppo e premi Invio",
+    "badName": "{name} non è un nome valido (lettere, cifre, _ . @ -)",
+    "removeName": "Rimuovi {name}"
   },
   "plugpol": {
     "unsigned": "Consenti i plugin della community",
@@ -193,7 +204,10 @@
     "versionDesc": "Una console web per server Linux.",
     "host": "Questo server",
     "user": "Accesso come",
-    "config": "File di configurazione"
+    "config": "File di configurazione",
+    "method": "Accesso eseguito con",
+    "methodPassword": "Password",
+    "methodKey": "Chiave SSH {fingerprint}"
   },
   "dur": {
     "1h": "1 ora",

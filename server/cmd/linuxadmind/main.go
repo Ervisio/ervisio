@@ -15,6 +15,7 @@ import (
 
 	"github.com/Fonlogen/LinuxAdmin/server/internal/brand"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/bridge"
+	"github.com/Fonlogen/LinuxAdmin/server/internal/config"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/server"
 	"github.com/Fonlogen/LinuxAdmin/server/internal/update"
 )
@@ -42,6 +43,7 @@ func main() {
 	bridgePath := flag.String("bridge", "", "path of "+brand.BridgeBinary+" (default: next to this binary)")
 	noAuth := flag.Bool("dev-insecure-noauth", false, "dev only: sign every request in as the daemon's user")
 	devKeys := flag.String("dev-authorized-keys", "", "dev only: authorized_keys file used for SSH-key sign-in instead of ~/.ssh")
+	check := flag.Bool("check-config", false, "parse and validate the configuration (the file after the flag, else -config), print OK or the errors, exit 0 or 1; starts nothing")
 	version := flag.Bool("version", false, "print the version and exit")
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [flags]\n", brand.DaemonBinary)
@@ -56,6 +58,13 @@ func main() {
 	if *version {
 		fmt.Println(brand.Version)
 		return
+	}
+	if *check {
+		path := *configPath
+		if flag.NArg() > 0 {
+			path = flag.Arg(0)
+		}
+		os.Exit(checkConfig(path))
 	}
 	log.SetFlags(log.LstdFlags)
 	log.SetPrefix(brand.DaemonBinary + ": ")
@@ -173,6 +182,20 @@ func main() {
 	if err := srv.Run(ctx); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// checkConfig implements --check-config: 0 when the file is valid.
+func checkConfig(path string) int {
+	warn, err := config.Check(path)
+	for _, w := range warn {
+		fmt.Fprintf(os.Stderr, "warning: %s\n", w)
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s: invalid configuration:\n%v\n", path, err)
+		return 1
+	}
+	fmt.Printf("OK: %s\n", path)
+	return 0
 }
 
 func isFile(p string) bool {

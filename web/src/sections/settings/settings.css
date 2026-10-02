@@ -174,3 +174,11 @@
 .st-upd-actions { display: flex; gap: 8px; }
 @keyframes st-pulse { 50% { transform: scale(0.6); opacity: 0.6; } }
 @media (prefers-reduced-motion: reduce) { .st-upd-step--now .mk i { animation: none; } }
+
+.st-names { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.st-names .ui-field { width: min(100%, 320px); }
+.st-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.st-chip { display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 4px 0 12px; border-radius: 10px; background: var(--sunk); font: 600 13px var(--mono); color: var(--ink); }
+.st-chip button { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 7px; color: var(--ink3); }
+.st-chip button:hover:not(:disabled) { background: var(--surface); color: var(--ink); }
+.st-chip .ui-icon { width: 12px; height: 12px; }

@@ -23,6 +23,12 @@ var (
 	errNotFound        = rpc.Errorf(rpc.NotFound, "not found")
 	errUnauthenticated = rpc.Errorf(rpc.Unauthenticated, "not signed in")
 	errBadCredentials  = rpc.Errorf(rpc.Unauthenticated, "wrong user name or password")
+	// errNotAllowed is only returned to SSH-key sign-ins, after the key
+	// signature verified and authorized_keys lists the key: whoever sees it
+	// holds a key of the account. Password sign-ins get errBadCredentials (no
+	// password oracle, like the other refusals after PAM accepted it).
+	errNotAllowed = rpc.Errorf(rpc.Forbidden, "This account may not sign in to LinuxAdmin").
+			WithData(map[string]string{"reason": "not_allowed"})
 )
 
 // csrf rejects state-changing requests that lack the X-Requested-With
@@ -199,7 +205,7 @@ func (s *Server) handleNoAuth(w http.ResponseWriter, r *http.Request) {
 		writeError(w, rpc.Errorf(rpc.Unavailable, "could not start the session"))
 		return
 	}
-	s.setCookie(w, token, 0)
+	s.setCookie(w, r, token, 0)
 	s.log.Printf("--dev-insecure-noauth: signed a browser in as %q", sess.Account.Name)
 	if u, err := s.newNoAuthToken("http://" + r.Host); err == nil {
 		s.log.Printf("--dev-insecure-noauth: next one-time sign-in URL: %s", u)
@@ -258,14 +264,27 @@ func (s *Server) createSession(ctx context.Context, a *account.Account, remember
 	return sess, token, nil
 }
 
-func (s *Server) setCookie(w http.ResponseWriter, token string, maxAge int) {
+// secureCookies reports whether the session cookie gets the Secure flag:
+// always, except in dev mode and in tls.mode = "http" where the request did
+// not come over https through a trusted reverse proxy (X-Forwarded-Proto).
+func (s *Server) secureCookies(r *http.Request) bool {
+	if s.opts.Dev {
+		return false
+	}
+	if s.Config().TLS.Mode != config.TLSHTTP || r == nil {
+		return true
+	}
+	return s.fromTrustedProxy(r) && strings.EqualFold(firstHeaderValue(r.Header.Get("X-Forwarded-Proto")), "https")
+}
+
+func (s *Server) setCookie(w http.ResponseWriter, r *http.Request, token string, maxAge int) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     brand.SessionCookie,
 		Value:    token,
 		Path:     "/",
 		MaxAge:   maxAge,
 		HttpOnly: true,
-		Secure:   !s.opts.Dev,
+		Secure:   s.secureCookies(r),
 		SameSite: http.SameSiteStrictMode,
 	})
 }
@@ -430,6 +449,13 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errBadCredentials)
 		return
 	}
+	// Same generic answer as the refusals above: an explicit "not allowed"
+	// would tell whoever guesses passwords that this one is right.
+	if !signInAllowed(cfg, a) {
+		s.log.Printf("login %q from %s refused: not allowed by auth.allow_users / auth.allow_groups / auth.admins_only", req.User, ip)
+		writeError(w, errBadCredentials)
+		return
+	}
 	result = attemptOK
 	sess, token, err := s.createSession(r.Context(), a, req.Remember, ip, nil)
 	if err != nil {
@@ -441,7 +467,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if req.Remember {
 		maxAge = int(cfg.Session.Timeout.Seconds())
 	}
-	s.setCookie(w, token, maxAge)
+	s.setCookie(w, r, token, maxAge)
 	s.log.Printf("login %q from %s method=password", a.Name, ip)
 	writeJSON(w, http.StatusOK, s.info(sess))
 }
@@ -452,7 +478,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 			s.sessions.remove(sess)
 		}
 	}
-	s.setCookie(w, "", -1)
+	s.setCookie(w, r, "", -1)
 	writeJSON(w, http.StatusOK, struct{}{})
 }
 

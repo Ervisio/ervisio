@@ -154,7 +154,8 @@
     "selfSigned": "Self-signed",
     "letsencrypt": "Let's Encrypt",
     "custom": "Custom",
-    "redirect": "Redirect HTTP to HTTPS"
+    "redirect": "Redirect HTTP to HTTPS",
+    "http": "Plain HTTP (proxy)"
   },
   "hosts": {
     "later": "Managing other machines will arrive in a later version.",
@@ -181,7 +182,17 @@
     "failures": "Block after failed attempts",
     "failuresDesc": "Per address, for a few minutes.",
     "attempts_one": "{count} attempt",
-    "attempts_other": "{count} attempts"
+    "attempts_other": "{count} attempts",
+    "adminsOnly": "Only administrators may sign in",
+    "adminsOnlyDesc": "Members of sudo, wheel or admin (and root, if allowed). Turn it off to let every local account in.",
+    "allowUsers": "Users who may sign in",
+    "allowUsersDesc": "Also allowed, whatever their group. With no users, no groups and the switch above off, every local account may sign in. Changes also end the sessions of people who lose access, within a minute.",
+    "allowUsersHint": "Add a user name and press Enter",
+    "allowGroups": "Groups who may sign in",
+    "allowGroupsDesc": "Everyone in one of these groups, including their primary group.",
+    "allowGroupsHint": "Add a group name and press Enter",
+    "badName": "{name} is not a valid name (letters, digits, _ . @ -)",
+    "removeName": "Remove {name}"
   },
   "plugpol": {
     "unsigned": "Allow community plugins",
@@ -193,7 +204,10 @@
     "versionDesc": "A web console for Linux servers.",
     "host": "This server",
     "user": "Signed in as",
-    "config": "Configuration file"
+    "config": "Configuration file",
+    "method": "Signed in with",
+    "methodPassword": "Password",
+    "methodKey": "SSH key {fingerprint}"
   },
   "dur": {
     "1h": "1 hour",

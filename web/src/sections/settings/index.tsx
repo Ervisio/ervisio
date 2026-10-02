@@ -9,6 +9,7 @@ import { RefreshSelect } from '../../lib/RefreshSelect';
 import { REFRESH_KEY } from '../../lib/refresh';
 import { ColourBlock, ThemeGrid } from './Appearance';
 import { HostsBlock, type HostEntry } from './Hosts';
+import { NameList } from './NameList';
 import { usePrefSave, useServerConfig } from './save';
 import { UpdatesBlock } from './Updates';
 import { updateStatus } from './updates';
@@ -184,6 +185,9 @@ export default function SettingsPage() {
         id: 'signin', part: 'server', icon: 'key', hue: 'svc', title: t('groups.signin'), admin: true, top: serverTop,
         rows: [
           { id: 'root', title: t('signin.root'), desc: t('signin.rootDesc'), cfgKey: 'allow_root = ' + String(server.get('allow_root', false)), control: <Switch aria-label={t('signin.root')} disabled={srvDisabled} checked={server.get('allow_root', false)} onChange={(v) => void sv('allow_root', v, t('signin.root'))} /> },
+          { id: 'adminsonly', title: t('signin.adminsOnly'), desc: t('signin.adminsOnlyDesc'), cfgKey: 'auth.admins_only = ' + String(server.get('auth.admins_only', false)), words: 'who may sign in allow administrators sudo wheel', control: <Switch aria-label={t('signin.adminsOnly')} disabled={srvDisabled} checked={server.get('auth.admins_only', false)} onChange={(v) => void sv('auth.admins_only', v, t('signin.adminsOnly'))} /> },
+          { id: 'allowusers', title: t('signin.allowUsers'), desc: t('signin.allowUsersDesc'), cfgKey: `auth.allow_users = [${server.get<string[]>('auth.allow_users', []).map((n) => `"${n}"`).join(', ')}]`, words: 'who may sign in allow users accounts', block: <NameList names={server.get<string[]>('auth.allow_users', [])} disabled={srvDisabled} label={t('signin.allowUsers')} placeholder={t('signin.allowUsersHint')} onChange={(next) => void sv('auth.allow_users', next, t('signin.allowUsers'))} /> },
+          { id: 'allowgroups', title: t('signin.allowGroups'), desc: t('signin.allowGroupsDesc'), cfgKey: `auth.allow_groups = [${server.get<string[]>('auth.allow_groups', []).map((n) => `"${n}"`).join(', ')}]`, words: 'who may sign in allow groups', block: <NameList names={server.get<string[]>('auth.allow_groups', [])} disabled={srvDisabled} label={t('signin.allowGroups')} placeholder={t('signin.allowGroupsHint')} onChange={(next) => void sv('auth.allow_groups', next, t('signin.allowGroups'))} /> },
           { id: 'showip', title: t('signin.showIp'), desc: t('signin.showIpDesc'), cfgKey: 'login.show_ip = ' + String(server.get('login.show_ip', true)), control: <Switch aria-label={t('signin.showIp')} disabled={srvDisabled} checked={server.get('login.show_ip', true)} onChange={(v) => void sv('login.show_ip', v, t('signin.showIp'))} /> },
           { id: 'timeout', title: t('signin.timeout'), cfgKey: `session.timeout = "${server.get('session.timeout', '12h')}"`, control: <Select compact aria-label={t('signin.timeout')} disabled={srvDisabled} value={normDur(server.get('session.timeout', '12h'))} options={withCurrent(durOptions, server.get('session.timeout', '12h'))} onChange={(v) => void sv('session.timeout', toGoDur(v), t('signin.timeout'))} /> },
           { id: 'unlock', title: t('signin.unlock'), desc: t('signin.unlockDesc'), cfgKey: `session.admin_unlock = "${server.get('session.admin_unlock', '5m')}"`, control: <Select compact aria-label={t('signin.unlock')} disabled={srvDisabled} value={server.get('session.admin_unlock', '5m')} options={withCurrent(unlockOptions, server.get('session.admin_unlock', '5m'))} onChange={(v) => void sv('session.admin_unlock', v, t('signin.unlock'))} /> },
@@ -194,8 +198,8 @@ export default function SettingsPage() {
         id: 'web', part: 'server', icon: 'net', hue: 'file', title: t('groups.web'), admin: true,
         rows: [
           { id: 'listen', title: t('web.listen'), restart: server.needsRestart('listen'), cfgKey: `listen = "${server.get('listen', '0.0.0.0:9090')}"`, control: <CommitInput disabled={srvDisabled} value={server.get('listen', '0.0.0.0:9090')} label={t('web.listen')} onCommit={(v) => void sv('listen', v, t('web.listen'))} /> },
-          { id: 'tls', title: t('web.tls'), desc: t('web.tlsDesc'), restart: server.needsRestart('tls.mode'), cfgKey: `tls.mode = "${server.get('tls.mode', 'self-signed')}"`, control: <Segmented aria-label={t('web.tls')} value={server.get('tls.mode', 'self-signed')} onChange={(v) => srvDisabled ? undefined : void sv('tls.mode', v, t('web.tls'))} options={[{ value: 'self-signed', label: t('web.selfSigned') }, { value: 'letsencrypt', label: t('web.letsencrypt') }, { value: 'custom', label: t('web.custom') }]} /> },
-          { id: 'redirect', title: t('web.redirect'), restart: server.needsRestart('tls.redirect'), cfgKey: 'tls.redirect = ' + String(server.get('tls.redirect', true)), control: <Switch aria-label={t('web.redirect')} disabled={srvDisabled} checked={server.get('tls.redirect', true)} onChange={(v) => void sv('tls.redirect', v, t('web.redirect'))} /> },
+          { id: 'tls', title: t('web.tls'), desc: t('web.tlsDesc'), restart: server.needsRestart('tls.mode'), cfgKey: `tls.mode = "${server.get('tls.mode', 'self-signed')}"`, control: <Segmented aria-label={t('web.tls')} value={server.get('tls.mode', 'self-signed')} onChange={(v) => srvDisabled ? undefined : void sv('tls.mode', v, t('web.tls'))} options={[{ value: 'self-signed', label: t('web.selfSigned') }, { value: 'letsencrypt', label: t('web.letsencrypt') }, { value: 'custom', label: t('web.custom') }, { value: 'http', label: t('web.http') }]} /> },
+          ...(server.get<string>('tls.mode', 'self-signed') === 'http' ? [] : [{ id: 'redirect', title: t('web.redirect'), restart: server.needsRestart('tls.redirect'), cfgKey: 'tls.redirect = ' + String(server.get('tls.redirect', true)), control: <Switch aria-label={t('web.redirect')} disabled={srvDisabled} checked={server.get('tls.redirect', true)} onChange={(v) => void sv('tls.redirect', v, t('web.redirect'))} /> }]),
           ...(server.get<string>('tls.mode', 'self-signed') === 'custom'
             ? [
                 { id: 'cert', title: t('web.cert'), desc: t('web.certDesc'), restart: true, cfgKey: `tls.cert = "${server.get('tls.cert', '')}"`, control: <CommitInput disabled={srvDisabled} allowEmpty value={server.get('tls.cert', '')} label={t('web.cert')} onCommit={(v) => void sv('tls.cert', v, t('web.cert'))} /> },
@@ -253,6 +257,11 @@ export default function SettingsPage() {
         : []),
       { id: 'host', title: t('about.host'), control: <span className="ui-in ui-in--mono" style={{ minWidth: 180 }}>{host?.hostname}{host?.ip ? ` (${host.ip})` : ''}</span> },
       { id: 'user', title: t('about.user'), control: <span className="ui-in ui-in--mono" style={{ minWidth: 180 }}>{session?.user}</span> },
+      {
+        id: 'method',
+        title: t('about.method'),
+        control: <span className="ui-in ui-in--mono" style={{ minWidth: 180, overflowWrap: 'anywhere' }}>{session?.authMethod === 'ssh-key' ? t('about.methodKey', { fingerprint: session.keyFingerprint ?? '' }) : t('about.methodPassword')}</span>,
+      },
       { id: 'conf', title: t('about.config'), control: <span className="ui-in ui-in--mono" style={{ minWidth: 180 }}>{server.path}</span> },
     ],
   });

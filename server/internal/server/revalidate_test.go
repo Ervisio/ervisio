@@ -54,7 +54,7 @@ func TestRevalidate(t *testing.T) {
 	}
 	base := func() (*Server, *Session, *fakeAccounts) {
 		f := &fakeAccounts{acc: a, shadow: &account.ShadowEntry{Fingerprint: "fp1", Expire: -1, LastChange: 19000}}
-		s := &Server{log: log.New(io.Discard, "", 0), checker: f.checker(), sessions: newStore()}
+		s := &Server{log: log.New(io.Discard, "", 0), checker: f.checker(), sessions: newStore(), cfg: testHolder(nil)}
 		sess := &Session{Account: a, Created: time.Now(), lastSeen: time.Now(), shadowFP: "fp1"}
 		if _, err := s.sessions.add(sess); err != nil {
 			t.Fatal(err)
@@ -164,7 +164,7 @@ func TestRevalidateKeySession(t *testing.T) {
 		t.Skipf("current user's shell %q is not a login shell", a.Shell)
 	}
 	f := &fakeAccounts{acc: a, shadow: &account.ShadowEntry{Fingerprint: "fp2", Locked: true, Expire: -1}}
-	s := &Server{log: log.New(io.Discard, "", 0), checker: f.checker(), sessions: newStore()}
+	s := &Server{log: log.New(io.Discard, "", 0), checker: f.checker(), sessions: newStore(), cfg: testHolder(nil)}
 	keyOK := true
 	s.checker.keyAuth = func(*account.Account, ssh.PublicKey, string) error {
 		if keyOK {
