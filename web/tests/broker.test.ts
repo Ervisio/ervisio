@@ -217,3 +217,10 @@ test('openUrl only takes http(s) addresses without credentials', () => {
     assert.equal(authorize(docker, 'openUrl', { url }, user).kind, 'deny', String(url));
   }
 });
+
+test('openUrl never opens the app itself', () => {
+  const me = { ...user, appOrigin: 'https://box.lan:8443' };
+  assert.equal(authorize(docker, 'openUrl', { url: 'https://box.lan:8443/terminal?cmd=id' }, me).kind, 'deny');
+  assert.equal(authorize(docker, 'openUrl', { url: 'HTTPS://BOX.lan:8443/' }, me).kind, 'deny');
+  assert.equal(authorize(docker, 'openUrl', { url: 'https://box.lan:9000/' }, me).kind, 'openUrl', 'other ports are other services');
+});

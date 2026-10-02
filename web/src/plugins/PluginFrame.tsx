@@ -70,7 +70,7 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
   live.current = {
     themeSnap,
     lang,
-    user: { groups: session?.groups ?? [], isRoot: !!session?.isRoot, home: session?.home },
+    user: { groups: session?.groups ?? [], isRoot: !!session?.isRoot, home: session?.home, appOrigin: window.location.origin },
     plugin,
     nav,
   };

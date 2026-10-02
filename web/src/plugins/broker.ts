@@ -47,6 +47,8 @@ export interface BrokerUser {
   groups?: string[];
   isRoot?: boolean;
   home?: string;
+  /** The app's own origin: openUrl never opens it (a tab of the app, e.g. /terminal?cmd=…, is outside the manifest). */
+  appOrigin?: string;
 }
 
 export type Plan =
@@ -297,6 +299,7 @@ export function authorize(m: BrokerManifest, op: FrameOp | string, args: Record<
     case 'openUrl': {
       const url = externalUrl(a.url);
       if (!url) return deny('Only http and https addresses without credentials can be opened.', 'invalid');
+      if (u.appOrigin && new URL(url).origin === u.appOrigin) return deny('Plugins cannot open pages of this app in a new tab.', 'invalid');
       return { kind: 'openUrl', url };
     }
   }

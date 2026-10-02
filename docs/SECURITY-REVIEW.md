@@ -43,3 +43,62 @@ package, user, host and journal arguments (validated, `--`/`--opt=value` forms).
 newlines. Download headers (attachment, sandbox CSP, nosniff, inline only for safe types). Static and
 plugin file serving confined with `os.OpenRoot`. CSP on the app. No `dangerouslySetInnerHTML`/URL sinks
 with server data in the web client.
+
+## Plugin SDK v3 and Docker 2.0 review (2026-10-02)
+
+Scope: commits `0059255..3daa42b`, which cover `plugins.http`/`httpStream`/`pty`/`mkdir`/`remove`, admin folders,
+the broker and frame changes, `allow-forms`, `openUrl`, `plugins/docker/manifest.json` and `plugins-src/docker`.
+The question was whether a plugin frame can do more than its manifest declares, and whether a docker-group user can
+do anything as root through LinuxAdmin that they could not already do with the Docker socket.
+
+| # | Severity | Location | Defect | Status |
+|---|---|---|---|---|
+| P1 | Medium | `web/src/plugins/broker.ts` (`openUrl`) | `openUrl` accepted any http(s) URL, including the app's own origin. A plugin could open an app tab outside its manifest, for example `/terminal?cmd=…`, which opens a new root-capable terminal with a command already typed in. | **Fixed:** `BrokerUser.appOrigin` (set by `PluginFrame` to `window.location.origin`) is refused. Test in `web/tests/broker.test.ts`. |
+| P2 | Medium | `plugins-src/docker/src/views/TemplatePage.tsx` | Stack templates from third-party Portainer lists were deployed in one click. The compose file came from the template repository's mutable `HEAD`, the user never saw it, and "Show compose" fetched it a second time, so the preview could differ from what was deployed. | **Fixed:** for stacks without a built-in compose file, the first Install fetches the file and shows it, and the second Install deploys exactly the reviewed text. A warning appears when the file uses `privileged`, the Docker socket, host namespaces, `cap_add`, `devices`, `security_opt` or a `/` bind. Container templates already went through the create wizard's review step, which shows the full `docker run`. |
+| P3 | Low | `server/internal/modules/plugins/files.go` | `readFile`, `listDir` and `writeFile` (parent folder) opened paths in a blocking mode. A FIFO planted in a shared folder (`/opt/stacks` is `2775 root:docker`) made the call hang, including on the root bridge of an admin. | **Fixed:** `openNoBlock` (`O_NONBLOCK` through `os.Root`) followed by a type check. Test `TestFilesFIFOAndPrivateMode`. |
+| P4 | Low | `server/internal/modules/plugins/http.go`, `files.go` | Text bodies are sent as JSON strings, and `encoding/json` writes `<`, `>`, `&` and control characters as 6 bytes each. An 11 MiB response (or a 4 MiB file) could therefore exceed `rpc.MaxLine`. The line was dropped and the call never answered, so content inside a container (logs, inspect output) could stall the plugin. | **Fixed:** `jsonTextLen` upper bound. Bodies over 12 MiB escaped are sent as base64, which the SDK decodes transparently. Tests `TestJSONTextLen` and `TestHTTPLargeEscapedTextGoesBase64`. **Open (pre-existing):** `plugins.exec` stdout and stderr (4 MiB each) have the same worst case. |
+| P5 | Low | `server/internal/modules/plugins/files.go` (`writePluginFile`) | Files in a plugin's `create: true` folder under `~` (the Docker plugin stores `registries.json` there, with registry passwords) were written `0644`. They were private only when the folder itself was newly created `0700`. | **Fixed:** files in `create: true` folders under `~` are written owner-only (`mode &= 0700`, so new files are `0600` and rewrites tighten old ones). Passwords are still stored in plain text, as Docker's own `config.json` stores them (accepted). |
+
+**Checked and found sound**
+
+- **Rule matching (`cleanHTTPPath`, `match`):**
+  - Paths are origin-form only, with no `?`, `#`, `\` or control characters. `%2f`, `%5c`, `%00`, `%0a` and `%0d` are refused.
+  - The decoded path must already be clean: no `//`, `.`, `..` or trailing `/`.
+  - Rules are RE2, anchored `^(?:…)$` on the decoded path, and Docker's mux matches on that same once-decoded path.
+  - None of the Docker rules' character classes allow `%`, so double-encoding cannot reach another route.
+  - The version prefix is required (`/v1\.[0-9]+/`) except for `/_ping` and `/version`. Matching is case-sensitive on both sides.
+- **Docker routes:**
+  - Docker's `{name:.*}` image routes cannot be steered to other handlers: GET must end in `/json` or `/history`, POST in `/tag`, and DELETE is the only DELETE route. Container, volume and network names exclude `/`.
+  - The rules exclude `/plugins`, `/swarm`, `/services`, `/nodes`, `/tasks`, `/secrets`, `/configs`, `/session`, `/grpc`, `/build` (only `/build/prune`), `/containers/{id}/archive` (GET, HEAD and PUT), `/export`, `/attach`, `/wait`, `/commit`, `/images/load`, `/images/get`, `/images/{name}/push` and `/images/search`. They should stay excluded.
+- **Request headers:**
+  - Only `Content-Type` and `X-Registry-Auth` may be set.
+  - Host, credentials, hop-by-hop, `Proxy-*`, `Sec-*` and `X-Forwarded-*` headers are refused at manifest validation. Values with CR, LF or NUL are refused.
+  - `Host` is fixed to `localhost`.
+- **Responses:** no redirects are followed and no proxy is used. Response headers are limited to 64 KiB, `Set-Cookie` is dropped, and bodies are capped at `min(maxBody, 11 MiB)`.
+- **Streams:** `httpStream` ends the connection when the stream input closes. Frame streams are capped at 32 and closed on teardown or navigation.
+- **Root bridge and `adminUnlessGroup`:**
+  - User-level commands, HTTP APIs and folders are refused on the root bridge.
+  - Admin entries run on the root bridge, or as the user when the user is root or in `adminUnlessGroup` (looked up through NSS).
+  - A docker-group member's requests always run as that member, never as root.
+  - `~` is not allowed in admin folders.
+  - The root bridge environment is reset (`HOME=/root`, `cwd /`, fixed `PATH`), and the Docker CLI is pinned with `-H unix:///var/run/docker.sock`.
+- **PTY:** `pty` commands run only through `plugins.pty`. The process runs as a new session; closing the stream sends SIGHUP and then SIGKILL to the process group.
+- **Files:** every path is resolved through `os.Root`, so neither symlinks nor `..` can leave the declared folder. `mkdir` works one component at a time. `remove` deletes the link itself, never its target, and refuses a declared folder (`rel == "."`). Writes use an `O_EXCL` temporary file plus `renameat`, so a symlink or hardlink at the target is replaced, not written through.
+- **Broker:** every new op (`http`, `httpStream`, `pty`, `mkdir`, `remove`, `openUrl`) is checked against the server-provided manifest, and the daemon checks again.
+- **Frame isolation:**
+  - `allow-forms` together with CSP `form-action 'none'` means submit events fire but no form is ever sent.
+  - There is no `allow-popups`, `allow-top-navigation` or `allow-same-origin`, and `default-src 'none'` blocks nested frames.
+  - `openUrl` takes http(s) only, without credentials, and opens with `noopener,noreferrer`.
+- **Docker plugin UI:**
+  - The only `dangerouslySetInnerHTML` is the compose and env highlighter (`stack/highlight.ts`). It escapes `& < >`, and its class names are fixed.
+  - Portainer descriptions and notes are tag-stripped and rendered as text. Remote logos are not loaded.
+  - Template `website` links come only from the signed built-in catalog.
+
+**Accepted and noted**
+
+- Docker group membership and Docker administration are root-equivalent. The consent screen discloses this, so `containers/create` (binds, `privileged`), `exec` and `networks/create` are allowed as Docker allows them.
+- **Query strings are not constrained by rules.** Through `/images/create?fromSrc=URL` or `fromImage=host/…` and `/auth`, a plugin can make the Docker daemon contact hosts outside `capabilities.network`. This is inherent to pulling images.
+- **`compose-config-project` runs `docker compose -f <any *.yml> config` as root for admins who are not in the docker group.** The path comes from a container's compose label, so a docker-group user can choose it. The output goes only to the admin's screen. This is accepted because the docker group is root-equivalent anyway.
+- **Stacks created by an admin on the root bridge are not group-writable.** Their folders are `0755` and their files `0644`, owned by root, so docker-group members cannot edit them afterwards. This is a usability issue, not a security one.
+- **A shell opened by `docker exec` may outlive its PTY.** When the pty stream closes, the Docker CLI is killed, but whether the process in the container ends is up to Docker.
+- **A frame can still navigate itself.** The host then tears the frame down, but only after the request has left; this was already true before this change set. `allow-forms` adds no new way out.

@@ -161,6 +161,20 @@ func fileErr(err error, path string) error {
 	return rpc.Errorf(rpc.Forbidden, "%s is outside the folders the plugin declared.", path)
 }
 
+// openNoBlock opens rel inside root read-only without waiting on a FIFO: a
+// FIFO planted in a shared folder (say /opt/stacks, writable by a group)
+// would otherwise hang the call, on the root bridge too. O_NONBLOCK changes
+// nothing for regular files and folders; callers check the type after.
+func openNoBlock(root *os.Root, rel string) (*os.File, error) {
+	return root.OpenFile(rel, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+}
+
+// privateFolder reports whether a write folder holds the plugin's own data
+// in the user's home (create: true under ~): new files there are 0600, so a
+// plugin's saved settings (registry passwords, tokens) are not readable by
+// other local users even when a parent folder is.
+func privateFolder(f Folder) bool { return f.Create && strings.HasPrefix(f.Path, "~") }
+
 func readPluginFile(_ context.Context, c *rpc.Call) (any, error) {
 	var p FileParams
 	if err := c.Bind(&p); err != nil {
@@ -175,7 +189,7 @@ func readPluginFile(_ context.Context, c *rpc.Call) (any, error) {
 		return nil, fileErr(err, p.Path)
 	}
 	defer root.Close()
-	fh, err := root.Open(r.rel)
+	fh, err := openNoBlock(root, r.rel)
 	if err != nil {
 		return nil, fileErr(err, p.Path)
 	}
@@ -198,7 +212,7 @@ func readPluginFile(_ context.Context, c *rpc.Call) (any, error) {
 		return nil, rpc.Errorf(rpc.Invalid, "%s is larger than %d MiB.", p.Path, MaxPluginFile>>20)
 	}
 	res := &FileResult{Path: filepath.Join(r.dir, r.rel), Size: int64(len(b))}
-	if p.B64 || !utf8.Valid(b) {
+	if p.B64 || !utf8.Valid(b) || jsonTextLen(b) > jsonTextBudget {
 		res.Data, res.B64 = base64.StdEncoding.EncodeToString(b), true
 	} else {
 		res.Data = string(b)
@@ -242,17 +256,23 @@ func writePluginFile(_ context.Context, c *rpc.Call) (any, error) {
 		}
 		mode = fi.Mode().Perm()
 	}
+	if privateFolder(r.folder) {
+		mode &= 0o700
+	}
 	// Write a temporary file next to the target and rename it over the
 	// target. The folder is opened through os.Root and both names are
 	// single components relative to its descriptor, so neither the write
 	// nor the rename can leave the declared folder (a symlink at the target
 	// is replaced, never followed).
 	dirRel, base := filepath.Dir(r.rel), filepath.Base(r.rel)
-	dh, err := root.Open(dirRel)
+	dh, err := openNoBlock(root, dirRel)
 	if err != nil {
 		return nil, fileErr(err, p.Path)
 	}
 	defer dh.Close()
+	if fi, err := dh.Stat(); err != nil || !fi.IsDir() {
+		return nil, rpc.Errorf(rpc.Invalid, "%s is not inside a folder.", p.Path)
+	}
 	var rnd [6]byte
 	_, _ = rand.Read(rnd[:])
 	tmpBase := ".la-plugin-" + hex.EncodeToString(rnd[:]) + ".tmp"
@@ -291,7 +311,7 @@ func listPluginDir(_ context.Context, c *rpc.Call) (any, error) {
 		return nil, fileErr(err, p.Path)
 	}
 	defer root.Close()
-	dh, err := root.Open(r.rel)
+	dh, err := openNoBlock(root, r.rel)
 	if err != nil {
 		return nil, fileErr(err, p.Path)
 	}

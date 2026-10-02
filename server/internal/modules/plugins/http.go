@@ -168,6 +168,30 @@ func (h *HTTPAPI) match(method, decoded string) bool {
 	return false
 }
 
+// jsonTextBudget bounds the JSON-escaped size of a text body sent in one
+// protocol line (rpc.MaxLine). Past it the body goes out as base64, which
+// is never more than 4/3 of its size: a line over rpc.MaxLine is dropped and
+// the call would never be answered.
+const jsonTextBudget = 12 << 20
+
+// jsonTextLen is an upper bound of the length of b (valid UTF-8) encoded as
+// a JSON string: encoding/json writes <, >, & and control characters as
+// \u00XX, and U+2028/U+2029 (3 bytes) as \u2028/\u2029.
+func jsonTextLen(b []byte) int {
+	n := 2
+	for _, c := range b {
+		switch {
+		case c < 0x20 || c == '<' || c == '>' || c == '&':
+			n += 6
+		case c == '"' || c == '\\' || c >= 0x80:
+			n += 2
+		default:
+			n++
+		}
+	}
+	return n
+}
+
 // resolveHTTP finds the plugin and API entry, applies the same level rules
 // as commands and checks the request against the declared rules and headers.
 func resolveHTTP(ctx context.Context, c *rpc.Call, p HTTPParams) (*httpPlan, error) {
@@ -333,7 +357,7 @@ func runHTTP(ctx context.Context, c *rpc.Call, p HTTPParams) (*HTTPResult, error
 		return nil, rpc.Errorf(rpc.Unavailable, "The response is larger than %d bytes; use httpStream for large answers.", limit)
 	}
 	res := &HTTPResult{Status: resp.StatusCode, Headers: flatHeaders(resp.Header)}
-	if utf8.Valid(b) {
+	if utf8.Valid(b) && jsonTextLen(b) <= jsonTextBudget {
 		res.Body = string(b)
 	} else {
 		res.Body, res.B64 = base64.StdEncoding.EncodeToString(b), true

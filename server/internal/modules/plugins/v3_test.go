@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -43,7 +44,7 @@ const v3Manifest = `{
     ],
     "files": {
       "read": ["%RO%", {"path": "%ADMIN%", "admin": true}],
-      "write": [%RW%, {"path": "%ADMIN%", "admin": true}, {"path": "%GADMIN%", "admin": true, "adminUnlessGroup": "%GROUP%"}, {"path": "%AUTO%", "create": true}]
+      "write": [%RW%, {"path": "%ADMIN%", "admin": true}, {"path": "%GADMIN%", "admin": true, "adminUnlessGroup": "%GROUP%"}, {"path": "%AUTO%", "create": true}, {"path": "~/.config/la-v3-test", "create": true}]
     },
     "sockets": [], "network": []
   },
@@ -660,5 +661,84 @@ func TestAdminFoldersAndMkdirRemove(t *testing.T) {
 	}
 	if err := fcall(removePlugin, true, filepath.Join(e.rw, "x")); !rpc.IsCode(err, rpc.Forbidden) {
 		t.Errorf("remove in a plain folder from the root bridge: %v", err)
+	}
+}
+
+func TestJSONTextLen(t *testing.T) {
+	for _, in := range []string{"", "plain", "<a href=\"x\">&amp;</a>", "\x00\x01\n\t\\", "caf\u00e9 \u2028 \u2029 \U0001F600"} {
+		got, _ := json.Marshal(in)
+		if n := jsonTextLen([]byte(in)); n < len(got) {
+			t.Errorf("%q: bound %d < encoded %d", in, n, len(got))
+		}
+	}
+}
+
+func TestHTTPLargeEscapedTextGoesBase64(t *testing.T) {
+	// A UTF-8 body that json would blow up past rpc.MaxLine is sent as base64.
+	b := bytes.Repeat([]byte("<"), 3<<20)
+	if jsonTextLen(b) <= jsonTextBudget {
+		t.Fatal("budget not exceeded")
+	}
+	if 4*((maxHTTPResult+2)/3)+(64<<10) > rpc.MaxLine {
+		t.Fatal("a base64 result of maxHTTPResult does not fit in one line")
+	}
+}
+
+func TestFilesFIFOAndPrivateMode(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	e := setupV3(t)
+	fifo := filepath.Join(e.rw, "pipe")
+	if err := syscall.Mkfifo(fifo, 0o644); err != nil {
+		t.Skip("mkfifo:", err)
+	}
+	run := func(fn func(context.Context, *rpc.Call) (any, error), path string) error {
+		done := make(chan error, 1)
+		go func() {
+			_, err := fn(context.Background(), call(t, false, FileParams{Plugin: "v3", Path: path, Data: "x"}))
+			done <- err
+		}()
+		select {
+		case err := <-done:
+			return err
+		case <-time.After(3 * time.Second):
+			t.Fatalf("%s blocked", path)
+			return nil
+		}
+	}
+	// A FIFO is neither read nor listed, and the call does not hang on it.
+	if err := run(readPluginFile, fifo); !rpc.IsCode(err, rpc.Invalid) {
+		t.Errorf("read fifo: %v", err)
+	}
+	if err := run(listPluginDir, fifo); err == nil {
+		t.Error("listed a fifo")
+	}
+	if err := run(writePluginFile, filepath.Join(fifo, "x")); err == nil {
+		t.Error("wrote below a fifo")
+	}
+	// New files in a create folder under ~ are private to the user.
+	priv := filepath.Join(home, ".config", "la-v3-test", "secrets.json")
+	if err := run(writePluginFile, "~/.config/la-v3-test/secrets.json"); err != nil {
+		t.Fatalf("write private: %v", err)
+	}
+	if fi, err := os.Stat(priv); err != nil || fi.Mode().Perm() != 0o600 {
+		t.Errorf("private file mode: %v %v", fi.Mode(), err)
+	}
+	os.Chmod(priv, 0o644)
+	if err := run(writePluginFile, "~/.config/la-v3-test/secrets.json"); err != nil {
+		t.Fatal(err)
+	}
+	if fi, _ := os.Stat(priv); fi.Mode().Perm() != 0o600 {
+		t.Errorf("rewrite kept mode %v", fi.Mode())
+	}
+	// Other folders keep 0644.
+	if err := run(writePluginFile, filepath.Join(e.rw, "pub.txt")); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(e.rw, "ref.txt"), nil, 0o644) // same umask
+	pub, _ := os.Stat(filepath.Join(e.rw, "pub.txt"))
+	ref, _ := os.Stat(filepath.Join(e.rw, "ref.txt"))
+	if pub.Mode().Perm() != ref.Mode().Perm() {
+		t.Errorf("plain folder file mode %v, want %v", pub.Mode(), ref.Mode())
 	}
 }
