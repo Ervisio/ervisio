@@ -334,3 +334,22 @@ func TestUploadUsesTheEnvironmentTunnel(t *testing.T) {
 	}
 
 }
+
+func TestDevFileOverrideKeepsLoadDevOutOfTheHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	DevFile = filepath.Join(t.TempDir(), "state", "plugins-dev.json")
+	t.Cleanup(func() { DevFile = "" })
+	if err := saveDev(devState{Folders: []string{"/x/y"}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := registeredDev(); len(got) != 1 || got[0] != "/x/y" {
+		t.Fatalf("%v", got)
+	}
+	if _, err := os.Stat(DevFile); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".config")); err == nil {
+		t.Fatal("the home folder was touched")
+	}
+}

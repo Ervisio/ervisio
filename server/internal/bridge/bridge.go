@@ -43,6 +43,8 @@ type Spec struct {
 	// DevPlugins the daemon's ./plugins folder with --dev-plugins.
 	Dev        bool
 	DevPlugins string
+	// DevPluginsFile (dev only) is where plugins.loadDev keeps its list.
+	DevPluginsFile string
 	// Sudo overrides the sudo binary (tests); "" = sudo from the safe PATH.
 	Sudo string
 	// SessionHelper, when set (and SwitchUser), is the daemon binary: the
@@ -144,6 +146,9 @@ func (s *Spec) bridgeArgs(admin bool) []string {
 		args = append(args, "--dev")
 		if s.DevPlugins != "" {
 			args = append(args, "--dev-plugins", s.DevPlugins)
+		}
+		if s.DevPluginsFile != "" {
+			args = append(args, "--dev-plugins-file", s.DevPluginsFile)
 		}
 	}
 	if admin {

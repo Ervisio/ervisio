@@ -48,6 +48,9 @@ type Options struct {
 	// DevPluginsDir (dev only) is the repository's ./plugins folder, passed
 	// to the bridges so they list its plugins.
 	DevPluginsDir string
+	// DevPluginsFile (dev only, with --dev-state-dir) keeps the list of
+	// plugins.loadDev folders, instead of ~/.config/ervisio/plugins-dev.json.
+	DevPluginsFile string
 	// SessionHelper is the daemon's own binary, started as
 	// `--pam-session-helper` to open a PAM session around each user bridge
 	// (not used in --dev). "" = no PAM session.

@@ -218,14 +218,15 @@ func (s *Server) handleNoAuth(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) spec(a *account.Account, rhost string) *bridge.Spec {
 	sp := &bridge.Spec{
-		Bridge:     s.opts.Bridge,
-		Config:     s.opts.ConfigPath,
-		Account:    a,
-		SwitchUser: !s.opts.Dev,
-		Dev:        s.opts.Dev,
-		DevPlugins: s.opts.DevPluginsDir,
-		RHost:      rhost,
-		Logger:     s.log,
+		Bridge:         s.opts.Bridge,
+		Config:         s.opts.ConfigPath,
+		Account:        a,
+		SwitchUser:     !s.opts.Dev,
+		Dev:            s.opts.Dev,
+		DevPlugins:     s.opts.DevPluginsDir,
+		DevPluginsFile: s.opts.DevPluginsFile,
+		RHost:          rhost,
+		Logger:         s.log,
 	}
 	if !s.opts.Dev {
 		sp.SessionHelper = s.opts.SessionHelper

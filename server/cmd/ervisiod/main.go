@@ -179,7 +179,7 @@ func main() {
 		plugins.DaemonDev = true
 		plugins.DaemonPluginsDir = devPlugins
 	}
-	stateDir, notifyFile := "", ""
+	stateDir, notifyFile, devPluginsFile := "", "", ""
 	if *devState != "" {
 		if !*dev {
 			log.Fatal("--dev-state-dir requires --dev")
@@ -188,6 +188,8 @@ func main() {
 			log.Fatal(err)
 		}
 		notifyFile = filepath.Join(stateDir, "notify.json")
+		devPluginsFile = filepath.Join(stateDir, "plugins-dev.json")
+		plugins.DevFile = devPluginsFile
 	} else if *dev {
 		stateDir = filepath.Join(os.TempDir(), fmt.Sprintf("ervisio-dev-state-%d", os.Getuid()))
 		notifyFile = filepath.Join(stateDir, "notify.json")
@@ -215,6 +217,7 @@ func main() {
 		Bridge:            bp,
 		PluginDirs:        pluginDirs,
 		DevPluginsDir:     devPlugins,
+		DevPluginsFile:    devPluginsFile,
 		SessionHelper:     helper,
 		DevAuthorizedKeys: *devKeys,
 		StateDir:          stateDir,

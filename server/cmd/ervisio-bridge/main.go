@@ -32,6 +32,7 @@ func main() {
 	configPath := flag.String("config", brand.ConfigPath, "daemon configuration file")
 	dev := flag.Bool("dev", false, "the daemon runs in --dev (passed by ervisiod)")
 	devPlugins := flag.String("dev-plugins", "", "with --dev: the daemon's ./plugins folder")
+	devPluginsFile := flag.String("dev-plugins-file", "", "with --dev: where plugins.loadDev keeps its list (instead of the one in the home folder)")
 	version := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
 	if *version {
@@ -67,6 +68,12 @@ func main() {
 	if *dev {
 		plugins.DaemonDev = true
 		updates.DaemonDev = true
+		if *devPluginsFile != "" {
+			if !filepath.IsAbs(*devPluginsFile) {
+				log.Fatal("--dev-plugins-file must be an absolute path")
+			}
+			plugins.DevFile = filepath.Clean(*devPluginsFile)
+		}
 		if *devPlugins != "" {
 			if !filepath.IsAbs(*devPlugins) {
 				log.Fatal("--dev-plugins must be an absolute path")
