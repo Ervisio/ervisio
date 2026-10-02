@@ -1,7 +1,7 @@
 # Brief for section agents
 
 You build ONE section of Ervisio end to end (Go bridge module + React page), in
-/home/fonlogen/Documenti/Ervisio. Seven other agents build the other sections at the same
+/home/fonlogen/Documenti/LinuxAdmin. Seven other agents build the other sections at the same
 time in the same working tree, so stay strictly inside your files.
 
 ## Read first
