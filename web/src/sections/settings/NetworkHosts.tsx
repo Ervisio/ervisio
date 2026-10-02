@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError } from '../../api';
 import { useT } from '../../i18n';
+import { formatDate } from '../../lib/format';
 import { Badge, ConfirmDialog, IconButton, Skeleton, toast } from '../../ui';
 import { hostRevoke, hostsList, type ApprovedHost } from './envs';
 import './envs.css';
@@ -32,7 +33,7 @@ export function NetworkHostsBlock({ disabled }: { disabled?: boolean }) {
           <span className="dot" style={{ background: a.scheme === 'http' ? 'var(--warn)' : 'var(--ok)' }} />
           <div className="grow">
             <b className="mono">{a.host}</b>
-            <small>{t('hosts.for', { plugin: a.plugin })} · {t('hosts.by', { by: a.by, date: new Date(a.at).toLocaleDateString() })}</small>
+            <small>{t('hosts.for', { plugin: a.plugin })} · {t('hosts.by', { by: a.by, date: formatDate(a.at) })}</small>
           </div>
           <Badge tone={a.scheme === 'http' ? 'warn' : 'ok'}>{a.scheme === 'http' ? t('network.http') : t('network.https')}</Badge>
           <IconButton icon="trash" label={t('hosts.revoke', { host: a.host })} disabled={disabled} onClick={() => setRevoking(a)} />

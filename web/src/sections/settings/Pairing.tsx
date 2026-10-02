@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ApiError, useSession } from '../../api';
 import { useT } from '../../i18n';
+import { formatDateTime } from '../../lib/format';
 import { Button, ConfirmDialog, Dialog, IconButton, Input, toast } from '../../ui';
 import { pairTokenCreate, pairingRevoke, type PairToken, type Pairing } from './envs';
 import './envs.css';
@@ -9,7 +10,7 @@ const errText = (e: unknown) => (e instanceof ApiError || e instanceof Error ? e
 
 const when = (iso: string) => {
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) || d.getFullYear() < 2000 ? '' : d.toLocaleString();
+  return Number.isNaN(d.getTime()) || d.getFullYear() < 2000 ? '' : formatDateTime(d);
 };
 
 /** Pairing, server side: lets another Ervisio server use the Docker of this one (its Environments > Ervisio server). */
@@ -28,7 +29,7 @@ export function PairingBlock({ pairings, onChange, disabled }: { pairings: Pairi
             <b>{p.name}</b>
             <small>
               {t('pair.runsAs', { user: p.user })} · {t('pair.created', { date: when(p.created) })}
-              {when(p.lastUsed) ? ` · ${t('pair.lastUsed', { date: when(p.lastUsed), via: p.lastVia ?? '' })}` : ` · ${t('pair.neverUsed')}`}
+              {when(p.lastUsed) ? ` · ${t('pair.lastUsed', { date: when(p.lastUsed) })}${p.lastVia ? ` · ${t('pair.lastVia', { via: p.lastVia })}` : ''}` : ` · ${t('pair.neverUsed')}`}
             </small>
           </div>
           <IconButton icon="trash" label={t('pair.revoke', { name: p.name })} disabled={disabled} onClick={() => setRevoking(p)} />
