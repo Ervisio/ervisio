@@ -71,8 +71,11 @@ Without administrator rights they fail with `needs_admin`.
 * The manifest must declare `capabilities.notify: true` (`forbidden` otherwise) and the plugin must be enabled and visible
   to the caller. `title` up to 1000 characters (cut to 200), `body` up to 4000, `level` one of `info`, `success`,
   `warn`, `error` (default `info`), `link` an `http(s)` address or an app path (`/p/docker/stacks`), at most 500.
-  Control characters are removed; the message's `source` is the plugin's name.
-* **Rate limit per plugin**: 10 a minute and 60 an hour, shared with job `notify` steps. Over it:
-  `unavailable`, `data: {reason: "rate_limited", retryAfter: seconds}`.
+  Control characters are removed. The message's `source` is the plugin's name and the user who sent it,
+  `Docker (alice)`: the daemon cannot tell a call from the plugin's frame (the broker sets `plugin`) from a direct
+  `/api/rpc` call of the same signed-in user, so it says who sent it rather than trusting it came from the plugin.
+* **Rate limit per plugin and sender**: 10 a minute and 60 an hour for each user of a plugin, and the same, separately,
+  for each job instance's `notify` steps (whose `source` is `Docker job <name> (<owner>)`). One user, or one busy job,
+  cannot use up the budget of the others. Over it: `unavailable`, `data: {reason: "rate_limited", retryAfter: seconds}`.
 * Sent to the enabled channels subscribed to `plugins` whose `minLevel` the message reaches. With none configured the
   result is `{channels: 0, delivered: 0, failed: 0}`, not an error.

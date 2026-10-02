@@ -175,7 +175,7 @@ func (f *fixture) manager(dir string) *Manager {
 		},
 		OwnerOK:     func(a *account.Account) string { f.mu.Lock(); defer f.mu.Unlock(); return f.ownerBad[a.Name] },
 		NewExecutor: func(a *account.Account) Executor { return f.exec },
-		Notify: func(ctx context.Context, plugin string, msg notify.Message) error {
+		Notify: func(ctx context.Context, plugin, instance string, msg notify.Message) error {
 			f.mu.Lock()
 			f.notes = append(f.notes, msg)
 			f.mu.Unlock()

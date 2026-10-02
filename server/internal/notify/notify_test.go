@@ -190,27 +190,27 @@ func TestPluginRateLimit(t *testing.T) {
 	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	svc.Now = func() time.Time { return now }
 	for i := 0; i < pluginPerMinute; i++ {
-		if ok, _ := svc.AllowPlugin("docker"); !ok {
+		if ok, _ := svc.AllowPlugin("docker", "user:alice"); !ok {
 			t.Fatalf("call %d refused", i)
 		}
 	}
-	ok, wait := svc.AllowPlugin("docker")
+	ok, wait := svc.AllowPlugin("docker", "user:alice")
 	if ok || wait <= 0 || wait > time.Minute {
 		t.Fatalf("11th call: %v %v", ok, wait)
 	}
-	if ok, _ := svc.AllowPlugin("other"); !ok {
+	if ok, _ := svc.AllowPlugin("other", "user:alice"); !ok {
 		t.Fatal("the limit is per plugin")
 	}
 	now = now.Add(61 * time.Second)
-	if ok, _ := svc.AllowPlugin("docker"); !ok {
+	if ok, _ := svc.AllowPlugin("docker", "user:alice"); !ok {
 		t.Fatal("the minute window must slide")
 	}
 	// The hourly cap.
 	for i := 0; i < 80; i++ {
 		now = now.Add(61 * time.Second)
-		svc.AllowPlugin("hourly")
+		svc.AllowPlugin("hourly", "user:alice")
 	}
-	ok, wait = svc.AllowPlugin("hourly")
+	ok, wait = svc.AllowPlugin("hourly", "user:alice")
 	if !ok && wait > time.Hour {
 		t.Fatalf("wait %v", wait)
 	}

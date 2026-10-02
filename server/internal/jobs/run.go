@@ -372,7 +372,9 @@ func (m *Manager) doStep(ctx context.Context, ex Executor, man *plugins.Manifest
 
 	case "notify":
 		n := s.Notify
-		msg := notify.Message{Level: n.Level, Source: man.Name}
+		// The source names the job and its owner: whoever reads the
+		// notification sees which instance, run as whom, sent it.
+		msg := notify.Message{Level: n.Level, Source: fmt.Sprintf("%s job %s (%s)", man.Name, jobLabel(in), in.Owner)}
 		var err error
 		if msg.Title, err = plugins.RenderTemplate(n.Title, val, nil); err == nil {
 			if msg.Body, err = plugins.RenderTemplate(n.Body, val, nil); err == nil {
@@ -388,7 +390,7 @@ func (m *Manager) doStep(ctx context.Context, ex Executor, man *plugins.Manifest
 		if m.env.Notify == nil {
 			return nil, "Notifications are not available."
 		}
-		if err := m.env.Notify(ctx, in.Plugin, msg); err != nil {
+		if err := m.env.Notify(ctx, in.Plugin, in.ID, msg); err != nil {
 			return nil, errText(err)
 		}
 		sr.Stdout = msg.Title

@@ -174,7 +174,8 @@ Strict: unknown fields are rejected.
   with `{param.x}` / `{step.id.stdout}` placeholders and one condition per step. At most 16 jobs. The full schema, the
   validation rules, the run model, administrator approval and webhooks are in `docs/api/jobs.md`.
 * `capabilities.notify` (SDK 0.2, core 0.5): `true` lets the plugin send notifications through `plugins.notify` and job
-  `notify` steps, to the channels an administrator configured in Settings (`docs/api/notify.md`). Rate limited per plugin.
+  `notify` steps, to the channels an administrator configured in Settings (`docs/api/notify.md`). Rate limited per plugin
+  and user (job steps have their own budget per instance); the message names the user who sent it.
 * `capabilities.network`: host names (`api.example.org`, `*.example.org`, `host:8443`; nothing else, the entries go into
   a CSP header). The plugin frame may connect to them over https/wss; the user's session cookie is never sent from the
   frame. It is a list, or `{"hosts": [...], "userHosts": true}`: with `userHosts` the plugin may ask an administrator to

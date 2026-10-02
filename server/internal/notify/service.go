@@ -220,13 +220,18 @@ func (s *Service) Subscribed(event string) bool {
 }
 
 // AllowPlugin counts one notification of a plugin against its rate limit
-// (10 a minute, 60 an hour). It returns false and how long to wait when the
-// plugin is over it.
-func (s *Service) AllowPlugin(plugin string) (bool, time.Duration) {
+// (10 a minute, 60 an hour). The budget is per plugin and sender: who is
+// "user:<name>" for plugins.notify (the signed-in user; a plugin frame and a
+// direct /api/rpc call look the same), "job:<instance>" for a job's notify
+// step, so one user, or one busy job, cannot use up everyone else's budget
+// (security review M2). It returns false and how long to wait when the
+// sender is over it.
+func (s *Service) AllowPlugin(plugin, who string) (bool, time.Duration) {
 	now := s.now()
+	key := plugin + "\x00" + who
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	times := s.sent[plugin]
+	times := s.sent[key]
 	keep := times[:0]
 	for _, t := range times {
 		if now.Sub(t) < time.Hour {
@@ -247,18 +252,18 @@ func (s *Service) AllowPlugin(plugin string) (bool, time.Duration) {
 		} else {
 			wait = time.Hour - now.Sub(times[0])
 		}
-		s.sent[plugin] = times
+		s.sent[key] = times
 		return false, wait
 	}
-	s.sent[plugin] = append(times, now)
-	// Forget plugins that stopped sending.
-	if len(s.sent) > 200 {
+	s.sent[key] = append(times, now)
+	// Forget senders that stopped sending.
+	if len(s.sent) > 1000 {
 		keys := make([]string, 0, len(s.sent))
 		for k := range s.sent {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
-		for _, k := range keys[:len(keys)-100] {
+		for _, k := range keys[:len(keys)-500] {
 			delete(s.sent, k)
 		}
 	}

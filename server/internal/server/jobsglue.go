@@ -51,8 +51,9 @@ func (s *Server) initJobs() error {
 		NewExecutor: func(a *account.Account) jobs.Executor {
 			return &bridgeExecutor{s: s, a: a}
 		},
-		Notify: func(ctx context.Context, plugin string, msg notify.Message) error {
-			return s.pluginNotify(ctx, plugin, msg)
+		Notify: func(ctx context.Context, plugin, instance string, msg notify.Message) error {
+			_, err := s.sendPlugin(ctx, plugin, "job:"+instance, msg)
+			return err
 		},
 		Alert: func(msg notify.Message) {
 			go s.notifier.Send(s.baseCtx, msg, notify.EventJobs)
@@ -437,8 +438,11 @@ func init() {
 		if !notify.ValidLink(msg.Link) {
 			return nil, rpc.Errorf(rpc.Invalid, "The link must be an http(s) address or a path of this app.")
 		}
-		msg.Source = man.Name
-		d, err := s.sendPlugin(ctx, p.Plugin, msg)
+		// The daemon cannot tell a plugin frame (the broker sets plugin)
+		// from a direct /api/rpc call of the same user, so the message
+		// names the user who sent it, and the limit is per user.
+		msg.Source = fmt.Sprintf("%s (%s)", man.Name, sess.Account.Name)
+		d, err := s.sendPlugin(ctx, p.Plugin, "user:"+sess.Account.Name, msg)
 		if err != nil {
 			return nil, err
 		}
@@ -605,19 +609,15 @@ func notifyErr(err error) error {
 	return rpc.Errorf(rpc.Invalid, "%v", err)
 }
 
-// sendPlugin applies the plugin's rate limit and sends the message.
-func (s *Server) sendPlugin(ctx context.Context, plugin string, msg notify.Message) (notify.Delivery, error) {
-	if ok, wait := s.notifier.AllowPlugin(plugin); !ok {
+// sendPlugin applies the rate limit of the plugin and sender (who:
+// "user:<name>" or "job:<instance>") and sends the message.
+func (s *Server) sendPlugin(ctx context.Context, plugin, who string, msg notify.Message) (notify.Delivery, error) {
+	if ok, wait := s.notifier.AllowPlugin(plugin, who); !ok {
 		secs := int(wait.Seconds()) + 1
 		return notify.Delivery{}, rpc.Errorf(rpc.Unavailable, "%s sent too many notifications. Try again in %d seconds.", plugin, secs).
 			WithData(map[string]any{"reason": "rate_limited", "retryAfter": secs})
 	}
 	return s.notifier.Send(ctx, msg, notify.EventPlugins), nil
-}
-
-func (s *Server) pluginNotify(ctx context.Context, plugin string, msg notify.Message) error {
-	_, err := s.sendPlugin(ctx, plugin, msg)
-	return err
 }
 
 // handleLocalRPC serves the daemon's own methods. It reports whether the

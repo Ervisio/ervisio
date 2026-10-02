@@ -43,8 +43,9 @@ type Env struct {
 	// NewExecutor makes the executor of one run.
 	NewExecutor func(a *account.Account) Executor
 	// Notify sends a plugin's notification (job notify steps); the daemon
-	// applies the plugin's rate limit.
-	Notify func(ctx context.Context, plugin string, msg notify.Message) error
+	// applies the rate limit of the instance (its own budget, apart from
+	// the users' plugins.notify calls).
+	Notify func(ctx context.Context, plugin, instance string, msg notify.Message) error
 	// Alert sends a core notification about a job (failed, recovered).
 	Alert func(msg notify.Message)
 	Logf  func(format string, args ...any)
