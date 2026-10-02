@@ -329,13 +329,18 @@ func (s *Server) routeWithEnv(ctx context.Context, sess *Session, method string,
 		p, isAdmin, e = s.route(ctx, sess, method, admin)
 		return p, isAdmin, params, release, e
 	}
-	_, hadSock := obj["envSocket"]
-	delete(obj, "envSocket")
-	var envID string
-	if raw, ok := obj["env"]; ok {
-		delete(obj, "env")
+	// encoding/json matches field names without regard to case, so
+	// "EnvSocket" or "ENV" would reach the bridge's EnvSocket and Env just
+	// like the exact keys: every spelling is taken out (security review L3).
+	// "via" is set only by the pairing relay, never by a browser.
+	hadSock := len(takeKeyFold(obj, "envSocket")) > 0
+	if len(takeKeyFold(obj, "via")) > 0 {
 		hadSock = true
-		if json.Unmarshal(raw, &envID) != nil {
+	}
+	var envID string
+	if raws := takeKeyFold(obj, "env"); len(raws) > 0 {
+		hadSock = true
+		if len(raws) > 1 || json.Unmarshal(raws[0], &envID) != nil {
 			return nil, false, nil, release, rpc.Errorf(rpc.Invalid, "env must be an environment id")
 		}
 	}
@@ -388,6 +393,19 @@ func (s *Server) routeWithEnv(ctx context.Context, sess *Session, method string,
 	obj["envSocket"], _ = json.Marshal(path)
 	b, _ := json.Marshal(obj)
 	return ub, false, b, release, nil
+}
+
+// takeKeyFold removes from obj every key that equals name under Unicode case
+// folding (as encoding/json matches field names) and returns their values.
+func takeKeyFold(obj map[string]json.RawMessage, name string) []json.RawMessage {
+	var out []json.RawMessage
+	for k, v := range obj {
+		if strings.EqualFold(k, name) {
+			out = append(out, v)
+			delete(obj, k)
+		}
+	}
+	return out
 }
 
 // remoteBridge returns the bridge of the paired server for this user.

@@ -294,8 +294,10 @@ func addVia(params json.RawMessage, via string) json.RawMessage {
 	if json.Unmarshal(params, &obj) != nil || obj == nil {
 		return params
 	}
-	delete(obj, "envSocket")
-	delete(obj, "env")
+	// Every spelling: encoding/json matches keys without regard to case.
+	takeKeyFold(obj, "envSocket")
+	takeKeyFold(obj, "env")
+	takeKeyFold(obj, "via")
 	obj["via"], _ = json.Marshal(via)
 	b, err := json.Marshal(obj)
 	if err != nil {
