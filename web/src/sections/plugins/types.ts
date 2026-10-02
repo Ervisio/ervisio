@@ -18,6 +18,7 @@ export interface HttpApi {
   headers: string[];
   rules: { methods: string[]; path: string }[];
   maxBody?: number;
+  maxUpload?: number;
   timeoutSec?: number;
 }
 /** A capabilities.files entry: a path, or an object with admin / create (SDK v3). */

@@ -24,7 +24,8 @@
     "plugpol": "Plugin",
     "hosts": "Host",
     "about": "Informazioni",
-    "browser": "Questo browser"
+    "browser": "Questo browser",
+    "activity": "Registro attività"
   },
   "note": {
     "default": "Predefinito",
@@ -192,7 +193,10 @@
     "allowGroupsDesc": "Tutti i membri di questi gruppi, compreso il gruppo primario.",
     "allowGroupsHint": "Aggiungi un gruppo e premi Invio",
     "badName": "{name} non è un nome valido (lettere, cifre, _ . @ -)",
-    "removeName": "Rimuovi {name}"
+    "removeName": "Rimuovi {name}",
+    "activity": "Registro attività",
+    "activityDesc": "Chi ha effettuato l'accesso, sbloccato i diritti di amministratore, installato plugin o cambiato impostazioni, e cosa hanno fatto i plugin.",
+    "activityOpen": "Apri il registro attività"
   },
   "plugpol": {
     "unsigned": "Consenti i plugin della community",
@@ -310,6 +314,81 @@
       "desc": "{name} installa da solo le nuove versioni ogni giorno a quest'ora, e si riavvia. Saltato mentre si installa software.",
       "at": "Ora",
       "managed": "Non disponibile: gli aggiornamenti di {name} li installa {manager}."
+    }
+  },
+  "activity": {
+    "title": "Registro attività",
+    "desc": "Cosa è successo tramite la console e i suoi plugin: accessi, sblocchi da amministratore, installazioni di plugin, impostazioni e ogni modifica fatta da un plugin. I segreti non vengono mai registrati.",
+    "ownOnly": "Vedi la tua attività. Gli amministratori vedono quella di tutti.",
+    "ownOnlyUnlock": "Vedi la tua attività. Sblocca i diritti di amministratore per vedere quella di tutti.",
+    "off": "Il registro attività è spento, quindi le nuove azioni non vengono registrate. Accendilo qui sotto.",
+    "loading": "Caricamento…",
+    "count": "{count} voci",
+    "empty": "Ancora nulla di registrato",
+    "emptyText": "Accessi, modifiche alle impostazioni e azioni dei plugin compaiono qui.",
+    "noMatch": "Nessuna voce corrisponde a questi filtri",
+    "more": "Mostra voci più vecchie",
+    "failed": "Impossibile caricare il registro attività: {error}",
+    "exportCsv": "Esporta CSV",
+    "exportJson": "Esporta JSON",
+    "core": "Console",
+    "admin": "da amministratore",
+    "col": {
+      "time": "Ora",
+      "who": "Chi",
+      "what": "Cosa",
+      "target": "Oggetto",
+      "result": "Esito"
+    },
+    "result": {
+      "ok": "Fatto",
+      "failed": "Fallito",
+      "denied": "Rifiutato",
+      "error": "Errore"
+    },
+    "f": {
+      "text": "Cerca nell'oggetto o nel messaggio",
+      "plugin": "Id del plugin",
+      "user": "Utente",
+      "source": "Origine",
+      "anySource": "Console e plugin",
+      "plugins": "Solo plugin",
+      "console": "Solo console",
+      "result": "Esito",
+      "anyResult": "Qualsiasi esito",
+      "since": "Dal",
+      "until": "Al",
+      "clear": "Azzera i filtri"
+    },
+    "actions": {
+      "command": "Ha eseguito un comando",
+      "pty": "Ha aperto un terminale",
+      "http": "Ha modificato un servizio",
+      "upload": "Ha caricato un file",
+      "download": "Ha scaricato un file",
+      "file_write": "Ha scritto un file",
+      "file_mkdir": "Ha creato una cartella",
+      "file_remove": "Ha rimosso un file o una cartella",
+      "login": "Ha effettuato l'accesso",
+      "login_failed": "Accesso fallito",
+      "logout": "Ha chiuso la sessione",
+      "unlock": "Ha sbloccato i diritti di amministratore",
+      "lock": "Ha bloccato i diritti di amministratore",
+      "plugin_install": "Ha installato un plugin",
+      "plugin_uninstall": "Ha rimosso un plugin",
+      "plugin_enable": "Ha acceso un plugin",
+      "plugin_disable": "Ha spento un plugin",
+      "settings": "Ha cambiato un'impostazione"
+    },
+    "on": {
+      "title": "Registra l'attività",
+      "desc": "Mantiene il registro attività. Da spento non si scrive nulla di nuovo; quello che c'è resta finché non scade."
+    },
+    "keep": {
+      "title": "Conserva il registro per",
+      "desc": "I file giornalieri più vecchi vengono eliminati in automatico.",
+      "days": "{count} giorni",
+      "forever": "Per sempre"
     }
   }
 }

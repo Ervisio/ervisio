@@ -172,6 +172,21 @@ func main() {
 		}
 	}
 
+	// The daemon's state (the activity log) is in /var/lib/ervisio; a dev
+	// daemon is not root and keeps its own under the user's state folder.
+	stateDir := ""
+	if *dev {
+		base := os.Getenv("XDG_STATE_HOME")
+		if base == "" {
+			if home, err := os.UserHomeDir(); err == nil {
+				base = filepath.Join(home, ".local", "state")
+			}
+		}
+		if base != "" {
+			stateDir = filepath.Join(base, brand.Slug+"-dev")
+		}
+	}
+
 	helper := ""
 	if !*dev {
 		// The daemon's own binary serves as the PAM session helper.
@@ -196,6 +211,7 @@ func main() {
 		DevPluginsDir:     devPlugins,
 		SessionHelper:     helper,
 		DevAuthorizedKeys: *devKeys,
+		StateDir:          stateDir,
 		Logger:            log.Default(),
 	})
 	if err != nil {

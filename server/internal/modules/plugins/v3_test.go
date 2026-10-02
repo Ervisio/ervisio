@@ -28,7 +28,10 @@ const v3Manifest = `{
     "commands": [
       {"name": "cat", "pty": true, "argv": ["cat"], "admin": false},
       {"name": "shell", "pty": true, "argv": ["sh", "-c", "{0}"], "args": [{"pattern": "echo [a-z]+; exit [0-9]"}], "admin": false},
-      {"name": "plain", "argv": ["echo", "plain"], "admin": false}
+      {"name": "plain", "argv": ["echo", "plain"], "admin": false},
+      {"name": "seq", "argv": ["seq", "1", "{0}"], "args": [{"pattern": "[0-9]{1,6}"}], "admin": false},
+      {"name": "oops", "argv": ["sh", "-c", "echo oops >&2; exit 3"], "admin": false},
+      {"name": "rootcmd", "argv": ["echo", "root"], "admin": true}
     ],
     "http": [
       {"name": "api", "socket": "%SOCK%", "admin": false,
@@ -39,6 +42,16 @@ const v3Manifest = `{
          {"methods": ["GET"], "path": "/(redirect|big|bin|echo|stream|slow)"}
        ],
        "maxBody": 1024, "timeoutSec": 2},
+      {"name": "xfer", "socket": "%SOCK%", "admin": false, "headers": ["Content-Type", "X-Registry-Auth"],
+       "rules": [
+         {"methods": ["GET"], "path": "/dl(/[a-z0-9]+)?"},
+         {"methods": ["POST", "PUT"], "path": "/count"},
+         {"methods": ["POST"], "path": "/count-fail"},
+         {"methods": ["POST"], "path": "/build"},
+         {"methods": ["DELETE"], "path": "/count"}
+       ],
+       "maxBody": 4096, "maxUpload": 3000000, "timeoutSec": 5},
+      {"name": "root-xfer", "socket": "%SOCK%", "admin": true, "rules": [{"methods": ["GET"], "path": "/dl"}, {"methods": ["POST"], "path": "/count"}]},
       {"name": "root-api", "socket": "%SOCK%", "admin": true, "rules": [{"methods": ["GET"], "path": "/echo"}]},
       {"name": "group-api", "socket": "%SOCK%", "admin": true, "adminUnlessGroup": "%GROUP%", "rules": [{"methods": ["GET"], "path": "/echo"}]}
     ],
@@ -99,6 +112,56 @@ func setupV3(t *testing.T) *v3env {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/dl"):
+			// A body of n bytes (n after /dl/, default 1 MiB) without buffering it.
+			n := 1 << 20
+			fmt.Sscanf(strings.TrimPrefix(r.URL.Path, "/dl/"), "%d", &n)
+			if r.URL.Path == "/dl/404" {
+				http.Error(w, `{"message":"no such thing"}`, http.StatusNotFound)
+				return
+			}
+			w.Header().Set("Content-Length", fmt.Sprint(n))
+			chunk := bytes.Repeat([]byte("0123456789abcdef"), 1024)
+			for n > 0 {
+				k := min(n, len(chunk))
+				if _, err := w.Write(chunk[:k]); err != nil {
+					return
+				}
+				n -= k
+			}
+			return
+		case r.URL.Path == "/build":
+			// Answers at once with a first line, reads the body, then reports.
+			w.Header().Set("X-Kind", "build")
+			fl := w.(http.Flusher)
+			fmt.Fprintln(w, "Step 1: receiving")
+			fl.Flush()
+			n, _ := io.Copy(io.Discard, r.Body)
+			fmt.Fprintf(w, "Step 2: got %d bytes\n", n)
+			return
+		case r.URL.Path == "/count" || r.URL.Path == "/count-fail":
+			var sum int64
+			buf := make([]byte, 32<<10)
+			h := byte(0)
+			for {
+				k, err := r.Body.Read(buf)
+				sum += int64(k)
+				for _, c := range buf[:k] {
+					h ^= c
+				}
+				if err != nil {
+					break
+				}
+			}
+			if r.URL.Path == "/count-fail" {
+				http.Error(w, "nope", http.StatusConflict)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"n":%d,"x":%d,"cl":%d,"method":%q}`, sum, h, r.ContentLength, r.Method)
+			return
+		}
 		body, _ := io.ReadAll(r.Body)
 		r.Body = io.NopCloser(bytes.NewReader(body))
 		select {
@@ -150,7 +213,7 @@ func TestManifestV3Valid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(m.Capabilities.HTTP) != 3 || m.Capabilities.HTTP[0].Rules[0].re == nil || !m.RunsRoot() {
+	if len(m.Capabilities.HTTP) != 5 || m.Capabilities.HTTP[0].Rules[0].re == nil || !m.RunsRoot() {
 		t.Fatalf("%+v", m.Capabilities.HTTP)
 	}
 	if !m.Capabilities.Commands[0].PTY || m.Capabilities.Files.Write[3].Create != true {
@@ -212,6 +275,8 @@ func TestManifestV3Invalid(t *testing.T) {
 		"header twice":       api(`,"headers":["X-A","x-a"]`),
 		"maxBody":            api(`,"maxBody":67108865`),
 		"timeout":            api(`,"timeoutSec":601`),
+		"maxUpload":          api(`,"maxUpload":1099511627777`),
+		"maxUpload negative": api(`,"maxUpload":-1`),
 		"group without adm":  api(`,"adminUnlessGroup":"docker"`),
 		"duplicate name":     fmt.Sprintf(base, `"http":[{"name":"a","socket":"/s","rules":[{"methods":["GET"],"path":"/"}]},{"name":"a","socket":"/s","rules":[{"methods":["GET"],"path":"/"}]}]`),
 		"folder unknown":     fmt.Sprintf(base, `"files":{"read":[{"path":"/srv","recursive":true}]}`),

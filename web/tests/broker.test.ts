@@ -3,9 +3,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   authorize,
+  authorizeDownload,
   authorizeHttpStream,
   authorizePty,
   authorizeStream,
+  authorizeUpload,
+  sanitizeFilename,
+  SaveLimiter,
   cleanHttpPath,
   matchFolder,
   normPath,
@@ -223,4 +227,218 @@ test('openUrl never opens the app itself', () => {
   assert.equal(authorize(docker, 'openUrl', { url: 'https://box.lan:8443/terminal?cmd=id' }, me).kind, 'deny');
   assert.equal(authorize(docker, 'openUrl', { url: 'HTTPS://BOX.lan:8443/' }, me).kind, 'deny');
   assert.equal(authorize(docker, 'openUrl', { url: 'https://box.lan:9000/' }, me).kind, 'openUrl', 'other ports are other services');
+});
+
+/* ---------- large transfers and the activity log ---------- */
+
+const xfer: BrokerManifest = {
+  id: 'docker',
+  capabilities: {
+    commands: [
+      { name: 'dump', admin: false, args: [{}] },
+      { name: 'rootdump', admin: true },
+      { name: 'shell', pty: true, admin: false },
+    ],
+    http: [
+      {
+        name: 'docker',
+        socket: '/var/run/docker.sock',
+        admin: true,
+        adminUnlessGroup: 'docker',
+        headers: ['Content-Type', 'X-Registry-Auth'],
+        maxUpload: 1000,
+        rules: [
+          { methods: ['GET'], path: '/images/[a-z0-9:._/-]+/get' },
+          { methods: ['POST'], path: '/images/load' },
+          { methods: ['PUT'], path: '/containers/[a-z0-9]+/archive' },
+          { methods: ['DELETE'], path: '/images/[a-z0-9]+' },
+        ],
+      },
+      { name: 'plain', socket: '/run/p.sock', rules: [{ methods: ['POST'], path: '/in' }, { methods: ['GET'], path: '/out' }] },
+    ],
+  },
+};
+const dl = (req: object, extra: object = {}) => authorizeDownload(xfer, { req, ...extra }, user);
+
+test('download: GET of a declared path, with a file name, admin as for http', () => {
+  const p = dl({ name: 'plain', method: 'GET', path: '/out', query: 'a=1' }, { filename: 'out.tar' });
+  assert.deepEqual(p, {
+    kind: 'transfer',
+    transfer: 'download',
+    body: { kind: 'download', plugin: 'docker', name: 'plain', method: 'GET', path: '/out', query: 'a=1', headers: undefined, filename: 'out.tar', admin: false },
+    admin: false,
+  });
+  const a = dl({ name: 'docker', method: 'GET', path: '/images/busybox/get' });
+  assert.ok(a.kind === 'transfer' && a.admin && a.body.admin === true && a.body.filename === 'download');
+  const g = authorizeDownload(xfer, { req: { name: 'docker', method: 'GET', path: '/images/busybox/get' } }, inDocker);
+  assert.ok(g.kind === 'transfer' && !g.admin);
+  const root = authorizeDownload(xfer, { req: { name: 'docker', method: 'GET', path: '/images/busybox/get' } }, { ...user, isRoot: true });
+  assert.ok(root.kind === 'transfer' && !root.admin);
+});
+
+test('download: refused when the rules or the method do not allow it', () => {
+  const denied = (p: ReturnType<typeof dl>) => assert.equal(p.kind, 'deny');
+  denied(dl({ name: 'plain', method: 'POST', path: '/in' }));
+  denied(dl({ name: 'plain', method: 'HEAD', path: '/out' }));
+  denied(dl({ name: 'plain', method: 'GET', path: '/in' }));
+  denied(dl({ name: 'plain', method: 'GET', path: '/out/../in' }));
+  denied(dl({ name: 'nope', method: 'GET', path: '/out' }));
+  denied(dl({ name: 'plain', method: 'GET', path: '/out', body: 'x' }));
+  denied(dl({ name: 'plain', method: 'GET', path: '/out', headers: { Cookie: 'a=b' } }));
+  denied(dl({ name: 'plain', method: 'GET', path: '/out', query: 'a b' }));
+  denied(dl(undefined as unknown as object));
+  denied(dl({ name: 'plain', method: 'GET', path: '/out' }, { filename: 'x'.repeat(300) }));
+  denied(dl({ name: 'plain', method: 'GET', path: '/out' }, { filename: 5 }));
+  // The plugin id is the manifest's.
+  const p = authorizeDownload(xfer, { req: { name: 'plain', method: 'GET', path: '/out' }, plugin: 'other' }, user);
+  assert.ok(p.kind === 'transfer' && p.body.plugin === 'docker');
+});
+
+test('download of a command: declared, not pty, argument list checked, admin by level', () => {
+  const p = authorizeDownload(xfer, { command: 'dump', args: ['x'], filename: 'd.bin' }, user);
+  assert.deepEqual(p, { kind: 'transfer', transfer: 'download', body: { kind: 'download', plugin: 'docker', command: 'dump', args: ['x'], filename: 'd.bin', admin: false }, admin: false });
+  const r = authorizeDownload(xfer, { command: 'rootdump' }, user);
+  assert.ok(r.kind === 'transfer' && r.admin);
+  for (const a of [{ command: 'nope' }, { command: 'shell' }, { command: 'dump', args: 'x' }, { command: 'dump', args: new Array(17).fill('a') }, { command: 'dump', args: [1] }]) {
+    assert.equal(authorizeDownload(xfer, a, user).kind, 'deny', JSON.stringify(a));
+  }
+});
+
+test('upload: POST or PUT of a declared path, size within maxUpload', () => {
+  const up = (req: object, size: unknown = 10) => authorizeUpload(xfer, req, size, user);
+  const p = up({ name: 'docker', method: 'POST', path: '/images/load', query: 'quiet=1', headers: { 'X-Registry-Auth': 'tok' } }, 500);
+  assert.ok(p.kind === 'transfer' && p.transfer === 'upload' && p.admin && p.size === 500);
+  assert.ok(p.kind === 'transfer' && p.body.size === 500 && p.body.kind === 'upload' && p.body.method === 'POST');
+  assert.ok(up({ name: 'docker', method: 'PUT', path: '/containers/abc/archive' }).kind === 'transfer');
+  assert.ok(up({ name: 'docker', method: 'POST', path: '/images/load' }, 1000).kind === 'transfer');
+  assert.equal(up({ name: 'docker', method: 'POST', path: '/images/load' }, 1001).kind, 'deny', 'over maxUpload');
+  assert.ok(up({ name: 'plain', method: 'POST', path: '/in' }, 20 * 2 ** 30).kind === 'transfer', 'default 20 GiB');
+  assert.equal(up({ name: 'plain', method: 'POST', path: '/in' }, 20 * 2 ** 30 + 1).kind, 'deny');
+  for (const bad of [
+    { name: 'docker', method: 'GET', path: '/images/busybox/get' },
+    { name: 'docker', method: 'DELETE', path: '/images/abc' },
+    { name: 'docker', method: 'PATCH', path: '/images/load' },
+    { name: 'docker', method: 'POST', path: '/images/other' },
+    { name: 'docker', method: 'POST', path: '/images/load', body: 'x' },
+    { name: 'docker', method: 'POST', path: '/images/load', headers: { Authorization: 'x' } },
+    { name: 'plain', method: 'PUT', path: '/in' },
+    { name: 'nope', method: 'POST', path: '/in' },
+    null,
+  ]) {
+    assert.equal(up(bad as object).kind, 'deny', JSON.stringify(bad));
+  }
+  for (const size of [-1, 1.5, NaN, Infinity, '10', null]) {
+    assert.equal(up({ name: 'plain', method: 'POST', path: '/in' }, size).kind, 'deny', String(size));
+  }
+});
+
+test('activity log: only this plugin, with checked parameters', () => {
+  const p = authorize(xfer, 'auditList', { limit: 50, user: 'ann', since: 1700000000000, until: '2026-10-02T00:00:00Z', cursor: '2026-10-01:3', plugin: 'other' }, user);
+  assert.deepEqual(p, {
+    kind: 'call',
+    method: 'plugins.audit.list',
+    params: { plugin: 'docker', user: 'ann', cursor: '2026-10-01:3', since: 1700000000000, until: '2026-10-02T00:00:00Z', limit: 50 },
+    admin: false,
+  });
+  assert.deepEqual(authorize(xfer, 'auditList', {}, user), { kind: 'call', method: 'plugins.audit.list', params: { plugin: 'docker' }, admin: false });
+  for (const bad of [{ limit: 0 }, { limit: 1001 }, { limit: 1.5 }, { user: 5 }, { since: {} }, { until: 'x'.repeat(41) }, { text: 'x'.repeat(257) }]) {
+    assert.equal(authorize(xfer, 'auditList', bad, user).kind, 'deny', JSON.stringify(bad));
+  }
+});
+
+test('inline request bodies: up to 8 MiB, base64 for long text, a clear error above', () => {
+  const api = { name: 'svc', socket: '/run/s.sock', rules: [{ methods: ['POST'], path: '/in' }] };
+  const m: BrokerManifest = { id: 'p', capabilities: { http: [api] } };
+  const call = (body: unknown) => authorize(m, 'http', { name: 'svc', method: 'POST', path: '/in', body }, user);
+  const small = call('hello');
+  assert.ok(small.kind === 'call' && small.params.body === 'hello' && small.params.b64 === undefined);
+  // A long text goes out as base64 (JSON escaping cannot grow it past the frame limit).
+  const text = 'é"\n'.repeat(200_000); // 600 k chars
+  const long = call(text);
+  assert.ok(long.kind === 'call' && long.params.b64 === true);
+  assert.equal(Buffer.from(String((long as { params: { body: string } }).params.body), 'base64').toString(), text);
+  assert.equal(call(new Uint8Array(8 << 20)).kind, 'call', '8 MiB of bytes');
+  const tooBig = call(new Uint8Array((8 << 20) + 1));
+  assert.ok(tooBig.kind === 'deny' && /sdk\.api\.upload/.test(tooBig.message));
+  const hugeText = call('x'.repeat((8 << 20) + 1));
+  assert.ok(hugeText.kind === 'deny' && /sdk\.api\.upload/.test(hugeText.message));
+  assert.equal(call('é'.repeat(5 << 20)).kind, 'deny', 'text that is over 8 MiB as UTF-8');
+  // Streams use the same check.
+  assert.equal(authorizeHttpStream(m, { name: 'svc', method: 'POST', path: '/in', body: new Uint8Array((8 << 20) + 1) }, user).kind, 'deny');
+});
+
+test('upload can ask for the response as a stream', () => {
+  const up = (stream?: boolean) => authorizeUpload(xfer, { name: 'plain', method: 'POST', path: '/in' }, 10, user, stream);
+  const a = up();
+  assert.ok(a.kind === 'transfer' && !('stream' in a.body));
+  const b = up(true);
+  assert.ok(b.kind === 'transfer' && b.body.stream === true);
+});
+
+/* ---------- sdk.saveFile ---------- */
+
+test('saveFile: a cleaned name, a checked MIME type, the data kinds a plugin may hold', () => {
+  const save = (a: Record<string, unknown>) => authorize(docker, 'saveFile', a, user);
+  const p = save({ filename: 'export.json', data: '{"a":1}', mime: 'application/json' });
+  assert.ok(p.kind === 'save' && p.filename === 'export.json' && p.mime === 'application/json' && p.size === 7);
+  const bytes = save({ filename: 'a.bin', data: new Uint8Array(5) });
+  assert.ok(bytes.kind === 'save' && bytes.mime === 'application/octet-stream' && bytes.size === 5);
+  const blob = save({ filename: 'a.tar', data: new Blob(['abc']), mime: 'application/x-tar' });
+  assert.ok(blob.kind === 'save' && blob.size === 3);
+  assert.ok((save({ filename: 'é.txt', data: 'é' }) as { size: number }).size === 2, 'size is in UTF-8 bytes');
+  for (const bad of [
+    {},
+    { filename: '', data: 'x' },
+    { filename: 5, data: 'x' },
+    { filename: 'x'.repeat(1025), data: 'x' },
+    { filename: 'a', data: 5 },
+    { filename: 'a', data: { length: 1 } },
+    { filename: 'a', data: null },
+    { filename: 'a', data: 'x', mime: 'text/html; charset=utf-8' },
+    { filename: 'a', data: 'x', mime: 'nonsense' },
+    { filename: 'a', data: 'x', mime: 5 },
+  ]) {
+    assert.equal(save(bad).kind, 'deny', JSON.stringify(bad));
+  }
+});
+
+test('saveFile: at most 64 MiB, with the way to a bigger file in the message', () => {
+  const save = (data: unknown) => authorize(docker, 'saveFile', { filename: 'a', data }, user);
+  assert.equal(save(new Uint8Array(64 << 20)).kind, 'save');
+  const big = save(new Uint8Array((64 << 20) + 1));
+  assert.ok(big.kind === 'deny' && /sdk\.api\.download/.test(big.message));
+  assert.equal(save(new Blob([new Uint8Array((64 << 20) + 1)])).kind, 'deny');
+  assert.equal(save('é'.repeat(33 << 20)).kind, 'deny', 'a text of 66 MiB as UTF-8');
+});
+
+test('saveFile names never carry a path or special characters', () => {
+  for (const [name, want] of Object.entries({
+    'backup.tar': 'backup.tar',
+    '../../etc/passwd': 'passwd',
+    'C:\\dir\\file.zip': 'file.zip',
+    'a"b;c<d>.tar': 'a_b_c_d_.tar',
+    '.hidden': 'hidden',
+    '...': 'download',
+    'line\nbreak.txt': 'line_break.txt',
+    'x\u202egnp.exe': 'x_gnp.exe',
+    '$(rm -rf).tar': '_(rm -rf).tar',
+    'trailing. ': 'trailing',
+    'naïve résumé.tar': 'naïve résumé.tar',
+  })) {
+    assert.equal(sanitizeFilename(name), want, name);
+  }
+  assert.equal(new TextEncoder().encode(sanitizeFilename('é'.repeat(300))).length <= 200, true);
+  assert.equal(sanitizeFilename('a'.repeat(300)).length, 200);
+});
+
+test('saveFile is rate limited per frame', () => {
+  const l = new SaveLimiter(3, 1000, 100);
+  assert.ok(l.allow(10, 0) && l.allow(10, 100) && l.allow(10, 200));
+  assert.equal(l.allow(10, 300), false, 'a fourth file in the window');
+  assert.ok(l.allow(10, 1001), 'the first one aged out');
+  const bytes = new SaveLimiter(100, 1000, 100);
+  assert.ok(bytes.allow(60, 0));
+  assert.equal(bytes.allow(60, 10), false, 'over the byte budget');
+  assert.ok(bytes.allow(40, 20));
+  assert.ok(bytes.allow(60, 1500), 'the window moved on');
 });

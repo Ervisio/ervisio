@@ -103,6 +103,30 @@ func Register(r *rpc.Registry) {
 		return runHTTPStream(ctx, c, s, p)
 	})
 
+	// Large transfers: streamed GET downloads (HTTP API or command output)
+	// and uploads as a request body (see transfer.go).
+	r.Stream("plugins.httpDownload", rpc.User, func(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
+		var p HTTPParams
+		if err := c.Bind(&p); err != nil {
+			return err
+		}
+		return runHTTPDownload(ctx, c, s, p)
+	})
+	r.Stream("plugins.execDownload", rpc.User, func(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
+		var p ExecParams
+		if err := c.Bind(&p); err != nil {
+			return err
+		}
+		return runExecDownload(ctx, c, s, p)
+	})
+	r.Stream("plugins.httpUpload", rpc.User, func(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
+		var p UploadParams
+		if err := c.Bind(&p); err != nil {
+			return err
+		}
+		return runHTTPUpload(ctx, c, s, p)
+	})
+
 	// Plugin-scoped file access: only inside capabilities.files, with the
 	// user's own rights, or on the root bridge for folders declared admin
 	// (see files.go).

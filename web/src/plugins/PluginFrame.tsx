@@ -2,17 +2,20 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { useNavigate } from 'react-router-dom';
 import { ApiError, call, fromBase64, stream, toBase64, useSession, type StreamHandle } from '../api';
 import { apiUrl, FETCH_CREDENTIALS } from '../api/base';
+import { saveDownload, sendUpload, startTransfer } from '../api/transfer';
 import { useI18n, useT } from '../i18n';
 import { themeVars, useTheme } from '../theme';
 import { EmptyState, Skeleton, toast } from '../ui';
-import { authorize, authorizeHttpStream, authorizePty, authorizeStream, type BrokerUser, type Plan } from './broker';
-import { isFrameMessage, type FrameError, type FrameHttpResult, type FrameTheme, type FrameToHost, type FrameView, type HostToFrame } from './protocol';
+import { authorize, authorizeHttpStream, authorizePty, authorizeStream, authorizeUpload, SaveLimiter, type BrokerUser, type Plan } from './broker';
+import { isFrameMessage, type FrameError, type FrameHttpResult, type FrameTheme, type FrameToHost, type FrameUploadResult, type FrameView, type HostToFrame } from './protocol';
 import { usePlugins } from './PluginsProvider';
 import type { PluginManifest } from './types';
 
 // Per frame. A page may follow many containers' stats at once; the app's WebSocket allows 128 channels per session.
 const MAX_STREAMS = 32;
 const MAX_PENDING = 32;
+// Uploads running at once per frame (the daemon also limits a session's transfers).
+const MAX_UPLOADS = 4;
 const WIDGET_MIN = 48;
 const WIDGET_MAX = 720;
 
@@ -84,12 +87,17 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
     let pending = 0;
     // Every stream the frame opened; all are closed when the frame fails or goes away.
     const streams = new Map<number, { h: StreamHandle; kind: 'exec' | 'http' | 'pty' }>();
+    const saves = new SaveLimiter();
+    // Uploads in progress; aborted with the frame.
+    const uploads = new Map<number, AbortController>();
 
     const fail = (msg: string) => {
       if (dead) return;
       dead = true;
       for (const s of streams.values()) s.h.close();
       streams.clear();
+      for (const u of uploads.values()) u.abort();
+      uploads.clear();
       setFailure(msg);
       setPhase('failed');
       reportError(plugin.id, msg);
@@ -142,6 +150,37 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
               : call(plan.method, plan.params, { admin: plan.admin }),
           );
           return;
+        case 'transfer':
+          // plugins.download: the daemon checks the request, then the app (not the sandboxed frame) starts the browser's download.
+          reply(
+            m.id,
+            startTransfer(plan.body, plan.admin).then((r) => {
+              saveDownload(r);
+              return { filename: r.filename ?? 'download', size: r.size, status: r.status };
+            }),
+          );
+          return;
+        case 'save': {
+          // Data the plugin holds in memory, saved from the app (the sandboxed frame may not download).
+          if (!saves.allow(plan.size)) {
+            reply(m.id, Promise.reject(new ApiError('unavailable', 'Too many files saved at once. Wait a few seconds and try again.')));
+            return;
+          }
+          const url = URL.createObjectURL(new Blob([plan.data as BlobPart], { type: plan.mime }));
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = plan.filename;
+          a.rel = 'noopener';
+          a.style.display = 'none';
+          document.body.appendChild(a);
+          a.click();
+          window.setTimeout(() => {
+            a.remove();
+            URL.revokeObjectURL(url);
+          }, 60_000);
+          reply(m.id, Promise.resolve({ filename: plan.filename, size: plan.size }));
+          return;
+        }
         case 'asset':
           reply(
             m.id,
@@ -225,6 +264,48 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
       }
     };
 
+    const onUploadOpen = (m: Extract<FrameToHost, { t: 'upload-open' }>) => {
+      const uid = m.uid;
+      if (typeof uid !== 'number' || uploads.has(uid)) return;
+      const out = (
+        msg:
+          | { ev: 'progress'; loaded: number; total: number }
+          | { ev: 'start'; status: number; headers: Record<string, string> }
+          | { ev: 'data'; chunk: Uint8Array }
+          | { ev: 'done'; result: FrameUploadResult }
+          | { ev: 'error'; error: FrameError },
+        transfer?: Transferable[],
+      ) => !dead && post({ la: 'plugin', t: 'upload', uid, ...msg } as HostToFrame, transfer);
+      const fail = (e: unknown) => out({ ev: 'error', error: toFrameError(e) });
+      if (uploads.size >= MAX_UPLOADS) return fail(new ApiError('unavailable', 'Too many uploads at once.'));
+      if (!(m.file instanceof Blob)) return fail(new ApiError('invalid', 'Give a file (a File or Blob).'));
+      const { user, plugin: p } = live.current;
+      const stream = m.stream === true;
+      const plan = authorizeUpload(p, m.req, m.file.size, user, stream);
+      if (plan.kind === 'deny') return fail(new ApiError(plan.code, plan.message));
+      if (plan.kind !== 'transfer') return fail(new ApiError('invalid', 'bad upload'));
+      const ctl = new AbortController();
+      uploads.set(uid, ctl);
+      const file = m.file;
+      startTransfer(plan.body, plan.admin)
+        .then((r) => sendUpload(r, file, {
+            signal: ctl.signal,
+            onProgress: (loaded, total) => out({ ev: 'progress', loaded, total }),
+            ...(stream
+              ? {
+                  stream: {
+                    onStart: (status, headers) => out({ ev: 'start', status, headers }),
+                    onData: (chunk) => out({ ev: 'data', chunk }, [chunk.buffer]),
+                  },
+                }
+              : {}),
+          }),
+        )
+        .then((result) => out({ ev: 'done', result: { ...toHttpResult(result), ...(result.truncated ? { truncated: true } : {}) } }))
+        .catch(fail)
+        .finally(() => uploads.delete(uid));
+    };
+
     const onMessage = (ev: MessageEvent) => {
       const win = frameRef.current?.contentWindow;
       if (dead || !win || ev.source !== win || !isFrameMessage(ev.data)) return;
@@ -252,6 +333,12 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
         case 'stream-input':
           onStreamInput(m);
           break;
+        case 'upload-open':
+          onUploadOpen(m);
+          break;
+        case 'upload-cancel':
+          uploads.get(m.uid)?.abort();
+          break;
         case 'stream-close': {
           const s = streams.get(m.sid);
           streams.delete(m.sid);
@@ -276,6 +363,8 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
       el?.removeEventListener('load', onLoad);
       for (const s of streams.values()) s.h.close();
       streams.clear();
+      for (const u of uploads.values()) u.abort();
+      uploads.clear();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

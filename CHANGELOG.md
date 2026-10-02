@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **Large transfers for plugins.** `sdk.api.download(name, req, filename)` (and `downloadCommand`) saves the response of a `GET` to a plugin's HTTP API, or a declared command's output, as a browser download: the bytes stream from the service to the disk with no memory use and no size limit. `sdk.api.upload(name, req, file, …)` sends a `File` as the body of a `POST` or `PUT` with progress, cancel and a size limit from the manifest (`capabilities.http[].maxUpload`, default 20 GiB), and can hand the response back as it arrives (a Docker build). Both go through a one-time, 60-second link bound to the session, with the same rules, admin unlock, origin checks and rate limits as `plugins.http`. See `docs/api/plugins.md`, "Large transfers".
+- **Activity log.** The daemon records every mutating plugin call (commands, terminals, HTTP calls other than `GET`/`HEAD`, uploads, file writes, folders, removals), downloads, sign-ins, administrator unlocks, plugin installs and removals and settings changes: time, user, address, plugin, target and result. Request headers, bodies and secrets in arguments or query strings are never stored. It is an append-only JSON-lines file per day under `/var/lib/ervisio/audit/`, kept for `audit.retention_days` (default 90) and switched by `audit.enabled`. Settings › Activity log lists, filters and exports it as CSV or JSON (everyone sees their own entries, administrators everyone's), and plugins read their own with `sdk.audit.list()`.
+- `sdk.saveFile(filename, data, mime?)` saves data a plugin already holds (a string, bytes or a Blob, up to 64 MiB) as a browser download, done by the app because the plugin frame is sandboxed and cannot download; the name is cleaned and each frame is limited to 10 files in 30 seconds.
+- `capabilities.http[].maxUpload`, and the settings `audit.enabled` and `audit.retention_days`.
+
+### Changed
+- A plugin HTTP request body of up to 8 MiB (the default `maxBody`) now reaches the service through `plugins.http` and `plugins.httpStream`. The limits were 1 MiB for `/api/rpc` and 512 KiB for the WebSocket frame that opens a stream, and a body over the second dropped the connection. They are now 12 MiB for both, a body over 8 MiB is refused with a message that points to `sdk.api.upload`, and writing a 4 MiB file with `plugins.writeFile` works.
+
 ## [0.4.0] - 2026-10-02
 
 ### Changed

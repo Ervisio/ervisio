@@ -24,7 +24,8 @@
     "plugpol": "Plugins",
     "hosts": "Hosts",
     "about": "About",
-    "browser": "This browser"
+    "browser": "This browser",
+    "activity": "Activity log"
   },
   "note": {
     "default": "Default",
@@ -192,7 +193,10 @@
     "allowGroupsDesc": "Everyone in one of these groups, including their primary group.",
     "allowGroupsHint": "Add a group name and press Enter",
     "badName": "{name} is not a valid name (letters, digits, _ . @ -)",
-    "removeName": "Remove {name}"
+    "removeName": "Remove {name}",
+    "activity": "Activity log",
+    "activityDesc": "Who signed in, unlocked administrator rights, installed plugins or changed settings, and what plugins did.",
+    "activityOpen": "Open the activity log"
   },
   "plugpol": {
     "unsigned": "Allow community plugins",
@@ -310,6 +314,81 @@
       "desc": "{name} installs new versions by itself every day at this time, and restarts. Skipped while software is being installed.",
       "at": "Time",
       "managed": "Not available: {manager} installs the updates of {name}."
+    }
+  },
+  "activity": {
+    "title": "Activity log",
+    "desc": "What happened through the console and its plugins: sign-ins, administrator unlocks, plugin installs, settings, and every change a plugin made. Secrets are never recorded.",
+    "ownOnly": "You see your own activity. Administrators see everyone's.",
+    "ownOnlyUnlock": "You see your own activity. Unlock administrator rights to see everyone's.",
+    "off": "The activity log is off, so new actions are not recorded. Turn it on below.",
+    "loading": "Loading…",
+    "count": "{count} entries",
+    "empty": "Nothing recorded yet",
+    "emptyText": "Sign-ins, settings changes and plugin actions appear here.",
+    "noMatch": "No entry matches these filters",
+    "more": "Show older entries",
+    "failed": "Couldn't load the activity log: {error}",
+    "exportCsv": "Export CSV",
+    "exportJson": "Export JSON",
+    "core": "Console",
+    "admin": "as administrator",
+    "col": {
+      "time": "Time",
+      "who": "Who",
+      "what": "What",
+      "target": "Target",
+      "result": "Result"
+    },
+    "result": {
+      "ok": "Done",
+      "failed": "Failed",
+      "denied": "Refused",
+      "error": "Error"
+    },
+    "f": {
+      "text": "Search target or message",
+      "plugin": "Plugin id",
+      "user": "User",
+      "source": "Source",
+      "anySource": "Console and plugins",
+      "plugins": "Plugins only",
+      "console": "Console only",
+      "result": "Result",
+      "anyResult": "Any result",
+      "since": "From",
+      "until": "To",
+      "clear": "Clear filters"
+    },
+    "actions": {
+      "command": "Ran a command",
+      "pty": "Opened a terminal",
+      "http": "Changed a service",
+      "upload": "Uploaded a file",
+      "download": "Downloaded a file",
+      "file_write": "Wrote a file",
+      "file_mkdir": "Created a folder",
+      "file_remove": "Removed a file or folder",
+      "login": "Signed in",
+      "login_failed": "Sign-in failed",
+      "logout": "Signed out",
+      "unlock": "Unlocked administrator rights",
+      "lock": "Locked administrator rights",
+      "plugin_install": "Installed a plugin",
+      "plugin_uninstall": "Removed a plugin",
+      "plugin_enable": "Turned a plugin on",
+      "plugin_disable": "Turned a plugin off",
+      "settings": "Changed a setting"
+    },
+    "on": {
+      "title": "Record activity",
+      "desc": "Keep the activity log. When off, nothing new is written; what is already there stays until it expires."
+    },
+    "keep": {
+      "title": "Keep the log for",
+      "desc": "Older daily files are deleted automatically.",
+      "days": "{count} days",
+      "forever": "Keep forever"
     }
   }
 }

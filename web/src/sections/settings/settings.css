@@ -185,3 +185,25 @@
 
 .st-brand { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
 .st-brand small { color: var(--ink2); font-size: 13px; }
+
+/* activity log */
+.st-act { display: flex; flex-direction: column; gap: 12px; }
+.st-act-note { margin: 0; color: var(--ink3); font-size: 13px; }
+.st-act-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.st-act-filters > .ui-field { flex: 1 1 150px; min-width: 130px; }
+.st-act-filters .ui-in { min-width: 0; }
+.st-act-date { display: flex; flex-direction: column; gap: 3px; flex: 1 1 130px; font-size: 11.5px; font-weight: 700; color: var(--ink3); }
+.st-act-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.st-act-count { font-size: 13px; font-weight: 700; color: var(--ink3); }
+.st-act-export { display: flex; gap: 8px; flex-wrap: wrap; }
+.st-act-who, .st-act-what, .st-act-result { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.st-act-who small, .st-act-what small, .st-act-result small, .st-act-target small { color: var(--ink3); font-size: 11.5px; }
+.st-act-who b, .st-act-what b { font-weight: 700; overflow-wrap: anywhere; }
+.st-act-result .ui-badge { align-self: flex-start; }
+.st-act-target { display: flex; flex-direction: column; gap: 2px; font: 12.5px var(--mono); overflow-wrap: anywhere; word-break: break-all; min-width: 0; }
+.st-act-target small { font-family: inherit; }
+.st-act-more { display: flex; justify-content: center; padding-top: 4px; }
+.st-act-card { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.st-act-card .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.st-act-card .top b { font-weight: 700; }
+.st-act-card .meta { color: var(--ink3); font-size: 11.5px; overflow-wrap: anywhere; }

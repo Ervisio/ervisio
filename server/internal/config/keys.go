@@ -156,6 +156,16 @@ var keys = []Key{
 		get: func(c *Config) any { return c.Plugins.CatalogURL }, set: func(c *Config, v any) { c.Plugins.CatalogURL = v.(string) }, validate: validateCatalogURL},
 	{Name: "plugins.catalog_key", Type: String,
 		get: func(c *Config) any { return c.Plugins.CatalogKey }, set: func(c *Config, v any) { c.Plugins.CatalogKey = v.(string) }, validate: validateEd25519Key},
+	{Name: "audit.enabled", Type: Bool,
+		get: func(c *Config) any { return c.Audit.Enabled }, set: func(c *Config, v any) { c.Audit.Enabled = v.(bool) }, validate: noCheck},
+	{Name: "audit.retention_days", Type: Int,
+		get: func(c *Config) any { return c.Audit.RetentionDays }, set: func(c *Config, v any) { c.Audit.RetentionDays = v.(int) },
+		validate: func(v any) error {
+			if n := v.(int); n < 0 || n > 3650 {
+				return errors.New("must be between 0 (keep forever) and 3650 days")
+			}
+			return nil
+		}},
 	{Name: "updates.channel", Type: Enum, Values: []string{"stable", "prerelease"},
 		get: func(c *Config) any { return c.Updates.Channel }, set: func(c *Config, v any) { c.Updates.Channel = v.(string) },
 		validate: func(v any) error {
