@@ -2364,7 +2364,11 @@ main() {
 		shift
 	done
 	[ "$PURGE" = 1 ] && [ "$UNINSTALL" = 0 ] && die "--purge only goes with --uninstall."
-	[ -n "$F_CERT" ] || [ -n "$F_KEY" ] && { [ -n "$F_CERT" ] && [ -n "$F_KEY" ] || die "--tls-cert and --tls-key go together."; }
+	if [ -n "$F_CERT" ] || [ -n "$F_KEY" ]; then
+		if [ -z "$F_CERT" ] || [ -z "$F_KEY" ]; then
+			die "--tls-cert and --tls-key go together."
+		fi
+	fi
 	[ "$CADDY_MODE" = yes ] && [ "$F_PROXY" = 1 ] && die "--caddy and --behind-proxy exclude each other (--caddy already sets up the proxy case)."
 	[ -n "$F_DOMAIN" ] && [ "$CADDY_MODE" = no ] && die "--domain only goes with Caddy."
 	[ -n "$F_DOMAIN" ] && [ "$CADDY_MODE" = auto ] && CADDY_MODE=yes
