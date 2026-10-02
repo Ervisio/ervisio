@@ -1,0 +1,46 @@
+# pacman install script of the ervisio and ervisio-bin packages.
+
+# Ervisio was called LinuxAdmin up to 0.2.0: copy its configuration,
+# certificate, plugins and state (the linuxadmin package was removed by
+# pacman; /etc/linuxadmin and /var/lib/linuxadmin stay until you delete them).
+_migrate() {
+	if [ -d /etc/linuxadmin ] || [ -d /var/lib/linuxadmin ]; then
+		/usr/bin/ervisiod --migrate-legacy || true
+		cat <<'MSG'
+==> Ervisio was called LinuxAdmin: its settings were copied to /etc/ervisio
+    (see /etc/linuxadmin/MOVED-TO-ERVISIO.txt). Start it with:
+      systemctl enable --now ervisio
+MSG
+		return 0
+	fi
+	return 1
+}
+
+post_install() {
+	_migrate && return 0
+	cat <<'MSG'
+==> Start Ervisio and enable it at boot:
+      systemctl enable --now ervisio
+    then open https://<this host>:9090 (self-signed certificate) and sign in
+    with a Linux account.
+==> Administrator rights use sudo: members of the 'wheel' group need the
+    "%wheel ALL=(ALL:ALL) ALL" rule, which Arch ships commented out
+    (enable it with visudo).
+==> Updates come with pacman; Ervisio's own self-update is off.
+MSG
+}
+
+post_upgrade() {
+	# Restarts the service if it runs (deferred until pacman has finished
+	# when pacman was started from Ervisio itself).
+	/usr/lib/ervisio/package-service restart
+}
+
+pre_remove() {
+	systemctl disable ervisio.service >/dev/null 2>&1 || true
+	/usr/lib/ervisio/package-service stop
+}
+
+post_remove() {
+	echo "==> /etc/ervisio (configuration, TLS certificate) and /var/lib/ervisio (installed plugins) were kept."
+}

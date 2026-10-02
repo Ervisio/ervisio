@@ -1,8 +1,8 @@
 #!/bin/sh
-# %preun of the linuxadmin .rpm (nfpm). $1: 0 = removal, 1+ = upgrade.
-unit=linuxadmin.service
+# %preun of the ervisio .rpm (nfpm). $1: 0 = removal, 1+ = upgrade.
+unit=ervisio.service
 if [ "$1" -eq 0 ] && [ -d /run/systemd/system ]; then
 	systemctl --no-reload disable $unit >/dev/null 2>&1 || true
-	/usr/lib/linuxadmin/package-service stop || true
+	/usr/lib/ervisio/package-service stop || true
 fi
 exit 0

@@ -1,8 +1,8 @@
 #!/bin/sh
-# postrm of the linuxadmin .deb (nfpm), as dh_installsystemd generates it.
+# postrm of the ervisio .deb (nfpm), as dh_installsystemd generates it.
 # Purge also removes the configuration, the TLS certificate and installed plugins.
 set -e
-unit=linuxadmin.service
+unit=ervisio.service
 if [ -d /run/systemd/system ]; then
 	systemctl --system daemon-reload >/dev/null || true
 fi
@@ -14,6 +14,6 @@ if [ "$1" = purge ]; then
 		deb-systemd-helper purge $unit >/dev/null || true
 		deb-systemd-helper unmask $unit >/dev/null || true
 	fi
-	rm -rf /etc/linuxadmin /var/lib/linuxadmin
+	rm -rf /etc/ervisio /var/lib/ervisio
 fi
 exit 0

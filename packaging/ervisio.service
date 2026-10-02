@@ -1,15 +1,19 @@
 [Unit]
-Description=LinuxAdmin web console
-Documentation=https://github.com/Fonlogen/LinuxAdmin
+Description=Ervisio web console
+Documentation=https://github.com/ervisio/ervisio
 After=network-online.target
 Wants=network-online.target
+# Ervisio was called LinuxAdmin: both listen on the same port, so starting
+# one stops the other (the move from LinuxAdmin relies on it, and so does
+# going back to it: systemctl start linuxadmin).
+Conflicts=linuxadmin.service
 
 [Service]
 Type=simple
-# /usr/bin/linuxadmind -> /usr/lib/linuxadmin/current/bin/linuxadmind: the
+# /usr/bin/ervisiod -> /usr/lib/ervisio/current/bin/ervisiod: the
 # bridge, web app and packaged plugins are taken from the same version folder
 # (self-update moves `current`, see docs/RELEASING.md).
-ExecStart=/usr/bin/linuxadmind
+ExecStart=/usr/bin/ervisiod
 Restart=on-failure
 RestartSec=2
 # The daemon closes its bridges itself on SIGTERM; anything left is killed

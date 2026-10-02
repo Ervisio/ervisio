@@ -1,9 +1,9 @@
 #!/bin/sh
-# postinst of the linuxadmin .deb (nfpm). Follows what dh_installsystemd
+# postinst of the ervisio .deb (nfpm). Follows what dh_installsystemd
 # generates: enable on first install (deb-systemd-helper remembers if the
 # admin disabled it), start on first install, restart on upgrade.
 set -e
-unit=linuxadmin.service
+unit=ervisio.service
 
 case "$1" in
 configure | abort-upgrade | abort-deconfigure | abort-remove) ;;
@@ -11,15 +11,24 @@ configure | abort-upgrade | abort-deconfigure | abort-remove) ;;
 esac
 
 # A previous install made by install.sh (versioned layout) is replaced by
-# the package: dpkg has overwritten /usr/bin/linuxadmind and the bridge.
+# the package: dpkg has overwritten /usr/bin/ervisiod and the bridge.
 # The daemon still running is that install's: it is restarted below.
 replaced=0
-if [ -L /usr/lib/linuxadmin/current ]; then
-	rm -rf /usr/lib/linuxadmin/versions /usr/lib/linuxadmin/current /usr/lib/linuxadmin/previous /var/lib/linuxadmin/updates
+if [ -L /usr/lib/ervisio/current ]; then
+	rm -rf /usr/lib/ervisio/versions /usr/lib/ervisio/current /usr/lib/ervisio/previous /var/lib/ervisio/updates
 	replaced=1
 fi
-if [ -f /etc/systemd/system/$unit ] && head -n 1 /etc/systemd/system/$unit | grep -q '^# Installed by the LinuxAdmin installer'; then
+if [ -f /etc/systemd/system/$unit ] && head -n 1 /etc/systemd/system/$unit | grep -q '^# Installed by the Ervisio installer'; then
 	rm -f /etc/systemd/system/$unit
+fi
+
+# Ervisio was called LinuxAdmin: copy its configuration, certificate and
+# data (the linuxadmin package itself was removed by dpkg, Conflicts/Replaces;
+# an install made by LinuxAdmin's install.sh is removed below once Ervisio runs).
+legacy=0
+if [ -d /etc/linuxadmin ] || [ -d /var/lib/linuxadmin ] || [ -d /usr/lib/linuxadmin ]; then
+	legacy=1
+	/usr/bin/ervisiod --migrate-legacy || echo "Ervisio: copying LinuxAdmin's configuration failed; see above." >&2
 fi
 
 if [ -x /usr/bin/deb-systemd-helper ]; then
@@ -37,24 +46,30 @@ if [ -d /run/systemd/system ]; then
 	systemctl --system daemon-reload >/dev/null || true
 	# Upgrade, or the daemon of a replaced install.sh install still runs.
 	if [ -n "$2" ] || [ "$replaced" = 1 ]; then
-		/usr/lib/linuxadmin/package-service restart || true
+		/usr/lib/ervisio/package-service restart || true
 	fi
 	if [ -z "$2" ]; then
-		if [ -x /usr/bin/deb-systemd-invoke ]; then
-			deb-systemd-invoke start $unit >/dev/null || true
-		else
-			systemctl start $unit >/dev/null 2>&1 || true
-		fi
+		# Starting ervisio.service stops linuxadmin.service (same port); when
+		# this runs inside LinuxAdmin's terminal, that waits until apt is done.
+		/usr/lib/ervisio/package-service start || true
+	fi
+	if [ "$legacy" = 1 ] && [ -d /usr/lib/linuxadmin ] && [ ! -e /usr/lib/linuxadmin/managed ] &&
+		! systemctl is-active --quiet linuxadmin.service; then
+		/usr/bin/ervisiod --remove-legacy >/dev/null || true
 	fi
 fi
 
 if [ -z "$2" ]; then
 	if systemctl is-active --quiet $unit 2>/dev/null; then
-		echo "LinuxAdmin is running on https://$(uname -n):9090 (self-signed certificate)."
+		echo "Ervisio is running on https://$(uname -n):9090 (self-signed certificate)."
 	else
-		echo "Start LinuxAdmin with: systemctl enable --now $unit   (then open https://$(uname -n):9090)"
+		echo "Start Ervisio with: systemctl enable --now $unit   (then open https://$(uname -n):9090)"
 	fi
-	echo "Sign in with a Linux account; members of the 'sudo' group get administrator rights."
-	echo "If a firewall is active, open the port: ufw allow 9090/tcp"
+	if [ "$legacy" = 1 ]; then
+		echo "Ervisio was called LinuxAdmin: its settings were copied to /etc/ervisio (see /etc/linuxadmin/MOVED-TO-ERVISIO.txt)."
+	else
+		echo "Sign in with a Linux account; members of the 'sudo' group get administrator rights."
+		echo "If a firewall is active, open the port: ufw allow 9090/tcp"
+	fi
 fi
 exit 0

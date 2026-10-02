@@ -4,11 +4,16 @@
 # every src below is relative to that staging folder.
 #
 # Packages use the flat layout and mark the install as managed:
-#   /usr/bin/linuxadmind                     daemon
-#   /usr/lib/linuxadmin/linuxadmin-bridge    bridge
-#   /usr/share/linuxadmin/{web,plugins}      web app, first-party plugins
-#   /usr/lib/linuxadmin/managed              "apt" / "dnf" / "zypper": self-update is off
-name: linuxadmin
+#   /usr/bin/ervisiod                  daemon
+#   /usr/lib/ervisio/ervisio-bridge    bridge
+#   /usr/share/ervisio/{web,plugins}   web app, first-party plugins
+#   /usr/lib/ervisio/managed           "apt" / "dnf" / "zypper": self-update is off
+#
+# Ervisio was called LinuxAdmin up to 0.2.0: the package replaces the
+# linuxadmin package (deb: Replaces/Conflicts/Provides, rpm: Obsoletes/
+# Provides), and the install scripts copy its configuration and data
+# (ervisiod --migrate-legacy, docs/RELEASING.md "Rename transition").
+name: ervisio
 arch: ${ARCH}
 platform: linux
 version: ${VERSION}
@@ -18,7 +23,7 @@ section: admin
 priority: optional
 maintainer: Fonlogen <info.fonlogen@gmail.com>
 vendor: Fonlogen
-homepage: https://github.com/Fonlogen/LinuxAdmin
+homepage: https://github.com/ervisio/ervisio
 license: MIT
 description: |-
   Web console for managing a Linux server from the browser
@@ -28,84 +33,90 @@ description: |-
   (HTTPS, self-signed certificate on first start).
 
 contents:
-  - src: ./bin/linuxadmind
-    dst: /usr/bin/linuxadmind
+  - src: ./bin/ervisiod
+    dst: /usr/bin/ervisiod
     file_info:
       mode: 0755
-  - src: ./bin/linuxadmin-bridge
-    dst: /usr/lib/linuxadmin/linuxadmin-bridge
+  - src: ./bin/ervisio-bridge
+    dst: /usr/lib/ervisio/ervisio-bridge
     file_info:
       mode: 0755
   - src: ./package-service.sh
-    dst: /usr/lib/linuxadmin/package-service
+    dst: /usr/lib/ervisio/package-service
     file_info:
       mode: 0755
   - src: ./web
-    dst: /usr/share/linuxadmin/web
+    dst: /usr/share/ervisio/web
     type: tree
   - src: ./plugins
-    dst: /usr/share/linuxadmin/plugins
+    dst: /usr/share/ervisio/plugins
     type: tree
   - src: ./LICENSE
-    dst: /usr/share/licenses/linuxadmin/LICENSE
+    dst: /usr/share/licenses/ervisio/LICENSE
     file_info:
       mode: 0644
-  - src: ./linuxadmin.service
-    dst: /usr/lib/systemd/system/linuxadmin.service
+  - src: ./ervisio.service
+    dst: /usr/lib/systemd/system/ervisio.service
     file_info:
       mode: 0644
-  - dst: /usr/lib/linuxadmin
+  - dst: /usr/lib/ervisio
     type: dir
     file_info:
       mode: 0755
-  - dst: /usr/share/linuxadmin
+  - dst: /usr/share/ervisio
     type: dir
     file_info:
       mode: 0755
-  - dst: /etc/linuxadmin
+  - dst: /etc/ervisio
     type: dir
     file_info:
       mode: 0755
-  - dst: /var/lib/linuxadmin
+  - dst: /var/lib/ervisio
     type: dir
     file_info:
       mode: 0755
 
   # Debian / Ubuntu: one PAM file, a conffile.
-  - src: ./pam.d/linuxadmin.debian
-    dst: /etc/pam.d/linuxadmin
+  - src: ./pam.d/ervisio.debian
+    dst: /etc/pam.d/ervisio
     type: config|noreplace
     packager: deb
     file_info:
       mode: 0644
   - src: ./managed.apt
-    dst: /usr/lib/linuxadmin/managed
+    dst: /usr/lib/ervisio/managed
     packager: deb
     file_info:
       mode: 0644
 
   # One .rpm for Fedora/RHEL and openSUSE: the post-install script writes
-  # /etc/pam.d/linuxadmin for the family it runs on, and the marker with the
+  # /etc/pam.d/ervisio for the family it runs on, and the marker with the
   # package manager there (dnf or zypper).
-  - src: ./pam.d/linuxadmin.fedora
-    dst: /usr/share/linuxadmin/pam.d/linuxadmin.fedora
+  - src: ./pam.d/ervisio.fedora
+    dst: /usr/share/ervisio/pam.d/ervisio.fedora
     packager: rpm
     file_info:
       mode: 0644
-  - src: ./pam.d/linuxadmin.suse
-    dst: /usr/share/linuxadmin/pam.d/linuxadmin.suse
+  - src: ./pam.d/ervisio.suse
+    dst: /usr/share/ervisio/pam.d/ervisio.suse
     packager: rpm
     file_info:
       mode: 0644
-  - dst: /etc/pam.d/linuxadmin
+  - dst: /etc/pam.d/ervisio
     type: ghost
     packager: rpm
-  - dst: /usr/lib/linuxadmin/managed
+  - dst: /usr/lib/ervisio/managed
     type: ghost
     packager: rpm
 
 overrides:
   deb:
+    replaces:
+      - linuxadmin
+    conflicts:
+      - linuxadmin
+    provides:
+      - linuxadmin
     depends:
       - sudo
       - libpam0g
@@ -116,6 +127,11 @@ overrides:
       preremove: ./scripts/deb-prerm
       postremove: ./scripts/deb-postrm
   rpm:
+    # nfpm writes "replaces" as Obsoletes for rpm.
+    replaces:
+      - linuxadmin < ${VERSION}
+    provides:
+      - linuxadmin = ${VERSION}
     depends:
       - sudo
       - pam
@@ -127,7 +143,7 @@ overrides:
 
 deb:
   fields:
-    Bugs: https://github.com/Fonlogen/LinuxAdmin/issues
+    Bugs: https://github.com/ervisio/ervisio/issues
 rpm:
   group: System Environment/Daemons
   summary: Web console for managing a Linux server from the browser

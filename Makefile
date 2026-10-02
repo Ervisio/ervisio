@@ -34,6 +34,7 @@ dev-web:
 
 # Release archive for this machine's architecture, as the release workflow
 # builds it: make dist VERSION=1.2.3  ->  dist/ervisio-1.2.3-linux-<arch>.tar.gz
+# (and the compatibility archive dist/linuxadmin-1.2.3-linux-<arch>.tar.gz)
 dist: build
 	./packaging/build-release.sh $(VERSION) $(shell cd server && $(GO) env GOARCH) dist
 

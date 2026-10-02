@@ -1,0 +1,31 @@
+pkgbase = ervisio-bin
+	pkgdesc = Web console for managing a Linux server from the browser (prebuilt; formerly LinuxAdmin)
+	pkgver = 0.3.0
+	pkgrel = 1
+	url = https://github.com/ervisio/ervisio
+	install = ervisio.install
+	arch = x86_64
+	arch = aarch64
+	license = MIT
+	depends = glibc
+	depends = pam
+	depends = sudo
+	depends = systemd
+	provides = ervisio=0.3.0
+	conflicts = ervisio
+	conflicts = linuxadmin
+	conflicts = linuxadmin-bin
+	replaces = linuxadmin-bin
+	options = !strip
+	options = !debug
+	backup = etc/pam.d/ervisio
+	source = ervisio.pam
+	source = package-service.sh
+	sha256sums = SKIP
+	sha256sums = SKIP
+	source_x86_64 = https://github.com/ervisio/ervisio/releases/download/v0.3.0/ervisio-0.3.0-linux-amd64.tar.gz
+	sha256sums_x86_64 = SKIP
+	source_aarch64 = https://github.com/ervisio/ervisio/releases/download/v0.3.0/ervisio-0.3.0-linux-arm64.tar.gz
+	sha256sums_aarch64 = SKIP
+
+pkgname = ervisio-bin

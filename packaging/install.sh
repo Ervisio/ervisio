@@ -2,8 +2,8 @@
 # Installs the release folder this script belongs to, for an archive
 # downloaded by hand from the GitHub release page:
 #
-#   tar xzf linuxadmin-1.2.0-linux-amd64.tar.gz
-#   sudo ./linuxadmin-1.2.0-linux-amd64/packaging/install.sh [--dry-run] [--yes] [--open-firewall]
+#   tar xzf ervisio-1.2.0-linux-amd64.tar.gz
+#   sudo ./ervisio-1.2.0-linux-amd64/packaging/install.sh [--dry-run] [--yes] [--open-firewall]
 #
 # It runs the installer shipped at the top of the folder (the same script as
 # install.sh at the root of the repository) with --from <release folder>, so

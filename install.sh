@@ -1,12 +1,12 @@
 #!/bin/sh
-# LinuxAdmin installer.
+# Ervisio installer.
 #
-#   curl -fsSL https://raw.githubusercontent.com/Fonlogen/LinuxAdmin/main/install.sh | sudo sh
-#   curl -fsSL https://raw.githubusercontent.com/Fonlogen/LinuxAdmin/main/install.sh | sudo sh -s -- --version 0.1.0
+#   curl -fsSL https://raw.githubusercontent.com/ervisio/ervisio/main/install.sh | sudo sh
+#   curl -fsSL https://raw.githubusercontent.com/ervisio/ervisio/main/install.sh | sudo sh -s -- --version 0.1.0
 #
 # or download it, read it, then run it:
 #
-#   curl -fsSLO https://raw.githubusercontent.com/Fonlogen/LinuxAdmin/main/install.sh
+#   curl -fsSLO https://raw.githubusercontent.com/ervisio/ervisio/main/install.sh
 #   less install.sh
 #   sudo sh install.sh [options]
 #
@@ -15,18 +15,22 @@
 # Linux 2, against the release key below) and its sha256, installs it into
 # the versioned layout that self-update uses (docs/RELEASING.md):
 #
-#   /usr/lib/linuxadmin/versions/<version>/{bin,web,plugins,packaging,VERSION}
-#   /usr/lib/linuxadmin/current  -> versions/<version>
-#   /usr/lib/linuxadmin/previous -> versions/<version before>   (rollback)
-#   /usr/bin/linuxadmind         -> /usr/lib/linuxadmin/current/bin/linuxadmind
+#   /usr/lib/ervisio/versions/<version>/{bin,web,plugins,packaging,VERSION}
+#   /usr/lib/ervisio/current  -> versions/<version>
+#   /usr/lib/ervisio/previous -> versions/<version before>   (rollback)
+#   /usr/bin/ervisiod         -> /usr/lib/ervisio/current/bin/ervisiod
 #
 # writes the PAM service for this distribution and the systemd unit, makes
-# sure sudo is installed, and starts linuxadmin.service. On a first install it
+# sure sudo is installed, and starts ervisio.service. On a first install it
 # asks a few questions (port, who can reach it, root sign-in, who may sign in,
-# admin unlock time, TLS, Caddy) and writes /etc/linuxadmin/linuxadmin.conf; answers come from the
+# admin unlock time, TLS, Caddy) and writes /etc/ervisio/ervisio.conf; answers come from the
 # terminal even when the script is piped, and --yes or no terminal means the
 # defaults. Running it again upgrades or repairs the installation and keeps the
-# configuration. LinuxAdmin installed this way
+# configuration. Ervisio was called LinuxAdmin up to 0.2.0: on a machine with
+# LinuxAdmin, its configuration, certificate, plugins and state are copied to
+# the Ervisio locations (ervisiod --migrate-legacy), then LinuxAdmin's
+# programs and unit are removed; /etc/linuxadmin and /var/lib/linuxadmin stay
+# until you delete them. Ervisio installed this way
 # updates itself from Settings > About. Installs made by a distribution
 # package (.deb, .rpm, AUR) are left alone: update those with the package
 # manager.
@@ -37,8 +41,8 @@
 #   --from DIR                 install a release folder already on disk (an extracted
 #                              archive, or the folder packaging/install-dev.sh builds);
 #                              nothing is downloaded or signature-checked
-#   --uninstall                remove LinuxAdmin (keeps /etc/linuxadmin and installed plugins)
-#   --purge                    with --uninstall: also remove /etc/linuxadmin and /var/lib/linuxadmin
+#   --uninstall                remove Ervisio (keeps /etc/ervisio and installed plugins)
+#   --purge                    with --uninstall: also remove /etc/ervisio and /var/lib/ervisio
 #   --open-firewall            open the port in ufw or firewalld when one of them is active
 #   --dry-run                  show what would be done, change nothing (can run without root)
 #   -y, --yes                  do not ask questions: every answer is the default (the firewall is
@@ -55,39 +59,48 @@
 #   --admin-unlock D           how long administrator rights stay unlocked: 5m (default), 15m, 1h,
 #                              any 30s-24h, or signout (until sign-out)
 #   --tls-cert F --tls-key F   use your own certificate instead of the self-signed one
-#   --behind-proxy             a reverse proxy on this machine fronts LinuxAdmin (plain HTTP on 127.0.0.1)
+#   --behind-proxy             a reverse proxy on this machine fronts Ervisio (plain HTTP on 127.0.0.1)
 #   --origin URL               browser origin to accept (web.allowed_origins), e.g. https://admin.example.org
 #   --trusted-proxy ADDR       address or CIDR of a reverse proxy to trust (web.trusted_proxies)
 #   --caddy | --no-caddy       set up (or never touch) a Caddy found on this machine or in Docker
-#   --domain NAME              the (sub)domain Caddy serves LinuxAdmin on; implies --caddy
+#   --domain NAME              the (sub)domain Caddy serves Ervisio on; implies --caddy
 #   --reconfigure              ask the configuration questions again on an installed system
 #   --no-enable, --no-start    do not enable at boot / do not start the service
 #   -h, --help                 show this help
 #
 # The script never runs downloaded code other than the verified release
-# binaries (`linuxadmind --version`), and never turns off TLS verification of
+# binaries (`ervisiod --version`), and never turns off TLS verification of
 # its downloads.
 
-REPO="Fonlogen/LinuxAdmin"
-LIB=/usr/lib/linuxadmin
-BIN_LINK=/usr/bin/linuxadmind
-UNIT=linuxadmin.service
-UNIT_FILE=/etc/systemd/system/linuxadmin.service
-PAM_FILE=/etc/pam.d/linuxadmin
-CONF_DIR=/etc/linuxadmin
-CONF_FILE=/etc/linuxadmin/linuxadmin.conf
-STATE_DIR=/var/lib/linuxadmin
-FIREWALL_RECORD=/var/lib/linuxadmin/firewall
-CERT=/etc/linuxadmin/tls/self-signed.crt
-MANAGED_MARKER=/usr/lib/linuxadmin/managed
+REPO="ervisio/ervisio"
+LIB=/usr/lib/ervisio
+BIN_LINK=/usr/bin/ervisiod
+UNIT=ervisio.service
+UNIT_FILE=/etc/systemd/system/ervisio.service
+PAM_FILE=/etc/pam.d/ervisio
+CONF_DIR=/etc/ervisio
+CONF_FILE=/etc/ervisio/ervisio.conf
+STATE_DIR=/var/lib/ervisio
+FIREWALL_RECORD=/var/lib/ervisio/firewall
+CERT=/etc/ervisio/tls/self-signed.crt
+MANAGED_MARKER=/usr/lib/ervisio/managed
 # First line of the unit file written by this script: distribution packages
 # remove a unit file that starts with it (they ship their own).
-UNIT_HEADER='# Installed by the LinuxAdmin installer (install.sh); removed by install.sh --uninstall.'
+UNIT_HEADER='# Installed by the Ervisio installer (install.sh); removed by install.sh --uninstall.'
 
-# The LinuxAdmin release key (ReleasePublicKey in server/internal/update/sign.go,
+# LinuxAdmin, the product's name up to 0.2.0 (moved to Ervisio by this script).
+LEGACY_LIB=/usr/lib/linuxadmin
+LEGACY_UNIT=linuxadmin.service
+LEGACY_CONF_DIR=/etc/linuxadmin
+LEGACY_CONF_FILE=/etc/linuxadmin/linuxadmin.conf
+LEGACY_STATE_DIR=/var/lib/linuxadmin
+LEGACY_MANAGED=/usr/lib/linuxadmin/managed
+
+# The Ervisio release key (ReleasePublicKey in server/internal/update/sign.go,
 # as an SPKI PEM). SHA256SUMS.sig is an ed25519 signature over
-# "linuxadmin-release-v1\n" followed by SHA256SUMS. A Go test checks that this
-# copy matches the key the consoles trust.
+# "linuxadmin-release-v1\n" followed by SHA256SUMS (the prefix keeps the
+# product's former name on purpose: every console verifies with it). A Go test
+# checks that this copy matches the key the consoles trust.
 RELEASE_KEY_PEM='-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEAeYuaHtzKiE4ofn2sX/p7tSNX/p5+sGV9EJT0aKSmNU8=
 -----END PUBLIC KEY-----'
@@ -255,7 +268,7 @@ opt_set() {
 		F_TRUSTED="$(list_add "$F_TRUSTED" "$2")"
 		;;
 	--domain)
-		valid_domain "$2" || die "--domain must be a domain name such as linuxadmin.example.org."
+		valid_domain "$2" || die "--domain must be a domain name such as ervisio.example.org."
 		F_DOMAIN=$2
 		;;
 	esac
@@ -263,17 +276,17 @@ opt_set() {
 
 usage() {
 	cat <<'USAGE'
-LinuxAdmin installer
+Ervisio installer
 
-  curl -fsSL https://raw.githubusercontent.com/Fonlogen/LinuxAdmin/main/install.sh | sudo sh -s -- [options]
+  curl -fsSL https://raw.githubusercontent.com/ervisio/ervisio/main/install.sh | sudo sh -s -- [options]
   sudo sh install.sh [options]
 
 Options:
   --version X.Y.Z            install this release instead of the latest stable one
   --prerelease               install the newest release, pre-releases included
   --from DIR                 install a release folder already on disk (no download, no signature check)
-  --uninstall                remove LinuxAdmin (keeps /etc/linuxadmin and installed plugins)
-  --purge                    with --uninstall: also remove /etc/linuxadmin and /var/lib/linuxadmin
+  --uninstall                remove Ervisio (keeps /etc/ervisio and installed plugins)
+  --purge                    with --uninstall: also remove /etc/ervisio and /var/lib/ervisio
   --open-firewall            open the port in ufw or firewalld when one of them is active
   --dry-run                  show what would be done, change nothing (can run without root)
   -y, --yes                  do not ask questions: every answer is the default
@@ -291,11 +304,11 @@ Configuration (first install; asked unless given here, --yes takes the defaults)
                              (these three add up; none of them = every local account)
   --admin-unlock D           5m (default), 15m, 1h, any 30s-24h, or signout (until sign-out)
   --tls-cert F --tls-key F   use your own certificate instead of the self-signed one
-  --behind-proxy             a reverse proxy on this machine fronts LinuxAdmin (plain HTTP on 127.0.0.1)
+  --behind-proxy             a reverse proxy on this machine fronts Ervisio (plain HTTP on 127.0.0.1)
   --origin URL               browser origin to accept (web.allowed_origins)
   --trusted-proxy ADDR       address or CIDR of a reverse proxy to trust (web.trusted_proxies)
   --caddy | --no-caddy       set up (or never touch) a Caddy found on this machine or in Docker
-  --domain NAME              the (sub)domain Caddy serves LinuxAdmin on (implies --caddy)
+  --domain NAME              the (sub)domain Caddy serves Ervisio on (implies --caddy)
   --reconfigure              ask the configuration questions again on an installed system
   --no-enable, --no-start    do not enable at boot / do not start the service
 USAGE
@@ -307,7 +320,7 @@ valid_version() {
 	printf '%s\n' "$1" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'
 }
 
-# The name of a version folder (what `linuxadmind --version` prints, without "v").
+# The name of a version folder (what `ervisiod --version` prints, without "v").
 valid_dirname() {
 	case $1 in *..*) return 1 ;; esac
 	printf '%s\n' "$1" | grep -Eq '^[0-9A-Za-z][0-9A-Za-z._+-]{0,63}$'
@@ -391,7 +404,7 @@ detect_arch() {
 	case $(uname -m) in
 	x86_64 | amd64) ARCH=amd64 ;;
 	aarch64 | arm64) ARCH=arm64 ;;
-	*) die "LinuxAdmin is built for x86-64 and ARM64; this machine is $(uname -m)." ;;
+	*) die "Ervisio is built for x86-64 and ARM64; this machine is $(uname -m)." ;;
 	esac
 }
 
@@ -611,8 +624,79 @@ refuse_managed() {
 	if [ -e "$MANAGED_MARKER" ]; then
 		rm_by="$(head -c 64 "$MANAGED_MARKER" 2>/dev/null | tr -cd 'a-z0-9._+-')"
 		[ -n "$rm_by" ] || rm_by="a package manager"
-		die "LinuxAdmin on this machine was installed by $rm_by (the linuxadmin package). Update or remove it with $rm_by; this script only manages installs it made."
+		die "Ervisio on this machine was installed by $rm_by (the ervisio package). Update or remove it with $rm_by; this script only manages installs it made."
 	fi
+	if [ -e "$LEGACY_MANAGED" ] && [ "$UNINSTALL" = 0 ]; then
+		rm_by="$(head -c 64 "$LEGACY_MANAGED" 2>/dev/null | tr -cd 'a-z0-9._+-')"
+		[ -n "$rm_by" ] || rm_by="a package manager"
+		die "LinuxAdmin (Ervisio's former name) was installed here by $rm_by (the linuxadmin package). Install the ervisio package instead: it replaces linuxadmin and keeps its settings. Or remove linuxadmin with $rm_by first (/etc/linuxadmin stays), then run this script: it copies the settings."
+	fi
+}
+
+# Sets LEGACY=1 when LinuxAdmin (Ervisio's name up to 0.2.0) is installed or
+# left its configuration here, and LEGACY_VERSION to its running version.
+legacy_detect() {
+	LEGACY=0
+	LEGACY_VERSION=
+	if [ -d "$LEGACY_CONF_DIR" ] || [ -d "$LEGACY_STATE_DIR" ] || [ -d "$LEGACY_LIB" ]; then
+		LEGACY=1
+	fi
+	if lv_t="$(readlink "$LEGACY_LIB/current" 2>/dev/null)"; then
+		LEGACY_VERSION="${lv_t#versions/}"
+	fi
+	return 0
+}
+
+# migrate_legacy: copies LinuxAdmin's configuration, certificate, state, PAM
+# file, unit drop-ins and scheduled update to the Ervisio locations (the
+# new ervisiod does it), then stops and disables linuxadmin.service: Ervisio
+# takes its port. LinuxAdmin's files are removed only once Ervisio runs
+# (legacy_cleanup), so "systemctl enable --now linuxadmin" still goes back.
+migrate_legacy() {
+	[ "$LEGACY" = 1 ] || return 0
+	step "Moving LinuxAdmin${LEGACY_VERSION:+ $LEGACY_VERSION} to Ervisio"
+	if [ "$DRY" = 1 ]; then
+		say "  [dry-run] $BIN_LINK --migrate-legacy: copy $LEGACY_CONF_DIR to $CONF_DIR, $LEGACY_STATE_DIR to $STATE_DIR,"
+		say "            /etc/pam.d/linuxadmin, the drop-ins of $LEGACY_UNIT and the scheduled update"
+		say "  [dry-run] systemctl disable --now $LEGACY_UNIT"
+		return 0
+	fi
+	if ! "$BIN_LINK" --migrate-legacy >"$TMPD/migrate.out" 2>&1; then
+		sed 's/^/  /' "$TMPD/migrate.out" >&2
+		die "Copying LinuxAdmin's settings failed (see above); LinuxAdmin was not changed."
+	fi
+	sed 's/^/  /' "$TMPD/migrate.out"
+	LEGACY_ENABLED=0
+	if [ -d /run/systemd/system ]; then
+		systemctl is-enabled --quiet "$LEGACY_UNIT" 2>/dev/null && LEGACY_ENABLED=1
+		systemctl disable --quiet --now "$LEGACY_UNIT" 2>/dev/null || true
+	fi
+	# LinuxAdmin did not start at boot: neither does Ervisio, unless asked.
+	if [ "$LEGACY_ENABLED" = 0 ] && [ -n "$LEGACY_VERSION" ] && [ "$CFG_MODE" = keep ]; then
+		ENABLE=0
+	fi
+	return 0
+}
+
+# legacy_cleanup: once ervisio.service runs, removes LinuxAdmin's programs,
+# unit and links (ervisiod --remove-legacy); its data stays.
+legacy_cleanup() {
+	[ "$LEGACY" = 1 ] || return 0
+	[ "$DRY" = 1 ] && {
+		say "  [dry-run] $BIN_LINK --remove-legacy: remove $LEGACY_LIB, /usr/bin/linuxadmind, $LEGACY_UNIT"
+		return 0
+	}
+	if [ "$START" = 1 ] && ! systemctl is-active --quiet "$UNIT"; then
+		return 0
+	fi
+	if "$BIN_LINK" --remove-legacy >"$TMPD/remove.out" 2>&1; then
+		sed 's/^/  /' "$TMPD/remove.out"
+	else
+		sed 's/^/  /' "$TMPD/remove.out" >&2
+		warn "Could not remove LinuxAdmin's programs; remove them later with: $BIN_LINK --remove-legacy"
+	fi
+	say "LinuxAdmin's settings were copied; $LEGACY_CONF_DIR and $LEGACY_STATE_DIR are kept (see $LEGACY_CONF_DIR/MOVED-TO-ERVISIO.txt)."
+	say "Delete them when you no longer need them: $BIN_LINK --remove-legacy --purge"
 }
 
 # Sets LISTEN, LISTEN_HOST and PORT: what was decided in this run, else the
@@ -637,7 +721,7 @@ tls_mode() {
 
 # ---------------------------------------------------------------- PAM
 
-# Embedded copies of packaging/pam.d/linuxadmin.<family>, used when the
+# Embedded copies of packaging/pam.d/ervisio.<family>, used when the
 # release folder does not ship them (0.1.0). A Go test keeps them in sync.
 embedded_pam() {
 	case $1 in
@@ -701,16 +785,16 @@ PAM
 	esac
 }
 
-# install_pam SRC_DIR: writes /etc/pam.d/linuxadmin for this distribution
-# family. A file written by LinuxAdmin (it says "PAM service for LinuxAdmin")
+# install_pam SRC_DIR: writes /etc/pam.d/ervisio for this distribution
+# family. A file written by Ervisio (it says "PAM service for Ervisio")
 # is replaced; one written by the administrator is kept.
 install_pam() {
 	if [ "$FAMILY" = unknown ]; then
-		warn "Unknown distribution: no $PAM_FILE written. LinuxAdmin then uses the 'login' PAM service; see packaging/README.md to write one."
+		warn "Unknown distribution: no $PAM_FILE written. Ervisio then uses the 'login' PAM service; see packaging/README.md to write one."
 		return 0
 	fi
-	if [ -f "$1/packaging/pam.d/linuxadmin.$FAMILY" ]; then
-		cp "$1/packaging/pam.d/linuxadmin.$FAMILY" "$TMPD/pam"
+	if [ -f "$1/packaging/pam.d/ervisio.$FAMILY" ]; then
+		cp "$1/packaging/pam.d/ervisio.$FAMILY" "$TMPD/pam"
 	else
 		embedded_pam "$FAMILY" >"$TMPD/pam"
 	fi
@@ -719,11 +803,11 @@ install_pam() {
 			say "PAM service $PAM_FILE is up to date ($FAMILY)."
 			return 0
 		fi
-		if ! grep -q 'PAM service for LinuxAdmin' "$PAM_FILE"; then
-			say "Keeping your own $PAM_FILE (not written by LinuxAdmin)."
+		if ! grep -q 'PAM service for Ervisio' "$PAM_FILE"; then
+			say "Keeping your own $PAM_FILE (not written by Ervisio)."
 			return 0
 		fi
-		run cp -p "$PAM_FILE" "$CONF_DIR/pam.d-linuxadmin.bak"
+		run cp -p "$PAM_FILE" "$CONF_DIR/pam.d-ervisio.bak"
 	fi
 	say "Writing $PAM_FILE ($FAMILY)."
 	run install -D -m 644 "$TMPD/pam" "$PAM_FILE"
@@ -733,8 +817,8 @@ install_pam() {
 
 ensure_sudo() {
 	if ! have sudo; then
-		say "sudo is not installed; LinuxAdmin uses it for administrator rights. Installing it."
-		pkg_install sudo || warn "Could not install sudo. Install it yourself: administrator rights in LinuxAdmin need it."
+		say "sudo is not installed; Ervisio uses it for administrator rights. Installing it."
+		pkg_install sudo || warn "Could not install sudo. Install it yourself: administrator rights in Ervisio need it."
 	fi
 }
 
@@ -753,12 +837,12 @@ report_admin_group() {
 		[ -f "$rg_f" ] && grep -Eq "^[[:space:]]*%${ADMIN_GROUP}[[:space:]]" "$rg_f" 2>/dev/null && rg_rule=1
 	done
 	step "Administrator rights"
-	say "LinuxAdmin unlocks administrator rights with sudo, using your own password."
+	say "Ervisio unlocks administrator rights with sudo, using your own password."
 	if [ -n "$rg_user" ]; then
 		if id -nG "$rg_user" 2>/dev/null | tr ' ' '\n' | grep -qx "$ADMIN_GROUP"; then
 			say "Your account '$rg_user' is in the '$ADMIN_GROUP' group."
 		else
-			say "Your account '$rg_user' is NOT in the '$ADMIN_GROUP' group. To manage the system from LinuxAdmin:"
+			say "Your account '$rg_user' is NOT in the '$ADMIN_GROUP' group. To manage the system from Ervisio:"
 			say "  ${rg_new}usermod -aG $ADMIN_GROUP $rg_user      (then sign out and in again)"
 		fi
 	else
@@ -771,7 +855,7 @@ report_admin_group() {
 	fi
 	if grep -Eqs '^[[:space:]]*Defaults[[:space:]]+targetpw' /etc/sudoers /usr/etc/sudoers &&
 		! cat /etc/sudoers.d/* /usr/etc/sudoers.d/* 2>/dev/null | grep -Eq "^[[:space:]]*Defaults:%${ADMIN_GROUP}[[:space:]]+!targetpw"; then
-		say "sudo asks for the root password here (Defaults targetpw). LinuxAdmin sends your own password,"
+		say "sudo asks for the root password here (Defaults targetpw). Ervisio sends your own password,"
 		say "so administrator rights will not unlock until that changes. On openSUSE:"
 		say "  zypper install sudo-policy-wheel-auth-self      (wheel members use their own password)"
 	fi
@@ -783,7 +867,7 @@ firewall() {
 	read_listen
 	case $LISTEN_HOST in 127.* | localhost | '[::1]') return 0 ;; esac
 	if [ -n "$PROXY" ]; then
-		say "LinuxAdmin sits behind a reverse proxy: the firewall is not changed for port $PORT."
+		say "Ervisio sits behind a reverse proxy: the firewall is not changed for port $PORT."
 		return 0
 	fi
 	fw=
@@ -797,10 +881,10 @@ firewall() {
 	fi
 	[ -n "$fw" ] || return 0
 	step "Firewall"
-	say "$fw is active and port $PORT/tcp is closed: other machines cannot reach LinuxAdmin yet."
+	say "$fw is active and port $PORT/tcp is closed: other machines cannot reach Ervisio yet."
 	if [ "$OPEN_FW" = 1 ] || ask "Open port $PORT/tcp in $fw? [y/N]" n; then
 		if [ "$fw" = ufw ]; then
-			run ufw allow "$PORT/tcp" comment LinuxAdmin
+			run ufw allow "$PORT/tcp" comment Ervisio
 		else
 			run firewall-cmd --quiet --permanent --add-port="$PORT/tcp"
 			run firewall-cmd --quiet --add-port="$PORT/tcp"
@@ -838,7 +922,7 @@ close_firewall() {
 # ---------------------------------------------------------------- port
 
 # port_in_use PORT: returns 0 when a process listens on the TCP port and sets
-# PORT_OWNER to what it is ("" when it cannot be told). A running linuxadmind
+# PORT_OWNER to what it is ("" when it cannot be told). A running ervisiod
 # does not count (re-running the installer keeps the port).
 port_in_use() {
 	pi_p=$1
@@ -868,7 +952,7 @@ port_in_use() {
 	fi
 	[ "$pi_found" = 1 ] || return 1
 	case $PORT_OWNER in
-	linuxadmind) return 1 ;;
+	ervisiod | linuxadmind) return 1 ;;
 	systemd | init)
 		# socket activation: name the socket unit that owns the port
 		pi_unit=
@@ -921,7 +1005,7 @@ choose_port() {
 			cp_next="$(next_free_port $((cp_try + 1)))"
 			if [ "$TTY_OK" = 1 ]; then
 				say "Port $cp_try is in use${PORT_OWNER:+ by $PORT_OWNER}."
-				if ask "Use it anyway (free it before the service starts, or LinuxAdmin will not start)? [y/N]" n; then
+				if ask "Use it anyway (free it before the service starts, or Ervisio will not start)? [y/N]" n; then
 					break
 				fi
 				say "Pick another one; $cp_next is free."
@@ -944,12 +1028,15 @@ TAB="$(printf '\t')"
 
 # conf_get SECTION KEY: the raw value of a key in the configuration file.
 conf_get() {
-	[ -r "$CONF_FILE" ] || return 0
+	cg_f=$CONF_FILE
+	# Before LinuxAdmin's configuration is copied, read it in place.
+	[ -r "$cg_f" ] || cg_f=$LEGACY_CONF_FILE
+	[ -r "$cg_f" ] || return 0
 	awk -v sec="$1" -v key="$2" '
 	BEGIN { insec = (sec == "") }
 	/^[[:space:]]*\[/ { h = $0; sub(/^[[:space:]]*\[/, "", h); sub(/\].*$/, "", h); insec = (h == sec); next }
 	insec && $0 ~ "^[[:space:]]*" key "[[:space:]]*=" { sub(/^[^=]*=[[:space:]]*/, ""); sub(/[[:space:]]+#.*$/, ""); sub(/[[:space:]]+$/, ""); print; exit }
-	' "$CONF_FILE"
+	' "$cg_f"
 }
 
 # conf_set SECTION KEY RAWVALUE: sets "KEY = RAWVALUE" in [SECTION] ("" is the
@@ -988,7 +1075,12 @@ toml_list() {
 load_current() {
 	D_PORT=9090 D_HOST=0.0.0.0 D_ROOT=false D_UNLOCK=5m D_TLS=self-signed D_CERT='' D_KEY='' D_ORIGINS='' D_PROXIES='' D_AUSERS='' D_AGROUPS='' D_ADMINS=false
 	CFG_EXISTS=0
-	[ -f "$CONF_FILE" ] || return 0
+	CFG_SHOWN=$CONF_FILE
+	if [ ! -f "$CONF_FILE" ]; then
+		[ -f "$LEGACY_CONF_FILE" ] || return 0
+		# LinuxAdmin's configuration: it is copied to $CONF_FILE and kept.
+		CFG_SHOWN=$LEGACY_CONF_FILE
+	fi
 	CFG_EXISTS=1
 	lc_l="$(conf_get '' listen | tr -d "\"'")"
 	if [ -n "$lc_l" ]; then
@@ -1114,7 +1206,7 @@ auth_warnings() {
 	fi
 	aw_me="${SUDO_USER:-}"
 	if [ -n "$aw_me" ] && [ "$aw_me" != root ] && ! auth_covers "$aw_me"; then
-		say "  Note: your own account '$aw_me' is not covered, so you could not sign in to LinuxAdmin yourself."
+		say "  Note: your own account '$aw_me' is not covered, so you could not sign in to Ervisio yourself."
 	fi
 	return 0
 }
@@ -1151,11 +1243,11 @@ CONF
 # Writes the commented configuration file (stdout) for a first install.
 render_config() {
 	cat <<CONF
-# LinuxAdmin server configuration, written by the installer on $(date +%Y-%m-%d).
+# Ervisio server configuration, written by the installer on $(date +%Y-%m-%d).
 # Every key and its default is described in docs/api/config.md. Settings that
-# say "restart" need: systemctl restart linuxadmin. Saving from Settings in the
+# say "restart" need: systemctl restart ervisio. Saving from Settings in the
 # web interface rewrites this file without the comments (a backup stays next
-# to it as linuxadmin.conf.bak).
+# to it as ervisio.conf.bak).
 
 # Address and port to listen on. 0.0.0.0 means every network interface,
 # 127.0.0.1 only this machine (use that behind a reverse proxy). Restart.
@@ -1181,7 +1273,7 @@ $(render_auth)
 admin_unlock = "$C_UNLOCK"
 
 [tls]
-# "self-signed": a certificate is created on first start (/etc/linuxadmin/tls).
+# "self-signed": a certificate is created on first start (/etc/ervisio/tls).
 # "custom": use cert and key below.
 # "http": plain HTTP, only allowed while listen is 127.0.0.1 or [::1], for a
 # reverse proxy on this machine that provides HTTPS (and sends
@@ -1193,19 +1285,19 @@ CONF
 	if [ "$C_TLS" = custom ]; then
 		printf 'cert = "%s"\nkey = "%s"\n' "$C_CERT" "$C_KEY"
 	else
-		printf '# cert = "/etc/ssl/certs/linuxadmin.pem"\n# key = "/etc/ssl/private/linuxadmin.key"\n'
+		printf '# cert = "/etc/ssl/certs/ervisio.pem"\n# key = "/etc/ssl/private/ervisio.key"\n'
 	fi
 	cat <<CONF
 
 [web]
 # Browser origins accepted besides the address in the Host header, for
-# reaching LinuxAdmin through a reverse proxy.
+# reaching Ervisio through a reverse proxy.
 CONF
 	if [ -n "$C_ORIGINS" ]; then
 		# shellcheck disable=SC2086
 		printf 'allowed_origins = %s\n' "$(toml_list $C_ORIGINS)"
 	else
-		printf '# allowed_origins = ["https://linuxadmin.example.org"]\n'
+		printf '# allowed_origins = ["https://ervisio.example.org"]\n'
 	fi
 	printf '# Addresses whose X-Forwarded-* headers are believed (the reverse proxy).\n'
 	if [ -n "$C_PROXIES" ]; then
@@ -1235,12 +1327,12 @@ write_config() {
 	[ "$CFG_MODE" = keep ] && return 0
 	if [ "$CFG_MODE" = new ]; then
 		step "Writing $CONF_FILE"
-		render_config >"$TMPD/linuxadmin.conf"
+		render_config >"$TMPD/ervisio.conf"
 		if [ "$DRY" = 1 ]; then
 			say "  [dry-run] would write:"
-			sed 's/^/    | /' "$TMPD/linuxadmin.conf"
+			sed 's/^/    | /' "$TMPD/ervisio.conf"
 		else
-			install -D -m 644 "$TMPD/linuxadmin.conf" "$CONF_FILE"
+			install -D -m 644 "$TMPD/ervisio.conf" "$CONF_FILE"
 		fi
 		return 0
 	fi
@@ -1252,7 +1344,7 @@ write_config() {
 		say "  [dry-run] who may sign in: $(auth_text)"
 		return 0
 	fi
-	wc_bak="$CONF_FILE.linuxadmin-backup-$(date +%Y%m%d-%H%M%S)"
+	wc_bak="$CONF_FILE.ervisio-backup-$(date +%Y%m%d-%H%M%S)"
 	cp -p "$CONF_FILE" "$wc_bak"
 	say "Backup: $wc_bak"
 	WC_BAK=$wc_bak
@@ -1278,7 +1370,7 @@ write_config() {
 	return 0
 }
 
-# check_config: runs `linuxadmind --check-config` on the file before the
+# check_config: runs `ervisiod --check-config` on the file before the
 # service is (re)started. When the file the installer just wrote is not valid
 # the previous one is put back (a first install removes it).
 check_config() {
@@ -1299,23 +1391,23 @@ check_config() {
 		if [ -n "$WC_BAK" ] && cp -p "$WC_BAK" "$CONF_FILE"; then
 			die "The changed configuration is not valid (see above). Your previous configuration is back in place; the service was not restarted."
 		fi
-		die "The changed configuration is not valid (see above) and the backup $WC_BAK could not be restored. Fix $CONF_FILE, then: systemctl restart linuxadmin"
+		die "The changed configuration is not valid (see above) and the backup $WC_BAK could not be restored. Fix $CONF_FILE, then: systemctl restart ervisio"
 		;;
 	new)
 		rm -f "$CONF_FILE"
 		die "The configuration the installer wrote is not valid (see above) and was removed; the service was not started. Run the installer again with other options."
 		;;
-	*) die "$CONF_FILE is not valid (see above). Fix it, then: systemctl restart linuxadmin (the service was not restarted)." ;;
+	*) die "$CONF_FILE is not valid (see above). Fix it, then: systemctl restart ervisio (the service was not restarted)." ;;
 	esac
 }
 
 # ---------------------------------------------------------------- Caddy
 #
-# Without a proxy LinuxAdmin serves HTTPS (self-signed by default). Behind a
+# Without a proxy Ervisio serves HTTPS (self-signed by default). Behind a
 # proxy on this machine it serves plain HTTP on 127.0.0.1 (tls.mode = "http"):
 # the hop never leaves the machine, and the proxy provides the certificate the
 # browser sees. A Caddy in a Docker container cannot reach the host's
-# 127.0.0.1, so LinuxAdmin then listens on the Docker bridge or on all
+# 127.0.0.1, so Ervisio then listens on the Docker bridge or on all
 # interfaces and keeps HTTPS: Caddy connects with TLS and does not check the
 # certificate (tls_insecure_skip_verify). A container with host networking
 # counts as this machine.
@@ -1346,7 +1438,7 @@ caddy_detect() {
 	fi
 	if [ -n "$cd_native" ] && [ -n "$cd_ctrs" ] && [ "$TTY_OK" = 1 ]; then
 		cd_first="$(printf '%s\n' "$cd_ctrs" | head -n 1)"
-		ask_choice "Caddy runs here and in Docker. Which one should serve LinuxAdmin?" 1 "Caddy on this machine ($cd_native)" "Caddy in the container $cd_first"
+		ask_choice "Caddy runs here and in Docker. Which one should serve Ervisio?" 1 "Caddy on this machine ($cd_native)" "Caddy in the container $cd_first"
 		[ "$CHOICE" = 2 ] && cd_native=
 	fi
 	if [ -n "$cd_native" ]; then
@@ -1481,7 +1573,7 @@ caddy_find_proxy() {
 	}' "$1"
 }
 
-# caddy_directive: the reverse_proxy directive for LinuxAdmin.
+# caddy_directive: the reverse_proxy directive for Ervisio.
 caddy_directive() {
 	if [ "$C_TLS" = http ]; then
 		printf 'reverse_proxy %s:%s\n' "$UPHOST" "$C_PORT"
@@ -1508,14 +1600,14 @@ caddy_plan() {
 			C_TLS=http
 		elif [ -n "$CD_GW" ]; then
 			# Inside the container 127.0.0.1 is the container itself: Caddy has to
-			# reach the host through the Docker bridge, so LinuxAdmin listens on the
+			# reach the host through the Docker bridge, so Ervisio listens on the
 			# bridge's gateway address only (not on every interface, where other
 			# machines could reach it). The bridge exists once docker.service has
-			# started: a drop-in orders linuxadmin.service after it.
+			# started: a drop-in orders ervisio.service after it.
 			C_HOST=$CD_GW
 			DOCKER_DROPIN=1
 			# Not host.docker.internal: host-gateway is docker0's address, which may
-			# not be the gateway of Caddy's network that LinuxAdmin listens on.
+			# not be the gateway of Caddy's network that Ervisio listens on.
 			UPHOST=$CD_GW
 			[ -n "$CD_SUBNET" ] && C_PROXIES="$(list_add "$C_PROXIES" "$CD_SUBNET")"
 		else
@@ -1553,7 +1645,7 @@ caddy_plan() {
 			cp_addr="$(printf '%s\n' "$cp_hit" | cut -f4)"
 			say "The Caddyfile has a site for Cockpit: $cp_addr (Cockpit listens on port 9090 by default)."
 			if [ "$TTY_OK" = 1 ]; then
-				ask "Point $cp_addr to LinuxAdmin (port $C_PORT) instead? [Y/n]" y || {
+				ask "Point $cp_addr to Ervisio (port $C_PORT) instead? [Y/n]" y || {
 					cp_hit=
 					cp_addr=
 				}
@@ -1566,10 +1658,10 @@ caddy_plan() {
 	if [ -z "$cp_addr" ]; then
 		cp_base="$(awk -F'\t' '$1 == "BLOCK" { a = $4; sub(/^https?:\/\//, "", a); sub(/[:,\/ ].*$/, "", a); n = split(a, p, "."); if (n >= 2 && a !~ /^[0-9.]+$/ && a !~ /[*]/) { print p[n-1] "." p[n]; exit } }' "$cp_blocks")"
 		cp_def=
-		[ -n "$cp_base" ] && cp_def="linuxadmin.$cp_base"
+		[ -n "$cp_base" ] && cp_def="ervisio.$cp_base"
 		if [ "$TTY_OK" = 1 ]; then
 			while :; do
-				ask_value "Domain for LinuxAdmin, such as linuxadmin.example.org (it must point to this Caddy)" "${cp_def:-linuxadmin.example.org}"
+				ask_value "Domain for Ervisio, such as ervisio.example.org (it must point to this Caddy)" "${cp_def:-ervisio.example.org}"
 				valid_domain "$REPLY" && break
 				say "'$REPLY' is not a domain name."
 			done
@@ -1577,14 +1669,14 @@ caddy_plan() {
 		else
 			say "Caddy: no domain given. Use --domain NAME to set it up; the snippet is printed instead."
 			CADDY_ACTION=manual
-			CADDY_DOMAIN=linuxadmin.example.org
+			CADDY_DOMAIN=ervisio.example.org
 			CADDY_ORIGIN=https://$CADDY_DOMAIN
 			C_ORIGINS="$(list_add "$C_ORIGINS" "$CADDY_ORIGIN")"
 			return 0
 		fi
 		cp_hit="$(awk -F'\t' -v d="$cp_addr" '$1 == "BLOCK" && ($4 == d || $4 == "https://" d || $4 == "http://" d) { print; exit }' "$cp_blocks")"
 		if [ -n "$cp_hit" ] && [ "$TTY_OK" = 1 ]; then
-			ask "The Caddyfile already has a site $cp_addr. Point it to LinuxAdmin? [y/N]" n || cp_hit=skip
+			ask "The Caddyfile already has a site $cp_addr. Point it to Ervisio? [y/N]" n || cp_hit=skip
 		fi
 	fi
 	case $cp_addr in
@@ -1671,7 +1763,7 @@ caddy_print_manual() {
 	esac
 }
 
-# caddy_apply: edits the Caddyfile (after the LinuxAdmin side is in place).
+# caddy_apply: edits the Caddyfile (after the Ervisio side is in place).
 caddy_apply() {
 	[ -n "$CADDY_KIND" ] && [ "$PROXY" = caddy ] || return 0
 	step "Caddy"
@@ -1690,7 +1782,7 @@ caddy_apply() {
 		caddy_print_manual
 		return 0
 	fi
-	ca_bak="$CADDY_CF.linuxadmin-backup-$(date +%Y%m%d-%H%M%S)"
+	ca_bak="$CADDY_CF.ervisio-backup-$(date +%Y%m%d-%H%M%S)"
 	cp -p "$CADDY_CF" "$ca_bak" || {
 		say "Could not make a backup next to the Caddyfile. Nothing was edited."
 		caddy_print_manual
@@ -1707,7 +1799,7 @@ caddy_apply() {
 		{
 			cat "$ca_bak"
 			[ -n "$(tail -c 1 "$ca_bak")" ] && printf '\n'
-			printf '\n# LinuxAdmin (added by install.sh)\n%s {\n' "$CADDY_DOMAIN"
+			printf '\n# Ervisio (added by install.sh)\n%s {\n' "$CADDY_DOMAIN"
 			sed "s/^/$TAB/" "$TMPD/caddy.directive"
 			printf '}\n'
 		} >"$TMPD/caddy.new"
@@ -1721,13 +1813,13 @@ caddy_apply() {
 		return 0
 	fi
 	if caddy_reload; then
-		say "Caddy reloaded: https://$CADDY_DOMAIN now goes to LinuxAdmin."
+		say "Caddy reloaded: https://$CADDY_DOMAIN now goes to Ervisio."
 		CADDY_DONE=1
 	else
 		say "The Caddyfile is edited and valid, but Caddy was not reloaded. https://$CADDY_DOMAIN works once Caddy runs with it."
 	fi
 	if [ "$CADDY_KIND" = docker ] && [ -n "$CD_SUBNET" ]; then
-		say "Caddy reaches LinuxAdmin at $UPHOST:$C_PORT from the Docker network $CD_SUBNET. If a firewall blocks that"
+		say "Caddy reaches Ervisio at $UPHOST:$C_PORT from the Docker network $CD_SUBNET. If a firewall blocks that"
 		say "(ufw does by default), allow it: ufw allow from $CD_SUBNET to any port $C_PORT proto tcp"
 	fi
 	say "The domain $CADDY_DOMAIN must point to this machine for Caddy to get its certificate."
@@ -1750,7 +1842,7 @@ decide_config() {
 		if [ "$CFG_REQUESTED" = 1 ] || [ "$RECONF" = 1 ]; then
 			CFG_MODE=change
 		elif [ "$TTY_OK" = 1 ]; then
-			say "LinuxAdmin is configured already ($CONF_FILE, listening on $D_HOST:$D_PORT); the configuration is kept."
+			say "Ervisio is configured already ($CFG_SHOWN, listening on $D_HOST:$D_PORT); the configuration is kept."
 			ask "Change settings now? [y/N]" n && CFG_MODE=change
 		fi
 		if [ "$CFG_MODE" = keep ]; then
@@ -1782,14 +1874,14 @@ decide_config() {
 		if [ "$CADDY_MODE" = yes ]; then
 			PROXY=caddy
 		elif [ "$TTY_OK" = 1 ]; then
-			ask "Put LinuxAdmin behind it, with its own (sub)domain? [Y/n]" y && PROXY=caddy
+			ask "Put Ervisio behind it, with its own (sub)domain? [Y/n]" y && PROXY=caddy
 		else
 			say "Caddy is not changed unless you pass --caddy."
 		fi
 	fi
 	if [ "$PROXY" = caddy ]; then
 		caddy_plan
-	elif [ "$F_PROXY" = 1 ] || { [ "$TTY_OK" = 1 ] && [ -z "$F_LISTEN" ] && ask "Will LinuxAdmin sit behind another reverse proxy (nginx, Apache, Traefik...)? [y/N]" n; }; then
+	elif [ "$F_PROXY" = 1 ] || { [ "$TTY_OK" = 1 ] && [ -z "$F_LISTEN" ] && ask "Will Ervisio sit behind another reverse proxy (nginx, Apache, Traefik...)? [y/N]" n; }; then
 		PROXY=other
 		C_TLS=http
 		C_HOST=127.0.0.1
@@ -1801,7 +1893,7 @@ decide_config() {
 		fi
 		if [ "$TTY_OK" = 1 ] && [ -z "$F_ORIGINS" ]; then
 			while :; do
-				ask_value "Public address of LinuxAdmin, as typed in the browser" "https://linuxadmin.example.org"
+				ask_value "Public address of Ervisio, as typed in the browser" "https://ervisio.example.org"
 				valid_origin "$REPLY" && break
 				say "'$REPLY' must look like https://host or https://host:port."
 			done
@@ -1820,7 +1912,7 @@ decide_config() {
 		'')
 			if [ "$TTY_OK" = 1 ]; then
 				if [ "$C_HOST" = 127.0.0.1 ]; then cl_def=2; else cl_def=1; fi
-				ask_choice "Who can reach LinuxAdmin?" "$cl_def" "every machine that can reach this one (all interfaces, 0.0.0.0)" "only this machine (127.0.0.1: for an SSH tunnel or a proxy)"
+				ask_choice "Who can reach Ervisio?" "$cl_def" "every machine that can reach this one (all interfaces, 0.0.0.0)" "only this machine (127.0.0.1: for an SSH tunnel or a proxy)"
 				if [ "$CHOICE" = 1 ]; then C_HOST=0.0.0.0; else C_HOST=127.0.0.1; fi
 			fi
 			;;
@@ -1834,9 +1926,9 @@ decide_config() {
 			if [ "$CHOICE" = 2 ]; then
 				C_TLS=custom
 				while :; do
-					ask_value "Certificate file (PEM, full chain)" "${C_CERT:-/etc/ssl/certs/linuxadmin.pem}"
+					ask_value "Certificate file (PEM, full chain)" "${C_CERT:-/etc/ssl/certs/ervisio.pem}"
 					C_CERT=$REPLY
-					ask_value "Private key file" "${C_KEY:-/etc/ssl/private/linuxadmin.key}"
+					ask_value "Private key file" "${C_KEY:-/etc/ssl/private/ervisio.key}"
 					C_KEY=$REPLY
 					valid_path "$C_CERT" && valid_path "$C_KEY" && [ -r "$C_CERT" ] && [ -r "$C_KEY" ] && break
 					say "Both files must exist and have plain absolute paths."
@@ -1855,7 +1947,7 @@ decide_config() {
 		case $C_HOST in
 		127.* | '[::1]') ;;
 		*)
-			say "Plain HTTP is only possible on 127.0.0.1; with this listen address LinuxAdmin keeps HTTPS (self-signed)."
+			say "Plain HTTP is only possible on 127.0.0.1; with this listen address Ervisio keeps HTTPS (self-signed)."
 			C_TLS=self-signed
 			;;
 		esac
@@ -1928,7 +2020,7 @@ decide_config() {
 	fi
 
 	if [ "$TTY_OK" = 1 ]; then
-		[ "$NO_ENABLE" = 1 ] || { ask "Start LinuxAdmin at boot? [Y/n]" y || ENABLE=0; }
+		[ "$NO_ENABLE" = 1 ] || { ask "Start Ervisio at boot? [Y/n]" y || ENABLE=0; }
 		[ "$NO_START" = 1 ] || { ask "Start it now? [Y/n]" y || START=0; }
 	fi
 
@@ -1947,7 +2039,7 @@ decide_config() {
 			say "  Caddy:             $CADDY_ACTION $CADDY_DOMAIN -> https://$UPHOST:$C_PORT (certificate not checked: it is this machine)"
 		fi
 		case $CADDY_ACTION in manual) say "                     (the Caddyfile is not edited: ${CADDY_WHY:-the snippet is printed})" ;; *) say "                     ($CADDY_CF is backed up, validated, rolled back on errors, then Caddy is reloaded)" ;; esac
-		[ "${DOCKER_DROPIN:-0}" = 1 ] && say "                     (Caddy is in Docker: LinuxAdmin listens on the Docker bridge $CD_GW and starts after docker.service)"
+		[ "${DOCKER_DROPIN:-0}" = 1 ] && say "                     (Caddy is in Docker: Ervisio listens on the Docker bridge $CD_GW and starts after docker.service)"
 	elif [ "$PROXY" = other ]; then
 		if [ "$C_TLS" = http ]; then
 			say "  Reverse proxy:     yes; point it at http://127.0.0.1:$C_PORT (plain HTTP) and let it send X-Forwarded-Proto and X-Forwarded-Host"
@@ -1969,9 +2061,9 @@ decide_config() {
 
 # Downloads and verifies the release; sets SRC to the extracted folder.
 download_release() {
-	ASSET="linuxadmin-$VERSION-linux-$ARCH.tar.gz"
+	ASSET="ervisio-$VERSION-linux-$ARCH.tar.gz"
 	BASE="https://github.com/$REPO/releases/download/v$VERSION"
-	step "Downloading LinuxAdmin $VERSION ($ARCH)"
+	step "Downloading Ervisio $VERSION ($ARCH)"
 	for dl_f in SHA256SUMS SHA256SUMS.sig "$ASSET"; do
 		say "  $BASE/$dl_f"
 		fetch "$BASE/$dl_f" "$TMPD/$dl_f" || die "Download of $dl_f failed. Does release v$VERSION exist, with a build for $ARCH?"
@@ -1983,12 +2075,12 @@ download_release() {
 		printf 'linuxadmin-release-v1\n' >"$TMPD/signed.msg"
 		cat "$TMPD/SHA256SUMS" >>"$TMPD/signed.msg"
 		if ! ed25519_verify "$TMPD/release.pem" "$TMPD/signed.msg" "$TMPD/SHA256SUMS.sig"; then
-			die "The signature of SHA256SUMS does not match the LinuxAdmin release key. The download was corrupted or tampered with; nothing was installed."
+			die "The signature of SHA256SUMS does not match the Ervisio release key. The download was corrupted or tampered with; nothing was installed."
 		fi
 		if [ "$VERIFIER" = python ]; then
-			say "Signature of SHA256SUMS: good (LinuxAdmin release key; checked with the built-in Ed25519 verifier on $VBIN, because this openssl is older than 3)."
+			say "Signature of SHA256SUMS: good (Ervisio release key; checked with the built-in Ed25519 verifier on $VBIN, because this openssl is older than 3)."
 		else
-			say "Signature of SHA256SUMS: good (LinuxAdmin release key, checked with $VBIN)."
+			say "Signature of SHA256SUMS: good (Ervisio release key, checked with $VBIN)."
 		fi
 	else
 		warn "No tool here can verify ed25519 signatures (OpenSSL 3, python3 or python2 is needed): SHA256SUMS is NOT verified. Continuing because of --insecure-skip-signature."
@@ -1999,7 +2091,7 @@ download_release() {
 	[ "$dl_got" = "$dl_want" ] || die "$ASSET does not match its sha256 in SHA256SUMS (download corrupted or tampered with)."
 	say "sha256 of $ASSET: good."
 
-	PREFIX="linuxadmin-$VERSION-linux-$ARCH"
+	PREFIX="ervisio-$VERSION-linux-$ARCH"
 	tar -tzf "$TMPD/$ASSET" >"$TMPD/list" || die "$ASSET is not a readable archive."
 	if grep -Ev "^$PREFIX(/|\$)" "$TMPD/list" | grep -q . || grep -Eq '(^|/)\.\.(/|$)' "$TMPD/list"; then
 		die "$ASSET contains files outside $PREFIX/: refused."
@@ -2011,8 +2103,8 @@ download_release() {
 
 # check_release_folder DIR: sets VERSION from DIR/VERSION and checks the folder.
 check_release_folder() {
-	for cr_f in bin/linuxadmind bin/linuxadmin-bridge web/index.html VERSION; do
-		[ -f "$1/$cr_f" ] || die "$1 is not a LinuxAdmin release folder (no $cr_f)."
+	for cr_f in bin/ervisiod bin/ervisio-bridge web/index.html VERSION; do
+		[ -f "$1/$cr_f" ] || die "$1 is not a Ervisio release folder (no $cr_f)."
 	done
 	if [ -n "$(find "$1" ! -type f ! -type d | head -n 1)" ]; then
 		die "$1 contains symlinks or special files: refused."
@@ -2025,10 +2117,10 @@ check_release_folder() {
 	VERSION="$cr_v"
 }
 
-# binary_runs DIR: DIR/bin/linuxadmind runs here and prints VERSION. It is
+# binary_runs DIR: DIR/bin/ervisiod runs here and prints VERSION. It is
 # run from its install location (/tmp may be mounted noexec).
 binary_runs() {
-	br_got="$("$1/bin/linuxadmind" --version 2>/dev/null || true)"
+	br_got="$("$1/bin/ervisiod" --version 2>/dev/null || true)"
 	[ "$br_got" = "$VERSION" ] || [ "${br_got#v}" = "$VERSION" ]
 }
 
@@ -2040,10 +2132,10 @@ setlink() {
 install_layout() {
 	step "Installing into $LIB/versions/$VERSION"
 	if [ "$DRY" = 1 ]; then
-		binary_runs "$1" || warn "Could not run bin/linuxadmind --version from $1 (a real run checks it in $LIB)."
+		binary_runs "$1" || warn "Could not run bin/ervisiod --version from $1 (a real run checks it in $LIB)."
 		say "  [dry-run] copy bin/ web/ plugins/ packaging/ VERSION to $LIB/versions/$VERSION"
 		say "  [dry-run] $LIB/current -> versions/$VERSION"
-		say "  [dry-run] $BIN_LINK -> $LIB/current/bin/linuxadmind"
+		say "  [dry-run] $BIN_LINK -> $LIB/current/bin/ervisiod"
 		say "  [dry-run] keep only the current and previous versions"
 		say "  [dry-run] create $STATE_DIR/updates, $CONF_DIR"
 		return 0
@@ -2057,8 +2149,8 @@ install_layout() {
 	printf '%s\n' "$VERSION" >"$il_tmp/VERSION"
 	chown -R root:root "$il_tmp"
 	chmod -R u+rwX,go+rX,go-w "$il_tmp"
-	chmod 755 "$il_tmp" "$il_tmp/bin/linuxadmind" "$il_tmp/bin/linuxadmin-bridge"
-	binary_runs "$il_tmp" || die "bin/linuxadmind of $VERSION does not run on this machine (or reports another version); nothing was changed."
+	chmod 755 "$il_tmp" "$il_tmp/bin/ervisiod" "$il_tmp/bin/ervisio-bridge"
+	binary_runs "$il_tmp" || die "bin/ervisiod of $VERSION does not run on this machine (or reports another version); nothing was changed."
 
 	il_old=
 	if [ -e "$LIB/versions/$VERSION" ]; then
@@ -2074,13 +2166,13 @@ install_layout() {
 		setlink "$LIB/previous" "versions/$il_cur"
 	fi
 	setlink "$LIB/current" "versions/$VERSION"
-	setlink "$BIN_LINK" "$LIB/current/bin/linuxadmind"
-	# Unit files written by older versions start $LIB/linuxadmin-bridge.
-	setlink "$LIB/linuxadmin-bridge" "current/bin/linuxadmin-bridge"
+	setlink "$BIN_LINK" "$LIB/current/bin/ervisiod"
+	# Unit files written by older versions start $LIB/ervisio-bridge.
+	setlink "$LIB/ervisio-bridge" "current/bin/ervisio-bridge"
 
 	# Leftovers of the flat layout.
-	rm -rf /usr/share/linuxadmin/web /usr/share/linuxadmin/plugins
-	rmdir /usr/share/linuxadmin 2>/dev/null || true
+	rm -rf /usr/share/ervisio/web /usr/share/ervisio/plugins
+	rmdir /usr/share/ervisio 2>/dev/null || true
 
 	# Keep current + previous only.
 	il_prev="$(readlink "$LIB/previous" 2>/dev/null || true)"
@@ -2099,13 +2191,13 @@ install_layout() {
 }
 
 install_unit() {
-	if [ -f "$1/packaging/linuxadmin.service" ]; then
+	if [ -f "$1/packaging/ervisio.service" ]; then
 		{
 			printf '%s\n' "$UNIT_HEADER"
-			cat "$1/packaging/linuxadmin.service"
+			cat "$1/packaging/ervisio.service"
 		} >"$TMPD/unit"
 	else
-		die "The release folder has no packaging/linuxadmin.service."
+		die "The release folder has no packaging/ervisio.service."
 	fi
 	if [ -f "$UNIT_FILE" ] && cmp -s "$TMPD/unit" "$UNIT_FILE"; then
 		say "systemd unit $UNIT_FILE is up to date."
@@ -2115,12 +2207,12 @@ install_unit() {
 	fi
 }
 
-# docker_dropin writes or removes the drop-in that starts LinuxAdmin after
+# docker_dropin writes or removes the drop-in that starts Ervisio after
 # Docker, needed when it listens on a Docker bridge address.
 docker_dropin() {
 	dd_f="$UNIT_FILE.d/docker-bridge.conf"
 	if [ "${DOCKER_DROPIN:-0}" = 1 ]; then
-		printf '%s\n' '# Written by install.sh: LinuxAdmin listens on a Docker bridge address,' \
+		printf '%s\n' '# Written by install.sh: Ervisio listens on a Docker bridge address,' \
 			'# which exists only once Docker has started.' \
 			'[Unit]' 'After=docker.service' 'Wants=docker.service' >"$TMPD/dropin"
 		say "Writing $dd_f."
@@ -2155,7 +2247,10 @@ start_service() {
 	done
 	if ! systemctl is-active --quiet "$UNIT"; then
 		systemctl --no-pager --lines=20 status "$UNIT" >&2 || true
-		die "$UNIT did not start. See: journalctl -u linuxadmin"
+		if [ "$LEGACY" = 1 ]; then
+			die "$UNIT did not start. See: journalctl -u ervisio. LinuxAdmin is still installed: go back to it with 'systemctl enable --now $LEGACY_UNIT'."
+		fi
+		die "$UNIT did not start. See: journalctl -u ervisio"
 	fi
 	say "$UNIT is running."
 }
@@ -2164,7 +2259,7 @@ print_access() {
 	read_listen
 	pa_s=https
 	[ "$(tls_mode)" = http ] && pa_s=http
-	step "Open LinuxAdmin"
+	step "Open Ervisio"
 	[ "$START" = 0 ] && say "(after you start the service)"
 	if [ "$CADDY_DONE" = 1 ]; then
 		say "  https://$CADDY_DOMAIN"
@@ -2186,7 +2281,7 @@ print_access() {
 	say "Sign in with a Linux account."
 	[ "$DRY" = 1 ] && return 0
 	if [ "$(tls_mode)" = http ]; then
-		say "LinuxAdmin serves plain HTTP on $LISTEN_HOST for the reverse proxy; the proxy provides HTTPS."
+		say "Ervisio serves plain HTTP on $LISTEN_HOST for the reverse proxy; the proxy provides HTTPS."
 		return 0
 	fi
 	if [ "$(tls_mode)" != self-signed ]; then
@@ -2210,17 +2305,18 @@ print_access() {
 do_install() {
 	refuse_managed
 	installed_version
+	legacy_detect
 	if [ -n "$FROM" ]; then
 		SRC="$(cd "$FROM" 2>/dev/null && pwd)" || die "No such folder: $FROM"
 		check_release_folder "$SRC"
 	else
 		resolve_version
 		if [ -n "$INSTALLED" ] && [ -z "$WANT_VERSION" ] && [ "$(ver_cmp "$INSTALLED" "$VERSION")" = 1 ]; then
-			die "LinuxAdmin $INSTALLED is installed, newer than $VERSION. To install $VERSION anyway: --version $VERSION"
+			die "Ervisio $INSTALLED is installed, newer than $VERSION. To install $VERSION anyway: --version $VERSION"
 		fi
 	fi
 
-	say "LinuxAdmin installer"
+	say "Ervisio installer"
 	say "  System:   $DISTRO_NAME ($FAMILY, $ARCH)"
 	if [ -n "$INSTALLED" ] && [ "$INSTALLED" = "$VERSION" ]; then
 		say "  Version:  $VERSION (installed: repairing)"
@@ -2228,6 +2324,10 @@ do_install() {
 		say "  Version:  $VERSION (installed: $INSTALLED)"
 	else
 		say "  Version:  $VERSION"
+	fi
+	if [ "$LEGACY" = 1 ]; then
+		say "  Moving:   LinuxAdmin${LEGACY_VERSION:+ $LEGACY_VERSION} (Ervisio's former name) is here: its settings, certificate"
+		say "            and plugins are copied to Ervisio, then its programs are removed"
 	fi
 	[ -n "$FROM" ] && say "  From:     $SRC"
 	[ "$DRY" = 1 ] && say "  Dry run:  nothing will be changed"
@@ -2261,12 +2361,14 @@ do_install() {
 	have systemd-run || warn "systemd-run is missing: self-update will not work."
 
 	install_layout "$SRC"
+	migrate_legacy
 	step "System files"
 	install_pam "$SRC"
 	write_config
 	check_config
 	install_unit "$SRC"
 	start_service
+	legacy_cleanup
 	report_admin_group
 	firewall
 	caddy_apply
@@ -2275,7 +2377,7 @@ do_install() {
 	if [ "$DRY" = 1 ]; then
 		say "Dry run finished: nothing was changed."
 	else
-		say "LinuxAdmin $VERSION is installed${PREVIOUS:+ (version $PREVIOUS is kept for rollback)}."
+		say "Ervisio $VERSION is installed${PREVIOUS:+ (version $PREVIOUS is kept for rollback)}."
 		say "It updates itself from Settings > About. Uninstall: sh install.sh --uninstall"
 	fi
 }
@@ -2284,10 +2386,10 @@ do_uninstall() {
 	refuse_managed
 	installed_version
 	if [ -z "$INSTALLED" ] && [ ! -e "$UNIT_FILE" ] && [ ! -e "$LIB" ]; then
-		say "LinuxAdmin is not installed."
+		say "Ervisio is not installed."
 		[ "$PURGE" = 1 ] || exit 0
 	fi
-	say "Removing LinuxAdmin${INSTALLED:+ $INSTALLED}."
+	say "Removing Ervisio${INSTALLED:+ $INSTALLED}."
 	if [ "$PURGE" = 1 ]; then
 		say "--purge: the configuration ($CONF_DIR, including the TLS certificate) and $STATE_DIR (installed plugins) are removed too."
 	fi
@@ -2305,12 +2407,17 @@ do_uninstall() {
 	if [ -L "$BIN_LINK" ] || [ -f "$BIN_LINK" ]; then
 		run rm -f "$BIN_LINK"
 	fi
-	if [ -f "$PAM_FILE" ] && grep -q 'PAM service for LinuxAdmin' "$PAM_FILE"; then
+	if [ -f "$PAM_FILE" ] && grep -q 'PAM service for Ervisio' "$PAM_FILE"; then
 		run rm -f "$PAM_FILE"
 	fi
-	run rm -rf "$LIB" /usr/share/linuxadmin "$STATE_DIR/updates" "$FIREWALL_RECORD"
+	run rm -rf "$LIB" /usr/share/ervisio "$STATE_DIR/updates" "$FIREWALL_RECORD"
 	if [ "$PURGE" = 1 ]; then
 		run rm -rf "$CONF_DIR" "$STATE_DIR"
+		# What LinuxAdmin (the former name) left behind, once its programs are gone.
+		if [ ! -d "$LEGACY_LIB" ] && { [ -d "$LEGACY_CONF_DIR" ] || [ -d "$LEGACY_STATE_DIR" ]; }; then
+			say "--purge: removing LinuxAdmin's leftover $LEGACY_CONF_DIR and $LEGACY_STATE_DIR too."
+			run rm -rf "$LEGACY_CONF_DIR" "$LEGACY_STATE_DIR"
+		fi
 	fi
 	if [ -d /run/systemd/system ]; then
 		run systemctl daemon-reload
@@ -2318,9 +2425,9 @@ do_uninstall() {
 	if [ "$DRY" = 1 ]; then
 		say "Dry run finished: nothing was changed."
 	elif [ "$PURGE" = 1 ]; then
-		say "LinuxAdmin was removed. Per-user preferences stay in each user's ~/.config/linuxadmin."
+		say "Ervisio was removed. Per-user preferences stay in each user's ~/.config/ervisio."
 	else
-		say "LinuxAdmin was removed. Kept: $CONF_DIR (configuration, TLS certificate) and $STATE_DIR (installed plugins); --purge removes them."
+		say "Ervisio was removed. Kept: $CONF_DIR (configuration, TLS certificate) and $STATE_DIR (installed plugins); --purge removes them."
 	fi
 }
 
@@ -2337,6 +2444,7 @@ main() {
 	CADDY_MODE=auto NO_ENABLE=0 NO_START=0 RECONF=0 CFG_REQUESTED=0
 	TTY_OK=0 C_LISTEN='' C_TLS='' PROXY='' CADDY_DOMAIN='' CADDY_DONE=0 ENABLE=1 START=1
 	CADDY_KIND='' CADDY_ACTION=none CFG_MODE=keep
+	LEGACY=0 LEGACY_VERSION='' LEGACY_ENABLED=0 CFG_SHOWN=''
 	while [ $# -gt 0 ]; do
 		case $1 in
 		--version)
@@ -2398,9 +2506,9 @@ main() {
 		[ "$DRY" = 1 ] || die "Run it as root: curl -fsSL https://raw.githubusercontent.com/$REPO/main/install.sh | sudo sh"
 		warn "Not running as root: dry run only."
 	fi
-	[ "$(uname -s)" = Linux ] || die "LinuxAdmin runs on Linux only."
+	[ "$(uname -s)" = Linux ] || die "Ervisio runs on Linux only."
 	if [ ! -d /run/systemd/system ]; then
-		[ "$DRY" = 1 ] || die "systemd is not running on this machine; LinuxAdmin needs it."
+		[ "$DRY" = 1 ] || die "systemd is not running on this machine; Ervisio needs it."
 		warn "systemd is not running here (dry run continues)."
 	fi
 	detect_arch

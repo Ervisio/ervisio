@@ -1,15 +1,24 @@
 #!/bin/sh
-# %post of the linuxadmin .rpm (nfpm). $1: 1 = first install, 2+ = upgrade.
-unit=linuxadmin.service
+# %post of the ervisio .rpm (nfpm). $1: 1 = first install, 2+ = upgrade.
+unit=ervisio.service
+
+# Ervisio was called LinuxAdmin: when the linuxadmin package is replaced
+# (Obsoletes), its scripts run after these ones, but its configuration and
+# data are still here to copy.
+legacy=0
+if [ -d /etc/linuxadmin ] || [ -d /var/lib/linuxadmin ] || [ -d /usr/lib/linuxadmin ]; then
+	legacy=1
+	/usr/bin/ervisiod --migrate-legacy || echo "Ervisio: copying LinuxAdmin's configuration failed; see above." >&2
+fi
 
 # The PAM service for this family (Fedora/RHEL: password-auth;
 # openSUSE/SLES: common-*), kept when it exists (the admin may have changed it).
-if [ ! -e /etc/pam.d/linuxadmin ]; then
+if [ ! -e /etc/pam.d/ervisio ]; then
 	fam=fedora
 	if grep -Eqs '^(ID|ID_LIKE)=.*(suse|sles)' /etc/os-release || { [ ! -e /etc/pam.d/password-auth ] && [ -e /etc/pam.d/common-auth ]; }; then
 		fam=suse
 	fi
-	install -m 644 /usr/share/linuxadmin/pam.d/linuxadmin.$fam /etc/pam.d/linuxadmin
+	install -m 644 /usr/share/ervisio/pam.d/ervisio.$fam /etc/pam.d/ervisio
 fi
 
 # The managed marker: self-update stays off, this package manager installs updates.
@@ -22,34 +31,46 @@ elif command -v yum >/dev/null 2>&1; then
 else
 	pm=rpm
 fi
-printf '%s\n' "$pm" >/usr/lib/linuxadmin/managed
-chmod 644 /usr/lib/linuxadmin/managed
+printf '%s\n' "$pm" >/usr/lib/ervisio/managed
+chmod 644 /usr/lib/ervisio/managed
 
 # A previous install made by install.sh (versioned layout) is replaced.
 # The daemon still running is that install's: it is restarted below.
 replaced=0
-if [ -L /usr/lib/linuxadmin/current ]; then
-	rm -rf /usr/lib/linuxadmin/versions /usr/lib/linuxadmin/current /usr/lib/linuxadmin/previous /var/lib/linuxadmin/updates
+if [ -L /usr/lib/ervisio/current ]; then
+	rm -rf /usr/lib/ervisio/versions /usr/lib/ervisio/current /usr/lib/ervisio/previous /var/lib/ervisio/updates
 	replaced=1
 fi
-if [ -f /etc/systemd/system/$unit ] && head -n 1 /etc/systemd/system/$unit | grep -q '^# Installed by the LinuxAdmin installer'; then
+if [ -f /etc/systemd/system/$unit ] && head -n 1 /etc/systemd/system/$unit | grep -q '^# Installed by the Ervisio installer'; then
 	rm -f /etc/systemd/system/$unit
 fi
 
 if [ -d /run/systemd/system ]; then
 	systemctl daemon-reload >/dev/null 2>&1 || true
 	if [ "$1" -eq 1 ]; then
-		systemctl enable --now $unit >/dev/null 2>&1 || true
-		[ "$replaced" = 1 ] && /usr/lib/linuxadmin/package-service restart
-		if systemctl is-active --quiet $unit; then
-			echo "LinuxAdmin is running on https://$(uname -n):9090 (self-signed certificate)."
-		else
-			echo "LinuxAdmin did not start: journalctl -u $unit"
+		systemctl enable $unit >/dev/null 2>&1 || true
+		# Starting ervisio.service stops linuxadmin.service (same port); when
+		# this runs inside LinuxAdmin's terminal, that waits until dnf is done.
+		/usr/lib/ervisio/package-service start
+		[ "$replaced" = 1 ] && /usr/lib/ervisio/package-service restart
+		if [ "$legacy" = 1 ] && [ -d /usr/lib/linuxadmin ] && [ ! -e /usr/lib/linuxadmin/managed ] &&
+			! systemctl is-active --quiet linuxadmin.service; then
+			# An install made by LinuxAdmin's install.sh: remove its programs.
+			/usr/bin/ervisiod --remove-legacy >/dev/null || true
 		fi
-		echo "Sign in with a Linux account; members of the 'wheel' group get administrator rights."
-		echo "If firewalld is active, open the port: firewall-cmd --permanent --add-port=9090/tcp && firewall-cmd --reload"
+		if systemctl is-active --quiet $unit; then
+			echo "Ervisio is running on https://$(uname -n):9090 (self-signed certificate)."
+		else
+			echo "Ervisio is not running yet: systemctl status $unit"
+		fi
+		if [ "$legacy" = 1 ]; then
+			echo "Ervisio was called LinuxAdmin: its settings were copied to /etc/ervisio (see /etc/linuxadmin/MOVED-TO-ERVISIO.txt)."
+		else
+			echo "Sign in with a Linux account; members of the 'wheel' group get administrator rights."
+			echo "If firewalld is active, open the port: firewall-cmd --permanent --add-port=9090/tcp && firewall-cmd --reload"
+		fi
 	else
-		/usr/lib/linuxadmin/package-service restart || true
+		/usr/lib/ervisio/package-service restart || true
 	fi
 fi
 exit 0

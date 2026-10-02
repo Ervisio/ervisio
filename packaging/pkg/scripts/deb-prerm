@@ -1,7 +1,7 @@
 #!/bin/sh
-# prerm of the linuxadmin .deb (nfpm): stop the service on removal.
+# prerm of the ervisio .deb (nfpm): stop the service on removal.
 set -e
 if [ "$1" = remove ] && [ -d /run/systemd/system ]; then
-	/usr/lib/linuxadmin/package-service stop || true
+	/usr/lib/ervisio/package-service stop || true
 fi
 exit 0

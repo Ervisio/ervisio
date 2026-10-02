@@ -1,0 +1,51 @@
+# Maintainer: Fonlogen <info.fonlogen@gmail.com>
+#
+# Ervisio (formerly LinuxAdmin) from the signed release archives on GitHub.
+# The checksums come from the release's SHA256SUMS, whose ed25519 signature
+# is checked by packaging/arch/update-pkgbuild.sh in the Ervisio repository
+# before they are written here. Source build: the "ervisio" package.
+
+pkgname=ervisio-bin
+_pkgname=ervisio
+pkgver=0.3.0
+pkgrel=1
+pkgdesc='Web console for managing a Linux server from the browser (prebuilt; formerly LinuxAdmin)'
+arch=('x86_64' 'aarch64')
+url='https://github.com/ervisio/ervisio'
+license=('MIT')
+depends=('glibc' 'pam' 'sudo' 'systemd')
+provides=("ervisio=$pkgver")
+conflicts=('ervisio' 'linuxadmin' 'linuxadmin-bin')
+replaces=('linuxadmin-bin')
+backup=('etc/pam.d/ervisio')
+install=ervisio.install
+options=('!strip' '!debug')
+source=('ervisio.pam' 'package-service.sh')
+source_x86_64=("https://github.com/ervisio/ervisio/releases/download/v$pkgver/ervisio-$pkgver-linux-amd64.tar.gz")
+source_aarch64=("https://github.com/ervisio/ervisio/releases/download/v$pkgver/ervisio-$pkgver-linux-arm64.tar.gz")
+# Set by update-pkgbuild.sh from the signed SHA256SUMS of the release.
+sha256sums=('SKIP' 'SKIP')
+sha256sums_x86_64=('SKIP')
+sha256sums_aarch64=('SKIP')
+
+package() {
+	local _arch=amd64
+	[[ $CARCH == aarch64 ]] && _arch=arm64
+	cd "$_pkgname-$pkgver-linux-$_arch"
+
+	install -Dm755 bin/ervisiod "$pkgdir/usr/bin/ervisiod"
+	install -Dm755 bin/ervisio-bridge "$pkgdir/usr/lib/ervisio/ervisio-bridge"
+	install -Dm755 "$srcdir/package-service.sh" "$pkgdir/usr/lib/ervisio/package-service"
+	# Self-update stays off: pacman installs new versions.
+	printf 'pacman\n' | install -Dm644 /dev/stdin "$pkgdir/usr/lib/ervisio/managed"
+
+	install -d "$pkgdir/usr/share/ervisio"
+	cp -r --no-preserve=ownership web "$pkgdir/usr/share/ervisio/web"
+	cp -r --no-preserve=ownership plugins "$pkgdir/usr/share/ervisio/plugins"
+	chmod -R u+rwX,go+rX,go-w "$pkgdir/usr/share/ervisio"
+
+	install -Dm644 packaging/ervisio.service "$pkgdir/usr/lib/systemd/system/ervisio.service"
+	install -Dm644 "$srcdir/ervisio.pam" "$pkgdir/etc/pam.d/ervisio"
+	install -dm755 "$pkgdir/etc/ervisio" "$pkgdir/var/lib/ervisio"
+	install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

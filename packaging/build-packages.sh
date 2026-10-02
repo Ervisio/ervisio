@@ -2,8 +2,8 @@
 # Builds the .deb and .rpm packages from a release folder:
 #
 #   packaging/build-packages.sh RELEASE_DIR ARCH OUTDIR
-#   -> OUTDIR/linuxadmin_VERSION_ARCH.deb
-#      OUTDIR/linuxadmin-VERSION-1.RPMARCH.rpm      (RPMARCH: x86_64 / aarch64)
+#   -> OUTDIR/ervisio_VERSION_ARCH.deb
+#      OUTDIR/ervisio-VERSION-1.RPMARCH.rpm      (RPMARCH: x86_64 / aarch64)
 #
 # RELEASE_DIR is an extracted release archive (bin/, web/, plugins/, VERSION;
 # see build-release.sh). The packaging files (unit, PAM files, scripts) come
@@ -21,7 +21,7 @@ case "$ARCH" in
   arm64) RPMARCH=aarch64 ;;
   *) echo "ARCH must be amd64 or arm64"; exit 2 ;;
 esac
-for f in bin/linuxadmind bin/linuxadmin-bridge web/index.html VERSION; do
+for f in bin/ervisiod bin/ervisio-bridge web/index.html VERSION; do
   [ -f "$SRC/$f" ] || { echo "missing $SRC/$f"; exit 1; }
 done
 VERSION="$(tr -d '[:space:]' < "$SRC/VERSION")"
@@ -33,15 +33,15 @@ trap 'rm -rf "$STAGE"' EXIT
 cp -r "$SRC/bin" "$SRC/web" "$STAGE/"
 if [ -d "$SRC/plugins" ]; then cp -r "$SRC/plugins" "$STAGE/"; else mkdir "$STAGE/plugins"; fi
 cp -r packaging/pam.d packaging/pkg/scripts "$STAGE/"
-cp packaging/linuxadmin.service packaging/package-service.sh packaging/pkg/nfpm.yaml "$STAGE/"
+cp packaging/ervisio.service packaging/package-service.sh packaging/pkg/nfpm.yaml "$STAGE/"
 if [ -f "$SRC/LICENSE" ]; then cp "$SRC/LICENSE" "$STAGE/"; else cp LICENSE "$STAGE/"; fi
 printf 'apt\n' > "$STAGE/managed.apt"
 chmod -R u+rwX,go+rX,go-w "$STAGE"
 
 mkdir -p "$OUT"
 OUT="$(cd "$OUT" && pwd)"
-DEB="$OUT/linuxadmin_${VERSION}_${ARCH}.deb"
-RPM="$OUT/linuxadmin-${VERSION}-1.${RPMARCH}.rpm"
+DEB="$OUT/ervisio_${VERSION}_${ARCH}.deb"
+RPM="$OUT/ervisio-${VERSION}-1.${RPMARCH}.rpm"
 (
   cd "$STAGE"
   export VERSION ARCH

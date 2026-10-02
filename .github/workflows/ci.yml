@@ -71,18 +71,24 @@ jobs:
           shellcheck --version | head -n 2
           shellcheck -s sh install.sh packaging/install.sh packaging/package-service.sh packaging/pkg/scripts/*
           shellcheck packaging/build-release.sh packaging/build-packages.sh packaging/install-dev.sh packaging/arch/update-pkgbuild.sh
-          shellcheck -s bash -e SC2034,SC2154,SC2164 packaging/arch/*/PKGBUILD packaging/arch/*/linuxadmin.install
+          shellcheck -s bash -e SC2034,SC2154,SC2164 packaging/arch/*/PKGBUILD packaging/arch/*/ervisio.install
       - name: AUR copies match packaging/
         run: |
-          for d in packaging/arch/linuxadmin-bin packaging/arch/linuxadmin; do
-            cmp packaging/pam.d/linuxadmin.arch "$d/linuxadmin.pam"
+          for d in packaging/arch/ervisio-bin packaging/arch/ervisio; do
+            cmp packaging/pam.d/ervisio.arch "$d/ervisio.pam"
             cmp packaging/package-service.sh "$d/package-service.sh"
-            cmp packaging/arch/linuxadmin-bin/linuxadmin.install "$d/linuxadmin.install"
+            cmp packaging/arch/ervisio-bin/ervisio.install "$d/ervisio.install"
           done
       - name: install.sh dry run with dash (downloads and verifies a real release)
         run: |
-          dash install.sh --dry-run --version 0.1.0 | tee "$RUNNER_TEMP/dry.log"
-          grep -q 'Signature of SHA256SUMS: good' "$RUNNER_TEMP/dry.log"
+          # The releases before 0.3.0 are LinuxAdmin ones (other asset names):
+          # until an Ervisio release exists, only the offline checks run.
+          if curl -fsSL --proto '=https' https://github.com/ervisio/ervisio/releases/latest/download/SHA256SUMS | grep -q ' ervisio-'; then
+            dash install.sh --dry-run | tee "$RUNNER_TEMP/dry.log"
+            grep -q 'Signature of SHA256SUMS: good' "$RUNNER_TEMP/dry.log"
+          else
+            echo "::notice::No Ervisio release yet: install.sh dry run against a release skipped."
+          fi
           dash install.sh --help >/dev/null
           dash install.sh --uninstall --dry-run --yes >/dev/null
       - name: Packages from a stub release folder
@@ -93,12 +99,13 @@ jobs:
           tar -xzf "$RUNNER_TEMP/$f" -C "$RUNNER_TEMP" nfpm
           R="$RUNNER_TEMP/rel"
           mkdir -p "$R/bin" "$R/web" "$R/plugins/docker"
-          printf '#!/bin/sh\necho 0.0.0-ci\n' > "$R/bin/linuxadmind"; cp "$R/bin/linuxadmind" "$R/bin/linuxadmin-bridge"
+          printf '#!/bin/sh\necho 0.0.0-ci\n' > "$R/bin/ervisiod"; cp "$R/bin/ervisiod" "$R/bin/ervisio-bridge"
           chmod 755 "$R/bin/"*
           echo '<!doctype html>' > "$R/web/index.html"; echo '{}' > "$R/plugins/docker/manifest.json"
           echo 0.0.0-ci > "$R/VERSION"
           NFPM="$RUNNER_TEMP/nfpm" ./packaging/build-packages.sh "$R" amd64 "$RUNNER_TEMP/out"
-          dpkg-deb --info "$RUNNER_TEMP/out/linuxadmin_0.0.0-ci_amd64.deb"
-          dpkg-deb --contents "$RUNNER_TEMP/out/linuxadmin_0.0.0-ci_amd64.deb"
-          dpkg-deb --contents "$RUNNER_TEMP/out/linuxadmin_0.0.0-ci_amd64.deb" | grep -q ' ./usr/lib/linuxadmin/managed$'
-          test -s "$RUNNER_TEMP/out/linuxadmin-0.0.0-ci-1.x86_64.rpm"
+          dpkg-deb --info "$RUNNER_TEMP/out/ervisio_0.0.0-ci_amd64.deb"
+          dpkg-deb --info "$RUNNER_TEMP/out/ervisio_0.0.0-ci_amd64.deb" | grep -q '^ Replaces: linuxadmin$'
+          dpkg-deb --contents "$RUNNER_TEMP/out/ervisio_0.0.0-ci_amd64.deb"
+          dpkg-deb --contents "$RUNNER_TEMP/out/ervisio_0.0.0-ci_amd64.deb" | grep -q ' ./usr/lib/ervisio/managed$'
+          test -s "$RUNNER_TEMP/out/ervisio-0.0.0-ci-1.x86_64.rpm"

@@ -33,7 +33,7 @@ docker run --rm --platform "linux/$goarch" \
 	'
 
 # Refuse binaries that need a newer glibc than 2.17.
-for f in server/bin/linuxadmind server/bin/linuxadmin-bridge; do
+for f in server/bin/ervisiod server/bin/ervisio-bridge; do
 	need="$(objdump -T "$f" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -n 1)"
 	echo "$f: needs $need"
 	case "$need" in

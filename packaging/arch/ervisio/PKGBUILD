@@ -1,0 +1,72 @@
+# Maintainer: Fonlogen <info.fonlogen@gmail.com>
+#
+# Ervisio (formerly LinuxAdmin) built from the tagged source. Prebuilt
+# binaries: the "ervisio-bin" package.
+
+pkgname=ervisio
+pkgver=0.3.0
+pkgrel=1
+pkgdesc='Web console for managing a Linux server from the browser (formerly LinuxAdmin)'
+arch=('x86_64' 'aarch64')
+url='https://github.com/ervisio/ervisio'
+license=('MIT')
+depends=('glibc' 'pam' 'sudo' 'systemd')
+makedepends=('go' 'npm')
+conflicts=('ervisio-bin' 'linuxadmin' 'linuxadmin-bin')
+replaces=('linuxadmin')
+backup=('etc/pam.d/ervisio')
+install=ervisio.install
+source=("$pkgname-$pkgver.tar.gz::https://github.com/ervisio/ervisio/archive/refs/tags/v$pkgver.tar.gz"
+        'ervisio.pam'
+        'package-service.sh')
+# Set by update-pkgbuild.sh.
+sha256sums=('SKIP' 'SKIP' 'SKIP')
+
+_src() { printf '%s' "$srcdir/ervisio-$pkgver"; }
+
+prepare() {
+	cd "$(_src)/web"
+	npm ci --no-audit --no-fund --cache "$srcdir/npm-cache"
+	cd "$(_src)/server"
+	export GOPATH="$srcdir/gopath" GOFLAGS='-modcacherw'
+	go mod download
+}
+
+build() {
+	cd "$(_src)/web"
+	npm run build
+
+	cd "$(_src)/server"
+	export GOPATH="$srcdir/gopath"
+	export CGO_ENABLED=1
+	export CGO_CPPFLAGS="$CPPFLAGS" CGO_CFLAGS="$CFLAGS" CGO_CXXFLAGS="$CXXFLAGS" CGO_LDFLAGS="$LDFLAGS"
+	export GOFLAGS='-buildmode=pie -trimpath -mod=readonly -modcacherw'
+	go build -ldflags "-linkmode=external -X github.com/ervisio/ervisio/server/internal/brand.Version=$pkgver" \
+		-o bin/ ./cmd/ervisiod ./cmd/ervisio-bridge
+}
+
+check() {
+	cd "$(_src)/server"
+	export GOPATH="$srcdir/gopath" GOFLAGS='-mod=readonly -modcacherw'
+	test "$(bin/ervisiod --version)" = "$pkgver"
+	go test ./...
+}
+
+package() {
+	cd "$(_src)"
+	install -Dm755 server/bin/ervisiod "$pkgdir/usr/bin/ervisiod"
+	install -Dm755 server/bin/ervisio-bridge "$pkgdir/usr/lib/ervisio/ervisio-bridge"
+	install -Dm755 "$srcdir/package-service.sh" "$pkgdir/usr/lib/ervisio/package-service"
+	# Self-update stays off: pacman installs new versions.
+	printf 'pacman\n' | install -Dm644 /dev/stdin "$pkgdir/usr/lib/ervisio/managed"
+
+	install -d "$pkgdir/usr/share/ervisio/plugins"
+	cp -r --no-preserve=ownership web/dist "$pkgdir/usr/share/ervisio/web"
+	cp -r --no-preserve=ownership plugins/docker "$pkgdir/usr/share/ervisio/plugins/docker"
+	chmod -R u+rwX,go+rX,go-w "$pkgdir/usr/share/ervisio"
+
+	install -Dm644 packaging/ervisio.service "$pkgdir/usr/lib/systemd/system/ervisio.service"
+	install -Dm644 "$srcdir/ervisio.pam" "$pkgdir/etc/pam.d/ervisio"
+	install -dm755 "$pkgdir/etc/ervisio" "$pkgdir/var/lib/ervisio"
+	install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
