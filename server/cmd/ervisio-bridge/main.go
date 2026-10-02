@@ -17,6 +17,7 @@ import (
 	"syscall"
 
 	"github.com/ervisio/ervisio/server/internal/brand"
+	"github.com/ervisio/ervisio/server/internal/legacy"
 	"github.com/ervisio/ervisio/server/internal/modules"
 	configmod "github.com/ervisio/ervisio/server/internal/modules/config"
 	"github.com/ervisio/ervisio/server/internal/modules/plugins"
@@ -51,6 +52,14 @@ func main() {
 		log.Fatal("--config must be an absolute path")
 	}
 	configmod.Path = filepath.Clean(*configPath)
+	// ~/.config/linuxadmin of this account becomes ~/.config/ervisio (once).
+	if u, err := user.LookupId(strconv.Itoa(os.Geteuid())); err == nil {
+		if moved, err := legacy.MigrateUserDir(u.HomeDir); err != nil {
+			log.Printf("copy %s to %s: %v", brand.LegacyUserDataDir, brand.UserDataDir, err)
+		} else if moved {
+			log.Printf("copied ~/%s to ~/%s", brand.LegacyUserDataDir, brand.UserDataDir)
+		}
+	}
 	// A versioned install lists the plugins shipped with its own version.
 	if vdir, ok := update.RunningVersionDir(); ok {
 		plugins.SystemDir = filepath.Join(vdir, "plugins")

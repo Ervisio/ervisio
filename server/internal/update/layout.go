@@ -352,7 +352,12 @@ func RunningVersionDir() (string, bool) {
 	if exe, err = filepath.EvalSymlinks(exe); err != nil {
 		return "", false
 	}
-	return versionDirOf(exe, brand.LibDir)
+	if d, ok := versionDirOf(exe, brand.LibDir); ok {
+		return d, true
+	}
+	// The compatibility archive run from LinuxAdmin's layout, until the
+	// move to Ervisio (internal/legacy) has happened.
+	return versionDirOf(exe, brand.LegacyLibDir)
 }
 
 func versionDirOf(exe, libDir string) (string, bool) {

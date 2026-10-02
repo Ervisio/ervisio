@@ -12,10 +12,12 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/ervisio/ervisio/server/internal/brand"
 	"github.com/ervisio/ervisio/server/internal/bridge"
 	"github.com/ervisio/ervisio/server/internal/config"
+	"github.com/ervisio/ervisio/server/internal/legacy"
 	"github.com/ervisio/ervisio/server/internal/server"
 	"github.com/ervisio/ervisio/server/internal/update"
 )
@@ -33,7 +35,22 @@ func main() {
 	// service and roll back if it does not answer (started by updates.apply
 	// in a transient systemd unit, never by hand).
 	if len(os.Args) > 1 && os.Args[1] == update.HelperFlag {
+		// Started by LinuxAdmin's updater from its own layout: this release
+		// moves the installation to Ervisio instead of a plain switch.
+		if _, ok := legacyExe(); ok {
+			os.Exit(legacy.RunHelper(os.Args[2:]))
+		}
 		os.Exit(update.RunHelper(os.Args[2:]))
+	}
+	// Internal mode: move a LinuxAdmin installation to Ervisio (started in a
+	// transient unit by a daemon that runs from LinuxAdmin's layout).
+	if len(os.Args) > 1 && os.Args[1] == legacy.TransitionFlag {
+		os.Exit(legacy.RunHelper(os.Args[2:]))
+	}
+	// Installer and package scripts: import LinuxAdmin's data, or remove
+	// what is left of it.
+	if len(os.Args) > 1 && (os.Args[1] == legacy.MigrateFlag || os.Args[1] == legacy.RemoveFlag) {
+		os.Exit(legacy.RunMigrate(os.Args[1], os.Args[2:]))
 	}
 	configPath := flag.String("config", brand.ConfigPath, "configuration file")
 	dev := flag.Bool("dev", false, "development mode: plain HTTP on 127.0.0.1:9090, no root, only your own user")
@@ -75,6 +92,16 @@ func main() {
 	if *noAuth && os.Geteuid() == 0 {
 		log.Fatal("--dev-insecure-noauth refuses to run as root")
 	}
+	// A machine that ran LinuxAdmin: its configuration, certificate, plugins
+	// and state are copied to the Ervisio locations before they are read
+	// (once; a no-op afterwards). See internal/legacy.
+	if !*dev && os.Geteuid() == 0 && *configPath == brand.ConfigPath {
+		if res, err := legacy.ImportOnStart(legacy.Paths{}, log.Printf); err != nil {
+			log.Printf("copy %s's data: %v", brand.LegacyName, err)
+		} else if res.Any() {
+			log.Printf("%s's data was copied to the %s locations (see %s/%s)", brand.LegacyName, brand.Name, brand.LegacyConfigDir, legacy.NoteFile)
+		}
+	}
 	cfgAbs, err := filepath.Abs(*configPath)
 	if err != nil {
 		log.Fatal(err)
@@ -90,6 +117,9 @@ func main() {
 		// and the bridge as /usr/lib/ervisio/ervisio-bridge.
 		if _, err := os.Stat(bp); err != nil {
 			if alt := filepath.Join(brand.LibDir, brand.BridgeBinary); isFile(alt) {
+				bp = alt
+			} else if alt := filepath.Join(filepath.Dir(exe), brand.LegacyBridgeBinary); isFile(alt) {
+				// Started from LinuxAdmin's layout (compatibility archive).
 				bp = alt
 			}
 		}
@@ -178,6 +208,21 @@ func main() {
 			auto := &update.Auto{Updater: u, Config: srv.Config, Logf: log.Printf}
 			go auto.Run(ctx)
 		}
+		// Started by linuxadmin.service from LinuxAdmin's layout: move to
+		// ervisio.service. The transition stops this process.
+		if v, ok := legacyExe(); ok && os.Geteuid() == 0 {
+			go func() {
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(3 * time.Second):
+				}
+				log.Printf("running from %s's layout: moving this installation to %s", brand.LegacyName, brand.Name)
+				if err := legacy.StartTransition(ctx, legacy.Paths{}, exe, v, update.SystemdRun); err != nil {
+					log.Printf("not moving to %s: %v", brand.Name, err)
+				}
+			}()
+		}
 	}
 	if err := srv.Run(ctx); err != nil {
 		log.Fatal(err)
@@ -196,6 +241,19 @@ func checkConfig(path string) int {
 	}
 	fmt.Printf("OK: %s\n", path)
 	return 0
+}
+
+// legacyExe returns the version folder when this binary runs from
+// LinuxAdmin's versioned layout (/usr/lib/linuxadmin/versions/<v>/bin).
+func legacyExe() (string, bool) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", false
+	}
+	if exe, err = filepath.EvalSymlinks(exe); err != nil {
+		return "", false
+	}
+	return legacy.LegacyVersionOf(legacy.Paths{}, exe)
 }
 
 func isFile(p string) bool {
