@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.5.0] - 2026-10-02
 
 ### Added
 - **Large transfers for plugins.** `sdk.api.download(name, req, filename)` (and `downloadCommand`) saves the response of a `GET` to a plugin's HTTP API, or a declared command's output, as a browser download: the bytes stream from the service to the disk with no memory use and no size limit. `sdk.api.upload(name, req, file, …)` sends a `File` as the body of a `POST` or `PUT` with progress, cancel and a size limit from the manifest (`capabilities.http[].maxUpload`, default 20 GiB), and can hand the response back as it arrives (a Docker build). Both go through a one-time, 60-second link bound to the session, with the same rules, admin unlock, origin checks and rate limits as `plugins.http`. See `docs/api/plugins.md`, "Large transfers".
@@ -27,6 +27,7 @@
 - A job that runs steps as root is approved only in Settings › Plugin jobs (Review and approve), by an administrator whose rights are unlocked in that session. A plugin can no longer approve one when it creates or changes it (`confirmAdmin` is ignored): the instance waits for approval and does not run until then. The approval covers the job's values; new values need a new approval, and a webhook call can no longer change them.
 
 ### Fixed
+- Pairing and approved-host lists follow the console's date and time settings; an incompatible plugin can no longer be switched on from its detail panel; wide Settings controls no longer squeeze their label on a phone.
 - Streams through a Portainer agent environment (logs follow, stats, events) were held back by up to 32 KiB inside the tunnel on top of the agent's own 4 KiB buffer; they now pass as the agent sends them. The agent itself still sends in 4 KiB steps (documented in `docs/api/environments.md`).
 
 ### Changed
