@@ -174,5 +174,10 @@
     "failed": "Impossibile caricare {name}",
     "navigated": "Il plugin ha provato a uscire dal suo riquadro ed è stato fermato.",
     "loading": "Caricamento del plugin"
+  },
+  "moved": {
+    "title": "{name} ora è nel marketplace",
+    "text": "{name} non è più incluso in Ervisio. Installalo dal marketplace per continuare a usarlo qui; è firmato dal team di Ervisio.",
+    "dismiss": "Non ora"
   }
 }

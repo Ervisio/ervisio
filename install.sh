@@ -66,6 +66,10 @@
 #   --domain NAME              the (sub)domain Caddy serves Ervisio on; implies --caddy
 #   --reconfigure              ask the configuration questions again on an installed system
 #   --no-enable, --no-start    do not enable at boot / do not start the service
+#   --with-docker-plugin       install the Docker plugin from the Ervisio marketplace (signed catalog);
+#                              asked when Docker is found here, --yes then installs it
+#   --no-plugins               install no plugin, and keep the daemon from installing the Docker
+#                              plugin by itself (it does so on machines with Docker, see docs/PACKAGING.md)
 #   -h, --help                 show this help
 #
 # The script never runs downloaded code other than the verified release
@@ -311,6 +315,10 @@ Configuration (first install; asked unless given here, --yes takes the defaults)
   --domain NAME              the (sub)domain Caddy serves Ervisio on (implies --caddy)
   --reconfigure              ask the configuration questions again on an installed system
   --no-enable, --no-start    do not enable at boot / do not start the service
+
+Plugins (from the Ervisio marketplace, signed by the Ervisio team):
+  --with-docker-plugin       install the Docker plugin (asked when Docker is found; --yes installs it then)
+  --no-plugins               install none, and keep the daemon from adding the Docker plugin by itself
 USAGE
 }
 
@@ -2057,6 +2065,65 @@ decide_config() {
 	return 0
 }
 
+# ---------------------------------------------------------------- plugins
+#
+# The Docker plugin shipped inside Ervisio up to 0.3.0 and now comes from the
+# marketplace (the signed catalog of github.com/Ervisio/plugins). ervisiod
+# installs it with --install-plugin, which checks the catalog signature, the
+# package checksum and the plugin signature against the team key. On start,
+# the daemon also installs it by itself once on a machine with Docker where it
+# is missing (unless --no-plugins recorded "skipped").
+
+docker_present() {
+	[ -S /var/run/docker.sock ] || [ -S /run/docker.sock ] || have docker || have dockerd
+}
+
+# docker_plugin_decide: sets DP_ACTION to install, skip or none.
+docker_plugin_decide() {
+	DP_ACTION=none
+	case $PLUGINS_MODE in
+	none)
+		DP_ACTION=skip
+		return 0
+		;;
+	docker)
+		DP_ACTION=install
+		return 0
+		;;
+	esac
+	[ -d "$STATE_DIR/plugins/docker" ] && return 0
+	[ -f "$STATE_DIR/plugins-moved.json" ] && grep -q '"docker"' "$STATE_DIR/plugins-moved.json" && return 0
+	docker_present || return 0
+	if [ "$TTY_OK" = 1 ]; then
+		say ""
+		say "Docker is installed here. The Docker plugin (containers, compose stacks, images, volumes, logs, shell)"
+		say "comes from the Ervisio marketplace, signed by the Ervisio team. It can manage Docker, which is"
+		say "equivalent to root on this machine; it is shown to administrators and the docker group."
+	fi
+	if ask "Install the Docker plugin? [Y/n]" y; then DP_ACTION=install; else DP_ACTION=skip; fi
+	return 0
+}
+
+# docker_plugin_apply: runs before the service (re)starts, with the new binary.
+docker_plugin_apply() {
+	[ "$DP_ACTION" = none ] && return 0
+	if [ "$DRY" = 0 ] && ! "$BIN_LINK" --help 2>&1 | grep -q -- '-install-plugin'; then
+		warn "Ervisio $VERSION cannot install plugins from the marketplace on its own; use Plugins > Browse."
+		return 0
+	fi
+	step "Plugins"
+	if [ "$DP_ACTION" = skip ]; then
+		say "No plugins are installed (the Docker plugin stays available in Plugins > Browse)."
+		run "$BIN_LINK" --skip-moved-plugins
+		return 0
+	fi
+	say "Installing the Docker plugin from the Ervisio marketplace (signature checked)."
+	if ! run "$BIN_LINK" --install-plugin docker; then
+		warn "The Docker plugin could not be installed now. Ervisio retries on start when Docker is present; you can also install it from Plugins > Browse."
+	fi
+	return 0
+}
+
 # ---------------------------------------------------------------- install
 
 # Downloads and verifies the release; sets SRC to the extracted folder.
@@ -2337,6 +2404,7 @@ do_install() {
 	fi
 
 	decide_config
+	docker_plugin_decide
 
 	if [ -z "$FROM" ]; then
 		verifier_selftest
@@ -2367,6 +2435,7 @@ do_install() {
 	write_config
 	check_config
 	install_unit "$SRC"
+	docker_plugin_apply
 	start_service
 	legacy_cleanup
 	report_admin_group
@@ -2445,6 +2514,7 @@ main() {
 	TTY_OK=0 C_LISTEN='' C_TLS='' PROXY='' CADDY_DOMAIN='' CADDY_DONE=0 ENABLE=1 START=1
 	CADDY_KIND='' CADDY_ACTION=none CFG_MODE=keep
 	LEGACY=0 LEGACY_VERSION='' LEGACY_ENABLED=0 CFG_SHOWN=''
+	PLUGINS_MODE=auto DP_ACTION=none
 	while [ $# -gt 0 ]; do
 		case $1 in
 		--version)
@@ -2483,6 +2553,14 @@ main() {
 		--reconfigure) RECONF=1 ;;
 		--no-enable) NO_ENABLE=1 ;;
 		--no-start) NO_START=1 ;;
+		--with-docker-plugin)
+			[ "$PLUGINS_MODE" = none ] && die "--with-docker-plugin and --no-plugins exclude each other."
+			PLUGINS_MODE=docker
+			;;
+		--no-plugins)
+			[ "$PLUGINS_MODE" = docker ] && die "--with-docker-plugin and --no-plugins exclude each other."
+			PLUGINS_MODE=none
+			;;
 		-h | --help)
 			usage
 			exit 0

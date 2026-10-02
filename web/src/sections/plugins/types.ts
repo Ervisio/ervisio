@@ -100,9 +100,17 @@ export interface CatalogCategory {
   icon: string;
   color: string;
 }
+/** A plugin that used to ship with Ervisio and now comes from the marketplace (plugins.catalog "moved"). */
+export interface MovedNotice {
+  id: string;
+  name: string;
+  version: string;
+}
 export interface CatalogView {
   categories: CatalogCategory[];
   plugins: CatalogEntry[];
   warning?: string;
+  /** Missing from older daemons. */
+  moved?: MovedNotice[];
 }
 export type TabId = 'installed' | 'updates' | 'browse' | 'security' | 'developer';

@@ -5,7 +5,7 @@ import { useT } from '../../i18n';
 import { Button, EmptyState, Input, Page, Skeleton, Tabs, toast, useIsMobile } from '../../ui';
 import { useRailBadge } from '../index';
 import { Browse } from './Browse';
-import { PluginCard } from './Cards';
+import { MovedCard, PluginCard } from './Cards';
 import { ConsentDialog } from './ConsentDialog';
 import { errMsg, usePluginData } from './data';
 import { DetailPanel } from './DetailPanel';
@@ -14,6 +14,7 @@ import { Security } from './Security';
 import type { CatalogEntry, PluginInfo, TabId } from './types';
 import './plugins.css';
 
+const MOVED_DISMISSED = 'ervisio.plugins.movedDismissed';
 const TABS: TabId[] = ['installed', 'updates', 'browse', 'security', 'developer'];
 
 export default function PluginsPage() {
@@ -29,6 +30,28 @@ export default function PluginsPage() {
   const [sel, setSel] = useState<string | null>(null);
   const [busyId, setBusyId] = useState('');
   const [consent, setConsent] = useState<{ entry: CatalogEntry; mode: 'install' | 'update' } | null>(null);
+
+  // Plugins that left Ervisio (Docker) and are not installed here; "Not now" is remembered in this browser.
+  const [dismissed, setDismissed] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(MOVED_DISMISSED) ?? '[]') as string[];
+    } catch {
+      return [];
+    }
+  });
+  const moved = useMemo(
+    () => (catalog?.moved ?? []).filter((m) => !dismissed.includes(m.id)).map((m) => catalog?.plugins.find((e) => e.id === m.id)).filter((e): e is CatalogEntry => !!e && !e.installed),
+    [catalog, dismissed],
+  );
+  const dismissMoved = (id: string) => {
+    const next = [...dismissed, id];
+    setDismissed(next);
+    try {
+      localStorage.setItem(MOVED_DISMISSED, JSON.stringify(next));
+    } catch {
+      /* private mode: dismissed for this visit only */
+    }
+  };
 
   const withUpdate = useMemo(() => plugins.filter((p) => p.updateAvailable), [plugins]);
   useRailBadge('plugins', withUpdate.length, 'info');
@@ -105,6 +128,9 @@ export default function PluginsPage() {
     ) : (
       <div className="plugins-split">
         <div className="plugins-main">
+          {tab === 'installed' && !q && moved.map((e) => (
+            <MovedCard key={e.id} entry={e} busy={busyId === e.id} onInstall={() => setConsent({ entry: e, mode: 'install' })} onDismiss={() => dismissMoved(e.id)} />
+          ))}
           {items.length === 0 ? (
             <EmptyState icon="plugins" hue="plg" title={empty.title} text={empty.text} action={tab === 'installed' ? <Button variant="primary" onClick={() => setTab('browse')}>{t('getPlugins')}</Button> : undefined} />
           ) : (

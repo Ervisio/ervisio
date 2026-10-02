@@ -27,6 +27,11 @@
 .plugins-split { display: flex; flex: 1; min-height: 0; gap: 12px; padding: 0 12px 12px; }
 .plugins-main { flex: 1; min-width: 0; overflow: auto; border-radius: var(--r-card); }
 .plugins-split > .ui-panel { background: var(--sunk); width: 400px; }
+.plugins-moved { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 4px 4px 12px; padding: 14px 16px; border-radius: var(--r-card); background: var(--s); }
+.plugins-moved-tx { flex: 1; min-width: 200px; }
+.plugins-moved-tx b { display: block; font-weight: 800; }
+.plugins-moved-tx small { display: block; color: var(--ink2); font-size: 13px; margin-top: 2px; }
+.plugins-moved-act { display: flex; gap: 8px; margin-left: auto; }
 .plugins-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; padding: 4px; align-content: start; }
 .plugins-card { background: var(--sunk); border-radius: 20px; padding: 14px; display: flex; flex-direction: column; gap: 10px; cursor: pointer; border: 2px solid transparent; text-align: left; color: inherit; }
 .plugins-card:hover { background: color-mix(in srgb, var(--sunk) 88%, var(--ink) 12%); }

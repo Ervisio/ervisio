@@ -174,5 +174,10 @@
     "failed": "{name} could not be loaded",
     "navigated": "The plugin tried to leave its frame, so it was stopped.",
     "loading": "Loading the plugin"
+  },
+  "moved": {
+    "title": "{name} moved to the marketplace",
+    "text": "{name} no longer ships with Ervisio. Install it from the marketplace to keep using it here; it is signed by the Ervisio team.",
+    "dismiss": "Not now"
   }
 }

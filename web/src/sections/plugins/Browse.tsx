@@ -60,7 +60,7 @@ export function Browse({ catalog, query, busyId, onInstall }: Props) {
                 <small>{e.description}</small>
                 <div className="plugins-bc-m">
                   <TrustBadge p={{ verified: e.verified }} />
-                  <span className="plugins-muted">{t('installs', { count: fmtInstalls(e.installs) })}</span>
+                  {e.installs > 0 && <span className="plugins-muted">{t('installs', { count: fmtInstalls(e.installs) })}</span>}
                 </div>
               </div>
               {e.installed ? (
