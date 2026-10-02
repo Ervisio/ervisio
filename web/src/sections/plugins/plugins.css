@@ -132,3 +132,9 @@
   .plugins-feat { padding: 18px; }
   .plugins-feat .ui-btn { margin-left: 0; }
 }
+
+/* Plugin logo (logo.svg / logo.png, or the catalog's data: URL) instead of the icon. */
+.plugins-tile.has-logo { background: var(--sunk); }
+.plugins-tile img { width: 62%; height: 62%; object-fit: contain; display: block; }
+.plugins-tile.has-logo.is-off img { opacity: .45; filter: grayscale(1); }
+.plugins-feat .plugins-tile.has-logo { background: color-mix(in srgb, var(--surface) 85%, transparent); }

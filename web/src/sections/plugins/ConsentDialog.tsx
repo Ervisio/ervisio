@@ -16,7 +16,7 @@ export function ConsentDialog({ entry, mode, busy, onCancel, onConfirm }: { entr
       title={t(mode === 'install' ? 'consent.titleInstall' : 'consent.titleUpdate', { name: entry.name })}
       description={
         <span className="plugins-consent-sub">
-          <Tile icon={entry.icon} color={entry.color} size="sm" />
+          <Tile icon={entry.icon} logo={entry.logo} color={entry.color} size="sm" />
           <span>{entry.author}, v{entry.version}</span>
           <TrustBadge p={{ verified: entry.verified }} />
         </span>

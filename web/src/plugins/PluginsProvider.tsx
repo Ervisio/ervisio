@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { call, useSession } from '../api';
+import { apiUrl, call, useSession } from '../api';
 import { NetworkApprovalHost } from './networkApproval';
 import type { PluginManifest, PluginPageInfo, PluginSnippet, PluginWidgetInfo } from './types';
 
@@ -9,6 +9,8 @@ export interface RailPluginPage {
   page: string;
   title: string;
   icon: string;
+  /** URL of the plugin's logo, drawn instead of the icon. */
+  logo?: string;
   color?: string;
 }
 
@@ -78,7 +80,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<PluginsValue>(() => {
     const railPages = plugins.flatMap((p) =>
-      (p.contributes?.pages ?? []).map((g) => ({ plugin: p.id, page: g.id, title: g.title, icon: g.icon ?? p.icon ?? 'plugins', color: p.color })),
+      (p.contributes?.pages ?? []).map((g) => ({ plugin: p.id, page: g.id, title: g.title, icon: g.icon ?? p.icon ?? 'plugins', logo: pluginLogoUrl(p), color: p.color })),
     );
     const pages = plugins.flatMap((p) => (p.contributes?.pages ?? []).map((g) => ({ plugin: p.id, id: g.id, title: g.title, icon: g.icon })));
     const widgets = plugins.flatMap((p) => (p.contributes?.widgets ?? []).map((w) => ({ plugin: p.id, id: w.id, title: w.title, icon: w.icon })));
@@ -91,6 +93,11 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
       <NetworkApprovalHost reload={reload} />
     </Ctx.Provider>
   );
+}
+
+/** URL of an installed plugin's logo (the version busts the browser cache after an update), or undefined. */
+export function pluginLogoUrl(p: { id: string; version: string; logo?: string }): string | undefined {
+  return p.logo ? apiUrl(`/plugins/${p.id}/${p.logo}?v=${encodeURIComponent(p.version)}`) : undefined;
 }
 
 export function usePlugins(): PluginsValue {

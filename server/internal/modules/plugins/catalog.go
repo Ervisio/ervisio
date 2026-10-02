@@ -25,12 +25,15 @@ type CatalogEntry struct {
 	Author      string `json:"author"`
 	Description string `json:"description"`
 	Icon        string `json:"icon"`
-	Color       string `json:"color"`
-	Category    string `json:"category"`
-	Verified    bool   `json:"verified"`
-	Installs    int    `json:"installs"`
-	Featured    bool   `json:"featured,omitempty"`
-	Notes       string `json:"notes,omitempty"`
+	// Logo is the plugin's logo as a data: URL (SVG or PNG), embedded in the
+	// signed catalog so Browse shows it before the plugin is installed.
+	Logo     string `json:"logo,omitempty"`
+	Color    string `json:"color"`
+	Category string `json:"category"`
+	Verified bool   `json:"verified"`
+	Installs int    `json:"installs"`
+	Featured bool   `json:"featured,omitempty"`
+	Notes    string `json:"notes,omitempty"`
 	// MinCore and Requires (as in the manifest) say which Ervisio the
 	// plugin needs; Browse shows it and the installer enforces it.
 	MinCore  string    `json:"minCore,omitempty"`
@@ -96,6 +99,9 @@ func parseCatalog(data []byte) (*Catalog, error) {
 			continue // ignore malformed entries instead of failing the whole catalog
 		}
 		seen[e.ID] = true
+		if !ValidLogoURL(e.Logo) {
+			e.Logo = "" // a bad logo only loses the logo
+		}
 		e.Capabilities = emptyIfNil(e.Capabilities)
 		if e.Contributes.Pages == nil || e.Contributes.Widgets == nil || e.Contributes.Snippets == nil {
 			m := Manifest{Contributes: e.Contributes}
@@ -112,6 +118,28 @@ func parseCatalog(data []byte) (*Catalog, error) {
 		c.Categories = []CatalogCategory{}
 	}
 	return &c, nil
+}
+
+// ValidLogoURL reports whether s is "" or a base64 data: URL of an SVG or PNG
+// image no larger than MaxLogoSize once decoded.
+func ValidLogoURL(s string) bool {
+	if s == "" {
+		return true
+	}
+	var data string
+	switch {
+	case strings.HasPrefix(s, "data:image/svg+xml;base64,"):
+		data = strings.TrimPrefix(s, "data:image/svg+xml;base64,")
+	case strings.HasPrefix(s, "data:image/png;base64,"):
+		data = strings.TrimPrefix(s, "data:image/png;base64,")
+	default:
+		return false
+	}
+	if base64.StdEncoding.DecodedLen(len(data)) > MaxLogoSize+2 {
+		return false
+	}
+	_, err := base64.StdEncoding.DecodeString(data)
+	return err == nil
 }
 
 func emptyIfNil(c Capabilities) Capabilities {

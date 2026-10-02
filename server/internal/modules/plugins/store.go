@@ -266,12 +266,15 @@ func (c caller) canSee(m *Manifest) bool {
 
 // Info is one entry of plugins.list.
 type Info struct {
-	ID             string       `json:"id"`
-	Name           string       `json:"name"`
-	Version        string       `json:"version"`
-	Author         string       `json:"author"`
-	Description    string       `json:"description"`
-	Icon           string       `json:"icon"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Version     string `json:"version"`
+	Author      string `json:"author"`
+	Description string `json:"description"`
+	Icon        string `json:"icon"`
+	// Logo is the plugin's own logo file (logo.svg or logo.png at the root
+	// of its folder), served at /plugins/<id>/<logo>; "" = draw Icon.
+	Logo           string       `json:"logo,omitempty"`
 	Color          string       `json:"color"`
 	Entry          string       `json:"entry"`
 	Enabled        bool         `json:"enabled"`
@@ -332,7 +335,7 @@ func list(adminBridge bool) []Info {
 		}
 		in := Info{
 			ID: m.ID, Name: m.Name, Version: m.Version, Author: m.Author, Description: m.Description,
-			Icon: m.Icon, Color: m.Color, Entry: m.Entry,
+			Icon: m.Icon, Logo: findLogo(f.Dir, m), Color: m.Color, Entry: m.Entry,
 			Enabled: st.isEnabled(m.ID), Signed: f.Sig.Signed, Verified: f.Sig.Verified, SignatureError: f.Sig.Err,
 			Capabilities: m.Capabilities, Contributes: m.Contributes, VisibleTo: m.VisibleTo,
 			Location: f.Location, Removable: f.Location == LocInstalled, Dir: f.Dir, Unloadable: f.Location == LocDev && isLoadedDev(f.Dir),
@@ -360,6 +363,31 @@ func list(adminBridge bool) []Info {
 		out = append(out, in)
 	}
 	return out
+}
+
+// LogoFiles are the names a plugin logo may have, at the root of the plugin
+// folder, in order of preference. A logo is optional and needs no manifest
+// field, so packages with one still load on consoles that predate logos.
+var LogoFiles = []string{"logo.svg", "logo.png"}
+
+// MaxLogoSize is the largest logo file shown (bytes).
+const MaxLogoSize = 64 << 10
+
+// findLogo returns the logo file of a plugin folder, or "". A signed plugin
+// shows only a logo its signature covers.
+func findLogo(dir string, m *Manifest) string {
+	for _, name := range LogoFiles {
+		if len(m.Files) > 0 {
+			if _, ok := m.Files[name]; !ok {
+				continue
+			}
+		}
+		fi, err := os.Lstat(filepath.Join(dir, name))
+		if err == nil && fi.Mode().IsRegular() && fi.Size() > 0 && fi.Size() <= MaxLogoSize {
+			return name
+		}
+	}
+	return ""
 }
 
 func emptyCaps() Capabilities {

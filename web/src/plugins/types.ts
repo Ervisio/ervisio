@@ -13,6 +13,8 @@ export interface PluginManifest {
   author?: string;
   entry: string;
   icon?: string;
+  /** Logo file at the root of the plugin folder (logo.svg or logo.png), served at /plugins/<id>/<logo>. */
+  logo?: string;
   color?: string;
   enabled?: boolean;
   blocked?: boolean;

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { call } from '../../api';
+import { pluginLogoUrl } from '../../plugins';
 import { useT } from '../../i18n';
 import { Button, Icon, Input, toast } from '../../ui';
 import { errMsg } from './data';
@@ -66,7 +67,7 @@ export function Developer({ plugins, refresh }: { plugins: PluginInfo[]; refresh
           <div className="plugins-devlist">
             {dev.map((p) => (
               <div key={p.id} className="plugins-devrow">
-                <Tile icon={p.icon} color={p.color} size="sm" />
+                <Tile icon={p.icon} logo={pluginLogoUrl(p)} color={p.color} size="sm" />
                 <div className="plugins-dev-tx"><b>{p.name}</b><small className="mono">{p.dir}</small></div>
                 <Button size="sm" icon="refresh" onClick={() => void refresh(true).then(() => toast.ok(t('dev.reloaded', { name: p.name })))}>{t('dev.reload')}</Button>
               </div>

@@ -21,6 +21,7 @@
 - **Download completion.** `sdk.api.download(…, { onDone })` reports `{ ok, bytes, error? }` when the browser's fetch ends, from a new `GET /api/plugins/transfer/<token>/status` that only the session that started the transfer can read.
 - `sdk.appOrigin` (the console's origin, for webhook URLs), a `timeoutSec` per job command step (up to 6 hours), and `minCore` / `requires: { ervisio }` in plugin manifests and marketplace entries (an older core refuses to install, enable or run such a plugin and says which version it needs).
 - With `--dev-state-dir`, `plugins.loadDev` registrations are kept in that folder, not in `~/.config/ervisio/plugins-dev.json`.
+- Plugin logos: a `logo.svg` or `logo.png` (at most 64 KiB) at the root of a plugin folder is shown instead of its icon in the rail, the dock, the More sheet, the palette and Plugins. The marketplace catalog can carry it as a `data:` URL (`logo`), so Browse and the install dialog show it too. No manifest field: packages with a logo still load on older consoles.
 
 ### Security
 - A job that runs steps as root is approved only in Settings › Plugin jobs (Review and approve), by an administrator whose rights are unlocked in that session. A plugin can no longer approve one when it creates or changes it (`confirmAdmin` is ignored): the instance waits for approval and does not run until then. The approval covers the job's values; new values need a new approval, and a webhook call can no longer change them.

@@ -4,6 +4,7 @@ import { useSession } from '../api';
 import { useT } from '../i18n';
 import { useTheme } from '../theme';
 import { Button, Icon, Sheet } from '../ui';
+import { NavIcon } from './NavIcon';
 import { useNav, type NavEntry } from './useNav';
 
 const DOCK_IDS = ['overview', 'terminal', 'files', 'services'];
@@ -18,7 +19,7 @@ export function Dock() {
       <nav className="dock" aria-label={t('nav.main')}>
         {items.map((e) => (
           <NavLink key={e.key} to={e.to} end={e.end} className={({ isActive }) => `${e.hueClass}${isActive ? ' active' : ''}`}>
-            <span className="pi"><Icon name={e.icon} /></span>
+            <span className={`pi${e.logo ? ' has-logo' : ''}`}><NavIcon e={e} /></span>
             {e.label}
             {e.badge && <span className="n">{e.badge.count}</span>}
           </NavLink>
@@ -60,7 +61,7 @@ export function MoreSheet({ open, onClose }: { open: boolean; onClose(): void })
       <div className="more-grid">
         {tiles.map((e) => (
           <NavLink key={e.key} to={e.to} end={e.end} onClick={onClose} className={({ isActive }) => `more-tile ${e.hueClass}${isActive ? ' active' : ''}`}>
-            <span className="t"><Icon name={e.icon} /></span>
+            <span className={`t${e.logo ? ' has-logo' : ''}`}><NavIcon e={e} /></span>
             <span>{e.label}</span>
             {e.badge && <span className="n">{e.badge.count}</span>}
           </NavLink>

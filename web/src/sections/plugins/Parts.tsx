@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 import { useT } from '../../i18n';
 import { Badge, Icon, type HueId } from '../../ui';
 import { describeCaps, whoCanUse } from './caps';
@@ -7,10 +7,13 @@ import type { CatalogEntry, PluginInfo } from './types';
 export const hueOf = (c?: string): HueId => (['ov', 'term', 'file', 'log', 'svc', 'sw', 'usr', 'plg'].includes(c ?? '') ? (c as HueId) : 'plg');
 
 /** Square icon tile in the plugin's colour. */
-export function Tile({ icon, color, off, size = 'md' }: { icon: string; color?: string; off?: boolean; size?: 'sm' | 'md' | 'lg' }) {
+export function Tile({ icon, logo, color, off, size = 'md' }: { icon: string; logo?: string; color?: string; off?: boolean; size?: 'sm' | 'md' | 'lg' }) {
+  // A logo that does not load (e.g. a disabled plugin's files are not served) falls back to the icon.
+  const [failed, setFailed] = useState('');
+  const showLogo = !!logo && failed !== logo;
   return (
-    <span className={`plugins-tile plugins-tile--${size} hue-${hueOf(color)}${off ? ' is-off' : ''}`}>
-      <Icon name={icon || 'plugins'} />
+    <span className={`plugins-tile plugins-tile--${size} hue-${hueOf(color)}${off ? ' is-off' : ''}${showLogo ? ' has-logo' : ''}`}>
+      {showLogo ? <img src={logo} alt="" draggable={false} onError={() => setFailed(logo!)} /> : <Icon name={icon || 'plugins'} />}
     </span>
   );
 }

@@ -1,3 +1,4 @@
+import { pluginLogoUrl } from '../../plugins';
 import { useT } from '../../i18n';
 import { Badge, Switch } from '../../ui';
 import { folderOf, httpApis, runsRoot } from './caps';
@@ -67,7 +68,7 @@ export function Security({ plugins, busyId, onToggle }: Props) {
                 <tr key={p.id} className={!p.verified ? 'is-warn' : ''}>
                   <td>
                     <div className="plugins-nm">
-                      <Tile icon={p.icon} color={p.color} size="sm" />
+                      <Tile icon={p.icon} logo={pluginLogoUrl(p)} color={p.color} size="sm" />
                       <div><b>{p.name}</b><small>v{p.version}</small></div>
                     </div>
                   </td>

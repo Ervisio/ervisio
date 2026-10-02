@@ -2,15 +2,16 @@ import { useRef, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { requestUnlock, useSession } from '../api';
 import { useT } from '../i18n';
-import { Icon, Menu, type MenuItem } from '../ui';
+import { Menu, type MenuItem } from '../ui';
 import { formatClock } from '../lib/format';
 import { DistroLogo } from './DistroLogo';
+import { NavIcon } from './NavIcon';
 import { useNav, type NavEntry } from './useNav';
 
 export function RailItem({ e }: { e: NavEntry }) {
   return (
     <NavLink to={e.to} end={e.end} className={({ isActive }) => `rail-it ${e.hueClass}${isActive ? ' active' : ''}`} aria-label={e.label}>
-      <span className="pi"><Icon name={e.icon} /></span>
+      <span className={`pi${e.logo ? ' has-logo' : ''}`}><NavIcon e={e} /></span>
       <span className="rail-lb">{e.label}</span>
       {e.badge && <span className={`n${e.badge.tone === 'info' ? ' n--info' : ''}`} aria-label={String(e.badge.count)}>{e.badge.count > 99 ? '99+' : e.badge.count}</span>}
     </NavLink>

@@ -133,6 +133,11 @@ Strict: unknown fields are rejected.
 * `id` `^[a-z][a-z0-9-]{1,39}$`; `version` semver; `color` one of `ov term file log svc sw usr plg`.
 * `entry`: relative `.js`/`.mjs` path that exists, is a regular file and (after resolving symlinks) stays inside the folder.
 * `files` (optional unless signed): path to sha256 hex of every file except `manifest.json`/`manifest.sig`; must list `entry`.
+* **Logo** (optional, not a manifest field): a `logo.svg` or `logo.png` (preferred in that order) at the root of the
+  plugin folder, at most 64 KiB, is drawn instead of `icon` in the rail, the dock, the palette and Plugins. A signed
+  plugin shows it only when `files` lists it (signing does that). Being a file and not a field, a package with a logo
+  still loads on consoles older than 0.5.0, which show the icon. Draw it square, legible at 20 px, on a transparent
+  background that works on dark and light themes.
 * Command: `argv[0]` is fixed (bare name resolved in the daemon's safe PATH, or absolute). `{N}` slots (also inside an
   item, like `--name={0}`) take the Nth call argument. Every slot needs an `args[N]` with a `pattern`: a regular expression
   that must match the **whole** value. Values starting with `-` are refused unless `allowDash`; default `maxLen` 256.
@@ -246,13 +251,13 @@ time.
 Params `{}`. Result: array of
 
 ```json
-{"id":"docker","name":"Docker","version":"1.4.0","author":"…","description":"…","icon":"server","color":"file",
+{"id":"docker","name":"Docker","version":"1.4.0","author":"…","description":"…","icon":"server","logo":"logo.svg","color":"file",
  "entry":"index.js","enabled":true,"signed":true,"verified":true,"signatureError":"…","capabilities":{…},
  "contributes":{…},"visibleTo":{"groups":[]},"location":"installed","removable":true,"dir":"/var/lib/…",
  "unloadable":false,"updateAvailable":{"version":"1.5.0","notes":"…","newPermissions":false,"source":"https://…","sha256":"…"},
  "blocked":false,"error":""}
 ```
-`capabilities` and `contributes` always carry arrays (never null). `signed` = a manifest.sig exists, `verified` = it is valid.
+`logo` (omitted when none): the logo file, served at `/plugins/<id>/<logo>`. `capabilities` and `contributes` always carry arrays (never null). `signed` = a manifest.sig exists, `verified` = it is valid.
 `blocked` = unsigned/invalid while `allow_unsigned` is off (`enabled` is then false); `devUnsigned` = an unsigned dev
 plugin that runs because developer mode is on. `updateAvailable` comes from the
 local catalog. Folders whose manifest fails validation are listed for admins only, with `error` set and `enabled:false`.
@@ -275,7 +280,8 @@ moved atomically into place (an existing installed version is replaced = update)
 Errors: `invalid` (bad source, archive, manifest, checksum), `forbidden`, `conflict`, `not_found`, `unavailable` (download).
 
 ### `plugins.catalog` (user)
-Params `{}` → `{"categories":[{id,name,icon,color}], "plugins":[{id,name,version,author,description,icon,color,category,verified,installs,featured?,notes?,source,sha256?,capabilities,contributes,visibleTo,installed,installedVersion?,minCore?,requires?,incompatible?}], "warning"?, "moved":[{id,name,version}]}`.
+Params `{}` → `{"categories":[{id,name,icon,color}], "plugins":[{id,name,version,author,description,icon,logo?,color,category,verified,installs,featured?,notes?,source,sha256?,capabilities,contributes,visibleTo,installed,installedVersion?,minCore?,requires?,incompatible?}], "warning"?, "moved":[{id,name,version}]}`.
+`logo` is a `data:image/svg+xml;base64,…` or `data:image/png;base64,…` URL of at most 64 KiB, embedded in the signed catalog by the registry; any other value is dropped (the entry keeps its icon).
 Sources:
 
 1. Local: the first existing `catalog.json` of `./plugins` (dev), `/var/lib/ervisio/plugins`, the packaged folder.
