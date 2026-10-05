@@ -230,6 +230,9 @@ func (e *bridgeExecutor) proc(ctx context.Context, admin bool) (*bridge.Proc, er
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	key := "u:" + strconv.FormatUint(uint64(e.a.UID), 10)
+	if e.a.SID != "" {
+		key = "u:" + e.a.SID // RIDs can repeat across Windows domains
+	}
 	if admin {
 		key = "root"
 	}

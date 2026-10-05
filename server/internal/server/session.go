@@ -193,7 +193,7 @@ func (st *store) add(s *Session) (string, error) {
 	st.sessions[s.key] = s
 	var mine []*Session
 	for _, o := range st.sessions {
-		if o.Account.UID == s.Account.UID {
+		if account.SameUser(o.Account, s.Account) {
 			mine = append(mine, o)
 		}
 	}

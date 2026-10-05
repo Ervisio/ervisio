@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os/user"
-	"slices"
 	"time"
 
 	"github.com/ervisio/ervisio/server/internal/account"
@@ -29,7 +28,7 @@ type accountChecker struct {
 func newAccountChecker() *accountChecker {
 	return &accountChecker{
 		lookup:  account.Lookup,
-		shadow:  account.ReadShadow,
+		shadow:  readShadow,
 		pamAcct: func(name, rhost string) error { return pam.CheckAccount(pam.Service(), name, rhost) },
 		now:     time.Now,
 	}
@@ -90,7 +89,7 @@ func (s *Server) revalidate(sess *Session, full bool) string {
 		s.log.Printf("revalidate %q: lookup: %v (session kept)", name, err)
 		return ""
 	}
-	if a.UID != sess.Account.UID {
+	if !account.SameUser(a, sess.Account) {
 		return fmt.Sprintf("the account's uid changed (%d → %d)", sess.Account.UID, a.UID)
 	}
 	if !account.ShellAllowed(a.Shell) {
@@ -106,10 +105,8 @@ func (s *Server) revalidate(sess *Session, full bool) string {
 	if !s.opts.NoAuth && !signInAllowed(cfg, a) {
 		return "the account is no longer allowed to sign in (auth.allow_users, auth.allow_groups, auth.admins_only)"
 	}
-	for _, g := range sess.Account.Groups {
-		if !slices.Contains(a.Groups, g) {
-			return fmt.Sprintf("the account left group %d", g)
-		}
+	if g := account.LostGroup(sess.Account, a); g != "" {
+		return fmt.Sprintf("the account left group %s", g)
 	}
 	runPAM := full
 	sh, err := c.shadow(name)
@@ -124,7 +121,7 @@ func (s *Server) revalidate(sess *Session, full bool) string {
 		sess.mu.Lock()
 		fp := sess.shadowFP
 		sess.mu.Unlock()
-		if fp != "" && sh.Fingerprint != fp && sess.sshKey == nil {
+		if fp != "" && fingerprintChanged(fp, sh.Fingerprint) && sess.sshKey == nil {
 			return "the account's password changed"
 		}
 	case errors.Is(err, account.ErrNoShadowEntry):

@@ -280,7 +280,7 @@ func (s *Server) pairUser(name string) (*account.Account, *rpc.Error) {
 	if !signInAllowed(cfg, acc) {
 		return nil, rpc.Errorf(rpc.Forbidden, "%s is not allowed to sign in here (auth.allow_users / auth.allow_groups), so a pairing cannot run as that user.", name)
 	}
-	if s.opts.Dev && s.devUser != nil && acc.UID != s.devUser.UID {
+	if s.opts.Dev && s.devUser != nil && !account.SameUser(acc, s.devUser) {
 		return nil, rpc.Errorf(rpc.Forbidden, "In development mode only %s can be used.", s.devUser.Name)
 	}
 	return acc, nil
