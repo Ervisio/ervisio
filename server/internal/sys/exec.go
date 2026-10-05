@@ -14,7 +14,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/ervisio/ervisio/server/internal/rpc"
@@ -141,14 +140,7 @@ func (c Cmd) Command(ctx context.Context) (*exec.Cmd, error) {
 	cmd.Env = Env(c.Env...)
 	cmd.Dir = c.Dir
 	cmd.Stdin = c.Stdin
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error {
-		// Kill the whole group so helpers spawned by the command go too.
-		if cmd.Process != nil {
-			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-		}
-		return nil
-	}
+	setProcessGroup(cmd)
 	cmd.WaitDelay = 2 * time.Second
 	return cmd, nil
 }
