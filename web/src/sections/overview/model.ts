@@ -56,7 +56,19 @@ export function stepCols(c: number, dir: 1 | -1): Cols {
   return SIZES[Math.max(0, Math.min(SIZES.length - 1, i + dir))];
 }
 
-export const DEFAULT_ACTIONS: DashAction[] = [
+const WIN_ACTIONS: DashAction[] = [
+  { id: 'a-ports', label: 'Listening ports', icon: 'globe', hue: 'file', argv: ['powershell.exe', '-NoProfile', '-Command', 'Get-NetTCPConnection -State Listen'] },
+  { id: 'a-disk', label: 'Disk usage', icon: 'disk', hue: 'term', argv: ['powershell.exe', '-NoProfile', '-Command', 'Get-PSDrive -PSProvider FileSystem'] },
+];
+
+let windowsHost = false;
+/** Called by the page once the session is known: Linux-only default actions are swapped for PowerShell ones. */
+export function setWindowsDefaults(win: boolean) {
+  windowsHost = win;
+}
+const defaultActions = (): DashAction[] => (windowsHost ? WIN_ACTIONS : LINUX_ACTIONS);
+
+const LINUX_ACTIONS: DashAction[] = [
   { id: 'a-ports', label: 'Listening ports', icon: 'globe', hue: 'file', argv: ['ss', '-tulpn'] },
   { id: 'a-disk', label: 'Disk usage', icon: 'disk', hue: 'term', argv: ['df', '-h'] },
   { id: 'a-journal', label: 'Trim old logs', icon: 'broom', hue: 'log', argv: ['journalctl', '--vacuum-time=7d'], admin: true },
@@ -72,7 +84,7 @@ export function defaultLayout(): Layout {
       { id: 'w-disk', type: 'stat', cols: 3, settings: { metric: 'disk' } },
       { id: 'w-net', type: 'stat', cols: 3, settings: { metric: 'network' } },
       { id: 'w-act', type: 'activity', cols: 7 },
-      { id: 'w-actions', type: 'actions', cols: 5, settings: { actions: DEFAULT_ACTIONS } },
+      { id: 'w-actions', type: 'actions', cols: 5, settings: { actions: defaultActions() } },
       { id: 'w-alerts', type: 'alerts', cols: 7 },
       { id: 'w-machine', type: 'machine', cols: 5 },
     ],
@@ -172,7 +184,7 @@ export interface CatalogItem {
 export const CATALOG: CatalogItem[] = [
   { type: 'stat', category: 'basics', icon: 'cpu', hue: 'ov', cols: 3, settings: () => ({ metric: 'cpu' }), configure: true },
   { type: 'activity', category: 'basics', icon: 'overview', hue: 'file', cols: 7 },
-  { type: 'actions', category: 'basics', icon: 'play', hue: 'sw', cols: 5, settings: () => ({ actions: DEFAULT_ACTIONS.map((a) => ({ ...a, id: uid('a') })) }) },
+  { type: 'actions', category: 'basics', icon: 'play', hue: 'sw', cols: 5, settings: () => ({ actions: defaultActions().map((a) => ({ ...a, id: uid('a') })) }) },
   { type: 'alerts', category: 'basics', icon: 'alert', hue: 'svc', cols: 7 },
   { type: 'machine', category: 'basics', icon: 'server', hue: 'ov', cols: 5 },
   { type: 'chart', category: 'system', icon: 'overview', hue: 'ov', cols: 6, settings: () => ({ metric: 'cpu', range: '15m' }), configure: true },

@@ -97,8 +97,12 @@ export function Details({ entry, contextSource, watchers, call_, onClose, onOpen
             {entry.file && (<><dt>{t('details.file')}</dt><dd className="mono" title={entry.file}>{entry.file}</dd></>)}
             {!!entry.line && (<><dt>{t('details.line')}</dt><dd>{entry.line.toLocaleString()}</dd></>)}
           </dl>
-          <h4>{t('details.context')}</h4>
-          <Context entry={entry} contextSource={contextSource} watchers={watchers} call_={call_} />
+          {(entry.file || !contextSource.startsWith('evt:')) && (
+            <>
+              <h4>{t('details.context')}</h4>
+              <Context entry={entry} contextSource={contextSource} watchers={watchers} call_={call_} />
+            </>
+          )}
           <div className="logs-acts">
             {entry.file && (
               <button type="button" onClick={() => onOpenFile(entry.file!)}>

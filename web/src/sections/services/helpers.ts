@@ -3,15 +3,16 @@ import type { Action, Unit } from './types';
 
 export const short = (name: string) => name.replace(/\.(service|socket|timer)$/, '');
 
-export function stateTone(u: Pick<Unit, 'state' | 'load'>): Tone {
+export function stateTone(u: Pick<Unit, 'state' | 'load' | 'sub'>): Tone {
   if (u.state === 'failed') return 'err';
-  if (u.state === 'running') return 'ok';
+  if (u.state === 'running') return u.sub === 'paused' ? 'warn' : 'ok';
   if (u.state === 'finished') return 'info';
   return 'neutral';
 }
 
 /** Key under `state.` for the badge text. */
 export function stateKey(u: Pick<Unit, 'state' | 'sub' | 'load' | 'name'>): string {
+  if (u.sub === 'paused') return 'paused';
   if (u.load === 'masked') return 'masked';
   if (u.name.endsWith('.timer') && u.state === 'running') return 'waiting';
   if (u.name.endsWith('.socket') && u.state === 'running') return 'listening';
@@ -28,8 +29,10 @@ export function bootMode(enabled: string): 'on' | 'off' | 'fixed' {
 /** Units whose stopping can cut the user off from the machine. */
 const CRITICAL = /^(sshd?|ervisio.*|linuxadmin.*|NetworkManager|systemd-(networkd|resolved|logind|journald|udevd)|dbus.*|polkit|getty.*|systemd-.*)\.(service|socket)$/i;
 
+const WIN_CRITICAL = /^(sshd|ervisio.*|TermService|WinRM|RpcSs|DcomLaunch|Dhcp|Dnscache|EventLog|mpssvc|BFE|LanmanServer|LanmanWorkstation|Winmgmt|Netlogon|SamSs|NlaSvc)$/i;
+
 export function isCritical(name: string): boolean {
-  return CRITICAL.test(name);
+  return CRITICAL.test(name) || WIN_CRITICAL.test(name);
 }
 
 export function needsConfirm(action: Action, name: string): 'typed' | 'simple' | null {

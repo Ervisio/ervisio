@@ -50,7 +50,8 @@
     "finished": "Finished",
     "waiting": "Waiting",
     "listening": "Listening",
-    "masked": "Masked"
+    "masked": "Masked",
+    "paused": "Paused"
   },
   "boot": {
     "label": "Start {name} at boot",
@@ -77,7 +78,9 @@
     "enable": "Enable",
     "disable": "Disable",
     "mask": "Mask",
-    "unmask": "Unmask"
+    "unmask": "Unmask",
+    "pause": "Pause",
+    "continue": "Continue"
   },
   "rowMenu": {
     "label": "Actions for {name}",
@@ -116,7 +119,9 @@
     "mask": "{name} masked",
     "unmask": "{name} unmasked",
     "restarted": "{name} restarted",
-    "failed": "Could not {action} {name}"
+    "failed": "Could not {action} {name}",
+    "pause": "{name} paused",
+    "continue": "{name} resumed"
   },
   "confirm": {
     "stop": {
@@ -195,5 +200,17 @@
   },
   "notice": {
     "failed": "{name} failed"
+  },
+  "win": {
+    "mask": "Disable",
+    "unmask": "Set to manual",
+    "boot": {
+      "enabled": "Automatic",
+      "enabled-runtime": "Automatic",
+      "disabled": "Manual",
+      "masked": "Disabled",
+      "static": "System driver",
+      "unknown": "Unknown"
+    }
   }
 }

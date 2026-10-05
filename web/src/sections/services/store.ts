@@ -24,7 +24,7 @@ export const publishFailed = (n: number) => set({ failed: n });
 /** Publish the failed units of a fresh services.summary (drives the badge and "unit failed" notifications). */
 export const publishSummary = (s: Summary) => set({ failed: s.failed.length, failedUnits: s.failed });
 export const publishRunning = (units: Unit[]) =>
-  set({ running: units.filter((u) => u.state === 'running' && u.name.endsWith('.service')).map((u) => u.name) });
+  set({ running: units.filter((u) => u.state === 'running' && !/\.(timer|socket)$/.test(u.name)).map((u) => u.name) });
 
 function subscribe(cb: () => void) {
   subs.add(cb);

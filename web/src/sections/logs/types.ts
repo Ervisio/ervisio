@@ -20,7 +20,7 @@ export interface Entry {
 
 export interface Source {
   id: string;
-  kind: 'journal' | 'unit' | 'kernel' | 'file';
+  kind: 'journal' | 'unit' | 'kernel' | 'file' | 'evt';
   group: 'system' | 'services' | 'files' | 'watchers';
   label: string;
   hint?: string;

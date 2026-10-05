@@ -50,7 +50,8 @@
     "finished": "Terminato",
     "waiting": "In attesa",
     "listening": "In ascolto",
-    "masked": "Mascherato"
+    "masked": "Mascherato",
+    "paused": "In pausa"
   },
   "boot": {
     "label": "Avvia {name} all'avvio",
@@ -77,7 +78,9 @@
     "enable": "Abilita",
     "disable": "Disabilita",
     "mask": "Maschera",
-    "unmask": "Smaschera"
+    "unmask": "Smaschera",
+    "pause": "Pausa",
+    "continue": "Riprendi"
   },
   "rowMenu": {
     "label": "Azioni per {name}",
@@ -116,7 +119,9 @@
     "mask": "{name} mascherato",
     "unmask": "{name} smascherato",
     "restarted": "{name} riavviato",
-    "failed": "Impossibile eseguire «{action}» su {name}"
+    "failed": "Impossibile eseguire «{action}» su {name}",
+    "pause": "{name} messo in pausa",
+    "continue": "{name} ripreso"
   },
   "confirm": {
     "stop": {
@@ -195,5 +200,17 @@
   },
   "notice": {
     "failed": "{name} non è riuscito"
+  },
+  "win": {
+    "mask": "Disabilita",
+    "unmask": "Imposta su manuale",
+    "boot": {
+      "enabled": "Automatico",
+      "enabled-runtime": "Automatico",
+      "disabled": "Manuale",
+      "masked": "Disabilitato",
+      "static": "Driver di sistema",
+      "unknown": "Sconosciuto"
+    }
   }
 }

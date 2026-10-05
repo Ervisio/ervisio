@@ -51,8 +51,16 @@ export default function TerminalPage() {
   const showSnippets = opts.snippets !== false;
   const hosts: Host[] = Array.isArray(prefs['terminal.hosts']) ? prefs['terminal.hosts'] : [];
   const history: HistoryItem[] = Array.isArray(prefs['terminal.history']) ? prefs['terminal.history'] : [];
+  const win = session?.os === 'windows';
   const defaultSnippets: Snippet[] = useMemo(
-    () => [
+    () => win ? [
+      { id: 'd1', title: t('defaults.disk'), command: 'Get-PSDrive -PSProvider FileSystem' },
+      { id: 'd2', title: t('defaults.memory'), command: 'Get-CimInstance Win32_OperatingSystem | Select FreePhysicalMemory,TotalVisibleMemorySize' },
+      { id: 'd3', title: t('defaults.top'), command: 'Get-Process | Sort-Object CPU -Descending | Select -First 15' },
+      { id: 'd4', title: t('defaults.ports'), command: 'Get-NetTCPConnection -State Listen' },
+      { id: 'd5', title: t('defaults.failed'), command: "Get-Service | ? {$_.StartType -eq 'Automatic' -and $_.Status -ne 'Running'}" },
+      { id: 'd6', title: t('defaults.journal'), command: 'Get-WinEvent -LogName System -MaxEvents 50' },
+    ] : [
       { id: 'd1', title: t('defaults.disk'), command: 'df -h' },
       { id: 'd2', title: t('defaults.memory'), command: 'free -h' },
       { id: 'd3', title: t('defaults.top'), command: 'ps aux --sort=-%cpu | head -15' },
@@ -60,7 +68,7 @@ export default function TerminalPage() {
       { id: 'd5', title: t('defaults.failed'), command: 'systemctl --failed' },
       { id: 'd6', title: t('defaults.journal'), command: 'journalctl -f' },
     ],
-    [t],
+    [t, win],
   );
   const customSnippets = Array.isArray(prefs['terminal.snippets']) ? (prefs['terminal.snippets'] as Snippet[]) : null;
   const snippets = customSnippets ?? defaultSnippets;

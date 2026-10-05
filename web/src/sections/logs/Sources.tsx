@@ -18,7 +18,7 @@ interface Props {
   canUnlock: boolean;
 }
 
-const KIND_ICON: Record<string, IconName> = { journal: 'logs', kernel: 'cpu', unit: 'services', file: 'file' };
+const KIND_ICON: Record<string, IconName> = { journal: 'logs', kernel: 'cpu', unit: 'services', file: 'file', evt: 'logs' };
 
 function count(n: number, approx = false): string {
   const s = n >= 10000 ? `${Math.round(n / 1000)}k` : n.toLocaleString();
@@ -27,7 +27,7 @@ function count(n: number, approx = false): string {
 
 function SourceItem({ s, on, onPick, onRemove }: { s: Source; on: boolean; onPick(multi: boolean): void; onRemove?: () => void }) {
   const t = useT('logs');
-  const hue = s.kind === 'journal' ? 'ov' : s.kind === 'kernel' ? 'svc' : s.group === 'watchers' ? 'log' : s.group === 'files' ? 'sw' : hueFor(s.label);
+  const hue = s.kind === 'journal' ? 'ov' : s.kind === 'kernel' ? 'svc' : s.kind === 'evt' ? 'ov' : s.group === 'watchers' ? 'log' : s.group === 'files' ? 'sw' : hueFor(s.label);
   const label = s.id === 'journal' ? t('sources.journal') : s.id === 'kernel' ? t('sources.kernel') : s.id === 'boot' ? t('sources.boot') : s.label;
   const hint = s.id === 'journal' ? t('sources.journalHint') : s.id === 'kernel' ? t('sources.kernelHint') : s.id === 'boot' ? t('sources.bootHint') : s.hint;
   return (

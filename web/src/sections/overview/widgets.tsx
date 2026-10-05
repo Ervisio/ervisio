@@ -107,7 +107,7 @@ function Stat({ w }: { w: Widget; ctx: WidgetCtx }) {
   const common = { hue: meta.hue, icon: meta.icon as IconName, label };
   if (!m) return <StatCard {...common} value="–" sub={t('loading')} />;
   if (metric === 'cpu') {
-    return <StatCard {...common} value={num(m.cpu.percent, lang, 0)} unit="%" sub={host ? t('stat.threads', { count: host.cpu.threads }) : t('stat.load', { v: num(m.load[0] ?? 0, lang, 2) })} percent={m.cpu.percent} />;
+    return <StatCard {...common} value={num(m.cpu.percent, lang, 0)} unit="%" sub={host ? t('stat.threads', { count: host.cpu.threads }) : m.load?.length ? t('stat.load', { v: num(m.load[0], lang, 2) }) : ''} percent={m.cpu.percent} />;
   }
   if (metric === 'memory') {
     const used = bytes(m.memory.used, lang);

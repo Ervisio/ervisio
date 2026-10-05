@@ -36,11 +36,12 @@ const num = (s: string | null) => {
 };
 
 /** The URL is the single source of truth for the current filter, so links from other sections work. */
-export function parseFilter(p: URLSearchParams): Filter {
+export function parseFilter(p: URLSearchParams, win = false): Filter {
   let sources = p.getAll('src').filter(Boolean);
   const unit = p.get('unit');
   const file = p.get('file');
-  if (!sources.length && unit) sources = [`unit:${/\.[a-z]+$/.test(unit) ? unit : unit + '.service'}`];
+  // Windows has no unit: sources; a unit link becomes a text search on the provider name.
+  if (!sources.length && unit && !win) sources = [`unit:${/\.[a-z]+$/.test(unit) ? unit : unit + '.service'}`];
   if (!sources.length && file && file.startsWith('/')) sources = [`file:${file}`];
   if (!sources.length) sources = ['all'];
 
@@ -54,11 +55,11 @@ export function parseFilter(p: URLSearchParams): Filter {
   const from = num(p.get('from'));
   const to = num(p.get('to'));
   const range: RangeId = r && RANGES.includes(r) ? r : from ? 'custom' : '1h';
-  return { sources, levels, q: p.get('q') ?? '', range, from, to, live: p.get('live') === '1' };
+  return { sources, levels, q: p.get('q') ?? (win && unit ? unit : ''), range, from, to, live: p.get('live') === '1' };
 }
 
-export function writeFilter(prev: URLSearchParams, patch: Partial<Filter>): URLSearchParams {
-  const cur = parseFilter(prev);
+export function writeFilter(prev: URLSearchParams, patch: Partial<Filter>, win = false): URLSearchParams {
+  const cur = parseFilter(prev, win);
   const f: Filter = { ...cur, ...patch };
   const next = new URLSearchParams();
   const keepSrc = patch.sources !== undefined ? patch.sources : cur.sources;
