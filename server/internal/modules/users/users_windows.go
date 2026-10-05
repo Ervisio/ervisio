@@ -113,7 +113,11 @@ func runPS(ctx context.Context, what, body string, input any) ([]byte, error) {
 		}
 		var ee *exec.ExitError
 		if errors.As(err, &ee) {
-			return nil, classifyPSError(what, errb.String())
+			msg := strings.TrimSpace(errb.String())
+			if msg == "" {
+				msg = "PowerShell exited with " + ee.ProcessState.String()
+			}
+			return nil, classifyPSError(what, msg)
 		}
 		return nil, rpc.Errorf(rpc.Unavailable, "%s: PowerShell could not be started: %v", what, err)
 	}
@@ -136,7 +140,24 @@ $groups = @(Get-LocalGroup | ForEach-Object {
 [pscustomobject]@{ computer=$env:COMPUTERNAME; self=$me.User.Value; selfName=($me.Name -replace '^.*\\',''); users=$users; groups=$groups } | ConvertTo-Json -Depth 5 -Compress
 `
 
+// snapshot reads accounts natively (works for unprivileged and profile-less
+// tokens) and only falls back to PowerShell if the native read fails.
 func snapshot(ctx context.Context) (*winSnapshot, error) {
+	s, nerr := nativeSnapshot(time.Now())
+	if nerr == nil {
+		return s, nil
+	}
+	s, err := psSnapshotRead(ctx)
+	if err != nil {
+		if rpc.IsCode(nerr, rpc.NeedsAdmin) {
+			return nil, nerr
+		}
+		return nil, err
+	}
+	return s, nil
+}
+
+func psSnapshotRead(ctx context.Context) (*winSnapshot, error) {
 	out, err := runPS(ctx, "Could not read the accounts", psSnapshot, nil)
 	if err != nil {
 		return nil, err

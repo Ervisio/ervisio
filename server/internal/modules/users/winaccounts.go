@@ -334,8 +334,11 @@ func classifyPSError(what, stderr string) error {
 	}
 	code := rpc.Internal
 	switch {
-	case has("accessdenied", "unauthorizedaccess", "access is denied", "permissiondenied"):
-		return rpc.Errorf(rpc.NeedsAdmin, "Administrator rights are needed: %s", what)
+	case has("accessdenied", "unauthorizedaccess", "access is denied"):
+		if msg == "" {
+			msg = "access is denied"
+		}
+		return rpc.Errorf(rpc.NeedsAdmin, "Administrator rights are needed: %s: %s", what, msg)
 	case has("userexists", "groupexists", "memberexists", "already exists", "already a member"):
 		code = rpc.Conflict
 	case has("usernotfound", "groupnotfound", "principalnotfound", "membernotfound", "was not found", "no such"):
