@@ -22,6 +22,9 @@ import (
 
 // Register adds the users.* and groups.* methods to the registry.
 func Register(r *rpc.Registry) {
+	if registerPlatform(r) {
+		return
+	}
 	r.Handle("users.list", rpc.User, list)
 	r.Handle("users.groups", rpc.User, groups)
 	r.Handle("users.sessions", rpc.User, sessions)
@@ -114,6 +117,7 @@ func noLoginShell(sh string) bool {
 
 type userInfo struct {
 	Name            string     `json:"name"`
+	SID             string     `json:"sid,omitempty"` // windows only
 	UID             int        `json:"uid"`
 	GID             int        `json:"gid"`
 	PrimaryGroup    string     `json:"primaryGroup"`
@@ -226,6 +230,7 @@ var groupDescriptions = map[string]string{
 
 type groupInfo struct {
 	Name           string   `json:"name"`
+	SID            string   `json:"sid,omitempty"` // windows only
 	GID            int      `json:"gid"`
 	Members        []string `json:"members"`
 	PrimaryMembers []string `json:"primaryMembers"`
