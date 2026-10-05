@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/ervisio/ervisio/server/internal/rpc"
@@ -193,8 +192,8 @@ func round1(v float64) float64 { return float64(int64(v*10+0.5)) / 10 }
 func describePID(pid int, name string) (cmdline, owner string) {
 	dir := "/proc/" + strconv.Itoa(pid)
 	if fi, err := os.Stat(dir); err == nil {
-		if st, ok := fi.Sys().(*syscall.Stat_t); ok {
-			owner = userName(st.Uid)
+		if uid, ok := fileOwner(fi); ok {
+			owner = userName(uid)
 		}
 	}
 	if b, err := os.ReadFile(dir + "/cmdline"); err == nil && len(b) > 0 {

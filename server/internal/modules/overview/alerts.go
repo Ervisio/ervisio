@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/ervisio/ervisio/server/internal/sys"
@@ -364,13 +363,10 @@ func diskAlerts() []Alert {
 	defer f.Close()
 	var out []Alert
 	for _, m := range parseMounts(f) {
-		var st syscall.Statfs_t
-		if syscall.Statfs(m.point, &st) != nil || st.Blocks == 0 {
+		used, avail, ok := diskUsage(m.point)
+		if !ok {
 			continue
 		}
-		bs := uint64(st.Bsize)
-		used := (st.Blocks - st.Bfree) * bs
-		avail := st.Bavail * bs
 		pct := 100 * float64(used) / float64(used+avail)
 		if a, ok := diskAlert(m.point, pct, avail); ok {
 			out = append(out, a)

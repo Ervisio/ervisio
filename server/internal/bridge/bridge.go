@@ -6,7 +6,6 @@ package bridge
 import (
 	"bufio"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -17,7 +16,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/ervisio/ervisio/server/internal/account"
@@ -123,20 +121,7 @@ func (s *Spec) command(name string, args ...string) *exec.Cmd {
 	if fi, err := os.Stat(s.Account.Home); err == nil && fi.IsDir() {
 		cmd.Dir = s.Account.Home
 	}
-	attr := &syscall.SysProcAttr{
-		// A new session: no controlling terminal (so sudo cannot prompt on
-		// a tty) and no terminal signals from the daemon's console.
-		Setsid:    true,
-		Pdeathsig: syscall.SIGTERM,
-	}
-	if s.SwitchUser {
-		attr.Credential = &syscall.Credential{
-			Uid:    s.Account.UID,
-			Gid:    s.Account.GID,
-			Groups: s.Account.Groups,
-		}
-	}
-	cmd.SysProcAttr = attr
+	setBridgeAttr(cmd, s.SwitchUser, s.Account)
 	return cmd
 }
 
@@ -384,8 +369,5 @@ func killGroup(p *Proc) {
 	if p.cmd.Process == nil {
 		return
 	}
-	err := syscall.Kill(-p.cmd.Process.Pid, syscall.SIGKILL)
-	if errors.Is(err, syscall.EPERM) || errors.Is(err, syscall.ESRCH) {
-		_ = p.cmd.Process.Kill()
-	}
+	killProcessGroup(p.cmd)
 }

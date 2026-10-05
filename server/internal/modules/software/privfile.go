@@ -9,15 +9,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"syscall"
 )
 
 // ownerOf returns the owner uid of an Lstat result.
 func ownerOf(fi os.FileInfo) int {
-	if st, ok := fi.Sys().(*syscall.Stat_t); ok {
-		return int(st.Uid)
-	}
-	return -1
+	return fileOwnerUID(fi)
 }
 
 // checkTrustedDir verifies that dir is a real directory (not a link) owned by
@@ -125,7 +121,7 @@ const maxStateFile = 4 << 20
 // readOwnedFile reads a regular file that must belong to owner, refusing links
 // (O_NOFOLLOW) and anything else planted under that name.
 func readOwnedFile(path string, owner int) ([]byte, error) {
-	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	f, err := os.OpenFile(path, os.O_RDONLY|oNoFollow|oNonblock, 0)
 	if err != nil {
 		return nil, err
 	}
