@@ -2,13 +2,11 @@ package server
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"os"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/ervisio/ervisio/server/internal/account"
@@ -134,28 +132,10 @@ func (s *Server) keyAuthorized(a *account.Account, pub ssh.PublicKey, fromIP str
 	return err
 }
 
-// checkDevAuthorizedKeys checks the --dev-authorized-keys file: a regular
-// file (not a symlink) owned by the daemon's user and not writable by group
-// or others, so another local account cannot add its own key to it.
-func checkDevAuthorizedKeys(f *os.File) error {
-	var st syscall.Stat_t
-	if err := syscall.Fstat(int(f.Fd()), &st); err != nil {
-		return err
-	}
-	if st.Mode&syscall.S_IFMT != syscall.S_IFREG {
-		return fmt.Errorf("--dev-authorized-keys %s: not a regular file", f.Name())
-	}
-	if int(st.Uid) != os.Geteuid() || st.Mode&0o022 != 0 {
-		return fmt.Errorf("--dev-authorized-keys %s: must be owned by uid %d and not writable by group or others (owner uid %d, mode %04o)",
-			f.Name(), os.Geteuid(), st.Uid, st.Mode&0o7777)
-	}
-	return nil
-}
-
 // readDevAuthorizedKeys reads the --dev-authorized-keys file after
 // checkDevAuthorizedKeys (at most 1 MiB).
 func readDevAuthorizedKeys(path string) ([]byte, error) {
-	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	f, err := os.OpenFile(path, os.O_RDONLY|oNoFollow|oNonBlock, 0)
 	if err != nil {
 		return nil, err
 	}

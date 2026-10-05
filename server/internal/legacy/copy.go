@@ -9,7 +9,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"syscall"
 )
 
 // copyTree copies src into dst (which must not exist): folders, regular
@@ -80,8 +79,8 @@ func lchown(target string, fi fs.FileInfo) {
 	if os.Geteuid() != 0 {
 		return
 	}
-	if st, ok := fi.Sys().(*syscall.Stat_t); ok {
-		_ = os.Lchown(target, int(st.Uid), int(st.Gid))
+	if uid, gid, ok := fileOwner(fi); ok {
+		_ = os.Lchown(target, uid, gid)
 	}
 }
 
@@ -91,7 +90,7 @@ func copyFile(src, dst string, mode os.FileMode) error {
 		return err
 	}
 	defer in.Close()
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, mode)
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL|oNoFollow, mode)
 	if err != nil {
 		return err
 	}

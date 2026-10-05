@@ -287,8 +287,7 @@ func writePluginFile(_ context.Context, c *rpc.Call) (any, error) {
 		werr = cerr
 	}
 	if werr == nil {
-		fd := int(dh.Fd())
-		werr = syscall.Renameat(fd, tmpBase, fd, base)
+		werr = renameAt(dh, tmpBase, base)
 	}
 	if werr != nil {
 		_ = root.Remove(tmp)

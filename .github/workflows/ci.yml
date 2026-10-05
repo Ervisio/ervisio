@@ -32,6 +32,9 @@ jobs:
       - name: go vet
         working-directory: server
         run: go vet ./...
+      - name: go vet (windows)
+        working-directory: server
+        run: GOOS=windows go vet ./...
       - name: go test
         working-directory: server
         run: go test -race ./...

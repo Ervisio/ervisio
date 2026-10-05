@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"syscall"
 
 	"github.com/ervisio/ervisio/server/internal/envs"
 	"github.com/ervisio/ervisio/server/internal/rpc"
@@ -30,7 +29,7 @@ func envSocketOK(p string) error {
 	if err != nil || fi.Mode()&os.ModeSocket == 0 {
 		return rpc.Errorf(rpc.Unavailable, "The environment's tunnel is not available. Try again.")
 	}
-	if st, ok := fi.Sys().(*syscall.Stat_t); !ok || int(st.Uid) != os.Geteuid() {
+	if uid, ok := fileUID(fi); !ok || uid != os.Geteuid() {
 		return rpc.Errorf(rpc.Forbidden, "The environment socket is not yours.")
 	}
 	return nil
