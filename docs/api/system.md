@@ -52,3 +52,14 @@ interval as `data` (first one immediately). Never ends by itself; close the chan
 ## `system.power` (admin)
 
 Params `{"action":"reboot"|"poweroff"}` → `{"ok":true}` (runs `systemctl reboot|poweroff`).
+
+## Windows notes
+
+`system.host` and `system.metrics` keep the same shapes on Windows, filled from Win32 instead of `/proc`:
+
+- CPU: `GetSystemTimes` deltas (aggregate) and `NtQuerySystemInformation` (per core).
+- Memory: `GlobalMemoryStatusEx`; `buffers`/`cached` are 0. Swap is the commit limit minus physical memory (page files).
+- `load` is always `[0,0,0]` (no load average on Windows).
+- Disks: fixed drives only (mount `C:\`), file system from `GetVolumeInformation`.
+- Network: `GetIfTable2` octet counters, loopback skipped; `virtual` means not a hardware interface.
+- Host: distro id `windows` (name from the registry, Windows 11 detected by build >= 22000), `kernel` is `10.0.<build>.<UBR>`, machine from the BIOS registry key, uptime from `GetTickCount64`. Not tested on a real Windows host.

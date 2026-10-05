@@ -3,11 +3,8 @@ package system
 import (
 	"bufio"
 	"io"
-	"os"
 	"runtime"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/ervisio/ervisio/server/internal/sys"
 )
@@ -58,42 +55,8 @@ func readHost() (*Host, error) {
 		Arch: runtime.GOARCH,
 		IP:   sys.PrimaryIP(),
 	}
-	if kernel, arch, ok := uname(); ok {
-		h.Kernel = kernel
-		h.Arch = arch
-	}
-	if f, err := os.Open("/proc/cpuinfo"); err == nil {
-		h.CPU = parseCPUInfo(io.LimitReader(f, 4<<20))
-		f.Close()
-	}
-	if h.CPU.Threads == 0 {
-		h.CPU.Threads = runtime.NumCPU()
-	}
-	if h.CPU.Cores == 0 {
-		h.CPU.Cores = h.CPU.Threads
-	}
-	if mi, err := readMeminfo(); err == nil {
-		h.MemoryTotal = mi["MemTotal"]
-	}
-	if b, err := os.ReadFile("/proc/uptime"); err == nil {
-		if f := strings.Fields(string(b)); len(f) > 0 {
-			if up, err := strconv.ParseFloat(f[0], 64); err == nil {
-				h.Uptime = int64(up)
-				h.BootTime = time.Now().Add(-time.Duration(up * float64(time.Second))).Unix()
-			}
-		}
-	}
-	h.Machine.Vendor = readTrim("/sys/class/dmi/id/sys_vendor")
-	h.Machine.Product = readTrim("/sys/class/dmi/id/product_name")
+	fillPlatform(h)
 	return h, nil
-}
-
-func readTrim(p string) string {
-	b, err := os.ReadFile(p)
-	if err != nil || len(b) > 256 {
-		return ""
-	}
-	return strings.TrimSpace(string(b))
 }
 
 func parseCPUInfo(r io.Reader) CPUInfo {

@@ -92,3 +92,7 @@ Widget types: `stat` (metric cpu|memory|disk|network), `activity`, `chart` (metr
 `actions`, `action` (one button), `alerts`, `machine`, `service` (units[]), `log` (unit, lines),
 `output` (argv, every, admin), `folder` (path, label), `plugin` (plugin, widget).
 `cols` is 3, 4, 5, 6, 7 or 12. Widget order is the array order.
+
+## Windows notes
+
+`overview.alerts` on Windows reports stopped Automatic services with a non-zero exit code as failed units (read-only service control manager query), fixed-drive usage, and page-file usage as swap. Update and SSH checks only run where their tools exist. `overview.processes` is not implemented on Windows yet. Not tested on a real Windows host.

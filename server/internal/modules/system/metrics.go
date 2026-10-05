@@ -5,7 +5,6 @@ import (
 	"context"
 	"io"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -90,21 +89,6 @@ type sampler struct {
 
 func newSampler() *sampler { return &sampler{} }
 
-func takeSample() (*sample, error) {
-	s := &sample{at: time.Now()}
-	f, err := os.Open("/proc/stat")
-	if err != nil {
-		return nil, err
-	}
-	s.cpu = parseProcStat(f)
-	f.Close()
-	if f, err := os.Open("/proc/net/dev"); err == nil {
-		s.net = parseNetDev(f)
-		f.Close()
-	}
-	return s, nil
-}
-
 func (sm *sampler) metrics(ctx context.Context) (*Metrics, error) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -136,14 +120,9 @@ func (sm *sampler) metrics(ctx context.Context) (*Metrics, error) {
 			m.CPU.Cores = append(m.CPU.Cores, cpuPercent(prev.cpu[i], cur.cpu[i]))
 		}
 	}
-	if b, err := os.ReadFile("/proc/loadavg"); err == nil {
-		f := strings.Fields(string(b))
-		for i := 0; i < 3 && i < len(f); i++ {
-			m.Load[i], _ = strconv.ParseFloat(f[i], 64)
-		}
-	}
-	if mi, err := readMeminfo(); err == nil {
-		m.Memory, m.Swap = memoryFrom(mi)
+	m.Load = readLoad()
+	if mem, sw, ok := readMemory(); ok {
+		m.Memory, m.Swap = mem, sw
 	}
 	m.Disks = readDisks()
 	m.Net = netFrom(prev.net, cur.net, dt)
@@ -283,12 +262,7 @@ func netFrom(prev, cur map[string]netCounters, dt float64) []Net {
 			n.RxRate = round(float64(c.rx-p.rx)/dt, 1)
 			n.TxRate = round(float64(c.tx-p.tx)/dt, 1)
 		}
-		if _, err := os.Stat(filepath.Join("/sys/class/net", name, "device")); err != nil {
-			n.Virtual = true
-		}
-		if b, err := os.ReadFile(filepath.Join("/sys/class/net", name, "operstate")); err == nil {
-			n.Up = strings.TrimSpace(string(b)) == "up"
-		}
+		n.Virtual, n.Up = ifaceFlags(name)
 		out = append(out, n)
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -362,24 +336,4 @@ func unescapeMount(s string) string {
 		sb.WriteByte(s[i])
 	}
 	return sb.String()
-}
-
-func readDisks() []Disk {
-	f, err := os.Open("/proc/self/mountinfo")
-	if err != nil {
-		return []Disk{}
-	}
-	entries := parseMountinfo(f)
-	f.Close()
-	out := []Disk{}
-	for _, e := range entries {
-		total, used, avail, err := diskUsage(e.mount)
-		if err != nil || total == 0 {
-			continue
-		}
-		d := Disk{Mount: e.mount, Device: e.source, FSType: e.fstype, Total: total, Used: used, Free: avail}
-		d.Percent = pct(used, used+avail)
-		out = append(out, d)
-	}
-	return out
 }

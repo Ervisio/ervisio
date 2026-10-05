@@ -192,3 +192,9 @@ func TestUnitShowAndTail(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestServiceFailed(t *testing.T) {
+	if serviceFailed(0, 0) || !serviceFailed(1, 0) || serviceFailed(1066, 0) || !serviceFailed(1066, 3) {
+		t.Fatal("serviceFailed")
+	}
+}
