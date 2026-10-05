@@ -254,6 +254,10 @@ Open `https://<host>:9090` and sign in with a Linux account. On first start the 
 
 Where things are installed, for each method, and how to publish more packages: [docs/PACKAGING.md](docs/PACKAGING.md) and [packaging/README.md](packaging/README.md).
 
+## Windows
+
+Build with `make build-windows`, then run `packaging\windows\install.ps1` as Administrator: it installs the `Ervisio` service to `%ProgramFiles%\Ervisio`, keeps configuration and data in `%ProgramData%\Ervisio` and opens port 9090. `ervisiod.exe --dev` still works from a console. See [docs/PACKAGING.md](docs/PACKAGING.md#windows).
+
 ## Configuration
 
 The file is `/etc/ervisio/ervisio.conf` in TOML. It is optional, and missing keys use the defaults below. Most keys can also be changed in Settings with administrator rights, which keeps a `.bak` copy of the previous file.

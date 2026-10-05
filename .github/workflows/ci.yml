@@ -40,6 +40,8 @@ jobs:
         run: go test -race ./...
       - name: Build
         run: make build-server VERSION=ci-${GITHUB_SHA::7}
+      - name: Build Windows binaries (amd64, arm64)
+        run: make build-windows VERSION=ci-${GITHUB_SHA::7}
 
   web:
     name: Web (typecheck, lint, i18n, test, build)

@@ -10,9 +10,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/signal"
 	"path/filepath"
-	"syscall"
 	"time"
 
 	"github.com/ervisio/ervisio/server/internal/brand"
@@ -31,6 +29,19 @@ import (
 var hiddenFlags = map[string]bool{"dev-insecure-noauth": true}
 
 func main() {
+	// A Windows service gets its stop request from the service manager
+	// (service_windows.go); everywhere else from signals.
+	if runAsService(run) {
+		return
+	}
+	ctx, stop := consoleContext()
+	defer stop()
+	run(ctx)
+}
+
+// run is the daemon: it serves until ctx is cancelled (a signal in console
+// mode, a Stop/Shutdown request when running as a Windows service).
+func run(ctx context.Context) {
 	// Internal mode: the root helper that opens a PAM session around a user
 	// bridge (started by the daemon itself, never by hand).
 	if len(os.Args) > 1 && os.Args[1] == bridge.HelperFlag {
@@ -122,7 +133,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		bp = filepath.Join(filepath.Dir(exe), brand.BridgeBinary)
+		bp = filepath.Join(filepath.Dir(exe), brand.BridgeBinary+exeSuffix)
 		// Packages (flat layout) install the daemon as /usr/bin/ervisiod
 		// and the bridge as /usr/lib/ervisio/ervisio-bridge.
 		if _, err := os.Stat(bp); err != nil {
@@ -229,9 +240,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-	signal.Ignore(syscall.SIGPIPE)
 	if !*dev {
 		// Automatic update checks and installs ([updates] in the config).
 		u := update.New(update.NewChecker())

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  WiX v4 source of the Ervisio MSI. Build (from the folder with the files):
+    wix build -arch x64 -d Version=1.2.3 -d SourceDir=..\..\server\bin\windows-amd64 -d WebDir=..\..\web\dist ervisio.wxs -o ervisio-1.2.3-x64.msi
+  Not built or tested on a real Windows machine; install.ps1 is the supported path.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:fw="http://wixtoolset.org/schemas/v4/wxs/firewall"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+  <Package Name="Ervisio" Manufacturer="Ervisio" Version="$(Version)" Scope="perMachine"
+           UpgradeCode="6B1F2C0E-5D3A-4E57-9A52-3C1E7A8B9D40">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Ervisio is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Ervisio">
+        <Directory Id="WEBDIR" Name="web">
+          <Files Include="$(WebDir)\**" />
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="CommonAppDataFolder">
+      <Directory Id="DATADIR" Name="Ervisio" />
+    </StandardDirectory>
+
+    <!-- Data folder: SYSTEM + Administrators only. -->
+    <DirectoryRef Id="DATADIR">
+      <Component Id="DataFolder" Guid="*">
+        <CreateFolder>
+          <util:PermissionEx User="SYSTEM" GenericAll="yes" />
+          <util:PermissionEx User="Administrators" GenericAll="yes" />
+        </CreateFolder>
+      </Component>
+    </DirectoryRef>
+
+    <ComponentGroup Id="Program" Directory="INSTALLFOLDER">
+      <Component Id="Daemon">
+        <File Id="ervisiod" Source="$(SourceDir)\ervisiod.exe" KeyPath="yes" />
+        <ServiceInstall Id="ErvisioSvc" Name="Ervisio" DisplayName="Ervisio web console"
+                        Description="Ervisio web administration console" Type="ownProcess"
+                        Start="auto" Account="LocalSystem" ErrorControl="normal" />
+        <ServiceControl Id="ErvisioCtl" Name="Ervisio" Start="install" Stop="both" Remove="uninstall" Wait="yes" />
+        <fw:FirewallException Id="ErvisioFw" Name="Ervisio (TCP)" Port="9090" Protocol="tcp" Scope="any" />
+      </Component>
+      <Component Id="Bridge">
+        <File Id="ervisiobridge" Source="$(SourceDir)\ervisio-bridge.exe" />
+      </Component>
+    </ComponentGroup>
+
+    <Feature Id="Main" Title="Ervisio" Level="1">
+      <ComponentGroupRef Id="Program" />
+      <ComponentRef Id="DataFolder" />
+    </Feature>
+  </Package>
+</Wix>
