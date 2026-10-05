@@ -10,9 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
-
-	"golang.org/x/sys/unix"
 
 	"github.com/ervisio/ervisio/server/internal/rpc"
 )
@@ -169,10 +166,7 @@ func makeEntry(dir string, fi os.FileInfo) Entry {
 		Perm:  modeString(fi.Mode()),
 		MTime: fi.ModTime().UnixMilli(),
 	}
-	if st, ok := fi.Sys().(*syscall.Stat_t); ok {
-		e.UID, e.GID = int(st.Uid), int(st.Gid)
-		e.Owner, e.Group = lookupUser(e.UID), lookupGroup(e.GID)
-	}
+	setOwner(&e, fi)
 	full := filepath.Join(dir, fi.Name())
 	switch e.Type {
 	case "symlink":
@@ -304,14 +298,8 @@ func hMkdir(ctx context.Context, c *rpc.Call) (any, error) {
 			return nil, err
 		}
 	} else {
-		d, name, err := openParent(path)
-		if err != nil {
+		if err := mkdirOne(path, 0o755); err != nil {
 			return nil, err
-		}
-		err = unix.Mkdirat(dfd(d), name, 0o755)
-		d.Close()
-		if err != nil {
-			return nil, pathErr("mkdir", path, err)
 		}
 	}
 	return statEntry(path)
@@ -328,16 +316,9 @@ func hCreate(ctx context.Context, c *rpc.Call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	d, name, err := openParent(path)
-	if err != nil {
+	if err := createFile(path, 0o644); err != nil {
 		return nil, err
 	}
-	fd, err := unix.Openat(dfd(d), name, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o644)
-	d.Close()
-	if err != nil {
-		return nil, pathErr("create", path, err)
-	}
-	unix.Close(fd)
 	return statEntry(path)
 }
 
