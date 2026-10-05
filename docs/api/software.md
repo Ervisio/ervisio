@@ -15,6 +15,7 @@ executes in the root bridge.
 | `apt` | `apt-get` + `dpkg-query` | Debian/Ubuntu. Upgrade all = `apt-get update` + `apt-get dist-upgrade`. |
 | `dnf` | `dnf` + `rpm` | Fedora (dnf4 and dnf5 output). |
 | `zypper` | `zypper` + `rpm` | openSUSE. |
+| `winget` | `winget` in PATH (Windows) | system manager on Windows (`kind: "repo"`, `name` = winget Id such as `Git.Git`, `title` = display name, `source` = winget/msstore). Listing and updates parse `winget list` / `winget upgrade` tables (positional columns, spinner and progress characters stripped, wide characters measured in cells); search is `winget search --query`. Install, uninstall and upgrade run `winget ... --id X -e --silent --accept-package-agreements --accept-source-agreements --disable-interactivity` (one step per package; upgrade-all is `winget upgrade --all`). `software.history` is always empty, scheduled updates answer `unavailable` (systemd only), and AUR/Flatpak do not apply. Parser: `winget_parse.go`. Not exercised on a real Windows host yet. Pending Windows Update (OS) updates are not reported (a possible later addition: PowerShell `Microsoft.Update.Session` `Search("IsInstalled=0")`). |
 | `flatpak` | `flatpak` | `kind: "flatpak"`, system and user installations (`scope`). |
 
 One system manager is used (first found in the order pacman, apt, dnf, zypper); AUR and Flatpak are added

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 
@@ -95,6 +96,9 @@ func (m *manager) setSchedule(ctx context.Context, at *string) (string, error) {
 		_ = os.Remove(filepath.Join(systemdDir, serviceName))
 		_, _ = run(ctx, 30*time.Second, nil, "systemctl", "daemon-reload")
 		return "", nil
+	}
+	if runtime.GOOS == "windows" {
+		return "", rpc.Errorf(rpc.Unavailable, "Scheduled updates use systemd timers and are not available on Windows.")
 	}
 	if !atRe.MatchString(*at) {
 		return "", rpc.Errorf(rpc.Invalid, "The time must look like 03:00 (24-hour clock).")
