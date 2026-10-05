@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"os/user"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -153,6 +154,9 @@ func processes(ctx context.Context, c *rpc.Call) (any, error) {
 	}
 	if p.Limit > 100 {
 		p.Limit = 100
+	}
+	if runtime.GOOS == "windows" {
+		return windowsProcesses(ctx, p.Sort, p.Limit)
 	}
 	const tick = 100.0 // USER_HZ is 100 on every Linux platform we run on
 	t0 := time.Now()

@@ -198,3 +198,24 @@ func TestServiceFailed(t *testing.T) {
 		t.Fatal("serviceFailed")
 	}
 }
+
+func TestWinCPUMath(t *testing.T) {
+	if got := cpuPercent(0, 10_000_000, time.Second); got != 100 {
+		t.Fatalf("1s cpu in 1s = %v", got)
+	}
+	if got := cpuPercent(5, 4, time.Second); got != 0 {
+		t.Fatalf("backwards = %v", got)
+	}
+	if got := cpuPercent(0, 1, 0); got != 0 {
+		t.Fatalf("zero elapsed = %v", got)
+	}
+	l := winProcesses(map[int]uint64{1: 0}, time.Second,
+		[]winProc{{pid: 1, name: "a", cpu100ns: 25_000_000, rss: 50}, {pid: 2, name: "b", rss: 100}}, 200)
+	if l[0].CPU != 250 || l[0].MemPercent != 25 || l[1].CPU != 0 || l[1].MemPercent != 50 {
+		t.Fatalf("rows = %+v", l)
+	}
+	n := time.Now()
+	if usablePrev(time.Time{}, n) || usablePrev(n, n) || !usablePrev(n.Add(-time.Second), n) || usablePrev(n.Add(-time.Hour), n) {
+		t.Fatal("usablePrev")
+	}
+}
