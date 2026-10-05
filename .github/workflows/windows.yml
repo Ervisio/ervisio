@@ -38,7 +38,7 @@ jobs:
           foreach ($f in 'install-windows.ps1', 'packaging\windows\install.ps1') {
             $errs = $null
             [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $f), [ref]$null, [ref]$errs) | Out-Null
-            if ($errs) { $errs | ForEach-Object { "$f: $_" }; exit 1 }
+            if ($errs) { $errs | ForEach-Object { "${f}: $_" }; exit 1 }
             "$f parses"
           }
 
