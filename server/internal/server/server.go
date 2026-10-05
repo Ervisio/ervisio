@@ -20,6 +20,7 @@ import (
 	"github.com/ervisio/ervisio/server/internal/account"
 	"github.com/ervisio/ervisio/server/internal/audit"
 	"github.com/ervisio/ervisio/server/internal/brand"
+	"github.com/ervisio/ervisio/server/internal/bridge"
 	"github.com/ervisio/ervisio/server/internal/config"
 	"github.com/ervisio/ervisio/server/internal/jobs"
 	"github.com/ervisio/ervisio/server/internal/notify"
@@ -126,10 +127,10 @@ func New(opts Options) (*Server, error) {
 	if opts.DevAuthorizedKeys != "" && !opts.Dev {
 		return nil, errors.New("--dev-authorized-keys requires --dev")
 	}
-	if opts.NoAuth && os.Geteuid() == 0 {
+	if opts.NoAuth && bridge.Privileged() {
 		return nil, errors.New("--dev-insecure-noauth refuses to run as root")
 	}
-	if !opts.Dev && os.Geteuid() != 0 {
+	if !opts.Dev && !bridge.Privileged() {
 		return nil, errors.New("ervisiod must run as root (use --dev for development)")
 	}
 	if fi, err := os.Stat(opts.Bridge); err != nil || !fi.Mode().IsRegular() {

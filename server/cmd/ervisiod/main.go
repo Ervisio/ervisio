@@ -110,13 +110,13 @@ func run(ctx context.Context) {
 	if *noAuth && !*dev {
 		log.Fatal("--dev-insecure-noauth requires --dev")
 	}
-	if *noAuth && os.Geteuid() == 0 {
+	if *noAuth && bridge.Privileged() {
 		log.Fatal("--dev-insecure-noauth refuses to run as root")
 	}
 	// A machine that ran LinuxAdmin: its configuration, certificate, plugins
 	// and state are copied to the Ervisio locations before they are read
 	// (once; a no-op afterwards). See internal/legacy.
-	if !*dev && os.Geteuid() == 0 && *configPath == brand.ConfigPath {
+	if !*dev && bridge.Privileged() && *configPath == brand.ConfigPath {
 		if res, err := legacy.ImportOnStart(legacy.Paths{}, log.Printf); err != nil {
 			log.Printf("copy %s's data: %v", brand.LegacyName, err)
 		} else if res.Any() {
@@ -270,7 +270,7 @@ func run(ctx context.Context) {
 		}
 		// Started by linuxadmin.service from LinuxAdmin's layout: move to
 		// ervisio.service. The transition stops this process.
-		if v, ok := legacyExe(); ok && os.Geteuid() == 0 {
+		if v, ok := legacyExe(); ok && bridge.Privileged() {
 			go func() {
 				select {
 				case <-ctx.Done():
@@ -284,7 +284,7 @@ func run(ctx context.Context) {
 			}()
 		}
 	}
-	if !*dev && os.Geteuid() == 0 {
+	if !*dev && bridge.Privileged() {
 		// Plugins that moved out of the core (Docker): keep them on machines
 		// that use them (internal/modules/plugins/moved.go).
 		go func() {
@@ -303,7 +303,7 @@ func run(ctx context.Context) {
 
 // pluginCommand implements --install-plugin and --skip-moved-plugins.
 func pluginCommand(id string, skip bool) int {
-	if os.Geteuid() != 0 {
+	if !bridge.Privileged() {
 		fmt.Fprintln(os.Stderr, "run this as root")
 		return 1
 	}
