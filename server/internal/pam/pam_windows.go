@@ -140,10 +140,14 @@ func Authenticate(service, user, password, rhost string) error {
 	if err := logonUser(pName, pDomain, &pw[0], logon32LogonInteractive, logon32ProviderDefault, &tok); err != nil {
 		return mapLogonError(err)
 	}
-	// LogonUser returns a primary token; duplicate explicitly so the kept
-	// handle is guaranteed primary (needed by CreateProcessAsUser).
+	return keepToken(user, tok)
+}
+
+// keepToken duplicates tok as a primary token (needed by
+// CreateProcessAsUser), closes tok and keeps the duplicate for UserToken.
+func keepToken(user string, tok windows.Token) error {
 	var primary windows.Token
-	err = windows.DuplicateTokenEx(tok, windows.MAXIMUM_ALLOWED, nil, windows.SecurityImpersonation, windows.TokenPrimary, &primary)
+	err := windows.DuplicateTokenEx(tok, windows.MAXIMUM_ALLOWED, nil, windows.SecurityImpersonation, windows.TokenPrimary, &primary)
 	_ = tok.Close()
 	if err != nil {
 		return fmt.Errorf("pam: DuplicateTokenEx: %w", err)

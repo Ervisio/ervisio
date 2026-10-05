@@ -30,3 +30,7 @@ func checkDevAuthorizedKeys(f *os.File) error {
 	}
 	return nil
 }
+
+// keyLogonToken: a key sign-in needs no token on unix (the bridge starts
+// with setuid).
+func (s *Server) keyLogonToken(string) error { return nil }

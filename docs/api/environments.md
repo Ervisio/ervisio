@@ -234,3 +234,15 @@ for a capability or command that does not declare `remote` fails with `forbidden
   extra delay on top of the agent's. It now copies with a 1 KiB buffer; `TestAgentTunnelFlushesEachChunk`.)
 * The remote bridge of an Ervisio environment is started on first use and closed after 5 minutes without calls.
 * Docker Swarm node targeting (`X-PortainerAgent-Target`) is not supported.
+
+## Windows notes
+
+Tunnels are AF_UNIX sockets (Windows 10 1803+), under `<run dir>\tunnels` (`--tunnel-dir`; at most 100 characters),
+`<tunnel dir>\<rid>\<env id>.sock` where `<rid>` is the account's RID. Access is by ACL instead of uid/mode: the tunnel
+dir has a protected DACL (SYSTEM, the daemon's user and Administrators full; Authenticated Users traverse only); the
+per-user folder has a protected DACL with SYSTEM, the daemon's user and the account's SID (read and traverse only, so
+it cannot add or replace entries); the socket is staged in a SYSTEM-only folder, given a DACL (SYSTEM, daemon's user,
+the account's SID read/write), renamed into place and verified. Every object is inspected on a handle opened without
+following reparse points: owner SYSTEM, the daemon's user or Administrators, no ACE for any other SID (a folder or
+socket that fails is removed and made again). Not verified on a real Windows host: that the account can connect to the
+socket with exactly these rights, and that `SetSecurityInfo` on the AF_UNIX reparse file works, are untested.

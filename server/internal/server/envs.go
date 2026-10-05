@@ -395,7 +395,7 @@ func (s *Server) routeWithEnv(ctx context.Context, sess *Session, method string,
 		}
 		return rp, false, rebuilt, rp.Hold(), nil
 	}
-	path, err := s.env.m.Tunnel(env, int(sess.Account.UID), int(sess.Account.GID))
+	path, err := s.env.m.TunnelAs(env, int(sess.Account.UID), int(sess.Account.GID), sess.Account.SID)
 	if err != nil {
 		return nil, false, nil, release, envErr(err)
 	}

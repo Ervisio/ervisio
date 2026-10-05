@@ -128,7 +128,7 @@ func (s *Server) keyAuthorized(a *account.Account, pub ssh.PublicKey, fromIP str
 		_, err = sshauth.FindKey(data, pub, ip, time.Now())
 		return err
 	}
-	_, err := sshauth.Authorize(sshauth.User{Name: a.Name, UID: a.UID, GID: a.GID, Home: a.Home, Groups: a.Groups}, pub, ip, time.Now())
+	_, err := sshauth.Authorize(sshauth.User{Name: a.Name, UID: a.UID, GID: a.GID, Home: a.Home, Groups: a.Groups, SID: a.SID, Admin: a.CanSudo()}, pub, ip, time.Now())
 	return err
 }
 
@@ -279,6 +279,18 @@ func (s *Server) handleLoginKey(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, pam.ErrAccount) {
 			refuse(errKeyRefused, "PAM account check: "+err.Error())
+			return
+		}
+		result = attemptNeutral
+		s.log.Printf("login %q method=ssh-key: %v", req.User, err)
+		writeError(w, rpc.Errorf(rpc.Internal, "authentication service error"))
+		return
+	}
+	// Windows: the bridge needs the user's token and a key sign-in has no
+	// password, so it is obtained with an S4U logon (no-op elsewhere).
+	if err := s.keyLogonToken(a.Name); err != nil {
+		if errors.Is(err, pam.ErrAccount) || errors.Is(err, pam.ErrAuth) {
+			refuse(errKeyRefused, "token: "+err.Error())
 			return
 		}
 		result = attemptNeutral

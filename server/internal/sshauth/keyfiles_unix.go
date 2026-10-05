@@ -11,6 +11,9 @@ import (
 	"syscall"
 )
 
+// extraKeyFiles are the platform's additional key files (none on unix).
+func extraKeyFiles(User) []string { return nil }
+
 func ownerOK(st *syscall.Stat_t, uid uint32) bool { return st.Uid == 0 || st.Uid == uid }
 
 // readSecure opens path (symlinks resolved, like sshd), checks it and

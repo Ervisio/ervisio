@@ -32,6 +32,10 @@ type User struct {
 	// Groups are the supplementary group ids (from NSS) used while
 	// reading the files as the user.
 	Groups []uint32
+	// SID is the account's security identifier and Admin whether it is a
+	// member of Administrators (Windows only; "" and false elsewhere).
+	SID   string
+	Admin bool
 }
 
 // AuthorizedKeysFiles returns the authorized_keys paths for u from the
@@ -178,7 +182,7 @@ func splitConfigLine(line string) []string {
 // and not group/world writable. Missing files are skipped; files failing
 // the checks are skipped and reported in problems.
 func ReadAuthorizedKeys(u User) (data []byte, problems []string) {
-	files := AuthorizedKeysFiles(u)
+	files := append(AuthorizedKeysFiles(u), extraKeyFiles(u)...)
 	var buf bytes.Buffer
 	err := asUser(u, func() error {
 		for _, f := range files {
