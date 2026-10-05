@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -40,13 +41,15 @@ func Parse(text string) (ed25519.PrivateKey, error) {
 	return nil, fmt.Errorf("expected a 32-byte seed or 64-byte private key, got %d bytes", len(b))
 }
 
-// Load reads a key file. It refuses files readable by group or others.
+// Load reads a key file. It refuses files readable by group or others (on
+// Unix; Windows relies on the ACL of the folder the key lives in).
 func Load(path string) (ed25519.PrivateKey, error) {
 	fi, err := os.Stat(path)
 	if err != nil {
 		return nil, err
 	}
-	if fi.Mode().Perm()&0o077 != 0 {
+	// Windows has no POSIX modes (it reports 0666): the check cannot apply.
+	if runtime.GOOS != "windows" && fi.Mode().Perm()&0o077 != 0 {
 		return nil, fmt.Errorf("%s is readable by other users (mode %v): chmod 600 it", path, fi.Mode().Perm())
 	}
 	if fi.Size() > maxKeyFile {

@@ -3,6 +3,7 @@ package overview
 import (
 	"context"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -109,20 +110,31 @@ func TestValidateArgv(t *testing.T) {
 
 func TestRunArgv(t *testing.T) {
 	ctx := context.Background()
-	r, err := runArgv(ctx, []string{"sh", "-c", "echo out; echo err >&2; exit 3"}, 5*time.Second, "")
+	failing := []string{"sh", "-c", "echo out; echo err >&2; exit 3"}
+	ok := []string{"true"}
+	slow := []string{"sleep", "5"}
+	if runtime.GOOS == "windows" { // no sh, true or sleep: cmd and ping
+		failing = []string{"cmd", "/c", "echo out& echo err 1>&2& exit 3"}
+		ok = []string{"cmd", "/c", "exit 0"}
+		slow = []string{"ping", "-n", "6", "127.0.0.1"}
+	}
+	r, err := runArgv(ctx, failing, 5*time.Second, "")
 	if err != nil || r.OK || r.ExitCode != 3 || !strings.Contains(r.Output, "out") || !strings.Contains(r.Output, "err") {
 		t.Fatalf("%+v %v", r, err)
 	}
-	r, err = runArgv(ctx, []string{"true"}, 5*time.Second, "")
+	r, err = runArgv(ctx, ok, 5*time.Second, "")
 	if err != nil || !r.OK {
 		t.Fatalf("%+v %v", r, err)
 	}
-	r, err = runArgv(ctx, []string{"sleep", "5"}, 200*time.Millisecond, "")
+	r, err = runArgv(ctx, slow, 200*time.Millisecond, "")
 	if err != nil || !r.TimedOut || r.ExitCode != -1 {
 		t.Fatalf("%+v %v", r, err)
 	}
 	if _, err = runArgv(ctx, []string{"definitely-not-a-command"}, time.Second, ""); !rpc.IsCode(err, rpc.Unavailable) {
 		t.Fatalf("%v", err)
+	}
+	if runtime.GOOS == "windows" {
+		return // the output cap is checked below with Unix tools
 	}
 	r, _ = runArgv(ctx, []string{"sh", "-c", "head -c 400000 /dev/zero | tr '\\0' a"}, 5*time.Second, "")
 	if !r.Truncated || len(r.Output) != maxActionOutput {

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/ervisio/ervisio/server/internal/brand"
@@ -108,6 +109,10 @@ const RemoveFlag = "--remove-legacy"
 // RunMigrate is the entry point of MigrateFlag and RemoveFlag. It returns
 // the exit code.
 func RunMigrate(flag string, args []string) int {
+	if runtime.GOOS == "windows" {
+		fmt.Fprintln(os.Stderr, brand.DaemonBinary+": "+flag+" is for Linux only")
+		return 2
+	}
 	logf := func(format string, a ...any) { fmt.Printf(format+"\n", a...) }
 	errf := func(format string, a ...any) { fmt.Fprintf(os.Stderr, brand.DaemonBinary+": "+format+"\n", a...) }
 	if os.Geteuid() != 0 {

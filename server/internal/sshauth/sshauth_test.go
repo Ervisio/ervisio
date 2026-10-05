@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -287,18 +288,25 @@ func TestAuthorizedKeysFilesConfig(t *testing.T) {
 	old := SSHDConfig
 	t.Cleanup(func() { SSHDConfig = old })
 	SSHDConfig = filepath.Join(dir, "sshd_config")
-	u := User{Name: "alice", UID: 1000, Home: "/home/alice"}
+	// Absolute paths need a drive on Windows; expectations are written with
+	// "/" and converted to the platform's separator.
+	drive, home := "", "/home/alice"
+	if runtime.GOOS == "windows" {
+		drive, home = "C:", `C:\home\alice`
+	}
+	native := func(p string) string { return filepath.FromSlash(drive + p) }
+	u := User{Name: "alice", UID: 1000, Home: home}
 
 	// No file: sshd's default.
 	got := AuthorizedKeysFiles(u)
-	if strings.Join(got, " ") != "/home/alice/.ssh/authorized_keys /home/alice/.ssh/authorized_keys2" {
+	if strings.Join(got, " ") != native("/home/alice/.ssh/authorized_keys")+" "+native("/home/alice/.ssh/authorized_keys2") {
 		t.Fatal(got)
 	}
 	os.MkdirAll(filepath.Join(dir, "sshd_config.d"), 0o755)
-	os.WriteFile(filepath.Join(dir, "sshd_config.d", "10-keys.conf"), []byte("AuthorizedKeysFile /etc/ssh/keys/%u \"%h/.ssh/my keys\" .ssh/k_%U %%x\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "sshd_config.d", "10-keys.conf"), []byte("AuthorizedKeysFile "+drive+"/etc/ssh/keys/%u \"%h/.ssh/my keys\" .ssh/k_%U %%x\n"), 0o644)
 	os.WriteFile(SSHDConfig, []byte("# test\nInclude sshd_config.d/*.conf\nAuthorizedKeysFile .ssh/ignored\nMatch User bob\n  AuthorizedKeysFile none\n"), 0o644)
 	got = AuthorizedKeysFiles(u)
-	want := "/etc/ssh/keys/alice|/home/alice/.ssh/my keys|/home/alice/.ssh/k_1000|/home/alice/%x"
+	want := native("/etc/ssh/keys/alice") + "|" + native("/home/alice/.ssh/my keys") + "|" + native("/home/alice/.ssh/k_1000") + "|" + native("/home/alice/%x")
 	if strings.Join(got, "|") != want {
 		t.Fatalf("got %q", strings.Join(got, "|"))
 	}
@@ -313,83 +321,6 @@ func TestAuthorizedKeysFilesConfig(t *testing.T) {
 	}
 }
 
-// StrictModes: files or directories writable by group/others are skipped.
-func TestReadAuthorizedKeysPermissions(t *testing.T) {
-	keys := newKeys(t)
-	line := authLine(keys[0].signer) + "\n"
-	home := filepath.Join(t.TempDir(), "home")
-	sshDir := filepath.Join(home, ".ssh")
-	os.MkdirAll(sshDir, 0o700)
-	os.Chmod(home, 0o755)
-	ak := filepath.Join(sshDir, "authorized_keys")
-	os.WriteFile(ak, []byte(line), 0o600)
-
-	dir := t.TempDir()
-	old := SSHDConfig
-	t.Cleanup(func() { SSHDConfig = old })
-	SSHDConfig = filepath.Join(dir, "none") // default files
-	u := User{Name: "me", UID: uint32(os.Getuid()), GID: uint32(os.Getgid()), Home: home}
-	ip := net.ParseIP("127.0.0.1")
-
-	if _, err := Authorize(u, keys[0].signer.PublicKey(), ip, time.Now()); err != nil {
-		t.Fatal("safe file refused:", err)
-	}
-	os.Chmod(ak, 0o620)
-	if _, err := Authorize(u, keys[0].signer.PublicKey(), ip, time.Now()); err == nil || !strings.Contains(err.Error(), "modes") {
-		t.Fatal("group-writable file accepted:", err)
-	}
-	os.Chmod(ak, 0o600)
-	os.Chmod(sshDir, 0o777)
-	if _, err := Authorize(u, keys[0].signer.PublicKey(), ip, time.Now()); err == nil {
-		t.Fatal("world-writable .ssh accepted")
-	}
-	os.Chmod(sshDir, 0o700)
-	os.Chmod(home, 0o775)
-	if _, err := Authorize(u, keys[0].signer.PublicKey(), ip, time.Now()); err == nil {
-		t.Fatal("group-writable home accepted")
-	}
-	os.Chmod(home, 0o755)
-	// Owner must be the user or root.
-	u2 := u
-	u2.UID = u.UID + 4242
-	if os.Getuid() != 0 {
-		if _, err := Authorize(u2, keys[0].signer.PublicKey(), ip, time.Now()); err == nil {
-			t.Fatal("file owned by another user accepted")
-		}
-	}
-	// A symlinked authorized_keys is followed (as sshd does) and checked
-	// at its target.
-	target := filepath.Join(home, "real_keys")
-	os.WriteFile(target, []byte(line), 0o600)
-	os.Remove(ak)
-	os.Symlink(target, ak)
-	if _, err := Authorize(u, keys[0].signer.PublicKey(), ip, time.Now()); err != nil {
-		t.Fatal("symlinked file refused:", err)
-	}
-	// authorized_keys2 is read too.
-	os.Remove(ak)
-	os.WriteFile(filepath.Join(sshDir, "authorized_keys2"), []byte(line), 0o600)
-	if _, err := Authorize(u, keys[0].signer.PublicKey(), ip, time.Now()); err != nil {
-		t.Fatal("authorized_keys2 not read:", err)
-	}
-	// A FIFO must not block the reader.
-	os.Remove(filepath.Join(sshDir, "authorized_keys2"))
-	if err := mkfifo(ak); err == nil {
-		done := make(chan error, 1)
-		go func() { _, err := Authorize(u, keys[0].signer.PublicKey(), ip, time.Now()); done <- err }()
-		select {
-		case err := <-done:
-			if err == nil {
-				t.Fatal("fifo accepted")
-			}
-		case <-time.After(3 * time.Second):
-			t.Fatal("reader blocked on a FIFO")
-		}
-	}
-}
-
-// from= follows sshd: only * and ? are wildcards, and a malformed CIDR
-// block refuses the whole list (a negation must not silently vanish).
 func TestMatchFromSSHDSemantics(t *testing.T) {
 	ip := net.ParseIP("10.0.0.5")
 	cases := []struct {

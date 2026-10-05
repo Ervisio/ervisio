@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -31,6 +32,19 @@ const goodManifest = `{
   "contributes": {"pages": [{"id": "demo", "title": "Demo"}], "widgets": [], "snippets": [{"name": "x", "command": "echo x"}]},
   "visibleTo": {"groups": ["docker"]}
 }`
+
+// jsonPath escapes a file path for use inside a JSON string (Windows paths
+// have backslashes).
+func jsonPath(p string) string { return strings.ReplaceAll(p, `\`, `\\`) }
+
+// shortTempBase is where short temp folders go: unix socket paths are limited
+// to about 100 bytes, so /tmp, not a long TMPDIR; Windows has no /tmp.
+func shortTempBase() string {
+	if runtime.GOOS == "windows" {
+		return ""
+	}
+	return "/tmp"
+}
 
 func writePlugin(t *testing.T, dir, manifest string, files map[string]string) {
 	t.Helper()
@@ -417,7 +431,11 @@ func TestResolveLevels(t *testing.T) {
 func TestRunExec(t *testing.T) {
 	system, _ := setup(t)
 	m := strings.Replace(goodManifest, `"visibleTo": {"groups": ["docker"]}`, `"visibleTo": {"groups": []}`, 1)
-	m = strings.Replace(m, `{"name": "ps", "argv": ["echo", "ps"], "admin": false},`, `{"name": "ps", "argv": ["echo", "ps"], "admin": false}, {"name": "fail", "argv": ["sh", "-c", "echo out; echo err >&2; exit 3"], "admin": false},`, 1)
+	psArgv, failArgv := `["echo", "ps"]`, `["sh", "-c", "echo out; echo err >&2; exit 3"]`
+	if runtime.GOOS == "windows" { // no echo or sh programs: cmd
+		psArgv, failArgv = `["cmd", "/c", "echo", "ps"]`, `["cmd", "/c", "echo out& echo err 1>&2& exit 3"]`
+	}
+	m = strings.Replace(m, `{"name": "ps", "argv": ["echo", "ps"], "admin": false},`, `{"name": "ps", "argv": `+psArgv+`, "admin": false}, {"name": "fail", "argv": `+failArgv+`, "admin": false},`, 1)
 	writePlugin(t, filepath.Join(system, "demo"), m, map[string]string{"index.js": "x"})
 	res, err := runExec(context.Background(), &rpc.Call{}, ExecParams{Plugin: "demo", Command: "ps"})
 	if err != nil || strings.TrimSpace(res.Stdout) != "ps" || res.ExitCode != 0 {

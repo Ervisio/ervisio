@@ -29,7 +29,7 @@ func envSocketOK(p string) error {
 	if err != nil || fi.Mode()&os.ModeSocket == 0 {
 		return rpc.Errorf(rpc.Unavailable, "The environment's tunnel is not available. Try again.")
 	}
-	if uid, ok := fileUID(fi); !ok || uid != os.Geteuid() {
+	if !socketOwnedByUs(p, fi) {
 		return rpc.Errorf(rpc.Forbidden, "The environment socket is not yours.")
 	}
 	return nil

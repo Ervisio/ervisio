@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -121,6 +122,17 @@ func (f *fakeExec) names() []string {
 	return out
 }
 
+// adminAccount is a test account; admin puts it in the administrators' group
+// of the platform (wheel on Unix, Administrators by SID on Windows).
+func adminAccount(name string, uid uint32, admin bool) *account.Account {
+	a := &account.Account{Name: name, UID: uid, GroupNames: []string{name}}
+	if admin {
+		a.GroupNames = append(a.GroupNames, "wheel")
+		a.GroupSIDs = []string{"S-1-5-32-544"}
+	}
+	return a
+}
+
 type fixture struct {
 	t      *testing.T
 	m      *Manager
@@ -146,7 +158,7 @@ func newFixture(t *testing.T) *fixture {
 	}
 	f := &fixture{t: t, exec: &fakeExec{}, now: time.Date(2026, 3, 2, 10, 0, 0, 0, time.UTC), man: man, dir: t.TempDir(), ownerBad: map[string]string{},
 		accts: map[string]*account.Account{
-			"alice": {Name: "alice", UID: 1000, GroupNames: []string{"alice", "wheel"}},
+			"alice": adminAccount("alice", 1000, true),
 			"bob":   {Name: "bob", UID: 1001, GroupNames: []string{"bob"}},
 			"dave":  {Name: "dave", UID: 1002, GroupNames: []string{"dave", "docker"}},
 		}}
@@ -581,11 +593,11 @@ func TestHistoryKeepsLastRunsAndIsPrivate(t *testing.T) {
 		t.Fatalf("history holds %d runs, want %d", n, KeepRuns)
 	}
 	fi, err := os.Stat(filepath.Join(f.dir, "runs", in.ID+".json"))
-	if err != nil || fi.Mode().Perm() != 0o600 {
+	if err != nil || (runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600) {
 		t.Fatalf("runs file: %v %v", err, fi)
 	}
 	fi, err = os.Stat(filepath.Join(f.dir, "instances.json"))
-	if err != nil || fi.Mode().Perm() != 0o600 {
+	if err != nil || (runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600) {
 		t.Fatalf("instances file: %v %v", err, fi)
 	}
 	if _, err := f.m.Runs(f.caller("bob"), "jt", in.ID, 5); err == nil {
@@ -722,7 +734,7 @@ func TestInstanceDisabledWhenOwnerLosesAdmin(t *testing.T) {
 	f := newFixture(t)
 	v := f.approved("alice", "rooty", nil, &Schedule{Every: 60})
 	f.mu.Lock()
-	f.accts["alice"].GroupNames = []string{"alice"} // removed from wheel
+	f.accts["alice"] = adminAccount("alice", 1000, false) // removed from wheel
 	f.mu.Unlock()
 	f.m.Reconcile()
 	got, _ := f.m.Get(f.caller("alice"), "jt", v.ID)
@@ -740,7 +752,7 @@ func TestInstanceDisabledWhenOwnerLosesAdmin(t *testing.T) {
 		t.Fatal("enabling must fail")
 	}
 	f.mu.Lock()
-	f.accts["alice"].GroupNames = []string{"alice", "wheel"}
+	f.accts["alice"] = adminAccount("alice", 1000, true)
 	f.mu.Unlock()
 	if _, err := f.m.Update(f.caller("alice"), UpdateReq{ID: v.ID, Enabled: &on}); err != nil {
 		t.Fatalf("enable after regaining admin: %v", err)

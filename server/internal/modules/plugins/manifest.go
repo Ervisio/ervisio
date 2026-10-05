@@ -10,6 +10,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -431,6 +432,9 @@ func validAbs(p string, allowHome bool) bool {
 	}
 	if allowHome && (p == "~" || strings.HasPrefix(p, "~/")) {
 		return !strings.Contains(p, "..")
+	}
+	if runtime.GOOS == "windows" && filepath.VolumeName(p) != "" {
+		return filepath.IsAbs(p) && filepath.Clean(p) == p // C:\dir style
 	}
 	return path.IsAbs(p) && path.Clean(p) == p
 }

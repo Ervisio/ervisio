@@ -297,7 +297,7 @@ func followFile(ctx context.Context, s spec, f filter, out chan<- Entry) error {
 			fh.Close()
 			fh = nil
 		}
-		h, err := os.Open(s.Path)
+		h, err := openShared(s.Path)
 		if err != nil {
 			return err
 		}
@@ -311,7 +311,7 @@ func followFile(ctx context.Context, s spec, f filter, out chan<- Entry) error {
 			return rpc.Errorf(rpc.Invalid, "%s is not a regular file", s.Path)
 		}
 		fh = h
-		if id, ok := fileInode(info); ok {
+		if id, ok := fileInode(s.Path, info); ok {
 			ino = id
 		}
 		pos = 0
@@ -337,7 +337,7 @@ func followFile(ctx context.Context, s spec, f filter, out chan<- Entry) error {
 		if err != nil {
 			continue // rotated away; wait for the new file
 		}
-		if id, ok := fileInode(info); ok && (id != ino || info.Size() < pos) {
+		if id, ok := fileInode(s.Path, info); ok && (id != ino || info.Size() < pos) {
 			if open(true) != nil {
 				continue
 			}

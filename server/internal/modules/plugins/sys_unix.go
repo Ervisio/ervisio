@@ -22,3 +22,9 @@ func renameAt(dir *os.File, oldName, newName string) error {
 	fd := int(dir.Fd())
 	return syscall.Renameat(fd, oldName, fd, newName)
 }
+
+// socketOwnedByUs reports whether the socket at p belongs to this user.
+func socketOwnedByUs(_ string, fi fs.FileInfo) bool {
+	uid, ok := fileUID(fi)
+	return ok && uid == os.Geteuid()
+}

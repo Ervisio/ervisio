@@ -74,6 +74,9 @@ func checkKeyFile(in *winsec.Info, p string, u User) error {
 	}
 	trusted := []*windows.SID{winsec.System(), winsec.Administrators()}
 	if af := adminKeysFile(); af == "" || !strings.EqualFold(filepath.Clean(p), af) {
+		if u.SID == "" {
+			return errors.New("the account has no SID, so the owner of the key file cannot be checked")
+		}
 		usid, err := windows.StringToSid(u.SID)
 		if err != nil {
 			return fmt.Errorf("account SID %q: %w", u.SID, err)

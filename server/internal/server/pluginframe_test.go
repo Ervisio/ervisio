@@ -6,10 +6,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/user"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/ervisio/ervisio/server/internal/account"
 )
 
 const frameTestManifest = `{"id":"%ID%","name":"Demo","version":"1.0.0","entry":"index.js",
@@ -122,18 +123,14 @@ func TestPluginFrameAndAssets(t *testing.T) {
 	}
 }
 
+// inAdminGroup reports whether the test user may administer the machine
+// (wheel/sudo/admin on Unix, Administrators on Windows).
 func inAdminGroup(t *testing.T) bool {
-	u, err := user.Current()
+	a, err := account.Current()
 	if err != nil {
 		t.Fatal(err)
 	}
-	ids, _ := u.GroupIds()
-	for _, id := range ids {
-		if g, err := user.LookupGroupId(id); err == nil && (g.Name == "wheel" || g.Name == "sudo" || g.Name == "admin") {
-			return true
-		}
-	}
-	return false
+	return a.CanSudo()
 }
 
 func TestPluginFrameCSPRejectsInjection(t *testing.T) {

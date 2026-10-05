@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -79,7 +80,7 @@ func TestSecretsNeverSerialized(t *testing.T) {
 	}
 	// The file holds them, readable by root only.
 	fi, err := os.Stat(svc.Store.Path)
-	if err != nil || fi.Mode().Perm() != 0o600 {
+	if err != nil || (runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600) { // no POSIX modes on Windows
 		t.Fatalf("channels file: %v %v", err, fi.Mode())
 	}
 	raw, _ := os.ReadFile(svc.Store.Path)

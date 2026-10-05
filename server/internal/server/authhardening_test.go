@@ -13,6 +13,7 @@ import (
 	"net/http/cookiejar"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -51,7 +52,10 @@ func TestRevalidateRootAndKeyPolicy(t *testing.T) {
 		t.Fatalf("password session ended by auth.ssh_keys = false: %s", r)
 	}
 
-	// A uid-0 session ends once allow_root is turned off.
+	// A uid-0 session ends once allow_root is turned off (Windows has no uid 0).
+	if runtime.GOOS == "windows" {
+		return
+	}
 	root := *a
 	root.UID = 0
 	f.acc = &root
@@ -161,7 +165,7 @@ func TestKeyLoginFromBehindProxy(t *testing.T) {
 
 	challenge := func(xff string) challengeResp {
 		t.Helper()
-		req, _ := http.NewRequest("POST", ts.URL+"/api/auth/challenge", strings.NewReader(`{"user":"`+me+`","host":"`+strings.TrimPrefix(ts.URL, "http://")+`"}`))
+		req, _ := http.NewRequest("POST", ts.URL+"/api/auth/challenge", strings.NewReader(`{"user":`+jq(me)+`,"host":"`+strings.TrimPrefix(ts.URL, "http://")+`"}`))
 		req.Header.Set("X-Requested-With", "ervisio")
 		req.Header.Set("Content-Type", "application/json")
 		if xff != "" {
@@ -215,7 +219,7 @@ func TestDevAuthorizedKeysChecks(t *testing.T) {
 	}
 	loose := filepath.Join(dir, "loose")
 	os.WriteFile(loose, []byte("\n"), 0o600)
-	os.Chmod(loose, 0o666)
+	makeWorldWritable(t, loose)
 	if _, err := readDevAuthorizedKeys(loose); err == nil || !strings.Contains(err.Error(), "writable") {
 		t.Fatalf("world-writable file accepted: %v", err)
 	}

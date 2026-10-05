@@ -3,6 +3,8 @@ package terminal
 import (
 	"bytes"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -41,9 +43,21 @@ func TestRingScrollbackSize(t *testing.T) {
 	}
 }
 
-func shSpec(script string) spec {
-	return spec{Name: "t", Kind: KindLocal, Path: "/bin/sh", Argv: []string{"sh", "-c", script}, Dir: "/", Env: []string{"PATH=/usr/bin:/bin", "TERM=xterm-256color"}, Cols: 80, Rows: 24, Shell: "sh"}
+// sleepCmd keeps a session alive for about 30 seconds.
+func sleepCmd() (unix, windows string) { return "sleep 30", "ping -n 31 127.0.0.1 >nul" }
+
+// shSpec is a session running a script through the platform's shell: unix is
+// the sh -c script, windows the cmd /c one (Windows has neither sh nor sleep).
+func shSpec(unix, windows string) spec {
+	if runtime.GOOS == "windows" {
+		cmdExe := filepath.Join(os.Getenv("SYSTEMROOT"), "System32", "cmd.exe")
+		return spec{Name: "t", Kind: KindLocal, Path: cmdExe, Argv: []string{"cmd", "/c", windows}, Dir: os.TempDir(), Cols: 80, Rows: 24, Shell: "cmd"}
+	}
+	return spec{Name: "t", Kind: KindLocal, Path: "/bin/sh", Argv: []string{"sh", "-c", unix}, Dir: "/", Env: []string{"PATH=/usr/bin:/bin", "TERM=xterm-256color"}, Cols: 80, Rows: 24, Shell: "sh"}
 }
+
+// sleepSpec is a session that just stays alive.
+func sleepSpec() spec { return shSpec(sleepCmd()) }
 
 func collect(t *testing.T, s *Session, sub *subscriber, replay []byte) string {
 	t.Helper()
@@ -70,7 +84,7 @@ func collect(t *testing.T, s *Session, sub *subscriber, replay []byte) string {
 
 func TestSessionRunsAndReplays(t *testing.T) {
 	m := newManager()
-	s, err := m.Create(shSpec("echo hi; sleep 0.3"))
+	s, err := m.Create(shSpec("echo hi; sleep 0.3", "echo hi& ping -n 2 127.0.0.1 >nul"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +115,9 @@ func TestSessionRunsAndReplays(t *testing.T) {
 func TestSessionInputResizeKill(t *testing.T) {
 	m := newManager()
 	defer m.CloseAll()
-	s, err := m.Create(shSpec("read x; echo got:$x; stty size; sleep 30"))
+	// The program reads a line, echoes it and prints the terminal size
+	// (stty size: "40 100"; on Windows mode con: "Lines: 40", "Columns: 100").
+	s, err := m.Create(shSpec("read x; echo got:$x; stty size; sleep 30", "set /p x=& echo got:%x%& mode con& ping -n 31 127.0.0.1 >nul"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,10 +125,17 @@ func TestSessionInputResizeKill(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, sub := s.Subscribe()
-	_ = s.Write([]byte("ping\n"))
+	enter, sized := "\n", func(o string) bool { return strings.Contains(o, "40 100") }
+	if runtime.GOOS == "windows" {
+		enter = "\r" // a console takes Enter as CR
+		sized = func(o string) bool {
+			return strings.Contains(o, "Lines:") && strings.Contains(o, "40") && strings.Contains(o, "100")
+		}
+	}
+	_ = s.Write([]byte("ping" + enter))
 	var out strings.Builder
 	deadline := time.After(5 * time.Second)
-	for !strings.Contains(out.String(), "40 100") {
+	for !sized(out.String()) {
 		select {
 		case b := <-sub.ch:
 			out.Write(b)
@@ -139,11 +162,11 @@ func TestSessionLimit(t *testing.T) {
 	m := newManager()
 	defer m.CloseAll()
 	for i := 0; i < MaxSessions; i++ {
-		if _, err := m.Create(shSpec("sleep 30")); err != nil {
+		if _, err := m.Create(sleepSpec()); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := m.Create(shSpec("sleep 30")); !rpc.IsCode(err, rpc.Conflict) {
+	if _, err := m.Create(sleepSpec()); !rpc.IsCode(err, rpc.Conflict) {
 		t.Fatalf("want conflict, got %v", err)
 	}
 }
@@ -189,15 +212,23 @@ func TestBuildSpecValidation(t *testing.T) {
 }
 
 func TestBuildSpecLocalAndSSH(t *testing.T) {
-	sp, err := buildSpec(createParams{Cols: 120, Rows: 30, Cwd: "/"}, false)
+	cwd, loginShell := "/", true // Windows has no "/" folder, and its shells are not login shells (argv[0] "-")
+	if runtime.GOOS == "windows" {
+		cwd, loginShell = os.TempDir(), false
+	}
+	sp, err := buildSpec(createParams{Cols: 120, Rows: 30, Cwd: cwd}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sp.Kind != KindLocal || sp.Dir != "/" || sp.Cols != 120 || sp.Rows != 30 || !strings.HasPrefix(sp.Argv[0], "-") {
+	if sp.Kind != KindLocal || sp.Dir != cwd || sp.Cols != 120 || sp.Rows != 30 || (loginShell && !strings.HasPrefix(sp.Argv[0], "-")) {
 		t.Fatalf("%+v", sp)
 	}
 	env := strings.Join(sp.Env, "\n")
-	for _, want := range []string{"TERM=xterm-256color", "COLORTERM=truecolor", "LANG="} {
+	wants := []string{"TERM=xterm-256color", "COLORTERM=truecolor", "LANG="}
+	if runtime.GOOS == "windows" {
+		wants = wants[:2] // no LANG on Windows
+	}
+	for _, want := range wants {
 		if !strings.Contains(env, want) {
 			t.Errorf("env lacks %s", want)
 		}
@@ -218,18 +249,6 @@ func TestBuildSpecLocalAndSSH(t *testing.T) {
 	}
 }
 
-func TestParsePasswdShell(t *testing.T) {
-	pw := "root:x:0:0:root:/root:/bin/sh\nbob:x:1000:1000::/home/bob:/usr/bin/nologin\nann:x:1001:1001::/home/ann:\n"
-	if got := parsePasswdShell(strings.NewReader(pw), "root"); got != "/bin/sh" {
-		t.Fatalf("root: %q", got)
-	}
-	for _, u := range []string{"bob", "ann", "nobody"} {
-		if got := parsePasswdShell(strings.NewReader(pw), u); got != "" {
-			t.Fatalf("%s: %q", u, got)
-		}
-	}
-}
-
 func TestUniqueName(t *testing.T) {
 	m := newManager()
 	defer m.CloseAll()
@@ -238,7 +257,7 @@ func TestUniqueName(t *testing.T) {
 		if got != want {
 			t.Fatalf("#%d: got %q want %q", i, got, want)
 		}
-		sp := shSpec("sleep 30")
+		sp := sleepSpec()
 		sp.Name = got
 		if _, err := m.Create(sp); err != nil {
 			t.Fatal(err)

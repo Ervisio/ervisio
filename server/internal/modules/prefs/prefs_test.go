@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/ervisio/ervisio/server/internal/rpc"
@@ -23,7 +24,7 @@ func TestStore(t *testing.T) {
 		t.Fatalf("%v", m)
 	}
 	fi, _ := os.Stat(p)
-	if fi.Mode().Perm() != 0o600 {
+	if runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600 { // no POSIX modes on Windows
 		t.Fatalf("mode %v", fi.Mode())
 	}
 	if _, err := s.Update(map[string]json.RawMessage{"../x": json.RawMessage(`1`)}, false); !rpc.IsCode(err, rpc.Invalid) {

@@ -222,7 +222,7 @@ func mapErr(err error) error {
 		return rpc.Errorf(rpc.Conflict, "%v", err)
 	case errors.Is(err, update.ErrNoPrevious), errors.Is(err, update.ErrNoRelease):
 		return rpc.Errorf(rpc.NotFound, "%v", err)
-	case errors.Is(err, update.ErrNotInstalled), errors.Is(err, update.ErrNoBuild), errors.Is(err, update.ErrManaged):
+	case errors.Is(err, update.ErrNotInstalled), errors.Is(err, update.ErrNoBuild), errors.Is(err, update.ErrManaged), errors.Is(err, update.ErrWindows):
 		return rpc.Errorf(rpc.Unavailable, "%v", err)
 	}
 	var re *rpc.Error

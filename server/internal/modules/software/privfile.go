@@ -11,10 +11,8 @@ import (
 	"path/filepath"
 )
 
-// ownerOf returns the owner uid of an Lstat result.
-func ownerOf(fi os.FileInfo) int {
-	return fileOwnerUID(fi)
-}
+// ownerOf returns the owner uid of an Lstat result (-1 on Windows).
+func ownerOf(fi os.FileInfo) int { return fileOwnerUID(fi) }
 
 // checkTrustedDir verifies that dir is a real directory (not a link) owned by
 // one of owners that no one else can write to.
@@ -26,18 +24,7 @@ func checkTrustedDir(dir string, owners ...int) error {
 	if !fi.IsDir() {
 		return fmt.Errorf("%s is not a directory", dir)
 	}
-	uid := ownerOf(fi)
-	ok := false
-	for _, o := range owners {
-		ok = ok || uid == o
-	}
-	if !ok {
-		return fmt.Errorf("%s belongs to uid %d", dir, uid)
-	}
-	if fi.Mode().Perm()&0o022 != 0 {
-		return fmt.Errorf("%s can be written by other users (mode %04o)", dir, fi.Mode().Perm())
-	}
-	return nil
+	return dirTrust(dir, fi, owners)
 }
 
 // ensurePrivateDir makes sure dir is a directory owned by the current user
@@ -72,19 +59,7 @@ func ensurePrivateDir(dir string, create bool) error {
 	if !fi.IsDir() {
 		return fmt.Errorf("%s is not a directory", dir)
 	}
-	if ownerOf(fi) != me {
-		return fmt.Errorf("%s belongs to uid %d", dir, ownerOf(fi))
-	}
-	if fi.Mode().Perm() != 0o700 {
-		if !create {
-			return fmt.Errorf("%s has mode %04o, not 0700", dir, fi.Mode().Perm())
-		}
-		// dir is ours and its parent only ours or root's: no link can be swapped in.
-		if err := os.Chmod(dir, 0o700); err != nil {
-			return err
-		}
-	}
-	return nil
+	return privateDir(dir, fi, create)
 }
 
 // writeFileAtomic replaces path with data and mode: a new file is created with
@@ -133,8 +108,8 @@ func readOwnedFile(path string, owner int) ([]byte, error) {
 	if !fi.Mode().IsRegular() {
 		return nil, fmt.Errorf("%s is not a regular file", path)
 	}
-	if ownerOf(fi) != owner {
-		return nil, fmt.Errorf("%s belongs to uid %d, not %d", path, ownerOf(fi), owner)
+	if err := fileTrust(path, fi, owner); err != nil {
+		return nil, err
 	}
 	b, err := io.ReadAll(io.LimitReader(f, maxStateFile+1))
 	if err != nil {

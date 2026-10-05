@@ -19,8 +19,9 @@ import (
 	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
-// SafePath is the PATH used to resolve and run commands.
-const SafePath = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+// SafePath is the PATH used to resolve and run commands: fixed system
+// folders (see exec_unix.go and exec_windows.go), never the caller's PATH.
+var SafePath = safePath()
 
 // DefaultMaxOutput bounds captured stdout for Output (16 MiB).
 const DefaultMaxOutput = 16 << 20
@@ -30,9 +31,6 @@ const DefaultTimeout = 2 * time.Minute
 
 // maxStderr is how much stderr is kept for error messages.
 const maxStderr = 8 << 10
-
-// keptEnv lists variables copied from the bridge environment.
-var keptEnv = []string{"HOME", "USER", "LOGNAME", "SHELL", "TZ", "XDG_RUNTIME_DIR"}
 
 // Env returns a sanitised environment: a fixed PATH, the C.UTF-8 locale for
 // predictable output parsing, the identity variables of the current process,
@@ -73,27 +71,24 @@ func LookPath(name string) (string, error) {
 	if name == "" {
 		return "", rpc.Errorf(rpc.Invalid, "empty command")
 	}
-	if strings.Contains(name, "/") {
+	if strings.ContainsAny(name, pathSeps) {
 		if !filepath.IsAbs(name) {
 			return "", rpc.Errorf(rpc.Invalid, "command path must be absolute: %s", name)
 		}
-		if isExecutable(name) {
-			return name, nil
+		if p, ok := findExecutable(name); ok {
+			return p, nil
 		}
 		return "", rpc.Errorf(rpc.Unavailable, "%s is not installed", name)
 	}
 	for _, dir := range filepath.SplitList(SafePath) {
-		p := filepath.Join(dir, name)
-		if isExecutable(p) {
+		if p, ok := findExecutable(filepath.Join(dir, name)); ok {
 			return p, nil
 		}
 	}
+	if p, ok := extraLookup(name); ok {
+		return p, nil
+	}
 	return "", rpc.Errorf(rpc.Unavailable, "%s is not installed", name)
-}
-
-func isExecutable(p string) bool {
-	fi, err := os.Stat(p)
-	return err == nil && fi.Mode().IsRegular() && fi.Mode()&0o111 != 0
 }
 
 // Cmd describes a command to run. Arguments are passed as argv, never

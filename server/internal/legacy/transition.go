@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -308,6 +309,9 @@ func FailedBefore(p Paths, v string) bool {
 // LegacyVersionOf returns the version folder when exe (resolved) is a
 // binary in LinuxAdmin's versioned layout: /usr/lib/linuxadmin/versions/<v>/bin/*.
 func LegacyVersionOf(p Paths, exe string) (string, bool) {
+	if runtime.GOOS == "windows" {
+		return "", false
+	}
 	bin := filepath.Dir(exe)
 	vdir := filepath.Dir(bin)
 	if filepath.Base(bin) != "bin" || filepath.Dir(vdir) != p.At(brand.LegacyLibDir+"/versions") {
@@ -331,6 +335,10 @@ const TransitionFlag = "--transition"
 // RunHelper is the entry point of the transition, as root, in a transient
 // systemd unit. args are what follows --apply-update or --transition.
 func RunHelper(args []string) int {
+	if runtime.GOOS == "windows" {
+		fmt.Fprintln(os.Stderr, brand.DaemonBinary+": the move from "+brand.LegacyName+" is for Linux only")
+		return 2
+	}
 	logf := func(format string, a ...any) {
 		fmt.Fprintf(os.Stderr, brand.DaemonBinary+" transition: "+format+"\n", a...)
 	}
@@ -401,6 +409,9 @@ func RunHelper(args []string) int {
 // transition in a transient unit, unless a transition to this version
 // failed before. The daemon keeps serving until the transition stops it.
 func StartTransition(ctx context.Context, p Paths, exe, v string, launch update.Launcher) error {
+	if runtime.GOOS == "windows" {
+		return errors.New("the move from " + brand.LegacyName + " is for Linux only")
+	}
 	if FailedBefore(p, v) {
 		return fmt.Errorf("the move to %s %s failed before (%s); run %s %s %s as root to try again", brand.Name, v, failurePath(p), exe, TransitionFlag, v)
 	}
