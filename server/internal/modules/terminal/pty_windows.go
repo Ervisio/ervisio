@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf16"
 	"unsafe"
 
@@ -216,6 +217,11 @@ func startPTY(cmd *exec.Cmd, cols, rows uint16) (ptyConn, error) {
 		windows.CloseHandle(h)
 		conPTYs.Delete(pid)
 		c.hangup()
+		// The console host can keep the output pipe open for a while after
+		// the process is gone; give the reader a moment to drain what is
+		// left, then close our end so the session sees the end.
+		time.Sleep(500 * time.Millisecond)
+		_ = c.out.Close()
 	}(pi.Process)
 	return c, nil
 }
@@ -229,7 +235,9 @@ func resizePTY(p ptyConn, cols, rows uint16) error {
 // went away. There are no process groups to signal, so self is ignored.
 func hangupProc(pid int, self bool) {
 	if v, ok := conPTYs.Load(pid); ok {
-		v.(*conPTY).hangup()
+		// ClosePseudoConsole can block until output is drained; don't hold
+		// up the caller (Kill falls back to TerminateProcess after its grace).
+		go v.(*conPTY).hangup()
 	}
 }
 
