@@ -8,7 +8,7 @@ import { ReleaseNotes } from './ReleaseNotes';
 import {
   checkUpdates, clearRun, startRollback, startUpdate, updateStatus, useRun,
   type CheckResult, type RunPhase, type RunState, type UpdateStatus,
-} from './updates';
+} from './updatesApi';
 
 /**
  * Settings › About: current version, check for updates, release notes, Update now (confirm → progress →
