@@ -1,9 +1,9 @@
 package services
 
 import (
-	"os"
-	"path/filepath"
-	"reflect"
+	"errors"
+
+	"github.com/ervisio/ervisio/server/internal/rpc"
 	"testing"
 )
 
@@ -62,27 +62,6 @@ func TestParseUnitFiles(t *testing.T) {
 	}
 }
 
-func TestParseShow(t *testing.T) {
-	out := []byte("Id=a.service\nMemoryCurrent=1409024\nCPUUsageNSec=[not set]\nMainPID=42\nStateChangeTimestamp=@1790871752\nListen=/run/x (Stream)\nListen=[::]:22 (Stream)\n\nId=b.service\nMemoryCurrent=18446744073709551615\n")
-	bl := parseShow(out)
-	if len(bl) != 2 || bl[0]["Id"] != "a.service" || bl[1]["Id"] != "b.service" {
-		t.Fatalf("blocks %v", bl)
-	}
-	if bl[0]["Listen"] != "/run/x (Stream)\n[::]:22 (Stream)" {
-		t.Errorf("repeated keys: %q", bl[0]["Listen"])
-	}
-	u := &Unit{Name: "a.socket", Active: "active"}
-	applyShow(u, bl[0])
-	if u.Memory == nil || *u.Memory != 1409024 || u.CPUNs != nil || u.PID != 42 || u.Since != 1790871752 || len(u.Listen) != 2 {
-		t.Errorf("unit %+v", u)
-	}
-	u2 := &Unit{Name: "b.service"}
-	applyShow(u2, bl[1])
-	if u2.Memory != nil {
-		t.Errorf("all-ones memory must be nil")
-	}
-}
-
 func TestStateOf(t *testing.T) {
 	cases := [][3]string{{"active", "running", StateRunning}, {"active", "exited", StateFinished}, {"failed", "failed", StateFailed}, {"inactive", "dead", StateStopped}, {"activating", "start", StateRunning}}
 	for _, c := range cases {
@@ -108,15 +87,6 @@ func TestHints(t *testing.T) {
 	}
 }
 
-func TestDiffSnapshots(t *testing.T) {
-	a := map[string]listedUnit{"a.service": {Name: "a.service", Active: "active", Sub: "running"}, "b.service": {Name: "b.service", Active: "active", Sub: "running"}}
-	b := map[string]listedUnit{"a.service": {Name: "a.service", Active: "failed", Sub: "failed"}, "c.service": {Name: "c.service", Active: "active", Sub: "running"}}
-	ch, rm := diffSnapshots(a, b)
-	if !reflect.DeepEqual(ch, []string{"a.service", "c.service"}) || !reflect.DeepEqual(rm, []string{"b.service"}) {
-		t.Fatalf("%v %v", ch, rm)
-	}
-}
-
 func TestParseJournal(t *testing.T) {
 	out := []byte(`{"__REALTIME_TIMESTAMP":"1790871752123456","PRIORITY":"3","MESSAGE":"boom"}` + "\n" +
 		`{"__REALTIME_TIMESTAMP":"1790871753000000","MESSAGE":[104,105]}` + "\nnot json\n")
@@ -126,21 +96,80 @@ func TestParseJournal(t *testing.T) {
 	}
 }
 
-func TestOverridePath(t *testing.T) {
-	old := overrideRoot
-	overrideRoot = t.TempDir()
-	defer func() { overrideRoot = old }()
-	want := filepath.Join(overrideRoot, "nginx.service.d", "override.conf")
-	if overridePath("nginx.service") != want {
-		t.Fatal(overridePath("nginx.service"))
+func TestWinState(t *testing.T) {
+	cases := []struct {
+		state, exit      uint32
+		active, sub, sim string
+	}{
+		{scmRunning, 0, "active", "running", StateRunning},
+		{scmStartPending, 0, "activating", "start-pending", StateRunning},
+		{scmPaused, 0, "active", "paused", StateRunning},
+		{scmStopPending, 0, "deactivating", "stop-pending", StateStopped},
+		{scmStopped, 0, "inactive", "dead", StateStopped},
+		{scmStopped, errServiceNeverStarted, "inactive", "dead", StateStopped},
+		{scmStopped, 1, "failed", "failed", StateFailed},
+		{99, 0, "inactive", "dead", StateStopped},
 	}
-	if err := os.MkdirAll(filepath.Dir(want), 0o755); err != nil {
-		t.Fatal(err)
+	for _, c := range cases {
+		a, s, st := winState(c.state, c.exit)
+		if a != c.active || s != c.sub || st != c.sim {
+			t.Errorf("winState(%d,%d) = %s %s %s", c.state, c.exit, a, s, st)
+		}
 	}
-	if err := writeFileAtomic(want, []byte("[Service]\n"), 0o644); err != nil {
-		t.Fatal(err)
+}
+
+func TestWinEnabled(t *testing.T) {
+	cases := []struct {
+		start   uint32
+		delayed bool
+		enabled string
+		name    string
+	}{
+		{scmAutoStart, false, "enabled", "auto"}, {scmAutoStart, true, "enabled", "delayed"},
+		{scmDemandStart, false, "disabled", "manual"}, {scmDisabled, false, "masked", "disabled"},
+		{scmBootStart, false, "static", "boot"}, {scmSystemStart, false, "static", "system"}, {42, false, "", ""},
 	}
-	if b, _ := os.ReadFile(want); string(b) != "[Service]\n" {
-		t.Fatal(string(b))
+	for _, c := range cases {
+		if g := winEnabled(c.start, c.delayed); g != c.enabled {
+			t.Errorf("winEnabled(%d) = %q", c.start, g)
+		}
+		if g := winStartTypeName(c.start, c.delayed); g != c.name {
+			t.Errorf("winStartTypeName(%d,%v) = %q", c.start, c.delayed, g)
+		}
+	}
+	for a, want := range map[string]uint32{"enable": scmAutoStart, "disable": scmDemandStart, "unmask": scmDemandStart, "mask": scmDisabled} {
+		if g, ok := winActionStartType(a); !ok || g != want {
+			t.Errorf("action %s = %d,%v", a, g, ok)
+		}
+	}
+	if _, ok := winActionStartType("start"); ok {
+		t.Error("start is not a start-type action")
+	}
+}
+
+func TestValidServiceName(t *testing.T) {
+	for _, n := range []string{"W32Time", "Windows Update", "Spooler", "wuauserv", "a.b-c"} {
+		if !validServiceName(n) {
+			t.Errorf("%q should be valid", n)
+		}
+	}
+	for _, n := range []string{"", " x", "a/b", `a\b`, "a\nb", string(make([]byte, 300))} {
+		if validServiceName(n) {
+			t.Errorf("%q should be invalid", n)
+		}
+	}
+}
+
+func TestWinError(t *testing.T) {
+	code := func(e uint32) rpc.Code {
+		var re *rpc.Error
+		if !errors.As(winError(e, "x", "start"), &re) {
+			t.Fatal("not an rpc error")
+		}
+		return re.Code
+	}
+	if code(errAccessDenied) != rpc.NeedsAdmin || code(errServiceDoesNotExist) != rpc.NotFound ||
+		code(errServiceAlreadyRun) != rpc.Conflict || code(errServiceRequestTmout) != rpc.Unavailable || code(9999) != rpc.Conflict {
+		t.Fatal("unexpected code mapping")
 	}
 }
