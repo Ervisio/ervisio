@@ -307,3 +307,21 @@ WebSocket, frames as in ARCHITECTURE.md. Notes:
   more than 8 MiB of input queued, the channel ends with `unavailable`.
 - The socket is closed with status 1008 when the session ends (logout, expiry, account check).
 - The `Origin` must match the host; in `--dev` the Vite dev server (`--vite`) is accepted too.
+
+## SSH-key sign-in on Windows
+
+- Key files: `%USERPROFILE%\.ssh\authorized_keys` and, for members of Administrators, also
+  `%ProgramData%\ssh\administrators_authorized_keys` (OpenSSH for Windows convention; `sshd_config` is not read).
+  The daemon (SYSTEM) reads them directly. Each file is opened without following reparse points and checked on the
+  open handle: not a reparse point or folder; owner is the user, SYSTEM or Administrators (the administrators file:
+  SYSTEM or Administrators only); the DACL exists and grants Everyone, Authenticated Users and Users no write-like
+  access. Files failing the check are skipped and named in the log. Parent folders are not checked.
+- A key sign-in has no password, but the bridge must run as the user, so the daemon gets the user's token with an
+  **S4U logon** (`LsaLogonUser`, `MSV1_0_S4U_LOGON` for local accounts, `KERB_S4U_LOGON` for domain accounts; needs
+  SeTcbPrivilege, i.e. the service running as SYSTEM). The token is a network-type logon: no network credentials
+  (no access to network shares as the user) and no loaded profile. If the user already signed in with a password, that
+  token is kept. If the S4U logon fails (not SYSTEM, disabled account...) the key sign-in is refused; the bridge never
+  runs without the user's token.
+- Not verified on a real Windows host (cross-compiled and vetted only); the domain (Kerberos) path is the least certain.
+- `--dev-authorized-keys` is checked the same way (owner: the daemon's user, SYSTEM or Administrators; no write for
+  Everyone / Authenticated Users / Users).

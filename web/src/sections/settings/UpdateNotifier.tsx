@@ -3,7 +3,7 @@ import { useSession } from '../../api';
 import { Name } from '../../brand';
 import { useT } from '../../i18n';
 import { notify } from '../../shell/notifications';
-import { checkUpdates, updateStatus } from './updates';
+import { checkUpdates, updateStatus } from './updatesApi';
 
 const EVERY = 6 * 60 * 60_000;
 

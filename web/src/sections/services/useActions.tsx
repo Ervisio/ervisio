@@ -1,5 +1,5 @@
 import { useCallback, useState, type ReactNode } from 'react';
-import { ApiError, call } from '../../api';
+import { ApiError, call, useSession } from '../../api';
 import { useT } from '../../i18n';
 import { ConfirmDialog, toast } from '../../ui';
 import { needsConfirm, short } from './helpers';
@@ -16,6 +16,7 @@ export function useActions(after: (name: string, action: Action) => void): {
   dialog: ReactNode;
 } {
   const t = useT('services');
+  const win = useSession().session?.os === 'windows';
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   const [ask, setAsk] = useState<{ name: string; action: Action; mode: 'typed' | 'simple' } | null>(null);
 
@@ -54,9 +55,9 @@ export function useActions(after: (name: string, action: Action) => void): {
       open={!!ask}
       onClose={() => setAsk(null)}
       onConfirm={() => ask && exec(ask.name, ask.action)}
-      title={ask ? t(`confirm.${ask.action}.title`, { name: short(ask.name) }) : ''}
-      description={ask ? t(`confirm.${ask.action}.text`, { name: short(ask.name) }) : ''}
-      confirmLabel={ask ? t(`actions.${ask.action}`) : ''}
+      title={ask ? t(win && ask.action === 'mask' ? 'win.confirm.mask.title' : `confirm.${ask.action}.title`, { name: short(ask.name) }) : ''}
+      description={ask ? t(win && ask.action === 'mask' ? 'win.confirm.mask.text' : `confirm.${ask.action}.text`, { name: short(ask.name) }) : ''}
+      confirmLabel={ask ? (win && ask.action === 'mask' ? t('win.mask') : t(`actions.${ask.action}`)) : ''}
       confirmText={ask?.mode === 'typed' ? short(ask.name) : undefined}
       danger
     />

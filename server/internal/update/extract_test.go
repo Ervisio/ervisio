@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -76,8 +77,9 @@ func TestExtractGood(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if fi.Mode() != mode {
-			t.Errorf("%s mode %v, want %v", rel, fi.Mode(), mode)
+		// Windows has no POSIX modes: only the kind (file, folder) is compared.
+		if got := fi.Mode(); (runtime.GOOS != "windows" && got != mode) || got.IsDir() != mode.IsDir() {
+			t.Errorf("%s mode %v, want %v", rel, got, mode)
 		}
 		if body != "" {
 			b, _ := os.ReadFile(filepath.Join(dst, rel))

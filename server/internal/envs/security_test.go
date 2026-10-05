@@ -3,6 +3,7 @@ package envs
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"testing"
 )
@@ -47,17 +48,17 @@ func TestTunnelFolderIsTheDaemonsAndReplacesAnOldOne(t *testing.T) {
 		t.Fatal(err)
 	}
 	di, err := os.Lstat(filepath.Dir(path))
-	if err != nil || !di.IsDir() || di.Mode().Perm() != 0o711 {
+	if err != nil || !di.IsDir() || (runtime.GOOS != "windows" && di.Mode().Perm() != 0o711) {
 		t.Fatalf("tunnel folder: %v %v", di, err)
 	}
 	if _, err := os.Lstat(filepath.Join(old, "planted")); !os.IsNotExist(err) {
 		t.Fatal("the old folder's content was kept")
 	}
 	fi, err := os.Lstat(path)
-	if err != nil || fi.Mode()&os.ModeSocket == 0 || fi.Mode().Perm() != 0o600 {
+	if err != nil || fi.Mode()&os.ModeSocket == 0 || (runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600) {
 		t.Fatalf("socket: %v %v", fi, err)
 	}
-	if ti, _ := os.Stat(target); ti.Mode().Perm() != 0o644 {
+	if ti, _ := os.Stat(target); runtime.GOOS != "windows" && ti.Mode().Perm() != 0o644 {
 		t.Fatalf("the symlink target was changed: %v", ti.Mode())
 	}
 	// No staging folder is left behind.

@@ -7,11 +7,13 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/ervisio/ervisio/server/internal/account"
 	"github.com/ervisio/ervisio/server/internal/bridge"
+	"github.com/ervisio/ervisio/server/internal/pam"
 	"github.com/ervisio/ervisio/server/internal/rpc"
 	"golang.org/x/crypto/ssh"
 )
@@ -191,7 +193,7 @@ func (st *store) add(s *Session) (string, error) {
 	st.sessions[s.key] = s
 	var mine []*Session
 	for _, o := range st.sessions {
-		if o.Account.UID == s.Account.UID {
+		if account.SameUser(o.Account, s.Account) {
 			mine = append(mine, o)
 		}
 	}
@@ -208,7 +210,7 @@ func (st *store) add(s *Session) (string, error) {
 	}
 	st.mu.Unlock()
 	for _, o := range evict {
-		go o.close()
+		go func() { o.close(); st.forgetIfIdle(o.Account.Name) }()
 	}
 	return token, nil
 }
@@ -235,6 +237,20 @@ func (st *store) remove(s *Session) {
 	}
 	st.mu.Unlock()
 	s.close()
+	st.forgetIfIdle(s.Account.Name)
+}
+
+// forgetIfIdle drops the logon credential pam kept for name (Windows token;
+// no-op elsewhere) when no live session of that user remains.
+func (st *store) forgetIfIdle(name string) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	for _, o := range st.sessions {
+		if strings.EqualFold(o.Account.Name, name) {
+			return
+		}
+	}
+	pam.Forget(name)
 }
 
 // expire closes sessions idle for longer than timeout or past their
@@ -257,7 +273,7 @@ func (st *store) expire(now time.Time, timeout, adminIdle time.Duration) {
 	}
 	st.mu.Unlock()
 	for _, s := range dead {
-		go s.close()
+		go func() { s.close(); st.forgetIfIdle(s.Account.Name) }()
 	}
 	for _, s := range lockable {
 		go s.lock()

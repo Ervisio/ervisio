@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
+import { useSession } from '../../api';
 import { useT } from '../../i18n';
 import { Button, Dialog, Input, Switch, Textarea } from '../../ui';
 import type { Host, Snippet } from './types';
 
 export function SnippetDialog({ open, initial, onClose, onSave }: { open: boolean; initial?: Partial<Snippet>; onClose(): void; onSave(title: string, command: string): void }) {
   const t = useT('terminal');
+  const win = useSession().session?.os === 'windows';
   const [title, setTitle] = useState('');
   const [cmd, setCmd] = useState('');
   useEffect(() => {
@@ -36,7 +38,7 @@ export function SnippetDialog({ open, initial, onClose, onSave }: { open: boolea
     >
       <div className="terminal-form">
         <Input label={t('snippet.name')} value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t('snippet.namePh')} data-autofocus maxLength={60} />
-        <Textarea label={t('snippet.command')} mono rows={3} value={cmd} onChange={(e) => setCmd(e.target.value)} placeholder="sudo systemctl restart nginx" hint={t('snippet.hint')} />
+        <Textarea label={t('snippet.command')} mono rows={3} value={cmd} onChange={(e) => setCmd(e.target.value)} placeholder={win ? "Get-Service | Where-Object Status -eq 'Stopped'" : "sudo systemctl restart nginx"} hint={t('snippet.hint')} />
       </div>
     </Dialog>
   );

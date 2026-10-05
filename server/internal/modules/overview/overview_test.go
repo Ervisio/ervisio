@@ -3,6 +3,7 @@ package overview
 import (
 	"context"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -109,20 +110,31 @@ func TestValidateArgv(t *testing.T) {
 
 func TestRunArgv(t *testing.T) {
 	ctx := context.Background()
-	r, err := runArgv(ctx, []string{"sh", "-c", "echo out; echo err >&2; exit 3"}, 5*time.Second, "")
+	failing := []string{"sh", "-c", "echo out; echo err >&2; exit 3"}
+	ok := []string{"true"}
+	slow := []string{"sleep", "5"}
+	if runtime.GOOS == "windows" { // no sh, true or sleep: cmd and ping
+		failing = []string{"cmd", "/c", "echo out& echo err 1>&2& exit 3"}
+		ok = []string{"cmd", "/c", "exit 0"}
+		slow = []string{"ping", "-n", "6", "127.0.0.1"}
+	}
+	r, err := runArgv(ctx, failing, 5*time.Second, "")
 	if err != nil || r.OK || r.ExitCode != 3 || !strings.Contains(r.Output, "out") || !strings.Contains(r.Output, "err") {
 		t.Fatalf("%+v %v", r, err)
 	}
-	r, err = runArgv(ctx, []string{"true"}, 5*time.Second, "")
+	r, err = runArgv(ctx, ok, 5*time.Second, "")
 	if err != nil || !r.OK {
 		t.Fatalf("%+v %v", r, err)
 	}
-	r, err = runArgv(ctx, []string{"sleep", "5"}, 200*time.Millisecond, "")
+	r, err = runArgv(ctx, slow, 200*time.Millisecond, "")
 	if err != nil || !r.TimedOut || r.ExitCode != -1 {
 		t.Fatalf("%+v %v", r, err)
 	}
 	if _, err = runArgv(ctx, []string{"definitely-not-a-command"}, time.Second, ""); !rpc.IsCode(err, rpc.Unavailable) {
 		t.Fatalf("%v", err)
+	}
+	if runtime.GOOS == "windows" {
+		return // the output cap is checked below with Unix tools
 	}
 	r, _ = runArgv(ctx, []string{"sh", "-c", "head -c 400000 /dev/zero | tr '\\0' a"}, 5*time.Second, "")
 	if !r.Truncated || len(r.Output) != maxActionOutput {
@@ -190,5 +202,32 @@ func TestUnitShowAndTail(t *testing.T) {
 	}
 	if _, err := tailFile(t.TempDir(), 2); !rpc.IsCode(err, rpc.Invalid) {
 		t.Fatal(err)
+	}
+}
+
+func TestServiceFailed(t *testing.T) {
+	if serviceFailed(0, 0) || !serviceFailed(1, 0) || serviceFailed(1066, 0) || !serviceFailed(1066, 3) {
+		t.Fatal("serviceFailed")
+	}
+}
+
+func TestWinCPUMath(t *testing.T) {
+	if got := cpuPercent(0, 10_000_000, time.Second); got != 100 {
+		t.Fatalf("1s cpu in 1s = %v", got)
+	}
+	if got := cpuPercent(5, 4, time.Second); got != 0 {
+		t.Fatalf("backwards = %v", got)
+	}
+	if got := cpuPercent(0, 1, 0); got != 0 {
+		t.Fatalf("zero elapsed = %v", got)
+	}
+	l := winProcesses(map[int]uint64{1: 0}, time.Second,
+		[]winProc{{pid: 1, name: "a", cpu100ns: 25_000_000, rss: 50}, {pid: 2, name: "b", rss: 100}}, 200)
+	if l[0].CPU != 250 || l[0].MemPercent != 25 || l[1].CPU != 0 || l[1].MemPercent != 50 {
+		t.Fatalf("rows = %+v", l)
+	}
+	n := time.Now()
+	if usablePrev(time.Time{}, n) || usablePrev(n, n) || !usablePrev(n.Add(-time.Second), n) || usablePrev(n.Add(-time.Hour), n) {
+		t.Fatal("usablePrev")
 	}
 }

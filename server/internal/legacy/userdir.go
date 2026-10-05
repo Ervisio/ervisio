@@ -3,6 +3,7 @@ package legacy
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/ervisio/ervisio/server/internal/brand"
 )
@@ -12,7 +13,7 @@ import (
 // the new folder holds no files yet. It runs in the user's own bridge, as
 // the user. The old folder stays.
 func MigrateUserDir(home string) (bool, error) {
-	if !filepath.IsAbs(home) {
+	if runtime.GOOS == "windows" || !filepath.IsAbs(home) {
 		return false, nil
 	}
 	oldD := filepath.Join(home, brand.LegacyUserDataDir)

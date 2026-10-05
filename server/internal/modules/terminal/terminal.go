@@ -10,7 +10,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"os/user"
@@ -21,7 +20,6 @@ import (
 	"time"
 
 	"github.com/ervisio/ervisio/server/internal/rpc"
-	"github.com/ervisio/ervisio/server/internal/sys"
 )
 
 var mgr = newManager()
@@ -230,7 +228,7 @@ func buildSpec(p createParams, admin bool) (spec, error) {
 	}
 	home := u.HomeDir
 	if home == "" {
-		home = "/"
+		home = defaultHome()
 	}
 	host, _ := os.Hostname()
 	kind := KindLocal
@@ -260,7 +258,7 @@ func buildSpec(p createParams, admin bool) (spec, error) {
 		}
 		base := filepath.Base(shell)
 		sp.Kind, sp.Path, sp.Dir, sp.Shell = kind, shell, dir, base
-		sp.Argv = []string{"-" + base} // leading dash: login shell
+		sp.Argv = shellArgv(base)
 		if name == "" {
 			name = u.Username + "@" + host
 		}
@@ -275,7 +273,7 @@ func buildSpec(p createParams, admin bool) (spec, error) {
 		if p.Port != 0 && (p.Port < 1 || p.Port > 65535) {
 			return spec{}, rpc.Errorf(rpc.Invalid, "The SSH port must be between 1 and 65535.")
 		}
-		ssh, err := sys.LookPath("ssh")
+		ssh, err := lookSSH()
 		if err != nil {
 			return spec{}, rpc.Errorf(rpc.Unavailable, "The ssh client is not installed. Install openssh and try again.")
 		}
@@ -299,46 +297,6 @@ func buildSpec(p createParams, admin bool) (spec, error) {
 	return sp, nil
 }
 
-// resolveShell picks the requested shell (must be listed in /etc/shells) or
-// the login shell from /etc/passwd, falling back to /bin/sh.
-func resolveShell(want, username string) (string, error) {
-	if want != "" {
-		if !filepath.IsAbs(want) || !shellListed(want) {
-			return "", rpc.Errorf(rpc.Invalid, "%s is not an allowed shell. Pick one listed in /etc/shells.", want)
-		}
-		return want, nil
-	}
-	if sh := passwdShell(username); sh != "" {
-		return sh, nil
-	}
-	return "/bin/sh", nil
-}
-
-func shellListed(path string) bool {
-	f, err := os.Open("/etc/shells")
-	if err != nil {
-		return false
-	}
-	defer f.Close()
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		if strings.TrimSpace(sc.Text()) == path {
-			fi, err := os.Stat(path)
-			return err == nil && fi.Mode()&0o111 != 0
-		}
-	}
-	return false
-}
-
-func passwdShell(username string) string {
-	f, err := os.Open("/etc/passwd")
-	if err != nil {
-		return ""
-	}
-	defer f.Close()
-	return parsePasswdShell(f, username)
-}
-
 func parsePasswdShell(r io.Reader, username string) string {
 	sc := bufio.NewScanner(r)
 	for sc.Scan() {
@@ -355,47 +313,4 @@ func parsePasswdShell(r io.Reader, username string) string {
 		}
 	}
 	return ""
-}
-
-// systemLang reads LANG from the environment or /etc/locale.conf.
-func systemLang() string {
-	if v := os.Getenv("LANG"); v != "" && v != "C" {
-		return v
-	}
-	if f, err := os.Open("/etc/locale.conf"); err == nil {
-		defer f.Close()
-		sc := bufio.NewScanner(f)
-		for sc.Scan() {
-			if v, ok := strings.CutPrefix(strings.TrimSpace(sc.Text()), "LANG="); ok {
-				v = strings.Trim(v, `"'`)
-				if v != "" {
-					return v
-				}
-			}
-		}
-	}
-	return "C.UTF-8"
-}
-
-func termEnv(u *user.User, home, shell string) []string {
-	env := []string{
-		"PATH=" + sys.SafePath,
-		"TERM=xterm-256color",
-		"COLORTERM=truecolor",
-		"LANG=" + systemLang(),
-		"HOME=" + home,
-		"USER=" + u.Username,
-		"LOGNAME=" + u.Username,
-	}
-	if shell != "" {
-		env = append(env, "SHELL="+shell)
-	}
-	if v := os.Getenv("TZ"); v != "" {
-		env = append(env, "TZ="+v)
-	}
-	rt := fmt.Sprintf("/run/user/%s", u.Uid)
-	if fi, err := os.Stat(rt); err == nil && fi.IsDir() {
-		env = append(env, "XDG_RUNTIME_DIR="+rt)
-	}
-	return env
 }

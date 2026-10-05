@@ -77,3 +77,17 @@ Runs `journalctl -u <name> -n <lines> -o json`; the journal may be empty for acc
 Params `{type?: "service"|"timer"|"socket"}` (default service). Every 2 s the bridge diffs `systemctl list-units`
 and pushes only changes (nothing is sent at open): `{units: Unit[] (new or changed, with details), removed: string[]}`.
 `removed` names left systemd's loaded set. Enable/disable changes are not pushed; refetch with `services.list {fresh:true}`.
+
+## Windows backend
+
+On Windows the same methods are served by the Service Control Manager (`golang.org/x/sys/windows/svc/mgr`,
+`services_windows.go`); the SCM enforces rights and `ERROR_ACCESS_DENIED` answers `needs_admin`.
+- Only `type: "service"` has rows; `timer` and `socket` return an empty list. `name` is the service short name (no `/` or `\`).
+- `active/sub/state`: running -> `active/running/running`, pending states -> `activating|deactivating`, paused -> `active/paused/running`,
+  stopped -> `inactive/dead/stopped`, stopped with a non-zero exit code -> `failed`. `memory`/`cpuNs` are `null`, `since` is 0.
+- `enabled`: Automatic and Automatic (Delayed) -> `enabled`, Manual -> `disabled`, Disabled -> `masked`, boot/system drivers -> `static`.
+- `services.action`: `start`, `stop`, `restart` (stop, wait, start), plus `pause` and `continue`; `enable` = Automatic, `disable` and `unmask` = Manual,
+  `mask` = Disabled. `reload` answers `invalid`. Errors: `needs_admin`, `not_found`, `conflict` (already running, disabled...), `unavailable` (timeout).
+- `services.get`: `path` is the binary path, `dependencies.requires` the service's dependencies, `dependencies.requiredBy` its dependent services;
+  `properties` holds DisplayName, StartType (auto|delayed|manual|disabled|boot|system), ServiceStartName.
+- `services.unitFile`, `services.saveOverride` and `services.logs` answer `unavailable`.

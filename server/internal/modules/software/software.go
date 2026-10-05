@@ -74,6 +74,7 @@ func buildSummary(ctx context.Context, m *manager, force bool) (map[string]any, 
 		sched = map[string]any{"at": at}
 	}
 	busy, _ := readStatus()
+	osUpdates := cachedOSUpdates(ctx)
 	if warns == nil {
 		warns = []string{}
 	}
@@ -92,6 +93,7 @@ func buildSummary(ctx context.Context, m *manager, force bool) (map[string]any, 
 		"schedule":      sched,
 		"busy":          busy,
 		"warnings":      warns,
+		"osUpdates":     osUpdates,
 	}, nil
 }
 

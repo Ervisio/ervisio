@@ -3,7 +3,6 @@ package bridge
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/ervisio/ervisio/server/internal/rpc"
 )
@@ -14,12 +13,12 @@ import (
 // rights still go through StartAdmin. spec.Account is root and
 // spec.SwitchUser is false.
 func StartRoot(ctx context.Context, s *Spec) (*Proc, error) {
-	if os.Geteuid() != 0 {
-		return nil, rpc.Errorf(rpc.Unavailable, "Steps that need administrator rights run only when the daemon runs as root.")
+	if !Privileged() {
+		return nil, rpc.Errorf(rpc.Unavailable, "Steps that need administrator rights run only when the daemon runs as root (Windows: as SYSTEM or elevated).")
 	}
 	cmd := s.command(s.Bridge, s.bridgeArgs(true)...)
 	// The root bridge never starts in a user's home.
-	cmd.Dir = "/"
+	cmd.Dir = rootDir()
 	p, _, err := s.start(cmd, "root bridge (job)", nil)
 	if err != nil {
 		return nil, err
@@ -31,7 +30,7 @@ func StartRoot(ctx context.Context, s *Spec) (*Proc, error) {
 		p.Stop()
 		return nil, fmt.Errorf("root bridge did not start: %w", err)
 	}
-	if !h.Admin || h.UID != 0 {
+	if !h.Admin || !rootHello(h) {
 		p.Stop()
 		return nil, fmt.Errorf("the job's bridge is not running as root")
 	}

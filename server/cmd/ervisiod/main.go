@@ -10,9 +10,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/signal"
 	"path/filepath"
-	"syscall"
 	"time"
 
 	"github.com/ervisio/ervisio/server/internal/brand"
@@ -31,6 +29,19 @@ import (
 var hiddenFlags = map[string]bool{"dev-insecure-noauth": true}
 
 func main() {
+	// A Windows service gets its stop request from the service manager
+	// (service_windows.go); everywhere else from signals.
+	if runAsService(run) {
+		return
+	}
+	ctx, stop := consoleContext()
+	defer stop()
+	run(ctx)
+}
+
+// run is the daemon: it serves until ctx is cancelled (a signal in console
+// mode, a Stop/Shutdown request when running as a Windows service).
+func run(ctx context.Context) {
 	// Internal mode: the root helper that opens a PAM session around a user
 	// bridge (started by the daemon itself, never by hand).
 	if len(os.Args) > 1 && os.Args[1] == bridge.HelperFlag {
@@ -99,13 +110,13 @@ func main() {
 	if *noAuth && !*dev {
 		log.Fatal("--dev-insecure-noauth requires --dev")
 	}
-	if *noAuth && os.Geteuid() == 0 {
+	if *noAuth && bridge.Privileged() {
 		log.Fatal("--dev-insecure-noauth refuses to run as root")
 	}
 	// A machine that ran LinuxAdmin: its configuration, certificate, plugins
 	// and state are copied to the Ervisio locations before they are read
 	// (once; a no-op afterwards). See internal/legacy.
-	if !*dev && os.Geteuid() == 0 && *configPath == brand.ConfigPath {
+	if !*dev && bridge.Privileged() && *configPath == brand.ConfigPath {
 		if res, err := legacy.ImportOnStart(legacy.Paths{}, log.Printf); err != nil {
 			log.Printf("copy %s's data: %v", brand.LegacyName, err)
 		} else if res.Any() {
@@ -122,7 +133,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		bp = filepath.Join(filepath.Dir(exe), brand.BridgeBinary)
+		bp = filepath.Join(filepath.Dir(exe), brand.BridgeBinary+exeSuffix)
 		// Packages (flat layout) install the daemon as /usr/bin/ervisiod
 		// and the bridge as /usr/lib/ervisio/ervisio-bridge.
 		if _, err := os.Stat(bp); err != nil {
@@ -229,9 +240,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-	signal.Ignore(syscall.SIGPIPE)
 	if !*dev {
 		// Automatic update checks and installs ([updates] in the config).
 		u := update.New(update.NewChecker())
@@ -262,7 +270,7 @@ func main() {
 		}
 		// Started by linuxadmin.service from LinuxAdmin's layout: move to
 		// ervisio.service. The transition stops this process.
-		if v, ok := legacyExe(); ok && os.Geteuid() == 0 {
+		if v, ok := legacyExe(); ok && bridge.Privileged() {
 			go func() {
 				select {
 				case <-ctx.Done():
@@ -276,7 +284,7 @@ func main() {
 			}()
 		}
 	}
-	if !*dev && os.Geteuid() == 0 {
+	if !*dev && bridge.Privileged() {
 		// Plugins that moved out of the core (Docker): keep them on machines
 		// that use them (internal/modules/plugins/moved.go).
 		go func() {
@@ -295,7 +303,7 @@ func main() {
 
 // pluginCommand implements --install-plugin and --skip-moved-plugins.
 func pluginCommand(id string, skip bool) int {
-	if os.Geteuid() != 0 {
+	if !bridge.Privileged() {
 		fmt.Fprintln(os.Stderr, "run this as root")
 		return 1
 	}

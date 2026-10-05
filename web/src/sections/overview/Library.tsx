@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, type PointerEvent } from 'react';
 import { useT } from '../../i18n';
 import { Button, Icon, Input, hueClass, type HueId, type IconName } from '../../ui';
 import { usePlugins } from '../../plugins';
+import { useSession } from '../../api';
 import { CATALOG, type Cols } from './model';
 
 export interface LibItem {
@@ -20,6 +21,7 @@ export interface LibItem {
 
 export function useLibraryItems(): LibItem[] {
   const t = useT('overview');
+  const win = useSession().session?.os === 'windows';
   const { widgets, plugins } = usePlugins();
   return useMemo(() => {
     const own: LibItem[] = CATALOG.map((c) => ({
@@ -29,7 +31,7 @@ export function useLibraryItems(): LibItem[] {
       icon: c.icon,
       hue: c.hue,
       title: t(`library.${c.type}.title`),
-      desc: t(`library.${c.type}.desc`),
+      desc: t(win && c.type === 'service' ? 'win.library.service.desc' : `library.${c.type}.desc`),
       cols: c.cols,
       configure: c.configure,
       settings: c.settings,
@@ -50,7 +52,7 @@ export function useLibraryItems(): LibItem[] {
       };
     });
     return [...own, ...plug];
-  }, [t, widgets, plugins]);
+  }, [t, widgets, plugins, win]);
 }
 
 export function Library({ onAdd, onPointerDown, onReset, className }: { onAdd(i: LibItem): void; onPointerDown(i: LibItem, e: PointerEvent<HTMLElement>): void; onReset(): void; className?: string }) {

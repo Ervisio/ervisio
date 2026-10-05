@@ -6,18 +6,15 @@ package bridge
 import (
 	"bufio"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/ervisio/ervisio/server/internal/account"
@@ -97,25 +94,6 @@ func (s *Spec) logger() *log.Logger {
 	return log.Default()
 }
 
-func (s *Spec) env() []string {
-	a := s.Account
-	env := []string{
-		"PATH=" + sys.SafePath,
-		"HOME=" + a.Home,
-		"USER=" + a.Name,
-		"LOGNAME=" + a.Name,
-		"LANG=C.UTF-8",
-	}
-	if a.Shell != "" {
-		env = append(env, "SHELL="+a.Shell)
-	}
-	rt := "/run/user/" + strconv.FormatUint(uint64(a.UID), 10)
-	if fi, err := os.Stat(rt); err == nil && fi.IsDir() {
-		env = append(env, "XDG_RUNTIME_DIR="+rt)
-	}
-	return env
-}
-
 func (s *Spec) command(name string, args ...string) *exec.Cmd {
 	cmd := exec.Command(name, args...)
 	cmd.Env = s.env()
@@ -123,20 +101,7 @@ func (s *Spec) command(name string, args ...string) *exec.Cmd {
 	if fi, err := os.Stat(s.Account.Home); err == nil && fi.IsDir() {
 		cmd.Dir = s.Account.Home
 	}
-	attr := &syscall.SysProcAttr{
-		// A new session: no controlling terminal (so sudo cannot prompt on
-		// a tty) and no terminal signals from the daemon's console.
-		Setsid:    true,
-		Pdeathsig: syscall.SIGTERM,
-	}
-	if s.SwitchUser {
-		attr.Credential = &syscall.Credential{
-			Uid:    s.Account.UID,
-			Gid:    s.Account.GID,
-			Groups: s.Account.Groups,
-		}
-	}
-	cmd.SysProcAttr = attr
+	setBridgeAttr(cmd, s.SwitchUser, s.Account)
 	return cmd
 }
 
@@ -284,6 +249,9 @@ func classifySudo(line string) rpc.Code {
 // fails at once with "a password is required" (Invalid) without running
 // PAM authentication, so nothing counts toward pam_faillock.
 func StartAdmin(ctx context.Context, s *Spec, password string) (*Proc, error) {
+	if adminViaToken {
+		return startAdminToken(ctx, s, password)
+	}
 	if strings.ContainsAny(password, "\n\r\x00") || len(password) > 4096 {
 		return nil, rpc.Errorf(rpc.Invalid, "invalid password")
 	}
@@ -384,8 +352,5 @@ func killGroup(p *Proc) {
 	if p.cmd.Process == nil {
 		return
 	}
-	err := syscall.Kill(-p.cmd.Process.Pid, syscall.SIGKILL)
-	if errors.Is(err, syscall.EPERM) || errors.Is(err, syscall.ESRCH) {
-		_ = p.cmd.Process.Kill()
-	}
+	killProcessGroup(p.cmd)
 }

@@ -9,9 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
-	"syscall"
 )
 
 var keyTypes = map[string]bool{
@@ -143,34 +141,8 @@ func appendKey(data, line string) string {
 
 // ---- file access, as the owner ----
 
-// asUser runs fn with the file-system identity of uid/gid when the bridge runs
-// as root, so a user-controlled symlink can never make us touch anything the
-// user could not. As a normal user it just runs fn.
-func asUser(uid, gid int, fn func() error) error {
-	if os.Geteuid() != 0 || uid == 0 {
-		return fn()
-	}
-	runtime.LockOSThread()
-	if err := syscall.Setfsgid(gid); err != nil {
-		runtime.UnlockOSThread()
-		return err
-	}
-	if err := syscall.Setfsuid(uid); err != nil {
-		_ = syscall.Setfsgid(0)
-		runtime.UnlockOSThread()
-		return err
-	}
-	err := fn()
-	e1 := syscall.Setfsuid(0)
-	e2 := syscall.Setfsgid(0)
-	if e1 == nil && e2 == nil {
-		runtime.UnlockOSThread()
-	} // else: leave the thread locked so it ends with this goroutine
-	return err
-}
-
 func readKeyFile(path string) (string, error) {
-	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	f, err := os.OpenFile(path, os.O_RDONLY|openNoFollow, 0)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return "", nil
@@ -202,7 +174,7 @@ func writeKeyFile(path, content string) error {
 	} else if !fi.IsDir() {
 		return fmt.Errorf("%s is not a directory", dir)
 	}
-	tmp, err := os.OpenFile(filepath.Join(dir, ".authorized_keys.tmp"), os.O_WRONLY|os.O_CREATE|os.O_TRUNC|syscall.O_NOFOLLOW, 0o600)
+	tmp, err := os.OpenFile(filepath.Join(dir, ".authorized_keys.tmp"), os.O_WRONLY|os.O_CREATE|os.O_TRUNC|openNoFollow, 0o600)
 	if err != nil {
 		return err
 	}

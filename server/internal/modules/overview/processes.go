@@ -5,10 +5,10 @@ import (
 	"context"
 	"os"
 	"os/user"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/ervisio/ervisio/server/internal/rpc"
@@ -155,6 +155,9 @@ func processes(ctx context.Context, c *rpc.Call) (any, error) {
 	if p.Limit > 100 {
 		p.Limit = 100
 	}
+	if runtime.GOOS == "windows" {
+		return windowsProcesses(ctx, p.Sort, p.Limit)
+	}
 	const tick = 100.0 // USER_HZ is 100 on every Linux platform we run on
 	t0 := time.Now()
 	a := readStats()
@@ -193,8 +196,8 @@ func round1(v float64) float64 { return float64(int64(v*10+0.5)) / 10 }
 func describePID(pid int, name string) (cmdline, owner string) {
 	dir := "/proc/" + strconv.Itoa(pid)
 	if fi, err := os.Stat(dir); err == nil {
-		if st, ok := fi.Sys().(*syscall.Stat_t); ok {
-			owner = userName(st.Uid)
+		if uid, ok := fileOwner(fi); ok {
+			owner = userName(uid)
 		}
 	}
 	if b, err := os.ReadFile(dir + "/cmdline"); err == nil && len(b) > 0 {

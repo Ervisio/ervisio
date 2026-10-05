@@ -31,6 +31,9 @@ export interface CallOptions {
   noUnlock?: boolean;
 }
 
+/** Operating systems the server can run on. */
+export type Platform = 'linux' | 'windows';
+
 export interface Session {
   user: string;
   /** GECOS full name, may be empty. */
@@ -43,6 +46,8 @@ export interface Session {
   isAdmin: boolean;
   /** Hint: root or member of wheel/sudo/admin. sudo decides on unlock. */
   canSudo: boolean;
+  /** Server operating system; older servers do not send it (Linux). */
+  os?: Platform;
   /** Epoch milliseconds (normalised from whatever the server sends). */
   unlockedUntil?: number;
   /** Admin rights last until sign-out (session.admin_unlock = 0). */

@@ -72,3 +72,26 @@ func TestLiveMetrics(t *testing.T) {
 		t.Fatalf("%+v %v", h, err)
 	}
 }
+
+func TestWindowsKernel(t *testing.T) {
+	if g := windowsKernel("22631", "3593"); g != "10.0.22631.3593" {
+		t.Fatal(g)
+	}
+	if windowsKernel("", "1") != "" || windowsKernel("19045", "") != "10.0.19045" {
+		t.Fatal("edge cases")
+	}
+}
+
+func TestWindowsMemory(t *testing.T) {
+	mem, sw := windowsMemory(16<<30, 4<<30, 20<<30, 6<<30)
+	if mem.Used != 12<<30 || mem.Percent != 75 {
+		t.Fatalf("%+v", mem)
+	}
+	if sw.Total != 4<<30 || sw.Free != 2<<30 || sw.Used != 2<<30 || sw.Percent != 50 {
+		t.Fatalf("%+v", sw)
+	}
+	_, sw = windowsMemory(8<<30, 1<<30, 8<<30, 1<<30)
+	if sw.Total != 0 {
+		t.Fatalf("%+v", sw)
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -314,15 +315,18 @@ type loginRequest struct {
 
 // userInfo is shared by the login and session responses.
 type userInfo struct {
-	User          string   `json:"user"`
-	Name          string   `json:"name"`
-	UID           uint32   `json:"uid"`
-	Home          string   `json:"home"`
-	Groups        []string `json:"groups"`
-	IsRoot        bool     `json:"isRoot"`
-	IsAdmin       bool     `json:"isAdmin"`
-	CanSudo       bool     `json:"canSudo"`
-	UnlockedUntil *int64   `json:"unlockedUntil,omitempty"`
+	User    string   `json:"user"`
+	Name    string   `json:"name"`
+	UID     uint32   `json:"uid"`
+	Home    string   `json:"home"`
+	Groups  []string `json:"groups"`
+	IsRoot  bool     `json:"isRoot"`
+	IsAdmin bool     `json:"isAdmin"`
+	CanSudo bool     `json:"canSudo"`
+	// OS is the server's operating system ("linux", "windows"): the web
+	// app hides sections that have no backend there.
+	OS            string `json:"os"`
+	UnlockedUntil *int64 `json:"unlockedUntil,omitempty"`
 	// UnlockedForever is set while unlocked with session.admin_unlock = 0:
 	// admin rights last until sign-out, unlockedUntil is the session end.
 	UnlockedForever bool `json:"unlockedForever,omitempty"`
@@ -336,7 +340,7 @@ type userInfo struct {
 func (s *Server) info(sess *Session) userInfo {
 	a := sess.Account
 	ui := userInfo{User: a.Name, Name: a.FullName, UID: a.UID, Home: a.Home, Groups: a.GroupNames,
-		IsRoot: a.IsRoot(), CanSudo: a.CanSudo(), AuthMethod: sess.Method}
+		IsRoot: a.IsRoot(), CanSudo: a.CanSudo(), OS: runtime.GOOS, AuthMethod: sess.Method}
 	if ui.AuthMethod == "" {
 		ui.AuthMethod = "password"
 	}
@@ -409,7 +413,16 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result := attemptFailed
-	defer func() { att.done(result) }()
+	authed := false
+	defer func() {
+		att.done(result)
+		if authed && result != attemptOK {
+			// Authenticated but refused: do not leave a logon token behind
+			// (Windows). Only after a successful Authenticate, so failed
+			// guesses cannot drop another sign-in's token.
+			s.sessions.forgetIfIdle(req.User)
+		}
+	}()
 
 	if !account.ValidName(req.User) || req.Password == "" || len(req.Password) > 4096 {
 		writeError(w, errBadCredentials)
@@ -449,6 +462,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	authed = true
 	a, err := account.Lookup(req.User)
 	if err != nil {
 		result = attemptNeutral

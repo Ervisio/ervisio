@@ -15,6 +15,7 @@ executes in the root bridge.
 | `apt` | `apt-get` + `dpkg-query` | Debian/Ubuntu. Upgrade all = `apt-get update` + `apt-get dist-upgrade`. |
 | `dnf` | `dnf` + `rpm` | Fedora (dnf4 and dnf5 output). |
 | `zypper` | `zypper` + `rpm` | openSUSE. |
+| `winget` | `winget` in PATH (Windows) | system manager on Windows (`kind: "repo"`, `name` = winget Id such as `Git.Git`, `title` = display name, `source` = winget/msstore). Listing and updates parse `winget list` / `winget upgrade` tables (positional columns, spinner and progress characters stripped, wide characters measured in cells); search is `winget search --query`. Install, uninstall and upgrade run `winget ... --id X -e --silent --accept-package-agreements --accept-source-agreements --disable-interactivity` (one step per package; upgrade-all is `winget upgrade --all`). `software.history` is always empty, scheduled updates answer `unavailable` (systemd only), and AUR/Flatpak do not apply. Parser: `winget_parse.go`. Not exercised on a real Windows host yet. Pending Windows Update (OS) updates are not reported (a possible later addition: PowerShell `Microsoft.Update.Session` `Search("IsInstalled=0")`). |
 | `flatpak` | `flatpak` | `kind: "flatpak"`, system and user installations (`scope`). |
 
 One system manager is used (first found in the order pacman, apt, dnf, zypper); AUR and Flatpak are added
@@ -181,3 +182,7 @@ Creates (or, with `null`, removes) the systemd timer pair
 their failure does not fail the run), then `daemon-reload` and `enable --now`. `at` is 24-hour server time
 (`invalid` otherwise). The scheduled time shows up as `schedule.at` in `software.summary`. To inspect:
 `systemctl list-timers ervisio-update.timer`, `journalctl -u ervisio-update.service`.
+
+### Windows: scheduled updates and OS updates
+
+On Windows, `software.schedule` registers the Task Scheduler task `\Ervisio\SoftwareUpdate` (runs as SYSTEM, daily at the given `HH:MM`, start when available, network required, 4 h limit) with one action per plan step, e.g. `winget upgrade --all --silent …`. Access denied maps to `needs_admin`. `software.summary` also carries `osUpdates`: the number of pending Windows Update software items (cached 30 minutes; `-1` when unknown or not on Windows).

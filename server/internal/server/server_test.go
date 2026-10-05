@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -219,6 +220,9 @@ func TestSessionLifetime(t *testing.T) {
 func buildBridge(t *testing.T) string {
 	t.Helper()
 	out := filepath.Join(t.TempDir(), "ervisio-bridge")
+	if runtime.GOOS == "windows" {
+		out += ".exe" // CreateProcess finds no other extension
+	}
 	if b, err := exec.Command("go", "build", "-o", out, "github.com/ervisio/ervisio/server/cmd/ervisio-bridge").CombinedOutput(); err != nil {
 		t.Fatalf("build bridge: %v\n%s", err, b)
 	}

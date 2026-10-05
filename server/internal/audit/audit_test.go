@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -54,11 +55,13 @@ func TestAddWritesJSONLinesAndRotatesDaily(t *testing.T) {
 		t.Fatalf("%v %+v", err, e)
 	}
 	// Private files in a private folder.
-	if fi, _ := os.Stat(filepath.Join(l.Dir(), files[0].Name())); fi.Mode().Perm() != 0o600 {
-		t.Fatalf("file mode %v", fi.Mode())
-	}
-	if fi, _ := os.Stat(l.Dir()); fi.Mode().Perm() != 0o700 {
-		t.Fatalf("dir mode %v", fi.Mode())
+	if runtime.GOOS != "windows" { // POSIX modes mean nothing on Windows
+		if fi, _ := os.Stat(filepath.Join(l.Dir(), files[0].Name())); fi.Mode().Perm() != 0o600 {
+			t.Fatalf("file mode %v", fi.Mode())
+		}
+		if fi, _ := os.Stat(l.Dir()); fi.Mode().Perm() != 0o700 {
+			t.Fatalf("dir mode %v", fi.Mode())
+		}
 	}
 }
 

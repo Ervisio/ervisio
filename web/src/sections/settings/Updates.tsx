@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useSession } from '../../api';
 import { Name } from '../../brand';
 import { useI18n, useT } from '../../i18n';
 import { formatBytes, formatDate, formatDateTime, relativeTime } from '../../lib/format';
@@ -7,7 +8,7 @@ import { ReleaseNotes } from './ReleaseNotes';
 import {
   checkUpdates, clearRun, startRollback, startUpdate, updateStatus, useRun,
   type CheckResult, type RunPhase, type RunState, type UpdateStatus,
-} from './updates';
+} from './updatesApi';
 
 /**
  * Settings › About: current version, check for updates, release notes, Update now (confirm → progress →
@@ -199,6 +200,7 @@ const stepOf = (p: RunPhase): string => (p === 'check' ? 'download' : p === 'ext
 
 function RunView({ run, onClose }: { run: RunState; onClose(): void }) {
   const t = useT('settings');
+  const win = useSession().session?.os === 'windows';
   const steps: readonly string[] = run.kind === 'update' ? UPDATE_STEPS : ROLLBACK_STEPS;
   const final = isFinal(run.phase);
   const cur = stepOf(run.phase);
@@ -231,7 +233,7 @@ function RunView({ run, onClose }: { run: RunState; onClose(): void }) {
       </ol>
       {run.phase === 'done' && <div className="st-upd-note st-upd-note--ok"><Icon name="check" />{t('updates.run.done', { version: run.target })}</div>}
       {run.phase === 'rolled-back' && <div className="st-warn"><Icon name="alert" /><div>{t('updates.run.rolledBack', { version: run.target, from: run.from })}</div></div>}
-      {run.phase === 'timeout' && <div className="st-warn"><Icon name="alert" /><div>{t('updates.run.timeout')}</div></div>}
+      {run.phase === 'timeout' && <div className="st-warn"><Icon name="alert" /><div>{t(win ? 'win.updates.run.timeout' : 'updates.run.timeout')}</div></div>}
       {run.phase === 'error' && <div className="st-warn"><Icon name="alert" /><div>{t('updates.run.error', { error: run.error ?? '' })}</div></div>}
       {(run.phase === 'rolled-back' || run.phase === 'timeout') && (
         <div className="st-upd-actions"><Button icon="refresh" onClick={() => window.location.reload()}>{t('updates.run.reload')}</Button></div>

@@ -143,5 +143,10 @@
   "notice": {
     "error": "Error in {name}",
     "errors": "{count} errors in {name}"
+  },
+  "win": {
+    "sources": {
+      "unlockText": "Reading the Event Log needs administrator rights. Unlock administrator rights to read it."
+    }
   }
 }

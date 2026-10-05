@@ -1,4 +1,5 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
+import type { Platform } from '../api/types';
 import type { IconName, HueId } from '../ui';
 
 export interface SectionDef {
@@ -15,6 +16,8 @@ export interface SectionDef {
   page: LazyExoticComponent<ComponentType>;
   /** Shown in the rail / dock. Settings is placed separately by the shell. */
   rail: boolean;
+  /** Operating systems the section works on; all when unset. */
+  platforms?: Platform[];
 }
 
 export const SECTIONS: SectionDef[] = [

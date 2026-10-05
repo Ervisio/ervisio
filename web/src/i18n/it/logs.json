@@ -143,5 +143,10 @@
   "notice": {
     "error": "Errore in {name}",
     "errors": "{count} errori in {name}"
+  },
+  "win": {
+    "sources": {
+      "unlockText": "Leggere il registro eventi richiede i diritti di amministratore. Sblocca i diritti di amministratore per leggerlo."
+    }
   }
 }

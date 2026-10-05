@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useSession } from '../api';
 import { useT } from '../i18n';
 import { usePlugins } from '../plugins';
 import { SECTIONS, useRailBadges, useSectionBadgeHooks, type RailBadge } from '../sections';
@@ -25,6 +26,7 @@ export function useNav() {
   const { railPages } = usePlugins();
   const registered = useRailBadges();
   const fromHooks = useSectionBadgeHooks();
+  const os = useSession().session?.os ?? 'linux';
   return useMemo(() => {
     const entry = (s: (typeof SECTIONS)[number]): NavEntry => ({
       key: s.id,
@@ -36,7 +38,7 @@ export function useNav() {
       end: s.path === '/',
       kind: s.id === 'settings' ? 'settings' : 'section',
     });
-    const main = SECTIONS.filter((s) => s.rail).map(entry);
+    const main = SECTIONS.filter((s) => s.rail && (!s.platforms || s.platforms.includes(os))).map(entry);
     const settings = entry(SECTIONS.find((s) => s.id === 'settings')!);
     const plugins: NavEntry[] = railPages.map((p) => ({
       key: `p:${p.plugin}/${p.page}`,
@@ -48,5 +50,5 @@ export function useNav() {
       kind: 'plugin',
     }));
     return { main, settings, plugins };
-  }, [t, railPages, registered, fromHooks]);
+  }, [t, railPages, registered, fromHooks, os]);
 }

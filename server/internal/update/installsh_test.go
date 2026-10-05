@@ -48,14 +48,15 @@ func TestInstallScriptPAMCopies(t *testing.T) {
 	}
 	for _, f := range files {
 		fam := strings.TrimPrefix(filepath.Ext(f), ".")
-		want, _ := os.ReadFile(f)
+		raw, _ := os.ReadFile(f)
+		want := strings.ReplaceAll(string(raw), "\r\n", "\n") // CRLF checkout on Windows
 		re := regexp.MustCompile(`(?s)\n` + fam + `\)\n\s*cat <<'PAM'\n(.*?)\nPAM\n`)
 		m := re.FindStringSubmatch(script)
 		if m == nil {
 			t.Errorf("install.sh has no embedded PAM file for %s", fam)
 			continue
 		}
-		if strings.TrimSpace(m[1]) != strings.TrimSpace(string(want)) {
+		if strings.TrimSpace(m[1]) != strings.TrimSpace(want) {
 			t.Errorf("install.sh: embedded PAM file for %s differs from %s", fam, f)
 		}
 	}
@@ -76,7 +77,8 @@ func readInstallScript(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return string(b)
+	// A Windows checkout may have CRLF line endings; install.sh is parsed as LF.
+	return strings.ReplaceAll(string(b), "\r\n", "\n")
 }
 
 // pemBlocks returns the PEM blocks of the shell variable name='...'.

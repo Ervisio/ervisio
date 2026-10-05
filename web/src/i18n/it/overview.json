@@ -313,7 +313,11 @@
     "errUnit": "Inserisci il nome del servizio da seguire.",
     "errUnits": "Puoi tenere d'occhio al massimo 30 servizi per widget.",
     "errFile": "Inserisci il percorso completo del file di log, che inizia con /.",
-    "errPath": "Inserisci il percorso completo della cartella, che inizia con /."
+    "errPath": "Inserisci il percorso completo della cartella, che inizia con /.",
+    "channel": "Canale del registro eventi",
+    "errChannel": "Il nome del canale è obbligatorio.",
+    "srcEvt": "Registro eventi di Windows",
+    "commandHintWin": "Viene eseguito direttamente, non in una shell. Per le pipe usa: powershell -Command \"Get-Process | Select -First 5\"."
   },
   "palette": {
     "personalize": "Personalizza la dashboard",
@@ -321,5 +325,24 @@
     "kwDashboard": "dashboard",
     "kwWidgets": "widget",
     "kwLayout": "layout"
+  },
+  "win": {
+    "library": {
+      "service": {
+        "desc": "Uno o più servizi Windows"
+      }
+    },
+    "widgets": {
+      "service": {
+        "desc": "Tieni d'occhio lo stato dei servizi Windows."
+      },
+      "log": {
+        "desc": "Le ultime righe del registro eventi o di un file di log."
+      }
+    },
+    "settings": {
+      "errPath": "Inserisci il percorso completo della cartella, che inizia con una lettera di unità (C:\\) o \\\\.",
+      "errFile": "Inserisci il percorso completo del file di log, che inizia con una lettera di unità (C:\\) o \\\\."
+    }
   }
 }

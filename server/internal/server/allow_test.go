@@ -28,8 +28,11 @@ func testHolder(mut func(*config.Config)) *configHolder {
 
 func TestSignInAllowed(t *testing.T) {
 	alice := &account.Account{Name: "alice", UID: 1000, GroupNames: []string{"alice", "devs"}}
-	bob := &account.Account{Name: "bob", UID: 1001, GroupNames: []string{"bob", "sudo"}}
-	root := &account.Account{Name: "root", UID: 0, GroupNames: []string{"root"}}
+	// Administrators: sudo/wheel on Unix, BUILTIN\Administrators (by SID) on
+	// Windows, where there is no root either (UID 0 is only a RID).
+	const sidAdministrators = "S-1-5-32-544"
+	bob := &account.Account{Name: "bob", UID: 1001, GroupNames: []string{"bob", "sudo"}, GroupSIDs: []string{sidAdministrators}}
+	root := &account.Account{Name: "root", UID: 0, GroupNames: []string{"root"}, GroupSIDs: []string{sidAdministrators}}
 	cfgOf := func(mut func(*config.Auth)) *config.Config {
 		c := config.Default()
 		if mut != nil {

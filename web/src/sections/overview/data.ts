@@ -8,7 +8,8 @@ export interface Metrics {
   time: number;
   interval: number;
   cpu: { percent: number; cores: number[] };
-  load: number[];
+  /** Absent or empty on Windows (no load average). */
+  load?: number[] | null;
   memory: { total: number; used: number; available: number; percent: number };
   swap: { total: number; used: number; free: number; percent: number };
   disks: { mount: string; device: string; fstype: string; total: number; used: number; free: number; percent: number }[];

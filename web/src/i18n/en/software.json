@@ -1,6 +1,11 @@
 {
   "title": "Software",
-  "tab": { "updates": "Updates", "store": "Find software", "installed": "Installed", "history": "History" },
+  "tab": {
+    "updates": "Updates",
+    "store": "Find software",
+    "installed": "Installed",
+    "history": "History"
+  },
   "checkNow": "Check now",
   "checked": "Checked {when}",
   "check": {
@@ -24,7 +29,9 @@
   "showMore": "Show {count} more",
   "showLess": "Show less",
   "rebootPending": "The system was updated and needs a restart to use the new kernel or core libraries.",
-  "unsupported": { "title": "No package manager found" },
+  "unsupported": {
+    "title": "No package manager found"
+  },
   "error": {
     "load": "Could not load the software list",
     "search": "The search failed",
@@ -54,7 +61,11 @@
     "saved": "Updates scheduled every day at {time}",
     "removed": "Automatic updates turned off"
   },
-  "group": { "repo": "Official repositories", "aur": "AUR", "flatpak": "Flatpak" },
+  "group": {
+    "repo": "Official repositories",
+    "aur": "AUR",
+    "flatpak": "Flatpak"
+  },
   "aur": {
     "warning": "AUR packages are built from community scripts. Review the PKGBUILD before updating. They are left unselected.",
     "terminal": "For now, update them from a terminal (for example: {helper} -Sua)."
@@ -73,7 +84,11 @@
   },
   "store": {
     "search": "Search apps and packages",
-    "src": { "repo": "Repos", "aur": "AUR", "flatpak": "Flatpak" },
+    "src": {
+      "repo": "Repos",
+      "aur": "AUR",
+      "flatpak": "Flatpak"
+    },
     "cat": {
       "development": "Development",
       "internet": "Internet",
@@ -129,8 +144,19 @@
     "aur": "AUR",
     "flatpak": "Flatpak"
   },
-  "col": { "package": "Package", "version": "Version", "source": "Source", "size": "Size", "reason": "Reason", "installed": "Installed" },
-  "reason": { "explicit": "Explicit", "dependency": "Dependency", "orphan": "Orphan" },
+  "col": {
+    "package": "Package",
+    "version": "Version",
+    "source": "Source",
+    "size": "Size",
+    "reason": "Reason",
+    "installed": "Installed"
+  },
+  "reason": {
+    "explicit": "Explicit",
+    "dependency": "Dependency",
+    "orphan": "Orphan"
+  },
   "installed": {
     "none": "No packages match",
     "noneText": "Change the filter or the search text.",
@@ -150,7 +176,13 @@
     "downgraded_other": "{count} downgraded",
     "reinstalled_one": "1 reinstalled",
     "reinstalled_other": "{count} reinstalled",
-    "verb": { "installed": "Installed", "upgraded": "Updated", "removed": "Removed", "downgraded": "Downgraded", "reinstalled": "Reinstalled" }
+    "verb": {
+      "installed": "Installed",
+      "upgraded": "Updated",
+      "removed": "Removed",
+      "downgraded": "Downgraded",
+      "reinstalled": "Reinstalled"
+    }
   },
   "tx": {
     "show": "Show",
@@ -207,5 +239,10 @@
     "store": "Software: find and install apps",
     "installed": "Software: installed packages",
     "history": "Software: update history"
+  },
+  "win": {
+    "schedule": {
+      "text": "The server installs all updates every day at this time, like Update all. It uses a Task Scheduler task called \\Ervisio\\SoftwareUpdate."
+    }
   }
 }

@@ -7,12 +7,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/ervisio/ervisio/server/internal/sys"
@@ -90,14 +88,6 @@ type unitState struct {
 	Description string `json:"description"`
 }
 
-func failedUnits(ctx context.Context) []Alert {
-	out, err := sys.Output(ctx, "systemctl", "list-units", "--state=failed", "--output=json", "--no-pager", "--all")
-	if err != nil {
-		return nil
-	}
-	return failedAlerts(out, func(unit string) string { return failedSince(ctx, unit) })
-}
-
 // failedAlerts turns the JSON of `systemctl list-units --state=failed --output=json`
 // into alerts. since is optional and returns a human timestamp for a unit.
 func failedAlerts(js []byte, since func(string) string) []Alert {
@@ -105,6 +95,11 @@ func failedAlerts(js []byte, since func(string) string) []Alert {
 	if err != nil {
 		return nil
 	}
+	return failedAlertsFromUnits(units, since)
+}
+
+// failedAlertsFromUnits builds the alerts for a list of failed units.
+func failedAlertsFromUnits(units []unitState, since func(string) string) []Alert {
 	var out []Alert
 	for i, u := range units {
 		if i >= maxFailed {
@@ -170,6 +165,17 @@ func parseUnits(js []byte) ([]unitState, error) {
 		return nil, err
 	}
 	return units, nil
+}
+
+// serviceFailed tells whether a stopped Windows service ended with an error:
+// a non-zero exit code, or a non-zero service-specific one when the exit code
+// is ERROR_SERVICE_SPECIFIC_ERROR (1066).
+func serviceFailed(win32, specific uint32) bool {
+	const specificError = 1066
+	if win32 == specificError {
+		return specific != 0
+	}
+	return win32 != 0
 }
 
 /* ---------- pending updates ---------- */
@@ -357,22 +363,14 @@ func unescapeMount(s string) string {
 }
 
 func diskAlerts() []Alert {
-	f, err := os.Open("/proc/mounts")
-	if err != nil {
-		return nil
-	}
-	defer f.Close()
 	var out []Alert
-	for _, m := range parseMounts(f) {
-		var st syscall.Statfs_t
-		if syscall.Statfs(m.point, &st) != nil || st.Blocks == 0 {
+	for _, point := range mountPoints() {
+		used, avail, ok := diskUsage(point)
+		if !ok || used+avail == 0 {
 			continue
 		}
-		bs := uint64(st.Bsize)
-		used := (st.Blocks - st.Bfree) * bs
-		avail := st.Bavail * bs
 		pct := 100 * float64(used) / float64(used+avail)
-		if a, ok := diskAlert(m.point, pct, avail); ok {
+		if a, ok := diskAlert(point, pct, avail); ok {
 			out = append(out, a)
 		}
 	}
@@ -395,29 +393,9 @@ func diskAlert(point string, pct float64, free uint64) (Alert, bool) {
 }
 
 func swapAlert() []Alert {
-	f, err := os.Open("/proc/meminfo")
-	if err != nil {
+	total, free, ok := swapKB()
+	if !ok {
 		return nil
-	}
-	defer f.Close()
-	var total, free uint64
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		k, v, ok := strings.Cut(sc.Text(), ":")
-		if !ok {
-			continue
-		}
-		fs := strings.Fields(v)
-		if len(fs) == 0 {
-			continue
-		}
-		n, _ := strconv.ParseUint(fs[0], 10, 64)
-		switch k {
-		case "SwapTotal":
-			total = n
-		case "SwapFree":
-			free = n
-		}
 	}
 	return swapFrom(total, free)
 }

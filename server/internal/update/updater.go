@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -43,6 +44,9 @@ var (
 	ErrNotInstalled = errors.New("this copy of Ervisio was not installed in " + brand.LibDir + "; update it the way it was installed")
 	ErrNoBuild      = errors.New("the release has no build for this architecture")
 	ErrManaged      = errors.New("Ervisio was installed by a package manager, which installs its updates")
+	// ErrWindows: the self-update swaps symlinks of a versioned folder under a
+	// systemd unit, none of which exist on Windows.
+	ErrWindows = errors.New("on Windows Ervisio is updated by running install.ps1 again; it cannot update itself")
 )
 
 // managedErr names the package manager in ErrManaged.
@@ -129,6 +133,9 @@ func (u *Updater) Supported(exe string, dev bool) (bool, string) {
 	if by := u.Layout.ManagedBy(); by != "" {
 		return false, managedErr(by).Error()
 	}
+	if runtime.GOOS == "windows" {
+		return false, ErrWindows.Error()
+	}
 	if u.Layout.Kind() == KindNone {
 		return false, ErrNotInstalled.Error()
 	}
@@ -152,6 +159,9 @@ func (u *Updater) Apply(ctx context.Context, channel, want string, auto bool, pr
 	}
 	if by := u.Layout.ManagedBy(); by != "" {
 		return "", "", managedErr(by)
+	}
+	if runtime.GOOS == "windows" {
+		return "", "", ErrWindows
 	}
 	if u.Layout.Kind() == KindNone {
 		return "", "", ErrNotInstalled
@@ -317,6 +327,9 @@ func (u *Updater) Apply(ctx context.Context, channel, want string, auto bool, pr
 func (u *Updater) Rollback(ctx context.Context, want string) (string, string, error) {
 	if by := u.Layout.ManagedBy(); by != "" {
 		return "", "", managedErr(by)
+	}
+	if runtime.GOOS == "windows" {
+		return "", "", ErrWindows
 	}
 	if u.Layout.Kind() != KindVersioned {
 		return "", "", ErrNoPrevious

@@ -11,7 +11,7 @@ import { SettingsDialog } from './SettingsDialog';
 import { RefreshSelect } from '../../lib/RefreshSelect';
 import { refreshNow, useSetRefreshInterval } from '../../lib/refresh';
 import { useAlerts, useHost } from './data';
-import { defaultLayout, normalizeLayout, snapCols, stepCols, uid, type DashAction, type Widget } from './model';
+import { defaultLayout, setWindowsDefaults, normalizeLayout, snapCols, stepCols, uid, type DashAction, type Widget } from './model';
 import { WidgetBody, widgetTitle, type WidgetCtx } from './widgets';
 import './overview.css';
 
@@ -54,6 +54,7 @@ export default function OverviewPage() {
   const setRefresh = useSetRefreshInterval();
   const { prefs, set } = usePrefs();
   const { session } = useSession();
+  setWindowsDefaults(session?.os === 'windows');
   const host = useHost();
   const { alerts } = useAlerts();
   const { widgets: pluginWidgets } = usePlugins();

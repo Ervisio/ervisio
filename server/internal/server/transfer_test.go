@@ -23,6 +23,7 @@ import (
 
 	"github.com/ervisio/ervisio/server/internal/account"
 	"github.com/ervisio/ervisio/server/internal/audit"
+	"github.com/ervisio/ervisio/server/internal/bridge"
 )
 
 const xferManifest = `{"id":"xfer","name":"Xfer","version":"1.0.0","entry":"index.js",
@@ -104,7 +105,7 @@ func newXferEnv(t *testing.T) *xferEnv {
 	plugins := t.TempDir()
 	p := filepath.Join(plugins, "xfer")
 	os.MkdirAll(p, 0o755)
-	os.WriteFile(filepath.Join(p, "manifest.json"), []byte(strings.ReplaceAll(xferManifest, "%SOCK%", sock)), 0o644)
+	os.WriteFile(filepath.Join(p, "manifest.json"), []byte(strings.ReplaceAll(xferManifest, "%SOCK%", strings.ReplaceAll(sock, `\`, `\\`))), 0o644)
 	os.WriteFile(filepath.Join(p, "index.js"), []byte("export default () => {}"), 0o644)
 	web := t.TempDir()
 	os.WriteFile(filepath.Join(web, "index.html"), []byte("<!doctype html>app"), 0o644)
@@ -614,6 +615,22 @@ func TestAuditQueryScope(t *testing.T) {
 	s.audit = audit.New(t.TempDir(), configAudit{s.cfg})
 	user := &Session{Account: &account.Account{Name: "bob", UID: 1001}}
 	root := &Session{Account: &account.Account{Name: "root", UID: 0}}
+	if runtime.GOOS == "windows" {
+		// No uid 0 here: an administrator is a session with a live root
+		// bridge (unlocked). A user bridge stands in for it.
+		me, err := account.Current()
+		if err != nil {
+			t.Fatal(err)
+		}
+		p, err := bridge.StartUser(context.Background(), &bridge.Spec{Bridge: buildBridge(t), Config: filepath.Join(t.TempDir(), "c.conf"), Account: me, Logger: log.New(io.Discard, "", 0)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer p.Stop()
+		root.mu.Lock()
+		root.root, root.rootUsed = p, time.Now()
+		root.mu.Unlock()
+	}
 	q, e := s.auditQuery(user, auditParams{User: "alice", Plugin: "docker"}, "")
 	if e != nil || q.User != "bob" || q.Plugin != "docker" {
 		t.Fatalf("user asking for another user: %+v %v", q, e)

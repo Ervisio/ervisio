@@ -4,12 +4,23 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -X github.com/ervisio/ervisio/server/internal/brand.Version=$(VERSION)
 DEV_LISTEN ?= 127.0.0.1:9090
 
-.PHONY: build build-server test-server dev dev-noauth dev-dist build-web dev-web dist clean
+.PHONY: build build-server build-windows test-server dev dev-noauth dev-dist build-web dev-web dist clean
 
 build: build-web build-server
 
 build-server:
 	cd server && $(GO) build -trimpath -ldflags '$(LDFLAGS)' -o bin/ ./cmd/... ./tools/...
+
+# Windows binaries (pure Go, no cgo): server/bin/windows-<arch>/{ervisiod,ervisio-bridge}.exe
+WIN_ARCHS ?= amd64 arm64
+build-windows:
+	@for arch in $(WIN_ARCHS); do \
+		echo "windows/$$arch"; \
+		(cd server && CGO_ENABLED=0 GOOS=windows GOARCH=$$arch $(GO) build -trimpath -ldflags '$(LDFLAGS)' \
+			-o bin/windows-$$arch/ervisiod.exe ./cmd/ervisiod && \
+		CGO_ENABLED=0 GOOS=windows GOARCH=$$arch $(GO) build -trimpath -ldflags '$(LDFLAGS)' \
+			-o bin/windows-$$arch/ervisio-bridge.exe ./cmd/ervisio-bridge) || exit 1; \
+	done
 
 test-server:
 	cd server && $(GO) vet ./... && $(GO) test ./...

@@ -12,7 +12,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/ervisio/ervisio/server/internal/account"
 	"github.com/ervisio/ervisio/server/internal/pam"
@@ -40,7 +39,7 @@ func (s *Spec) helperCommand() *exec.Cmd {
 	cmd := exec.Command(s.SessionHelper, args...)
 	cmd.Env = s.env()
 	cmd.Dir = "/"
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Pdeathsig: syscall.SIGTERM}
+	setSessionAttr(cmd)
 	return cmd
 }
 
@@ -129,13 +128,9 @@ func RunSessionHelper(args []string) int {
 	if fi, err := os.Stat(a.Home); err == nil && fi.IsDir() {
 		cmd.Dir = a.Home
 	}
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Credential: &syscall.Credential{Uid: a.UID, Gid: a.GID, Groups: a.Groups},
-		Pdeathsig:  syscall.SIGTERM,
-	}
+	setUserAttr(cmd, a)
 	sigs := make(chan os.Signal, 4)
-	signal.Notify(sigs, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
-	signal.Ignore(syscall.SIGPIPE)
+	notifySignals(sigs)
 	if err := cmd.Start(); err != nil {
 		return fail("start bridge: %v", err)
 	}

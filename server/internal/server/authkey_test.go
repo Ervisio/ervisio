@@ -49,6 +49,13 @@ func newKeyTestServer(t *testing.T, keysFile string) (*httptest.Server, *Server)
 	return ts, srv
 }
 
+// jq returns s as a JSON string literal: a Windows account name holds a
+// backslash ("HOST\\user"), which pasted into JSON would be an escape.
+func jq(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
+}
+
 type challengeResp struct {
 	Nonce     string `json:"nonce"`
 	Challenge string `json:"challenge"`
@@ -57,7 +64,7 @@ type challengeResp struct {
 
 func getChallenge(t *testing.T, c *http.Client, ts *httptest.Server, user string) challengeResp {
 	t.Helper()
-	code, body := doc(t, c, "POST", ts.URL+"/api/auth/challenge", `{"user":"`+user+`","host":"`+strings.TrimPrefix(ts.URL, "http://")+`"}`, true)
+	code, body := doc(t, c, "POST", ts.URL+"/api/auth/challenge", `{"user":`+jq(user)+`,"host":"`+strings.TrimPrefix(ts.URL, "http://")+`"}`, true)
 	if code != 200 {
 		t.Fatalf("challenge: %d %s", code, body)
 	}
@@ -104,7 +111,7 @@ func TestKeyLogin(t *testing.T) {
 		t.Fatal(code, body)
 	}
 	// A host the server does not answer to is refused.
-	if code, _ := doc(t, cl, "POST", ts.URL+"/api/auth/challenge", `{"user":"`+me+`","host":"evil.example"}`, true); code != 400 {
+	if code, _ := doc(t, cl, "POST", ts.URL+"/api/auth/challenge", `{"user":`+jq(me)+`,"host":"evil.example"}`, true); code != 400 {
 		t.Fatal("foreign host", code)
 	}
 
@@ -178,10 +185,10 @@ func TestKeyLoginRateLimited(t *testing.T) {
 			t.Fatalf("attempt %d: %d %s", i, code, body)
 		}
 	}
-	if code, body := doc(t, cl, "POST", ts.URL+"/api/auth/challenge", `{"user":"`+me+`"}`, true); code != 429 || !strings.Contains(body, "rate_limited") {
+	if code, body := doc(t, cl, "POST", ts.URL+"/api/auth/challenge", `{"user":`+jq(me)+`}`, true); code != 429 || !strings.Contains(body, "rate_limited") {
 		t.Fatal(code, body)
 	}
-	if code, _ := doc(t, cl, "POST", ts.URL+"/api/auth/login", `{"user":"`+me+`","password":"x"}`, true); code != 429 {
+	if code, _ := doc(t, cl, "POST", ts.URL+"/api/auth/login", `{"user":`+jq(me)+`,"password":"x"}`, true); code != 429 {
 		t.Fatal("password login not limited after key failures", code)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"os/user"
+	"runtime"
 	"testing"
 	"time"
 
@@ -78,9 +79,17 @@ func TestRevalidate(t *testing.T) {
 		edit func(f *fakeAccounts)
 	}{
 		{"removed", func(f *fakeAccounts) { f.lookupErr = user.UnknownUserError(a.Name) }},
-		{"uid changed", func(f *fakeAccounts) { b := *f.acc; b.UID++; f.acc = &b }},
+		// Windows identifies an account by SID (the UID is only a RID).
+		{"uid changed", func(f *fakeAccounts) {
+			b := *f.acc
+			b.UID++
+			if b.SID != "" {
+				b.SID += "9"
+			}
+			f.acc = &b
+		}},
 		{"nologin", func(f *fakeAccounts) { b := *f.acc; b.Shell = "/usr/sbin/nologin"; f.acc = &b }},
-		{"group removed", func(f *fakeAccounts) { b := *f.acc; b.Groups = nil; f.acc = &b }},
+		{"group removed", func(f *fakeAccounts) { b := *f.acc; b.Groups, b.GroupSIDs = nil, nil; f.acc = &b }},
 		{"locked", func(f *fakeAccounts) { f.shadow = &account.ShadowEntry{Fingerprint: "fp2", Locked: true, Expire: -1} }},
 		{"password changed", func(f *fakeAccounts) { f.shadow = &account.ShadowEntry{Fingerprint: "fp2", Expire: -1} }},
 		{"expired", func(f *fakeAccounts) { f.shadow = &account.ShadowEntry{Fingerprint: "fp1", Expire: 1} }},
@@ -90,6 +99,9 @@ func TestRevalidate(t *testing.T) {
 		}},
 	}
 	for _, c := range cases {
+		if c.name == "nologin" && runtime.GOOS == "windows" {
+			continue // accounts have no login shell on Windows (ShellAllowed is always true)
+		}
 		s, sess, f := base()
 		c.edit(f)
 		r := s.revalidate(sess, false)

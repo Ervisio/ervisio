@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -117,7 +118,7 @@ func TestKeyFileRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fi, _ := os.Stat(p); fi.Mode().Perm() != 0o600 {
+	if fi, _ := os.Stat(p); runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600 { // no POSIX modes on Windows
 		t.Fatalf("key file mode %v", fi.Mode().Perm())
 	}
 	if _, err := signkey.GenerateFile(p); err == nil {
@@ -136,8 +137,10 @@ func TestKeyFileRoundTrip(t *testing.T) {
 	if err != nil || !seed.Equal(sk) {
 		t.Fatalf("seed form: %v", err)
 	}
-	os.Chmod(p, 0o644)
-	if _, err := signkey.Load(p); err == nil {
-		t.Fatal("world-readable key accepted")
+	if runtime.GOOS != "windows" {
+		os.Chmod(p, 0o644)
+		if _, err := signkey.Load(p); err == nil {
+			t.Fatal("world-readable key accepted")
+		}
 	}
 }

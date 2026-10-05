@@ -513,7 +513,7 @@ func readStatus() (busy bool, tx *txState) {
 			st.Log = []string{}
 		}
 		if st.Running {
-			if _, err := os.Stat(fmt.Sprintf("/proc/%d", st.PID)); err != nil || st.PID <= 0 {
+			if st.PID <= 0 || !pidRunning(st.PID) {
 				st.Running, st.OK, st.Message = false, false, "interrupted"
 			}
 		}

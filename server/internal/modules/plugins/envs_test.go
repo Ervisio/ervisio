@@ -122,7 +122,7 @@ func TestRemoteArgv(t *testing.T) {
 }
 
 func TestEnvSocketOK(t *testing.T) {
-	dir, err := os.MkdirTemp("/tmp", "ervs")
+	dir, err := os.MkdirTemp(shortTempBase(), "ervs")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +148,7 @@ func TestEnvSocketOK(t *testing.T) {
 func envSetup(t *testing.T) string {
 	system, _ := setup(t)
 	HostsPath = filepath.Join(t.TempDir(), "hosts.json")
-	dir, _ := os.MkdirTemp("/tmp", "ervs")
+	dir, _ := os.MkdirTemp(shortTempBase(), "ervs")
 	t.Cleanup(func() { os.RemoveAll(dir) })
 	sock := filepath.Join(dir, "api.sock")
 	ln, err := net.Listen("unix", sock)
@@ -158,7 +158,7 @@ func envSetup(t *testing.T) string {
 	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, `{"via":"`+r.URL.Path+`"}`) })}
 	go srv.Serve(ln)
 	t.Cleanup(func() { srv.Close() })
-	writePlugin(t, filepath.Join(system, "envp"), strings.ReplaceAll(envManifest, "%SOCK%", filepath.Join(dir, "none.sock")), map[string]string{"index.js": "x"})
+	writePlugin(t, filepath.Join(system, "envp"), strings.ReplaceAll(envManifest, "%SOCK%", jsonPath(filepath.Join(dir, "none.sock"))), map[string]string{"index.js": "x"})
 	return sock
 }
 

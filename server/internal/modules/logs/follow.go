@@ -74,6 +74,19 @@ func follow(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
 			}
 		}()
 	}
+	for _, sp := range specs {
+		if sp.Kind != "evt" {
+			continue
+		}
+		sp := sp
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := followEventLog(ctx, sp.Channel, f, out); err != nil && ctx.Err() == nil {
+				fail(err)
+			}
+		}()
+	}
 	done := make(chan struct{})
 	go func() { wg.Wait(); close(done) }()
 

@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"testing"
 	"time"
 
@@ -103,7 +102,7 @@ func setupV3(t *testing.T) *v3env {
 		os.MkdirAll(d, 0o755)
 	}
 	os.WriteFile(filepath.Join(e.admin, "a.txt"), []byte("admin"), 0o644)
-	r := strings.NewReplacer("%SOCK%", e.sock, "%RO%", e.ro, "%RW%", `"`+e.rw+`"`, "%ADMIN%", e.admin, "%GADMIN%", e.gadmin, "%AUTO%", e.auto, "%GROUP%", e.group)
+	r := strings.NewReplacer("%SOCK%", jsonPath(e.sock), "%RO%", jsonPath(e.ro), "%RW%", `"`+jsonPath(e.rw)+`"`, "%ADMIN%", jsonPath(e.admin), "%GADMIN%", jsonPath(e.gadmin), "%AUTO%", jsonPath(e.auto), "%GROUP%", e.group)
 	writePlugin(t, filepath.Join(system, "v3"), r.Replace(v3Manifest), map[string]string{"index.js": "x"})
 
 	ln, err := net.Listen("unix", e.sock)
@@ -754,7 +753,7 @@ func TestFilesFIFOAndPrivateMode(t *testing.T) {
 	t.Setenv("HOME", home)
 	e := setupV3(t)
 	fifo := filepath.Join(e.rw, "pipe")
-	if err := syscall.Mkfifo(fifo, 0o644); err != nil {
+	if err := mkfifo(fifo, 0o644); err != nil {
 		t.Skip("mkfifo:", err)
 	}
 	run := func(fn func(context.Context, *rpc.Call) (any, error), path string) error {

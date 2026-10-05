@@ -32,9 +32,10 @@ export default function LogsPage() {
   const [params, setParams] = useSearchParams();
   const { prefs, set } = usePrefs();
   const { session, isUnlocked } = useSession();
+  const win = session?.os === 'windows';
 
-  const filter = useMemo(() => parseFilter(params), [params]);
-  const setFilter = useCallback((patch: Partial<Filter>) => setParams((prev) => writeFilter(prev, patch), { replace: true }), [setParams]);
+  const filter = useMemo(() => parseFilter(params, win), [params, win]);
+  const setFilter = useCallback((patch: Partial<Filter>) => setParams((prev) => writeFilter(prev, patch, win), { replace: true }), [setParams, win]);
 
   const watchers = useMemo(() => normalizeWatchers(prefs['logs.watchers']), [prefs]);
   const watchersKey = JSON.stringify(watchers);
@@ -255,7 +256,7 @@ export default function LogsPage() {
   // ---- selection and navigation ----
   const selected = useMemo(() => (sel ? rows.find((r) => r.key === sel) ?? null : null), [rows, sel]);
   const onlySource = filter.sources.length === 1 ? filter.sources[0] : '';
-  const contextSource = selected ? (onlySource.startsWith('unit:') || onlySource === 'kernel' ? onlySource : selected.srcId) : 'journal';
+  const contextSource = selected ? (onlySource.startsWith('unit:') || onlySource === 'kernel' ? onlySource : selected.srcId) : win ? 'all' : 'journal';
 
   const addWatcher = (w: Watcher) => {
     void set('logs.watchers', [...watchers, w]);

@@ -107,7 +107,7 @@ function Stat({ w }: { w: Widget; ctx: WidgetCtx }) {
   const common = { hue: meta.hue, icon: meta.icon as IconName, label };
   if (!m) return <StatCard {...common} value="–" sub={t('loading')} />;
   if (metric === 'cpu') {
-    return <StatCard {...common} value={num(m.cpu.percent, lang, 0)} unit="%" sub={host ? t('stat.threads', { count: host.cpu.threads }) : t('stat.load', { v: num(m.load[0] ?? 0, lang, 2) })} percent={m.cpu.percent} />;
+    return <StatCard {...common} value={num(m.cpu.percent, lang, 0)} unit="%" sub={host ? t('stat.threads', { count: host.cpu.threads }) : m.load?.length ? t('stat.load', { v: num(m.load[0], lang, 2) }) : ''} percent={m.cpu.percent} />;
   }
   if (metric === 'memory') {
     const used = bytes(m.memory.used, lang);
@@ -351,14 +351,22 @@ function Log({ w, ctx }: { w: Widget; ctx: WidgetCtx }) {
   const refresh = useRefreshInterval();
   const s = w.settings ?? {};
   const lines = Math.max(4, Math.min(100, Number(s.lines) || 12));
+  const evt = typeof s.source === 'string' && s.source.startsWith('evt:');
   const params = s.source === 'file' ? { file: s.file ?? '', lines } : { unit: s.source === 'unit' ? s.unit ?? '' : '', lines };
   const ready = s.source === 'file' ? !!s.file : s.source === 'unit' ? !!s.unit : true;
-  const { data, err, reload } = usePoll<{ lines: string[] }>('overview.logTail', params, Math.max(refresh, 2000), false, ready);
+  const evtPoll = usePoll<{ entries: { ts: number; level: string; source: string; message: string }[] }>('logs.query', { sources: [evt ? String(s.source) : 'evt:System'], limit: lines }, Math.max(refresh, 2000), false, evt);
+  const tail = usePoll<{ lines: string[] }>('overview.logTail', params, Math.max(refresh, 2000), false, ready && !evt);
+  const err = evt ? evtPoll.err : tail.err;
+  const reload = evt ? evtPoll.reload : tail.reload;
+  const evtData = evtPoll.data;
+  const data = useMemo(() => evt
+    ? evtData && { lines: [...evtData.entries].reverse().map((e) => `${new Date(e.ts).toLocaleTimeString()} ${e.source}: ${e.message.split('\n')[0]}`) }
+    : tail.data, [evt, evtData, tail.data]);
   const box = useRef<HTMLPreElement>(null);
   useEffect(() => {
     if (box.current) box.current.scrollTop = box.current.scrollHeight;
   }, [data]);
-  const title = s.title?.trim() || (s.source === 'file' ? String(s.file).split('/').pop() : s.source === 'unit' ? s.unit : t('log.system'));
+  const title = s.title?.trim() || (s.source === 'file' ? String(s.file).split(/[\\/]/).pop() : s.source === 'unit' ? s.unit : evt ? String(s.source).slice(4) : t('log.system'));
   return (
     <Card title={title || t('widgets.log.title')} action={<span className="ov-live"><i />{t('log.live')}</span>}>
       {!ready ? (
@@ -435,7 +443,7 @@ function Folder({ w, ctx }: { w: Widget; ctx: WidgetCtx }) {
   const path = String(w.settings?.path ?? '');
   if (!path) return <div className="ov-card-fill"><SetUp ctx={ctx} w={w} text={t('folder.empty')} /></div>;
   const shown = session?.home && path.startsWith(session.home) ? `~${path.slice(session.home.length)}` : path;
-  const name = w.settings?.label?.trim() || path.replace(/\/+$/, '').split('/').pop() || '/';
+  const name = w.settings?.label?.trim() || path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || path;
   return (
     <button type="button" className="ov-tile ov-tile--big hue-file" onClick={() => go('files', { path })}>
       <Icon name="files" />

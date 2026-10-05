@@ -28,6 +28,7 @@ package legacy
 
 import (
 	"path/filepath"
+	"runtime"
 
 	"github.com/ervisio/ervisio/server/internal/brand"
 )
@@ -76,6 +77,9 @@ const (
 // Installed reports whether LinuxAdmin's configuration, state or programs
 // are present.
 func Installed(p Paths) bool {
+	if runtime.GOOS == "windows" {
+		return false // LinuxAdmin never ran on Windows: nothing to migrate
+	}
 	for _, d := range []string{brand.LegacyConfigDir, brand.LegacyStateDir, brand.LegacyLibDir} {
 		if isDir(p.At(d)) {
 			return true

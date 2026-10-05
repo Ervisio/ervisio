@@ -17,6 +17,7 @@ import (
 	"syscall"
 
 	"github.com/ervisio/ervisio/server/internal/brand"
+	"github.com/ervisio/ervisio/server/internal/bridge"
 	"github.com/ervisio/ervisio/server/internal/legacy"
 	"github.com/ervisio/ervisio/server/internal/modules"
 	configmod "github.com/ervisio/ervisio/server/internal/modules/config"
@@ -43,7 +44,7 @@ func main() {
 	log.SetFlags(0)
 	log.SetPrefix(brand.BridgeBinary + ": ")
 
-	if *admin && os.Geteuid() != 0 {
+	if *admin && !bridge.Privileged() {
 		log.Fatal("--admin requires root")
 	}
 	if *admin {
@@ -126,19 +127,4 @@ func rootEnv() {
 	os.Setenv("USER", name)
 	os.Setenv("LOGNAME", name)
 	os.Unsetenv("XDG_RUNTIME_DIR") // the user's runtime dir, if sudo kept it
-}
-
-// protocolStdout moves the protocol to a private duplicate of stdout and
-// points fd 1 at stderr, so stray prints from modules or libraries cannot
-// corrupt the JSON stream.
-func protocolStdout() (*os.File, error) {
-	fd, err := syscall.Dup(1)
-	if err != nil {
-		return nil, fmt.Errorf("dup stdout: %w", err)
-	}
-	syscall.CloseOnExec(fd)
-	if err := syscall.Dup3(2, 1, 0); err != nil {
-		return nil, fmt.Errorf("redirect stdout: %w", err)
-	}
-	return os.NewFile(uintptr(fd), "protocol"), nil
 }

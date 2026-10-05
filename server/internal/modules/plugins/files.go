@@ -65,6 +65,7 @@ type capRoot struct {
 func matchCap(declared []Folder, path string) (capRoot, bool) {
 	var best capRoot
 	found := false
+	sep := string(filepath.Separator)
 	for _, d := range declared {
 		dir := filepath.Clean(expandHome(d.Path))
 		if !filepath.IsAbs(dir) || strings.HasPrefix(dir, "~") {
@@ -74,9 +75,9 @@ func matchCap(declared []Folder, path string) (capRoot, bool) {
 		switch {
 		case path == dir:
 			rel = "."
-		case dir == "/":
-			rel = strings.TrimPrefix(path, "/")
-		case strings.HasPrefix(path, dir+"/"):
+		case dir == filepath.VolumeName(dir)+sep: // the root: "/" or a drive root
+			rel = strings.TrimPrefix(path, dir)
+		case strings.HasPrefix(path, dir+sep):
 			rel = path[len(dir)+1:]
 		default:
 			continue
@@ -287,8 +288,7 @@ func writePluginFile(_ context.Context, c *rpc.Call) (any, error) {
 		werr = cerr
 	}
 	if werr == nil {
-		fd := int(dh.Fd())
-		werr = syscall.Renameat(fd, tmpBase, fd, base)
+		werr = renameAt(dh, tmpBase, base)
 	}
 	if werr != nil {
 		_ = root.Remove(tmp)
@@ -362,7 +362,7 @@ func mkdirPlugin(_ context.Context, c *rpc.Call) (any, error) {
 	// One component at a time through os.Root (no MkdirAll before Go 1.25),
 	// so a symlink on the way cannot lead out of the folder.
 	cur := ""
-	for _, part := range strings.Split(r.rel, "/") {
+	for _, part := range strings.Split(r.rel, string(filepath.Separator)) {
 		if part == "." || part == "" {
 			continue
 		}

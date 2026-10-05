@@ -17,7 +17,7 @@ import (
 // Source is one entry of the sources sidebar.
 type Source struct {
 	ID         string `json:"id"`
-	Kind       string `json:"kind"` // journal | unit | kernel | file
+	Kind       string `json:"kind"` // journal | unit | kernel | file | evt
 	Group      string `json:"group"`
 	Label      string `json:"label"`
 	Hint       string `json:"hint,omitempty"`
@@ -126,6 +126,9 @@ func (w Watcher) source() Source {
 }
 
 func listSources(ctx context.Context, watchers []Watcher, admin bool) (*SourcesResult, error) {
+	if onWindows {
+		return listSourcesWindows(ctx, watchers, admin)
+	}
 	watchers = validWatchers(watchersOrPrefs(watchers))
 	res := &SourcesResult{JournalReadable: admin || journalReadable()}
 	system := SourceGroup{ID: "system"}

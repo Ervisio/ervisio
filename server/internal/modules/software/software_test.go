@@ -1,10 +1,10 @@
 package software
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -394,10 +394,10 @@ func TestIcons(t *testing.T) {
 	os.MkdirAll(svg, 0o755)
 	os.WriteFile(filepath.Join(png, "foo.png"), []byte("\x89PNG"), 0o644)
 	os.WriteFile(filepath.Join(svg, "bar.svg"), []byte("<svg/>"), 0o644)
-	if got := searchIconIn([]string{dir}, "foo", 64); !strings.HasSuffix(got, "48x48/apps/foo.png") {
+	if got := searchIconIn([]string{dir}, "foo", 64); !strings.HasSuffix(filepath.ToSlash(got), "48x48/apps/foo.png") {
 		t.Errorf("png: %q", got)
 	}
-	if got := searchIconIn([]string{dir}, "bar", 64); !strings.HasSuffix(got, "scalable/apps/bar.svg") {
+	if got := searchIconIn([]string{dir}, "bar", 64); !strings.HasSuffix(filepath.ToSlash(got), "scalable/apps/bar.svg") {
 		t.Errorf("svg: %q", got)
 	}
 	if _, err := loadIcon("../../etc/passwd", 64); err == nil {
@@ -412,31 +412,6 @@ func TestIcons(t *testing.T) {
 	dirs := iconDirs(64)
 	if dirs[0] != "64x64/apps" || dirs[2] != "96x96/apps" {
 		t.Errorf("size preference: %v", dirs[:6])
-	}
-}
-
-func TestSchedule(t *testing.T) {
-	old := systemdDir
-	systemdDir = t.TempDir()
-	defer func() { systemdDir = old }()
-	if currentSchedule() != "" {
-		t.Error("no timer yet")
-	}
-	os.WriteFile(filepath.Join(systemdDir, timerName), []byte(renderTimer("03:00")), 0o644)
-	if got := currentSchedule(); got != "03:00" {
-		t.Errorf("got %q", got)
-	}
-	m := &manager{primary: newPacman()}
-	bad := "3am"
-	if _, err := m.setSchedule(context.Background(), &bad); !rpc.IsCode(err, rpc.Invalid) {
-		t.Errorf("bad time: %v", err)
-	}
-	svc, err := renderService([]Plan{{Steps: []Step{{Name: "sh", Args: []string{"-c", "echo a b"}, Env: []string{"X=1"}}}}, {Steps: []Step{{Name: "sh", Args: []string{"-c", "true"}}}}}, 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(svc, `ExecStart=/`) || !strings.Contains(svc, `"echo a b"`) || !strings.Contains(svc, "ExecStart=-/") || !strings.Contains(svc, "Environment=X=1") || !strings.Contains(svc, "Type=oneshot") {
-		t.Errorf("service:\n%s", svc)
 	}
 }
 
@@ -467,11 +442,24 @@ func newFakeRun() (*txRun, *[]map[string]any) {
 	return r, &sent
 }
 
+// shellStep builds a step running script through the platform's shell
+// (sh -c on Unix, cmd /c on Windows, which has neither sh nor printf).
+func shellStep(script string) (name string, args []string) {
+	if runtime.GOOS == "windows" {
+		return "cmd", []string{"/c", script}
+	}
+	return "sh", []string{"-c", script}
+}
+
 func TestExecutePlansStreamsAndParses(t *testing.T) {
 	r, sent := newFakeRun()
 	r.path = filepath.Join(t.TempDir(), "state.json")
 	script := "echo 'Packages (2) a-1 b-2'; echo '(1/2) upgrading a'; echo err >&2; printf '(2/2) upgrading b\\r'; echo done"
-	pl := Plan{Steps: []Step{{Title: "upgrade", Name: "sh", Args: []string{"-c", script}, Parse: parsePacmanLine}}}
+	if runtime.GOOS == "windows" {
+		script = "echo Packages (2) a-1 b-2& echo (1/2) upgrading a& echo err 1>&2& echo (2/2) upgrading b& echo done"
+	}
+	name, args := shellStep(script)
+	pl := Plan{Steps: []Step{{Title: "upgrade", Name: name, Args: args, Parse: parsePacmanLine}}}
 	ok, msg := executePlans([]Plan{pl}, r, "upgrade")
 	if !ok || msg != "" {
 		t.Fatalf("ok=%v msg=%q", ok, msg)
@@ -489,7 +477,7 @@ func TestExecutePlansStreamsAndParses(t *testing.T) {
 	if len(progress) != 3 || progress[2]["done"] != 1 || progress[2]["total"] != 2 || progress[2]["current"] != "b" {
 		t.Errorf("progress %+v", progress)
 	}
-	if len(logs) < 5 || !strings.HasPrefix(logs[0], "$ sh") {
+	if len(logs) < 5 || !strings.HasPrefix(logs[0], "$ "+name) {
 		t.Errorf("logs %v", logs)
 	}
 	if b, err := os.ReadFile(r.path); err != nil || !strings.Contains(string(b), `"current":"b"`) {
@@ -499,7 +487,13 @@ func TestExecutePlansStreamsAndParses(t *testing.T) {
 
 func TestExecutePlansFailure(t *testing.T) {
 	r, _ := newFakeRun()
-	pl := Plan{Steps: []Step{{Name: "sh", Args: []string{"-c", "echo 'error: target not found: nope' ; exit 1"}}, {Name: "sh", Args: []string{"-c", "echo never"}}}}
+	failScript, neverScript := "echo 'error: target not found: nope' ; exit 1", "echo never"
+	if runtime.GOOS == "windows" {
+		failScript = "echo error: target not found: nope& exit 1"
+	}
+	n1, a1 := shellStep(failScript)
+	n2, a2 := shellStep(neverScript)
+	pl := Plan{Steps: []Step{{Name: n1, Args: a1}, {Name: n2, Args: a2}}}
 	ok, msg := executePlans([]Plan{pl}, r, "install")
 	if ok || !strings.Contains(msg, "target not found") {
 		t.Errorf("ok=%v msg=%q", ok, msg)

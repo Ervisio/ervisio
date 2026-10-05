@@ -92,3 +92,7 @@ Widget types: `stat` (metric cpu|memory|disk|network), `activity`, `chart` (metr
 `actions`, `action` (one button), `alerts`, `machine`, `service` (units[]), `log` (unit, lines),
 `output` (argv, every, admin), `folder` (path, label), `plugin` (plugin, widget).
 `cols` is 3, 4, 5, 6, 7 or 12. Widget order is the array order.
+
+## Windows notes
+
+`overview.alerts` on Windows reports stopped Automatic services with a non-zero exit code as failed units (read-only service control manager query), fixed-drive usage, and page-file usage as swap. Update and SSH checks only run where their tools exist. `overview.processes` on Windows lists processes from a toolhelp snapshot: `memory` is the working set, `command` the full image path (`[name]` when it cannot be opened), `user` is `DOMAIN\name` (empty when unreadable), and `state` is empty. CPU comes from the delta against the previous call when it is 0.2 s to 2 min old, otherwise from two samples 400 ms apart; processes that cannot be opened report 0 CPU and memory. Not tested on a real Windows host.

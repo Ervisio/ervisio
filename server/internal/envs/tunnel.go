@@ -3,7 +3,6 @@ package envs
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -16,7 +15,6 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 )
 
@@ -91,10 +89,17 @@ func (c *countedConn) CloseWrite() error {
 // Tunnel returns the path of the unix socket through which uid can reach
 // the environment (created on first use, kept while it is used).
 func (m *Manager) Tunnel(e *Env, uid, gid int) (string, error) {
+	return m.TunnelAs(e, uid, gid, "")
+}
+
+// TunnelAs is Tunnel for an account that Windows identifies by SID (sid is
+// "" elsewhere): the tunnel folder and socket are made reachable by that SID
+// and SYSTEM only.
+func (m *Manager) TunnelAs(e *Env, uid, gid int, sid string) (string, error) {
 	if e.Kind == KindErvisio {
 		return "", errf("An Ervisio environment has no tunnel; its calls run on the other server.")
 	}
-	key := e.ID + ":" + strconv.Itoa(uid)
+	key := e.ID + ":" + strconv.Itoa(uid) + sid
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if t := m.tunnels[key]; t != nil {
@@ -102,14 +107,14 @@ func (m *Manager) Tunnel(e *Env, uid, gid int) (string, error) {
 		return t.path, nil
 	}
 	dir := filepath.Join(m.opts.TunnelDir, strconv.Itoa(uid))
-	if err := prepareTunnelDir(m.opts.TunnelDir, dir); err != nil {
+	if err := prepareTunnelDirFor(m.opts.TunnelDir, dir, sid); err != nil {
 		return "", errf("Could not prepare the tunnel folder: %v", err)
 	}
 	path := filepath.Join(dir, e.ID+".sock")
 	if len(path) > 100 { // sun_path holds 107 bytes; the bridge checks the same
 		return "", errf("The tunnel folder path is too long (%d characters, at most 100): %s", len(path), path)
 	}
-	ln, err := listenOwned(m.opts.TunnelDir, path, uid, gid)
+	ln, err := listenOwnedFor(m.opts.TunnelDir, path, uid, gid, sid)
 	if err != nil {
 		return "", errf("Could not open the tunnel socket: %v", err)
 	}
@@ -135,114 +140,6 @@ func (m *Manager) Tunnel(e *Env, uid, gid int) (string, error) {
 	}
 	m.tunnels[key] = t
 	return path, nil
-}
-
-// tunnelDirMode is the mode of the tunnel folders: root's, traversable.
-const tunnelDirMode = 0o711
-
-// ownedByUs reports whether fi is owned by the daemon's user (root in
-// production).
-func ownedByUs(fi os.FileInfo) bool {
-	st, ok := fi.Sys().(*syscall.Stat_t)
-	return ok && int(st.Uid) == os.Geteuid()
-}
-
-// prepareTunnelDir makes base and dir folders of the daemon's user with
-// mode 0711, nothing else: not a symlink, not the user's. A folder left
-// from an older version (the user's own, 0700) is removed with whatever
-// the user put in it (os.RemoveAll does not follow symlinks) and made
-// again. base is made by the daemon only, so nobody else can create or
-// rename entries in it.
-func prepareTunnelDir(base, dir string) error {
-	if err := os.MkdirAll(base, tunnelDirMode); err != nil {
-		return err
-	}
-	bi, err := os.Lstat(base)
-	if err != nil {
-		return err
-	}
-	if !bi.IsDir() || !ownedByUs(bi) {
-		return fmt.Errorf("%s is not a folder of this service", base)
-	}
-	if err := os.Chmod(base, tunnelDirMode); err != nil {
-		return err
-	}
-	fi, err := os.Lstat(dir)
-	if err == nil && (!fi.IsDir() || !ownedByUs(fi) || fi.Mode().Perm() != tunnelDirMode) {
-		if err := os.RemoveAll(dir); err != nil {
-			return err
-		}
-		fi, err = nil, os.ErrNotExist
-	}
-	if errors.Is(err, os.ErrNotExist) {
-		if err := os.Mkdir(dir, tunnelDirMode); err != nil {
-			return err
-		}
-		if err := os.Chmod(dir, tunnelDirMode); err != nil { // umask
-			return err
-		}
-		fi, err = os.Lstat(dir)
-	}
-	if err != nil {
-		return err
-	}
-	if !fi.IsDir() || !ownedByUs(fi) || fi.Mode().Perm() != tunnelDirMode {
-		return fmt.Errorf("%s is not a folder of this service", dir)
-	}
-	return nil
-}
-
-// listenOwned listens on a unix socket at path that belongs to uid:gid with
-// mode 0600. The socket is bound in a new folder of base that only the
-// daemon can enter, given its owner and mode there, and only then renamed to
-// path, so nobody can swap it for a symlink while the daemon changes it.
-// The result is checked again with Lstat.
-func listenOwned(base, path string, uid, gid int) (net.Listener, error) {
-	tmp, err := os.MkdirTemp(base, ".new-")
-	if err != nil {
-		return nil, err
-	}
-	defer os.RemoveAll(tmp)
-	if err := os.Chmod(tmp, 0o700); err != nil {
-		return nil, err
-	}
-	staged := filepath.Join(tmp, "s")
-	ln, err := net.Listen("unix", staged)
-	if err != nil {
-		return nil, err
-	}
-	// The socket file moves; tunnel.close removes it at its final path.
-	ln.(*net.UnixListener).SetUnlinkOnClose(false)
-	fail := func(err error) (net.Listener, error) {
-		ln.Close()
-		return nil, err
-	}
-	if err := os.Chmod(staged, 0o600); err != nil {
-		return fail(err)
-	}
-	if os.Geteuid() == 0 {
-		if err := os.Lchown(staged, uid, gid); err != nil {
-			return fail(err)
-		}
-	}
-	// A socket left by an earlier run (the daemon's folder: no one else's).
-	if fi, err := os.Lstat(path); err == nil && !fi.IsDir() {
-		_ = os.Remove(path)
-	}
-	if err := os.Rename(staged, path); err != nil {
-		return fail(err)
-	}
-	fi, err := os.Lstat(path)
-	if err != nil {
-		return fail(err)
-	}
-	st, ok := fi.Sys().(*syscall.Stat_t)
-	if fi.Mode()&os.ModeSocket == 0 || fi.Mode().Perm() != 0o600 || !ok ||
-		(os.Geteuid() == 0 && (int(st.Uid) != uid || int(st.Gid) != gid)) {
-		_ = os.Remove(path)
-		return fail(fmt.Errorf("the socket %s did not get the expected owner and mode", path))
-	}
-	return ln, nil
 }
 
 // closeTunnels closes every tunnel of an environment (it changed or was removed).

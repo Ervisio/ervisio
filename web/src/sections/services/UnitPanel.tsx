@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ApiError, call } from '../../api';
+import { ApiError, call, useSession } from '../../api';
 import { useT } from '../../i18n';
 import { formatBytes, formatDuration } from '../../lib/format';
 import { usePolling, useRefreshInterval } from '../../lib/refresh';
@@ -27,6 +27,7 @@ const MAX_SAMPLES = 60;
 
 export function UnitPanel({ name, tab, onTab, onClose, inline, rev, row, run, busy, onOpenUnit, onChanged }: Props) {
   const t = useT('services');
+  const win = useSession().session?.os === 'windows';
   const [detail, setDetail] = useState<Detail | null>(null);
   const [err, setErr] = useState<ApiError | null>(null);
   const [mem, setMem] = useState<number[]>([]);
@@ -68,7 +69,11 @@ export function UnitPanel({ name, tab, onTab, onClose, inline, rev, row, run, bu
     <>
       <div className="svc-pacts">
         <Button icon="refresh" variant="primary" loading={busy} onClick={() => run(name, 'restart')}>{t('actions.restart')}</Button>
-        <Button disabled={busy || !running} onClick={() => run(name, 'reload')}>{t('actions.reload')}</Button>
+        {win ? (
+          u?.sub === 'paused' ? <Button icon="play" disabled={busy} onClick={() => run(name, 'continue')}>{t('actions.continue')}</Button> : <Button disabled={busy || !running} onClick={() => run(name, 'pause')}>{t('actions.pause')}</Button>
+        ) : (
+          <Button disabled={busy || !running} onClick={() => run(name, 'reload')}>{t('actions.reload')}</Button>
+        )}
         {running ? <Button icon="power" disabled={busy} onClick={() => run(name, 'stop')}>{t('actions.stop')}</Button> : <Button icon="play" disabled={busy} onClick={() => run(name, 'start')}>{t('actions.start')}</Button>}
       </div>
       <Tabs
@@ -78,10 +83,9 @@ export function UnitPanel({ name, tab, onTab, onClose, inline, rev, row, run, bu
         onChange={onTab}
         aria-label={t('panel.tabs')}
         items={[
-          { id: 'info', label: t('panel.info') },
-          { id: 'logs', label: t('panel.logs') },
-          { id: 'unit', label: t('panel.unitFile') },
-          { id: 'deps', label: t('panel.deps') },
+          { id: 'info' as const, label: t('panel.info') },
+          ...(win ? [] : [{ id: 'logs' as const, label: t('panel.logs') }, { id: 'unit' as const, label: t('panel.unitFile') }]),
+          { id: 'deps' as const, label: t('panel.deps') },
         ]}
       />
     </>
@@ -94,7 +98,7 @@ export function UnitPanel({ name, tab, onTab, onClose, inline, rev, row, run, bu
       ) : !detail && !row ? (
         <Skeleton lines={6} height={22} />
       ) : tab === 'info' ? (
-        <InfoTab name={name} u={u!} detail={detail} mem={mem} run={run} busy={busy} />
+        <InfoTab name={name} u={u!} detail={detail} mem={mem} run={run} busy={busy} win={win} />
       ) : tab === 'logs' ? (
         <LogsTab name={name} />
       ) : tab === 'unit' ? (
@@ -106,7 +110,7 @@ export function UnitPanel({ name, tab, onTab, onClose, inline, rev, row, run, bu
   );
 }
 
-function InfoTab({ name, u, detail, mem, run, busy }: { name: string; u: Unit; detail: Detail | null; mem: number[]; run(n: string, a: Action): void; busy: boolean }) {
+function InfoTab({ name, u, detail, mem, run, busy, win }: { name: string; u: Unit; detail: Detail | null; mem: number[]; run(n: string, a: Action): void; busy: boolean; win: boolean }) {
   const t = useT('services');
   const mode = bootMode(u.enabled);
   const lo = mem.length ? Math.min(...mem) : 0;
@@ -131,15 +135,19 @@ function InfoTab({ name, u, detail, mem, run, busy }: { name: string; u: Unit; d
       <div className="svc-tg">
         <div>
           <b>{t('info.boot')}</b>
-          <small>{mode === 'fixed' ? t('info.bootFixed', { state: u.enabled ? t(`boot.${u.enabled}`) : t('boot.unknown') }) : t('info.bootHint')}</small>
+          <small>{mode === 'fixed' ? t('info.bootFixed', { state: u.enabled ? (win ? t(`win.boot.${u.enabled}`) : t(`boot.${u.enabled}`)) : t('boot.unknown') }) : t('info.bootHint')}</small>
         </div>
         {mode !== 'fixed' && <Switch checked={mode === 'on'} disabled={busy} onChange={() => run(name, mode === 'on' ? 'disable' : 'enable')} aria-label={t('boot.label', { name: short(name) })} />}
       </div>
       <dl className="svc-kv">
         <dt>{t('info.loadedFrom')}</dt>
         <dd className="svc-mono svc-wrap">{detail?.path || '—'}</dd>
-        <dt>{t('info.group')}</dt>
-        <dd>{t(`purpose.${u.purpose}`)}</dd>
+        {!win && (
+          <>
+            <dt>{t('info.group')}</dt>
+            <dd>{t(`purpose.${u.purpose}`)}</dd>
+          </>
+        )}
         {detail?.description && (
           <>
             <dt>{t('info.description')}</dt>
@@ -153,10 +161,10 @@ function InfoTab({ name, u, detail, mem, run, busy }: { name: string; u: Unit; d
           </>
         )}
       </dl>
-      {u.load !== 'masked' ? (
-        <Button variant="ghost" className="svc-self" onClick={() => run(name, 'mask')}>{t('actions.mask')}</Button>
+      {(win ? u.enabled !== 'masked' : u.load !== 'masked') ? (
+        <Button variant="ghost" className="svc-self" onClick={() => run(name, 'mask')}>{win ? t('win.mask') : t('actions.mask')}</Button>
       ) : (
-        <Button variant="ghost" className="svc-self" onClick={() => run(name, 'unmask')}>{t('actions.unmask')}</Button>
+        <Button variant="ghost" className="svc-self" onClick={() => run(name, 'unmask')}>{win ? t('win.unmask') : t('actions.unmask')}</Button>
       )}
     </>
   );

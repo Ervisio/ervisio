@@ -7,7 +7,6 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/ervisio/ervisio/server/internal/rpc"
@@ -298,7 +297,7 @@ func followFile(ctx context.Context, s spec, f filter, out chan<- Entry) error {
 			fh.Close()
 			fh = nil
 		}
-		h, err := os.Open(s.Path)
+		h, err := openShared(s.Path)
 		if err != nil {
 			return err
 		}
@@ -312,8 +311,8 @@ func followFile(ctx context.Context, s spec, f filter, out chan<- Entry) error {
 			return rpc.Errorf(rpc.Invalid, "%s is not a regular file", s.Path)
 		}
 		fh = h
-		if sys, ok := info.Sys().(*syscall.Stat_t); ok {
-			ino = sys.Ino
+		if id, ok := fileInode(s.Path, info); ok {
+			ino = id
 		}
 		pos = 0
 		if !fromStart {
@@ -338,7 +337,7 @@ func followFile(ctx context.Context, s spec, f filter, out chan<- Entry) error {
 		if err != nil {
 			continue // rotated away; wait for the new file
 		}
-		if sy, ok := info.Sys().(*syscall.Stat_t); ok && (sy.Ino != ino || info.Size() < pos) {
+		if id, ok := fileInode(s.Path, info); ok && (id != ino || info.Size() < pos) {
 			if open(true) != nil {
 				continue
 			}

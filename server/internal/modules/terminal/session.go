@@ -11,10 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"sync"
-	"syscall"
 	"time"
-
-	"github.com/creack/pty"
 
 	"github.com/ervisio/ervisio/server/internal/rpc"
 )
@@ -71,7 +68,7 @@ type Session struct {
 	startDir string
 
 	cmd  *exec.Cmd
-	ptmx *os.File
+	ptmx ptyConn
 	ring *ring
 
 	mu    sync.Mutex
@@ -108,7 +105,7 @@ func (m *Manager) Create(sp spec) (*Session, error) {
 		return nil, rpc.Errorf(rpc.Conflict, "There are already %d sessions open. Close one before starting another.", MaxSessions)
 	}
 	cmd := &exec.Cmd{Path: sp.Path, Args: sp.Argv, Dir: sp.Dir, Env: sp.Env}
-	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: sp.Cols, Rows: sp.Rows})
+	ptmx, err := startPTY(cmd, sp.Cols, sp.Rows)
 	if err != nil {
 		return nil, rpc.Errorf(rpc.Unavailable, "Could not start %s: %v", sp.Path, err)
 	}
@@ -209,7 +206,7 @@ func (s *Session) pump() {
 			s.mu.Unlock()
 		}
 		if err != nil {
-			if !errors.Is(err, io.EOF) && !errors.Is(err, syscall.EIO) && !errors.Is(err, os.ErrClosed) {
+			if !errors.Is(err, io.EOF) && !isPTYClosed(err) && !errors.Is(err, os.ErrClosed) {
 				// unexpected read error: treat like the end of the session
 				_ = err
 			}
@@ -264,7 +261,7 @@ func (s *Session) Write(p []byte) error {
 
 // Resize changes the pty size.
 func (s *Session) Resize(cols, rows uint16) error {
-	return pty.Setsize(s.ptmx, &pty.Winsize{Cols: cols, Rows: rows})
+	return resizePTY(s.ptmx, cols, rows)
 }
 
 // Rename changes the display name.
@@ -283,15 +280,13 @@ func (s *Session) ExitCode() int { return s.exitCode }
 // Kill hangs up the process group, then kills it after grace.
 func (s *Session) Kill(grace time.Duration) {
 	pid := s.cmd.Process.Pid
-	_ = syscall.Kill(-pid, syscall.SIGHUP)
-	_ = syscall.Kill(pid, syscall.SIGHUP)
+	hangupProc(pid, true)
 	select {
 	case <-s.done:
 		return
 	case <-time.After(grace):
 	}
-	_ = syscall.Kill(-pid, syscall.SIGKILL)
-	_ = syscall.Kill(pid, syscall.SIGKILL)
+	killProc(pid)
 	select {
 	case <-s.done:
 	case <-time.After(2 * time.Second):

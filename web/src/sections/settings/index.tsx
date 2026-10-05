@@ -19,7 +19,7 @@ import { NameList } from './NameList';
 import { PluginJobsBlock } from './PluginJobs';
 import { usePrefSave, useServerConfig } from './save';
 import { UpdatesBlock } from './Updates';
-import { updateStatus } from './updates';
+import { updateStatus } from './updatesApi';
 import './settings.css';
 
 interface RowDef {

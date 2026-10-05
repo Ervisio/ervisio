@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button, Checkbox, Chip, EmptyState, Icon, IconButton, Input, Select, Skeleton, type IconName } from '../../ui';
-import { call } from '../../api';
+import { call, useSession } from '../../api';
 import { useT } from '../../i18n';
 import { hueFor } from './helpers';
 import type { Source, SourcesResult, Watcher, WatchFormat } from './types';
@@ -18,7 +18,7 @@ interface Props {
   canUnlock: boolean;
 }
 
-const KIND_ICON: Record<string, IconName> = { journal: 'logs', kernel: 'cpu', unit: 'services', file: 'file' };
+const KIND_ICON: Record<string, IconName> = { journal: 'logs', kernel: 'cpu', unit: 'services', file: 'file', evt: 'logs' };
 
 function count(n: number, approx = false): string {
   const s = n >= 10000 ? `${Math.round(n / 1000)}k` : n.toLocaleString();
@@ -27,7 +27,7 @@ function count(n: number, approx = false): string {
 
 function SourceItem({ s, on, onPick, onRemove }: { s: Source; on: boolean; onPick(multi: boolean): void; onRemove?: () => void }) {
   const t = useT('logs');
-  const hue = s.kind === 'journal' ? 'ov' : s.kind === 'kernel' ? 'svc' : s.group === 'watchers' ? 'log' : s.group === 'files' ? 'sw' : hueFor(s.label);
+  const hue = s.kind === 'journal' ? 'ov' : s.kind === 'kernel' ? 'svc' : s.kind === 'evt' ? 'ov' : s.group === 'watchers' ? 'log' : s.group === 'files' ? 'sw' : hueFor(s.label);
   const label = s.id === 'journal' ? t('sources.journal') : s.id === 'kernel' ? t('sources.kernel') : s.id === 'boot' ? t('sources.boot') : s.label;
   const hint = s.id === 'journal' ? t('sources.journalHint') : s.id === 'kernel' ? t('sources.kernelHint') : s.id === 'boot' ? t('sources.bootHint') : s.hint;
   return (
@@ -137,6 +137,7 @@ function WatchForm({ watchers, onAdd, onClose }: { watchers: Watcher[]; onAdd(w:
 
 export function Sources({ data, error, selected, watchers, onSelect, onAddWatcher, onRemoveWatcher, onUnlock, onRetry, canUnlock }: Props) {
   const t = useT('logs');
+  const win = useSession().session?.os === 'windows';
   const [adding, setAdding] = useState(false);
   const allOn = selected.length === 1 && selected[0] === 'all';
 
@@ -167,7 +168,7 @@ export function Sources({ data, error, selected, watchers, onSelect, onAddWatche
         {data && !data.journalReadable && (
           <div className="logs-lockbox">
             <b>{t('sources.unlockTitle')}</b>
-            <small>{t('sources.unlockText')}</small>
+            <small>{t(win ? 'win.sources.unlockText' : 'sources.unlockText')}</small>
             {canUnlock && <Button size="sm" variant="primary" icon="unlock" onClick={onUnlock}>{t('sources.unlock')}</Button>}
           </div>
         )}

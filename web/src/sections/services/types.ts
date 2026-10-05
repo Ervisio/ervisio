@@ -65,7 +65,7 @@ export interface LogLine {
   message: string;
 }
 
-export type Action = 'start' | 'stop' | 'restart' | 'reload' | 'enable' | 'disable' | 'mask' | 'unmask';
+export type Action = 'start' | 'stop' | 'restart' | 'reload' | 'enable' | 'disable' | 'mask' | 'unmask' | 'pause' | 'continue';
 export type PanelTab = 'info' | 'logs' | 'unit' | 'deps';
 
 export const PURPOSES = ['web', 'containers', 'system'] as const;

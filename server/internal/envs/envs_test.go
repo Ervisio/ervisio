@@ -20,6 +20,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -193,10 +194,10 @@ func TestSecretsNeverSerialized(t *testing.T) {
 	}
 	// On disk: 0600, and the key is sealed (not in clear).
 	fi, err := os.Stat(filepath.Join(dir, "envs.json"))
-	if err != nil || fi.Mode().Perm() != 0o600 {
+	if err != nil || (runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600) { // no POSIX modes on Windows
 		t.Fatalf("envs.json mode: %v %v", fi, err)
 	}
-	if fi, _ := os.Stat(filepath.Join(dir, "master.key")); fi == nil || fi.Mode().Perm() != 0o600 {
+	if fi, _ := os.Stat(filepath.Join(dir, "master.key")); fi == nil || (runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600) {
 		t.Error("master.key must be 0600")
 	}
 	raw, _ := os.ReadFile(filepath.Join(dir, "envs.json"))
@@ -341,7 +342,12 @@ func TestAgentSignaturePadding(t *testing.T) {
 
 func shortTemp(t *testing.T) string {
 	t.Helper()
-	d, err := os.MkdirTemp("/tmp", "ervt")
+	// A short path: unix socket paths are limited to about 100 bytes.
+	base := "/tmp"
+	if runtime.GOOS == "windows" {
+		base = "" // no /tmp: the system temp folder
+	}
+	d, err := os.MkdirTemp(base, "ervt")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -399,10 +405,10 @@ func TestTunnelLifecycleTCPTLS(t *testing.T) {
 		t.Fatal(err)
 	}
 	fi, err := os.Stat(path)
-	if err != nil || fi.Mode().Perm() != 0o600 || fi.Mode()&os.ModeSocket == 0 {
+	if err != nil || (runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600) || fi.Mode()&os.ModeSocket == 0 {
 		t.Fatalf("tunnel socket: %v %v", fi, err)
 	}
-	if di, _ := os.Stat(filepath.Dir(path)); di.Mode().Perm() != 0o711 {
+	if di, _ := os.Stat(filepath.Dir(path)); runtime.GOOS != "windows" && di.Mode().Perm() != 0o711 { // Windows: ACLs, checked by the daemon itself
 		t.Errorf("tunnel folder mode %v", di.Mode().Perm())
 	}
 	// A second request for the same user reuses it.

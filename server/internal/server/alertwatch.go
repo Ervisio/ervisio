@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"time"
 
 	"github.com/ervisio/ervisio/server/internal/account"
@@ -65,7 +64,9 @@ func (w *alertWatch) fresh(cur []watchedAlert) []watchedAlert {
 func (s *Server) readAlerts(ctx context.Context) ([]watchedAlert, error) {
 	var p *bridge.Proc
 	var err error
-	if os.Geteuid() == 0 {
+	// (On Windows Geteuid is -1, so this always takes the user branch and
+	// never looks up "root".)
+	if bridge.Privileged() {
 		var ra *account.Account
 		if ra, err = account.Lookup("root"); err != nil {
 			return nil, err
@@ -98,7 +99,7 @@ func (s *Server) runAlertWatch(ctx context.Context) {
 		case <-next.C:
 		}
 		next.Reset(alertEvery)
-		if s.notifier == nil || !s.notifier.Subscribed(notify.EventAlerts) || (s.devUser == nil && os.Geteuid() != 0) {
+		if s.notifier == nil || !s.notifier.Subscribed(notify.EventAlerts) || (s.devUser == nil && !bridge.Privileged()) {
 			w.first = true // start from the state at the next scan
 			continue
 		}

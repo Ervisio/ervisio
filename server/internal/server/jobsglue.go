@@ -230,6 +230,9 @@ func (e *bridgeExecutor) proc(ctx context.Context, admin bool) (*bridge.Proc, er
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	key := "u:" + strconv.FormatUint(uint64(e.a.UID), 10)
+	if e.a.SID != "" {
+		key = "u:" + e.a.SID // RIDs can repeat across Windows domains
+	}
 	if admin {
 		key = "root"
 	}
@@ -241,9 +244,9 @@ func (e *bridgeExecutor) proc(ctx context.Context, admin bool) (*bridge.Proc, er
 	}
 	p, err := e.s.jobPool.acquire(key, func() (*bridge.Proc, error) {
 		if admin {
-			ra, err := account.Lookup("root")
+			ra, err := adminJobAccount()
 			if err != nil {
-				return nil, rpc.Errorf(rpc.Unavailable, "Cannot look up root: %v", err)
+				return nil, err
 			}
 			return bridge.StartRoot(ctx, e.s.rootSpec(ra))
 		}

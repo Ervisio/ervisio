@@ -109,3 +109,13 @@ by the browser through `GET /api/files/download?...&inline=1`.
 ## Errors
 `not_found`, `conflict`, `invalid`, `forbidden` (protected folder, or permission denied as root), `needs_admin`
 (permission denied as user), `unavailable` (cancelled).
+
+## Windows notes
+
+- Paths are Windows paths (`C:\Users\me`). The bridge runs as the signed-in user, so ACLs are enforced by the OS. Links (symlinks, junctions) are never followed at the final path component: creates use exclusive creation, saves and uploads write a temp file in the same folder and rename it over the target (`MoveFileEx` replace + write-through, which replaces a link rather than writing through it), deletes remove links without descending into them.
+- `files.copy`: links inside a copied tree are skipped and listed in the final message's `skipped` array; a link given as a source is refused. Moving across drives copies then deletes, and is refused when anything would be skipped.
+- `files.chmod`: only the read-only attribute exists. The owner write bit decides (`644` writable, `444` read-only); setuid/setgid/sticky and modes without owner read are `invalid`. A folder needs `recursive: true` (applies to the files inside).
+- `files.chown`: `unavailable` (ownership uses ACLs).
+- `files.places`: `home` is `%USERPROFILE%`; `disks` lists fixed drives (mount `C:\`, device = volume label); `trashCount` is 0. Trash methods and `delete` with `trash: true` return `unavailable` (no Recycle Bin integration); use permanent delete.
+- Entry `owner` is `DOMAIN\name` (best effort); `uid`/`gid`/`group` are empty. Protected paths: drive roots and system folders (Windows, Program Files, ProgramData, Users, the profile folder).
+- Not verified on a real Windows host: cross-compiled and vetted only.

@@ -46,6 +46,8 @@ func newManager() *manager {
 		m.primary = d
 	} else if z := newZypper(); z.Available() {
 		m.primary = z
+	} else if w := newWinget(); w.Available() {
+		m.primary = w
 	}
 	if f := newFlatpak(); f.Available() {
 		m.flatpak = f
@@ -65,7 +67,7 @@ func (m *manager) backends() []Backend {
 
 func (m *manager) requireAny() error {
 	if len(m.backends()) == 0 {
-		return rpc.Errorf(rpc.Unavailable, "No supported package manager was found on this system (pacman, apt, dnf, zypper or flatpak).")
+		return rpc.Errorf(rpc.Unavailable, "No supported package manager was found on this system (pacman, apt, dnf, zypper, winget or flatpak).")
 	}
 	return nil
 }

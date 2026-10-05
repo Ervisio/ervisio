@@ -76,3 +76,18 @@ followed, so files stay owned by the user and a user-planted symlink cannot redi
 
 Error codes used: `invalid` (bad name/shell/password/key), `not_found`, `conflict`, `forbidden`, `needs_admin`,
 `unavailable` (a tool is not installed), `internal` (tool failure, message carries its stderr).
+
+## Windows backend
+
+On Windows (`users_windows.go`, `winaccounts.go`) local accounts are handled through PowerShell's LocalAccounts
+cmdlets. Scripts are fixed text run with `-EncodedCommand`; all data (names, passwords) is ASCII-escaped JSON on
+stdin, never on a command line or interpolated into a script.
+
+- `uid`/`gid` carry the RID of the account/group SID; the full SID is in the extra `sid` field. `home` is the
+  profile path (empty until the profile exists), `shell` is empty and `noLoginShell` is true. `people` are
+  RID 500 and RID >= 1000; other built-ins are listed under `system`. `isAdmin` means member of Administrators.
+- `users.lock`/`unlock` disable/enable the account (`passwordState: "disabled"`). `users.setPassword` with
+  `mustChange` sets "must change at next logon". `users.modify` also accepts `description`.
+- `users.sessions`, `sshKeys`, `addSshKey`, `removeSshKey`, `terminateSession` and changing `shell` return
+  `unavailable`. Access denied from PowerShell maps to `needs_admin`.
+- Names follow Windows rules (users up to 20 chars, no `" / \ [ ] : ; | = , + * ? < > @`), case-insensitive.

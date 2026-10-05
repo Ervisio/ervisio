@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -210,6 +211,15 @@ func (l *Log) Add(e Entry) error {
 		prune = true
 	}
 	_, err = l.f.Write(line)
+	if runtime.GOOS == "windows" {
+		// Windows cannot delete or rename a file that has an open handle (Go
+		// does not share FILE_SHARE_DELETE), which would block retention,
+		// rotation and any admin cleanup: close after every write.
+		if cerr := l.f.Close(); err == nil {
+			err = cerr
+		}
+		l.f = nil
+	}
 	return err
 }
 

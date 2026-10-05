@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/ervisio/ervisio/server/internal/brand"
@@ -271,7 +270,7 @@ func copyFile(src, dst string) {
 		return
 	}
 	defer in.Close()
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_EXCL|os.O_WRONLY|syscall.O_NOFOLLOW, 0o600)
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_EXCL|os.O_WRONLY|oNoFollow, 0o600)
 	if err != nil {
 		return
 	}

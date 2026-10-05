@@ -73,7 +73,7 @@ func newHangEnv(t *testing.T, sock string) (*Server, *httptest.Server, *http.Cli
 	plugins := t.TempDir()
 	p := filepath.Join(plugins, "hang")
 	os.MkdirAll(p, 0o755)
-	os.WriteFile(filepath.Join(p, "manifest.json"), []byte(strings.ReplaceAll(hangManifest, "%SOCK%", sock)), 0o644)
+	os.WriteFile(filepath.Join(p, "manifest.json"), []byte(strings.ReplaceAll(hangManifest, "%SOCK%", strings.ReplaceAll(sock, `\`, `\\`))), 0o644)
 	os.WriteFile(filepath.Join(p, "index.js"), []byte("export default () => {}"), 0o644)
 	web := t.TempDir()
 	os.WriteFile(filepath.Join(web, "index.html"), []byte("<!doctype html>app"), 0o644)

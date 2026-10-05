@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -50,7 +51,7 @@ func setupFiles(t *testing.T) (readDir, writeDir, outside string) {
 	os.WriteFile(filepath.Join(outside, "secret.txt"), []byte("secret"), 0o644)
 	os.Symlink(filepath.Join(outside, "secret.txt"), filepath.Join(readDir, "link.txt"))
 	os.Symlink(outside, filepath.Join(writeDir, "escape"))
-	m := strings.ReplaceAll(strings.ReplaceAll(filesManifest, "%READ%", readDir), "%WRITE%", writeDir)
+	m := strings.ReplaceAll(strings.ReplaceAll(filesManifest, "%READ%", jsonPath(readDir)), "%WRITE%", jsonPath(writeDir))
 	writePlugin(t, filepath.Join(system, "files"), m, map[string]string{"index.js": "x"})
 	return
 }
@@ -175,14 +176,23 @@ func folders(paths ...string) []Folder {
 }
 
 func TestMatchCapLongestPrefix(t *testing.T) {
-	r, ok := matchCap(folders("/srv", "/srv/www"), "/srv/www/a")
-	if !ok || r.dir != "/srv/www" || r.rel != "a" {
+	// Windows has no "/srv": the same layout under a drive.
+	abs := func(p string) string { return p }
+	if runtime.GOOS == "windows" {
+		abs = func(p string) string { return `C:` + filepath.FromSlash(p) }
+	}
+	r, ok := matchCap(folders(abs("/srv"), abs("/srv/www")), abs("/srv/www/a"))
+	if !ok || r.dir != abs("/srv/www") || r.rel != "a" {
 		t.Fatalf("%+v", r)
 	}
-	if _, ok := matchCap(folders("/srv"), "/srvx/a"); ok {
+	if _, ok := matchCap(folders(abs("/srv")), abs("/srvx/a")); ok {
 		t.Fatal("prefix without a separator matched")
 	}
-	if r, ok := matchCap(folders("/"), "/etc/x"); !ok || r.rel != "etc/x" {
+	root := abs("/")
+	if runtime.GOOS == "windows" {
+		root = `C:\`
+	}
+	if r, ok := matchCap(folders(root), abs("/etc/x")); !ok || r.rel != filepath.FromSlash("etc/x") {
 		t.Fatalf("%+v", r)
 	}
 }
