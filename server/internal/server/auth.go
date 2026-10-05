@@ -413,7 +413,16 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result := attemptFailed
-	defer func() { att.done(result) }()
+	authed := false
+	defer func() {
+		att.done(result)
+		if authed && result != attemptOK {
+			// Authenticated but refused: do not leave a logon token behind
+			// (Windows). Only after a successful Authenticate, so failed
+			// guesses cannot drop another sign-in's token.
+			s.sessions.forgetIfIdle(req.User)
+		}
+	}()
 
 	if !account.ValidName(req.User) || req.Password == "" || len(req.Password) > 4096 {
 		writeError(w, errBadCredentials)
@@ -453,6 +462,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	authed = true
 	a, err := account.Lookup(req.User)
 	if err != nil {
 		result = attemptNeutral
