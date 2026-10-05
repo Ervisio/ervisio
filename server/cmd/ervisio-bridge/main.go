@@ -13,9 +13,11 @@ import (
 	"os/signal"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"syscall"
 
+	"github.com/ervisio/ervisio/server/internal/account"
 	"github.com/ervisio/ervisio/server/internal/brand"
 	"github.com/ervisio/ervisio/server/internal/bridge"
 	"github.com/ervisio/ervisio/server/internal/legacy"
@@ -101,7 +103,7 @@ func main() {
 
 	err = rpc.Serve(ctx, reg, os.Stdin, proto, rpc.ServeOptions{
 		Admin:   *admin,
-		UID:     os.Geteuid(),
+		UID:     selfUID(),
 		Version: brand.Version,
 	})
 	if err != nil && err != context.Canceled {
@@ -127,4 +129,17 @@ func rootEnv() {
 	os.Setenv("USER", name)
 	os.Setenv("LOGNAME", name)
 	os.Unsetenv("XDG_RUNTIME_DIR") // the user's runtime dir, if sudo kept it
+}
+
+// selfUID is the uid the bridge reports in its hello: the effective uid, or
+// on Windows (where there is none) the RID of the account it runs as, which
+// is what the daemon's account.Account.UID holds.
+func selfUID() int {
+	if runtime.GOOS == "windows" {
+		if a, err := account.Current(); err == nil {
+			return int(a.UID)
+		}
+		return -1
+	}
+	return os.Geteuid()
 }
