@@ -94,17 +94,27 @@ type Watcher struct {
 // spec is a parsed source id.
 type spec struct {
 	ID     string
-	Kind   string // journal | kernel | boot | unit | file
+	Kind   string // journal | kernel | boot | unit | file | evt
 	Unit   string
 	Path   string
 	Label  string
 	Format string
+	// Channel is the Windows Event Log channel of an "evt" source.
+	Channel string
 }
 
 var unitRe = regexp.MustCompile(`^[A-Za-z0-9:_.@][A-Za-z0-9:_.@\\-]{0,199}$`)
 
 func parseSourceID(id string, watchers []Watcher) (spec, error) {
 	switch {
+	case strings.HasPrefix(id, "evt:"):
+		ch := strings.TrimPrefix(id, "evt:")
+		if !onWindows || !channelRe.MatchString(ch) {
+			return spec{}, rpc.Errorf(rpc.Invalid, "unknown log source %q", id)
+		}
+		return spec{ID: id, Kind: "evt", Channel: ch, Label: ch}, nil
+	case onWindows && (id == "journal" || id == "kernel" || id == "boot" || strings.HasPrefix(id, "unit:")):
+		return spec{}, rpc.Errorf(rpc.Invalid, "unknown log source %q", id)
 	case id == "journal" || id == "kernel" || id == "boot":
 		return spec{ID: id, Kind: id, Label: id}, nil
 	case strings.HasPrefix(id, "unit:"):
@@ -135,7 +145,7 @@ func parseSourceID(id string, watchers []Watcher) (spec, error) {
 }
 
 func checkPath(p string) error {
-	if p == "" || p[0] != '/' || strings.ContainsRune(p, 0) || len(p) > 4096 {
+	if !absLogPath(p) || strings.ContainsRune(p, 0) || len(p) > 4096 {
 		return rpc.Errorf(rpc.Invalid, "the log file path must be absolute")
 	}
 	if cleanPath(p) != p {
@@ -148,7 +158,7 @@ func labelForPath(p string) string {
 	if rel, ok := strings.CutPrefix(p, "/var/log/"); ok {
 		return strings.TrimSuffix(rel, ".log")
 	}
-	i := strings.LastIndexByte(p, '/')
+	i := strings.LastIndexAny(p, pathSeps)
 	return p[i+1:]
 }
 

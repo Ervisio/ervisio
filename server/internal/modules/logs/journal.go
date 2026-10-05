@@ -186,7 +186,8 @@ func journalGroups(specs []spec) []jgroup {
 
 func hasJournal(specs []spec) bool {
 	for _, s := range specs {
-		if s.Kind != "file" {
+		switch s.Kind {
+		case "journal", "kernel", "boot", "unit":
 			return true
 		}
 	}

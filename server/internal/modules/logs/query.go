@@ -106,9 +106,18 @@ func resolveSpecs(ids []string, watchers []Watcher, admin bool) ([]spec, error) 
 	}
 	for _, id := range ids {
 		if id == "all" {
-			s, _ := parseSourceID("journal", nil)
-			add(s)
-			for _, lf := range listLogFiles("/var/log", 150) {
+			var logFiles []LogFile
+			if onWindows {
+				for _, ch := range eventChannels {
+					s, _ := parseSourceID("evt:"+ch, nil)
+					add(s)
+				}
+			} else {
+				s, _ := parseSourceID("journal", nil)
+				add(s)
+				logFiles = listLogFiles("/var/log", 150)
+			}
+			for _, lf := range logFiles {
 				if lf.NeedsAdmin && !admin {
 					continue
 				}
@@ -173,12 +182,18 @@ func (q queryParams) run(ctx context.Context, admin bool) (*QueryResult, error) 
 			files = append(files, s)
 		}
 	}
+	var evts []spec
+	for _, s := range specs {
+		if s.Kind == "evt" {
+			evts = append(evts, s)
+		}
+	}
 	type result struct {
 		id   string
 		ents []Entry
 		err  error
 	}
-	results := make([]result, len(groups)+len(files))
+	results := make([]result, len(groups)+len(files)+len(evts))
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 6)
 	run := func(i int, id string, fn func() ([]Entry, error)) {
@@ -198,6 +213,10 @@ func (q queryParams) run(ctx context.Context, admin bool) (*QueryResult, error) 
 	for i, s := range files {
 		s := s
 		run(len(groups)+i, s.ID, func() ([]Entry, error) { return fetchFile(ctx, s, f, until, want) })
+	}
+	for i, s := range evts {
+		s := s
+		run(len(groups)+len(files)+i, s.ID, func() ([]Entry, error) { return fetchEventLog(ctx, s.Channel, f, until, want) })
 	}
 	wg.Wait()
 	if err := ctx.Err(); err != nil {
@@ -400,6 +419,24 @@ func (h histParams) run(ctx context.Context, admin bool) (*HistogramResult, erro
 				return true
 			})
 			if err != nil && len(specs) == 1 {
+				fail(err)
+			}
+		})
+	}
+	for _, s := range specs {
+		if s.Kind != "evt" {
+			continue
+		}
+		s := s
+		spawn(func() {
+			ents, err := fetchEventLog(ctx, s.Channel, filter{sinceUs: f.sinceUs, untilUs: f.untilUs, text: f.text}, f.untilUs, histEventCap)
+			if len(ents) >= histEventCap {
+				res.Truncated = true
+			}
+			for i := range ents {
+				count(ents[i].Ts, ents[i].Level)
+			}
+			if err != nil {
 				fail(err)
 			}
 		})

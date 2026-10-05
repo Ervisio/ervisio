@@ -97,3 +97,18 @@ Give a journal `cursor` (optionally with `source` = `unit:…`/`kernel` to restr
 `cursor` of a file entry (`file:<path>:<line>`).
 → `{"entries":[… oldest first …],"index":4}` where `index` is the requested entry. Files over 128 MiB answer
 `unavailable`; a line beyond the end answers `not_found` (the file was probably rotated).
+
+## Windows (Windows Event Log backend)
+
+On Windows the journal, `kernel`, `boot` and `unit:` sources do not exist (they answer `invalid`); the
+system group lists Windows Event Log channels instead, as sources `evt:<channel>` with `kind:"evt"`:
+`evt:Application`, `evt:System`, `evt:Security`, `evt:Setup` and `evt:Microsoft-Windows-PowerShell/Operational`.
+`all` expands to those channels plus the watchers. Log files (watchers) take absolute Windows paths.
+
+Entries are read with `wevtutil qe <channel> /rd:true /c:<n> /f:RenderedXml /q:<XPath>`; time range and levels
+are pushed down into the XPath, text is filtered server side. Level mapping: 1,2 → `err`, 3 → `warn`,
+0,4 → `info`, 5 → `debug`. `source` and `unit` are the provider name, `pid` the execution process id, `cursor`
+is `<channel>/<EventRecordID>`, `message` the rendered message (event data when none is available).
+Reading `Security` without administrator rights gives `needs_admin` (source flag `needsAdmin`). `logs.follow`
+polls every ~2 s for records with a higher `EventRecordID`. `logs.context` supports files only. Untested on a
+real Windows host.
