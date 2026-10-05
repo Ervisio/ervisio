@@ -313,7 +313,11 @@
     "errUnit": "Inserisci il nome del servizio da seguire.",
     "errUnits": "Puoi tenere d'occhio al massimo 30 servizi per widget.",
     "errFile": "Inserisci il percorso completo del file di log, che inizia con /.",
-    "errPath": "Inserisci il percorso completo della cartella, che inizia con /."
+    "errPath": "Inserisci il percorso completo della cartella, che inizia con /.",
+    "channel": "Canale del registro eventi",
+    "errChannel": "Il nome del canale è obbligatorio.",
+    "srcEvt": "Registro eventi di Windows",
+    "commandHintWin": "Viene eseguito direttamente, non in una shell. Per le pipe usa: powershell -Command \"Get-Process | Select -First 5\"."
   },
   "palette": {
     "personalize": "Personalizza la dashboard",

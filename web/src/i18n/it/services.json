@@ -211,6 +211,12 @@
       "masked": "Disabilitato",
       "static": "Driver di sistema",
       "unknown": "Sconosciuto"
+    },
+    "confirm": {
+      "mask": {
+        "title": "Disabilitare {name}?",
+        "text": "Il tipo di avvio verrà impostato su Disabilitato: non partirà, nemmeno se un altro servizio ne ha bisogno, finché non lo reimposti su Manuale."
+      }
     }
   }
 }

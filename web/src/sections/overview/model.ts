@@ -189,7 +189,7 @@ export const CATALOG: CatalogItem[] = [
   { type: 'machine', category: 'basics', icon: 'server', hue: 'ov', cols: 5 },
   { type: 'chart', category: 'system', icon: 'overview', hue: 'ov', cols: 6, settings: () => ({ metric: 'cpu', range: '15m' }), configure: true },
   { type: 'service', category: 'system', icon: 'services', hue: 'svc', cols: 4, settings: () => ({ units: [] }), configure: true },
-  { type: 'log', category: 'system', icon: 'logs', hue: 'log', cols: 6, settings: () => ({ source: 'journal', lines: 12 }), configure: true },
+  { type: 'log', category: 'system', icon: 'logs', hue: 'log', cols: 6, settings: () => ({ source: windowsHost ? 'evt:System' : 'journal', lines: 12 }), configure: true },
   { type: 'action', category: 'personal', icon: 'play', hue: 'sw', cols: 3, settings: () => ({ id: uid('a'), label: '', icon: 'play', hue: 'sw', argv: [] }), configure: true },
   { type: 'output', category: 'personal', icon: 'terminal', hue: 'term', cols: 6, settings: () => ({ argv: [], every: 10 }), configure: true },
   { type: 'folder', category: 'personal', icon: 'files', hue: 'file', cols: 3, settings: () => ({ path: '', label: '' }), configure: true },

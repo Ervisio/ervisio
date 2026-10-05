@@ -211,6 +211,12 @@
       "masked": "Disabled",
       "static": "System driver",
       "unknown": "Unknown"
+    },
+    "confirm": {
+      "mask": {
+        "title": "Disable {name}?",
+        "text": "Its start type will be set to Disabled: it will not start, not even when another service needs it, until you set it back to Manual."
+      }
     }
   }
 }

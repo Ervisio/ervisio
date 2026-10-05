@@ -313,7 +313,11 @@
     "errUnit": "Enter the name of the service to follow.",
     "errUnits": "Watch at most 30 services per widget.",
     "errFile": "Enter the full path of the log file, starting with /.",
-    "errPath": "Enter the full path of the folder, starting with /."
+    "errPath": "Enter the full path of the folder, starting with /.",
+    "channel": "Event log channel",
+    "errChannel": "Channel name is required.",
+    "srcEvt": "Windows Event Log",
+    "commandHintWin": "Runs directly, not in a shell. For pipes use: powershell -Command \"Get-Process | Select -First 5\"."
   },
   "palette": {
     "personalize": "Personalize dashboard",
