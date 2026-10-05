@@ -154,7 +154,7 @@ func prepareTunnelDirFor(base, dir, sid string) error {
 	}
 	if _, err := os.Lstat(dir); err == nil {
 		if checkObject(dir, true, true, allow) != nil {
-			if err := os.RemoveAll(dir); err != nil {
+			if err := removeTree(dir, me); err != nil {
 				return err
 			}
 		}
@@ -171,6 +171,26 @@ func prepareTunnelDirFor(base, dir, sid string) error {
 		return fmt.Errorf("%s is not a folder of this service: %v", dir, err)
 	}
 	return nil
+}
+
+// removeTree removes a folder tree. Setting the DACL of base (not inherited
+// by its children) strips the inherited entries of an old folder, which then
+// has an empty DACL and cannot even be opened: it is given full access for
+// this service (inherited by what it holds, from the owner's WRITE_DAC right)
+// before the removal is retried. os.RemoveAll does not follow links.
+func removeTree(dir string, me []*windows.SID) error {
+	err := os.RemoveAll(dir)
+	if err == nil {
+		return nil
+	}
+	var es []winsec.Entry
+	for _, s := range me {
+		es = append(es, winsec.Entry{SID: s, Mask: winsec.FileAllAccess, Inherit: windows.SUB_CONTAINERS_AND_OBJECTS_INHERIT})
+	}
+	if e := winsec.SetProtectedDACL(dir, es); e != nil {
+		return err
+	}
+	return os.RemoveAll(dir)
 }
 
 // listenOwned is listenOwnedFor without an account (reachable by the

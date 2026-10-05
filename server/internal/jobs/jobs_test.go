@@ -764,6 +764,7 @@ func TestRunRefusedWhenAdminLostBetweenReconciles(t *testing.T) {
 	v := f.approved("alice", "rooty", nil, nil)
 	f.mu.Lock()
 	f.accts["alice"].GroupNames = []string{"alice"}
+	f.accts["alice"].GroupSIDs = nil // Windows: admin is the Administrators SID
 	f.mu.Unlock()
 	f.m.RunNow(f.caller("alice"), "jt", v.ID)
 	f.m.Wait()

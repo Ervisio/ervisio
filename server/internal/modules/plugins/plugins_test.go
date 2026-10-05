@@ -261,7 +261,7 @@ func TestExtractLimitsAndStrip(t *testing.T) {
 			t.Errorf("%s not extracted: %v", f, err)
 		}
 	}
-	if fi, _ := os.Stat(filepath.Join(dest, "bin/run")); fi.Mode().Perm() != 0o755 {
+	if fi, _ := os.Stat(filepath.Join(dest, "bin/run")); runtime.GOOS != "windows" && fi.Mode().Perm() != 0o755 {
 		t.Errorf("exec bit lost: %v", fi.Mode())
 	}
 	// Flat archive stays flat.

@@ -14,3 +14,7 @@ func startAdminToken(context.Context, *Spec, string) (*Proc, error) { panic("unr
 
 // Privileged reports whether the process runs as root (--admin requires it).
 func Privileged() bool { return os.Geteuid() == 0 }
+
+// RunningAsServiceIdentity reports whether the process runs as the all-powerful
+// identity --dev-insecure-noauth must never run as: root on unix.
+func RunningAsServiceIdentity() bool { return os.Geteuid() == 0 }

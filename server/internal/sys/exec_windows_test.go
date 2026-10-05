@@ -17,7 +17,8 @@ import (
 func TestRunOutputWindows(t *testing.T) {
 	ctx := context.Background()
 	out, err := Output(ctx, "cmd", "/c", "echo", "a b")
-	if err != nil || strings.TrimSpace(string(out)) != "a b" {
+	// Go quotes the argument with a space, and cmd's echo prints the quotes.
+	if err != nil || strings.Trim(strings.TrimSpace(string(out)), `"`) != "a b" {
 		t.Fatalf("%q %v", out, err)
 	}
 	err = Run(ctx, "cmd", "/c", "echo boom 1>&2& exit 3")

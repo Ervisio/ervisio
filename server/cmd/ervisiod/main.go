@@ -111,7 +111,7 @@ func run(ctx context.Context) {
 	if *noAuth && !*dev {
 		log.Fatal("--dev-insecure-noauth requires --dev")
 	}
-	if *noAuth && bridge.Privileged() {
+	if *noAuth && bridge.RunningAsServiceIdentity() {
 		log.Fatal("--dev-insecure-noauth refuses to run as root")
 	}
 	// A machine that ran LinuxAdmin: its configuration, certificate, plugins

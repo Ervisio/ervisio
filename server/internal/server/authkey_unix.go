@@ -34,3 +34,8 @@ func checkDevAuthorizedKeys(f *os.File) error {
 // keyLogonToken: a key sign-in needs no token on unix (the bridge starts
 // with setuid).
 func (s *Server) keyLogonToken(string) error { return nil }
+
+// openDevAuthorizedKeys opens the file without following a final symlink.
+func openDevAuthorizedKeys(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_RDONLY|oNoFollow|oNonBlock, 0)
+}

@@ -176,6 +176,13 @@ func startPTY(cmd *exec.Cmd, cols, rows uint16) (ptyConn, error) {
 	var si windows.StartupInfoEx
 	si.Cb = uint32(unsafe.Sizeof(si))
 	si.ProcThreadAttributeList = al.List()
+	// Without STARTF_USESTDHANDLES the child can get this process's own
+	// standard handles (a pipe or file when we run as a service or under a
+	// test runner) instead of the pseudo console: its output then goes to our
+	// stdout and the console stays empty. Naming invalid handles (as WezTerm does) makes it use the
+	// console it is attached to.
+	si.Flags |= windows.STARTF_USESTDHANDLES
+	si.StdInput, si.StdOutput, si.StdErr = windows.InvalidHandle, windows.InvalidHandle, windows.InvalidHandle
 
 	var pi windows.ProcessInformation
 	err = windows.CreateProcess(appName, cmdline, nil, nil, false,

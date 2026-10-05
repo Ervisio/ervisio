@@ -37,7 +37,7 @@ func spec(t *testing.T, bridge string) *Spec {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &Spec{Bridge: bridge, Config: "/nonexistent/ervisio.conf", Account: a, Logger: log.New(io.Discard, "", 0)}
+	return &Spec{Bridge: bridge, Config: filepath.Join(t.TempDir(), "ervisio.conf"), Account: a, Logger: log.New(io.Discard, "", 0)}
 }
 
 func TestUserBridge(t *testing.T) {
