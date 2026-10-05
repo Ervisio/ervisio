@@ -51,7 +51,7 @@ func sleepCmd() (unix, windows string) { return "sleep 30", "ping -n 31 127.0.0.
 func shSpec(unix, windows string) spec {
 	if runtime.GOOS == "windows" {
 		cmdExe := filepath.Join(os.Getenv("SYSTEMROOT"), "System32", "cmd.exe")
-		return spec{Name: "t", Kind: KindLocal, Path: cmdExe, Argv: []string{"cmd", "/c", windows}, Dir: os.TempDir(), Cols: 80, Rows: 24, Shell: "cmd"}
+		return spec{Name: "t", Kind: KindLocal, Path: cmdExe, Argv: []string{"cmd", "/v:on", "/c", windows}, Dir: os.TempDir(), Cols: 80, Rows: 24, Shell: "cmd"}
 	}
 	return spec{Name: "t", Kind: KindLocal, Path: "/bin/sh", Argv: []string{"sh", "-c", unix}, Dir: "/", Env: []string{"PATH=/usr/bin:/bin", "TERM=xterm-256color"}, Cols: 80, Rows: 24, Shell: "sh"}
 }
@@ -117,7 +117,7 @@ func TestSessionInputResizeKill(t *testing.T) {
 	defer m.CloseAll()
 	// The program reads a line, echoes it and prints the terminal size
 	// (stty size: "40 100"; on Windows mode con: "Lines: 40", "Columns: 100").
-	s, err := m.Create(shSpec("read x; echo got:$x; stty size; sleep 30", "set /p x=& echo got:%x%& mode con& ping -n 31 127.0.0.1 >nul"))
+	s, err := m.Create(shSpec("read x; echo got:$x; stty size; sleep 30", "set /p x=& echo got:!x!& mode con& ping -n 31 127.0.0.1 >nul"))
 	if err != nil {
 		t.Fatal(err)
 	}

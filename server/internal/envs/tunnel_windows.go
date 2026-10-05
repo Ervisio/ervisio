@@ -173,24 +173,35 @@ func prepareTunnelDirFor(base, dir, sid string) error {
 	return nil
 }
 
-// removeTree removes a folder tree. Setting the DACL of base (not inherited
-// by its children) strips the inherited entries of an old folder, which then
-// has an empty DACL and cannot even be opened: it is given full access for
-// this service (inherited by what it holds, from the owner's WRITE_DAC right)
-// before the removal is retried. os.RemoveAll does not follow links.
+// removeTree removes a folder tree. A folder left by an older version or by
+// the user can deny this service every access (its DACL was emptied when the
+// parent's was replaced, or it is the user's own), so it cannot be opened,
+// listed or deleted. The removal is retried after taking ownership (with the
+// take-ownership, backup and restore privileges an administrator holds) and
+// giving this service full access, inherited by what the folder holds.
+// os.RemoveAll does not follow links.
 func removeTree(dir string, me []*windows.SID) error {
 	err := os.RemoveAll(dir)
 	if err == nil {
 		return nil
 	}
+	// Best effort: a token without these still gets the plain attempts below.
+	_ = winsec.EnablePrivileges("SeTakeOwnershipPrivilege", "SeRestorePrivilege", "SeBackupPrivilege")
 	var es []winsec.Entry
 	for _, s := range me {
-		es = append(es, winsec.Entry{SID: s, Mask: winsec.FileAllAccess, Inherit: windows.SUB_CONTAINERS_AND_OBJECTS_INHERIT})
+		es = append(es, winsec.Entry{SID: s, Mask: winsec.FileAllAccess, Inherit: windows.SUB_CONTAINERS_AND_OBJECTS_INHERIT | windows.OBJECT_INHERIT_ACE})
 	}
-	if e := winsec.SetProtectedDACL(dir, es); e != nil {
+	owner := me[len(me)-1]
+	if e := winsec.TakeOwnership(dir, owner, es); e != nil {
+		// Without the privilege: the DACL alone, as the owner.
+		if e2 := winsec.SetProtectedDACL(dir, es); e2 != nil {
+			return fmt.Errorf("%w (taking ownership: %v)", err, e)
+		}
+	}
+	if err := os.RemoveAll(dir); err != nil {
 		return err
 	}
-	return os.RemoveAll(dir)
+	return nil
 }
 
 // listenOwned is listenOwnedFor without an account (reachable by the
