@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"syscall"
 	"time"
 
 	"github.com/ervisio/ervisio/server/internal/brand"
@@ -158,16 +157,16 @@ func (s *State) Lock() (func(), error) {
 	if err := os.MkdirAll(s.Dir, 0o755); err != nil {
 		return nil, err
 	}
-	f, err := os.OpenFile(filepath.Join(s.Dir, "lock"), os.O_RDWR|os.O_CREATE|syscall.O_NOFOLLOW, 0o600)
+	f, err := os.OpenFile(filepath.Join(s.Dir, "lock"), os.O_RDWR|os.O_CREATE|oNoFollow, 0o600)
 	if err != nil {
 		return nil, err
 	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := lockFile(f); err != nil {
 		f.Close()
 		return nil, errors.New("another update is in progress")
 	}
 	return func() {
-		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		unlockFile(f)
 		f.Close()
 	}, nil
 }
@@ -182,7 +181,7 @@ func pidAlive(pid int) bool {
 
 // readOwned reads a regular file owned by owner (no symlinks followed).
 func readOwned(path string, owner int, max int64) ([]byte, error) {
-	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	f, err := os.OpenFile(path, os.O_RDONLY|oNoFollow|oNonBlock, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +193,7 @@ func readOwned(path string, owner int, max int64) ([]byte, error) {
 	if !fi.Mode().IsRegular() {
 		return nil, fmt.Errorf("%s is not a regular file", path)
 	}
-	if st, ok := fi.Sys().(*syscall.Stat_t); ok && owner >= 0 && int(st.Uid) != owner {
+	if !checkOwner(fi, owner) {
 		return nil, fmt.Errorf("%s has the wrong owner", path)
 	}
 	b, err := io.ReadAll(io.LimitReader(f, max+1))

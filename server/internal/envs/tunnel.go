@@ -16,7 +16,6 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 )
 
@@ -143,8 +142,8 @@ const tunnelDirMode = 0o711
 // ownedByUs reports whether fi is owned by the daemon's user (root in
 // production).
 func ownedByUs(fi os.FileInfo) bool {
-	st, ok := fi.Sys().(*syscall.Stat_t)
-	return ok && int(st.Uid) == os.Geteuid()
+	uid, _, ok := fileOwner(fi)
+	return ok && uid == os.Geteuid()
 }
 
 // prepareTunnelDir makes base and dir folders of the daemon's user with
@@ -236,9 +235,9 @@ func listenOwned(base, path string, uid, gid int) (net.Listener, error) {
 	if err != nil {
 		return fail(err)
 	}
-	st, ok := fi.Sys().(*syscall.Stat_t)
+	fuid, fgid, ok := fileOwner(fi)
 	if fi.Mode()&os.ModeSocket == 0 || fi.Mode().Perm() != 0o600 || !ok ||
-		(os.Geteuid() == 0 && (int(st.Uid) != uid || int(st.Gid) != gid)) {
+		(os.Geteuid() == 0 && (fuid != uid || fgid != gid)) {
 		_ = os.Remove(path)
 		return fail(fmt.Errorf("the socket %s did not get the expected owner and mode", path))
 	}

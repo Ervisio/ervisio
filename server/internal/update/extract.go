@@ -10,7 +10,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"syscall"
 )
 
 // Limits applied while extracting a release archive.
@@ -165,7 +164,7 @@ func mkdirNoFollow(root, rel string) error {
 }
 
 func writeFileExcl(target string, r io.Reader, size int64, mode os.FileMode) error {
-	f, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, mode)
+	f, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL|oNoFollow, mode)
 	if err != nil {
 		return err
 	}
