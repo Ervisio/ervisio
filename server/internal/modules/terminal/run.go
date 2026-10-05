@@ -6,10 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os/exec"
-	"syscall"
 	"time"
-
-	"github.com/creack/pty"
 
 	"github.com/ervisio/ervisio/server/internal/rpc"
 )
@@ -27,7 +24,7 @@ func RunPTY(ctx context.Context, cmd *exec.Cmd, cols, rows int, st rpc.Stream) e
 	if err != nil {
 		return err
 	}
-	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: c16, Rows: r16})
+	ptmx, err := startPTY(cmd, c16, r16)
 	if err != nil {
 		return rpc.Errorf(rpc.Unavailable, "Could not start %s: %v", cmd.Path, err)
 	}
@@ -69,14 +66,13 @@ func RunPTY(ctx context.Context, cmd *exec.Cmd, cols, rows int, st rpc.Stream) e
 	}()
 
 	kill := func() {
-		_ = syscall.Kill(-pid, syscall.SIGHUP)
+		hangupProc(pid, false)
 		select {
 		case <-waited:
 			return
 		case <-time.After(time.Second):
 		}
-		_ = syscall.Kill(-pid, syscall.SIGKILL)
-		_ = syscall.Kill(pid, syscall.SIGKILL)
+		killProc(pid)
 		<-waited
 	}
 
@@ -102,7 +98,7 @@ func RunPTY(ctx context.Context, cmd *exec.Cmd, cols, rows int, st rpc.Stream) e
 			exited = nil
 			drain = time.After(500 * time.Millisecond)
 		case <-drain:
-			_ = syscall.Kill(-pid, syscall.SIGHUP)
+			hangupProc(pid, false)
 			return st.Send(map[string]any{"type": "exit", "code": code})
 		case raw, ok := <-in:
 			if !ok {
@@ -122,7 +118,7 @@ func RunPTY(ctx context.Context, cmd *exec.Cmd, cols, rows int, st rpc.Stream) e
 				_, _ = ptmx.Write(data)
 			case "resize":
 				if cols, rows, err := checkSize(f.Cols, f.Rows); err == nil {
-					_ = pty.Setsize(ptmx, &pty.Winsize{Cols: cols, Rows: rows})
+					_ = resizePTY(ptmx, cols, rows)
 				}
 			}
 		}

@@ -7,7 +7,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/ervisio/ervisio/server/internal/sys"
@@ -59,10 +58,9 @@ func readHost() (*Host, error) {
 		Arch: runtime.GOARCH,
 		IP:   sys.PrimaryIP(),
 	}
-	var u syscall.Utsname
-	if err := syscall.Uname(&u); err == nil {
-		h.Kernel = utsString(u.Release[:])
-		h.Arch = utsString(u.Machine[:])
+	if kernel, arch, ok := uname(); ok {
+		h.Kernel = kernel
+		h.Arch = arch
 	}
 	if f, err := os.Open("/proc/cpuinfo"); err == nil {
 		h.CPU = parseCPUInfo(io.LimitReader(f, 4<<20))
@@ -96,17 +94,6 @@ func readTrim(p string) string {
 		return ""
 	}
 	return strings.TrimSpace(string(b))
-}
-
-func utsString(b []int8) string {
-	out := make([]byte, 0, len(b))
-	for _, c := range b {
-		if c == 0 {
-			break
-		}
-		out = append(out, byte(c))
-	}
-	return string(out)
 }
 
 func parseCPUInfo(r io.Reader) CPUInfo {

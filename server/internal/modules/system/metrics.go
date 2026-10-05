@@ -3,7 +3,6 @@ package system
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -11,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -375,34 +373,13 @@ func readDisks() []Disk {
 	f.Close()
 	out := []Disk{}
 	for _, e := range entries {
-		var st syscall.Statfs_t
-		if err := statfsTimeout(e.mount, &st); err != nil {
+		total, used, avail, err := diskUsage(e.mount)
+		if err != nil || total == 0 {
 			continue
 		}
-		bs := uint64(st.Bsize)
-		total := st.Blocks * bs
-		if total == 0 {
-			continue
-		}
-		used := (st.Blocks - st.Bfree) * bs
-		avail := st.Bavail * bs
 		d := Disk{Mount: e.mount, Device: e.source, FSType: e.fstype, Total: total, Used: used, Free: avail}
 		d.Percent = pct(used, used+avail)
 		out = append(out, d)
 	}
 	return out
-}
-
-// statfsTimeout guards against hung network filesystems.
-func statfsTimeout(path string, st *syscall.Statfs_t) error {
-	done := make(chan error, 1)
-	var local syscall.Statfs_t
-	go func() { done <- syscall.Statfs(path, &local) }()
-	select {
-	case err := <-done:
-		*st = local
-		return err
-	case <-time.After(time.Second):
-		return fmt.Errorf("statfs %s: timeout", path)
-	}
 }
