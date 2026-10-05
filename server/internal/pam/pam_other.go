@@ -1,10 +1,10 @@
-//go:build !(linux && cgo)
+//go:build !(linux && cgo) && !windows
 
 package pam
 
 import "errors"
 
-// errUnsupported is returned on platforms without libpam (Windows, or a
+// errUnsupported is returned on platforms without libpam (a
 // build with cgo disabled). Sign-in there needs its own backend.
 var errUnsupported = errors.New("pam: not supported on this platform")
 
