@@ -1,0 +1,133 @@
+# Windows: runs the server tests natively, builds the MSI and installs it on a
+# real Windows runner, then checks that the service answers and that a local
+# account can sign in. The MSI is kept as a workflow artifact.
+# Manual only: Actions > Windows > Run workflow.
+name: Windows
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows (go test, MSI, install smoke test)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: go vet
+        working-directory: server
+        run: go vet ./...
+      - name: go test
+        working-directory: server
+        env:
+          CGO_ENABLED: '0'
+        run: go test ./...
+
+      - name: Build web app
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build binaries
+        working-directory: server
+        env:
+          CGO_ENABLED: '0'
+        run: |
+          go build -trimpath -o bin/windows-amd64/ervisiod.exe ./cmd/ervisiod
+          go build -trimpath -o bin/windows-amd64/ervisio-bridge.exe ./cmd/ervisio-bridge
+
+      - name: Build MSI
+        working-directory: packaging/windows
+        run: |
+          dotnet tool install --global wix --version 4.0.5
+          wix extension add -g WixToolset.Firewall.wixext/4.0.5
+          wix extension add -g WixToolset.Util.wixext/4.0.5
+          wix build -arch x64 -ext WixToolset.Firewall.wixext -ext WixToolset.Util.wixext `
+            -d Version=0.0.1 -d SourceDir=..\..\server\bin\windows-amd64 -d WebDir=..\..\web\dist `
+            ervisio.wxs -o ervisio-x64.msi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ervisio-windows-x64
+          path: |
+            packaging/windows/ervisio-x64.msi
+            server/bin/windows-amd64/*.exe
+
+      - name: Install MSI
+        working-directory: packaging/windows
+        run: |
+          $p = Start-Process msiexec.exe -ArgumentList '/i', 'ervisio-x64.msi', '/qn', '/l*v', 'msi.log' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content msi.log -Tail 80; exit $p.ExitCode }
+          Get-Service Ervisio
+
+      - name: Smoke test (health, sign-in, session, RPC)
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Self-signed certificate: skip verification for this local check only.
+          $skip = @{ SkipCertificateCheck = $true }
+          $base = 'https://127.0.0.1:9090'
+          $ok = $false
+          for ($i = 0; $i -lt 30; $i++) {
+            try { $h = Invoke-RestMethod "$base/api/health" @skip; $ok = $true; break } catch { Start-Sleep 2 }
+          }
+          if (-not $ok) { throw 'ervisiod did not answer /api/health' }
+          "health: $($h | ConvertTo-Json -Compress)"
+
+          $pw = 'Ev-' + [guid]::NewGuid().ToString('N').Substring(0, 16) + '!a1'
+          $sec = ConvertTo-SecureString $pw -AsPlainText -Force
+          New-LocalUser -Name ervtest -Password $sec -PasswordNeverExpires | Out-Null
+          Add-LocalGroupMember -Group Administrators -Member ervtest
+
+          $hdr = @{ 'X-Requested-With' = 'ervisio' }
+          $body = @{ user = 'ervtest'; password = $pw } | ConvertTo-Json
+          $login = Invoke-RestMethod "$base/api/auth/login" -Method Post -Body $body -ContentType 'application/json' `
+            -Headers $hdr -SessionVariable s @skip
+          "login: $($login | ConvertTo-Json -Compress)"
+          $sess = Invoke-RestMethod "$base/api/auth/session" -WebSession $s @skip
+          if ($sess.os -ne 'windows') { throw "session.os is '$($sess.os)'" }
+
+          foreach ($m in 'system.info', 'services.list', 'logs.sources', 'files.list') {
+            $params = @{}
+            if ($m -eq 'files.list') { $params = @{ path = 'C:\' } }
+            if ($m -eq 'services.list') { $params = @{ type = 'service' } }
+            $rb = @{ method = $m; params = $params } | ConvertTo-Json
+            $r = Invoke-RestMethod "$base/api/rpc" -Method Post -Body $rb -ContentType 'application/json' `
+              -Headers $hdr -WebSession $s @skip
+            if ($r.error) { throw "$m failed: $($r.error | ConvertTo-Json -Compress)" }
+            "$m ok"
+          }
+
+      - name: Service log
+        if: always()
+        run: |
+          $log = Join-Path $env:ProgramData 'Ervisio\logs\ervisiod.log'
+          if (Test-Path $log) { Get-Content $log -Tail 200 }
+
+      - name: Uninstall MSI
+        if: always()
+        working-directory: packaging/windows
+        run: |
+          if (Test-Path ervisio-x64.msi) {
+            $p = Start-Process msiexec.exe -ArgumentList '/x', 'ervisio-x64.msi', '/qn' -Wait -PassThru
+            "uninstall exit: $($p.ExitCode)"
+          }
