@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -15,6 +16,9 @@ import (
 
 // isInside reports whether child is parent or lies below it.
 func isInside(child, parent string) bool {
+	if runtime.GOOS == "windows" {
+		return isInsideWin(child, parent)
+	}
 	if parent == "/" {
 		return true
 	}
@@ -146,6 +150,11 @@ var homeOverride string
 func homeDir() (string, error) {
 	if homeOverride != "" {
 		return homeOverride, nil
+	}
+	if runtime.GOOS == "windows" {
+		if h := os.Getenv("USERPROFILE"); h != "" {
+			return filepath.Clean(h), nil
+		}
 	}
 	if u, err := user.Current(); err == nil && u.HomeDir != "" {
 		return filepath.Clean(u.HomeDir), nil

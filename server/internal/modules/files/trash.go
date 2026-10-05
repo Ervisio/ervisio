@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,6 +17,9 @@ import (
 const trashDateLayout = "2006-01-02T15:04:05"
 
 func trashDirs() (files, info string, err error) {
+	if runtime.GOOS == "windows" {
+		return "", "", rpc.Errorf(rpc.Unavailable, "The Recycle Bin is not available from here. Delete the items permanently instead.")
+	}
 	home, err := homeDir()
 	if err != nil {
 		return "", "", err

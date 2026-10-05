@@ -14,3 +14,6 @@ func setOwner(e *Entry, fi os.FileInfo) {
 		e.Owner, e.Group = lookupUser(e.UID), lookupGroup(e.GID)
 	}
 }
+
+// setOwnerPath is used on Windows, where owners are looked up by path.
+func setOwnerPath(e *Entry, full string, fi os.FileInfo) {}

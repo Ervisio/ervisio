@@ -5,7 +5,9 @@ package files
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/ervisio/ervisio/server/internal/rpc"
@@ -85,6 +87,12 @@ var protected = map[string]bool{
 }
 
 func checkNotProtected(p string) error {
+	if runtime.GOOS == "windows" {
+		if windowsProtectedPath(p, windowsSystemDirs()) {
+			return rpc.Errorf(rpc.Forbidden, "%s is a system folder and cannot be removed or moved from here.", p)
+		}
+		return nil
+	}
 	if protected[p] {
 		return rpc.Errorf(rpc.Forbidden, "%s is a system folder and cannot be removed or moved from here.", p)
 	}
@@ -110,4 +118,15 @@ func human(n int64) string {
 		i++
 	}
 	return fmt.Sprintf("%.1f %ciB", f, u[i])
+}
+
+// windowsSystemDirs lists the system folders named by the environment.
+func windowsSystemDirs() []string {
+	var out []string
+	for _, k := range []string{"SystemRoot", "ProgramFiles", "ProgramFiles(x86)", "ProgramW6432", "ProgramData", "PUBLIC", "USERPROFILE"} {
+		if v := os.Getenv(k); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }

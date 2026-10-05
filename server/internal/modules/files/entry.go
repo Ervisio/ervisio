@@ -168,6 +168,7 @@ func makeEntry(dir string, fi os.FileInfo) Entry {
 	}
 	setOwner(&e, fi)
 	full := filepath.Join(dir, fi.Name())
+	setOwnerPath(&e, full, fi)
 	switch e.Type {
 	case "symlink":
 		if t, err := os.Readlink(full); err == nil {
@@ -202,7 +203,7 @@ func hList(ctx context.Context, c *rpc.Call) (any, error) {
 		return nil, err
 	}
 	parent := filepath.Dir(path)
-	if path == "/" {
+	if parent == path { // file system root ("/" or a drive root)
 		parent = ""
 	}
 	return map[string]any{"path": path, "entries": entries, "parent": parent, "truncated": truncated}, nil
@@ -260,8 +261,8 @@ func statEntry(path string) (Entry, error) {
 		return Entry{}, err
 	}
 	e := makeEntry(filepath.Dir(path), fi)
-	if path == "/" {
-		e.Name = "/"
+	if filepath.Dir(path) == path {
+		e.Name = path
 	}
 	e.Path = path
 	return e, nil
