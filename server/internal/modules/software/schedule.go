@@ -14,6 +14,9 @@ import (
 	"github.com/ervisio/ervisio/server/internal/sys"
 )
 
+// On Windows the same commands run from a Task Scheduler task
+// (\Ervisio\SoftwareUpdate, SYSTEM, daily); see schedule_task.go.
+//
 // The scheduled update is a systemd timer pair written to /etc/systemd/system:
 //
 //	ervisio-update.timer    OnCalendar=*-*-* HH:MM:00, Persistent=true
@@ -30,6 +33,9 @@ var onCalendarRe = regexp.MustCompile(`(?m)^OnCalendar=\*-\*-\* ([0-9]{2}:[0-9]{
 
 // currentSchedule returns the scheduled time ("03:00") or "".
 func currentSchedule() string {
+	if runtime.GOOS == "windows" {
+		return currentScheduleOS()
+	}
 	b, err := os.ReadFile(filepath.Join(systemdDir, timerName))
 	if err != nil {
 		return ""
@@ -91,14 +97,14 @@ func renderTimer(at string) string {
 
 func (m *manager) setSchedule(ctx context.Context, at *string) (string, error) {
 	if at == nil || *at == "" {
+		if runtime.GOOS == "windows" {
+			return "", removeScheduleOS(ctx)
+		}
 		_, _ = run(ctx, 30*time.Second, nil, "systemctl", "disable", "--now", timerName)
 		_ = os.Remove(filepath.Join(systemdDir, timerName))
 		_ = os.Remove(filepath.Join(systemdDir, serviceName))
 		_, _ = run(ctx, 30*time.Second, nil, "systemctl", "daemon-reload")
 		return "", nil
-	}
-	if runtime.GOOS == "windows" {
-		return "", rpc.Errorf(rpc.Unavailable, "Scheduled updates use systemd timers and are not available on Windows.")
 	}
 	if !atRe.MatchString(*at) {
 		return "", rpc.Errorf(rpc.Invalid, "The time must look like 03:00 (24-hour clock).")
@@ -117,6 +123,9 @@ func (m *manager) setSchedule(ctx context.Context, at *string) (string, error) {
 		if fp, err := m.flatpak.(scoped).WithScope("system").Upgrade(nil); err == nil {
 			plans = append(plans, fp)
 		}
+	}
+	if runtime.GOOS == "windows" {
+		return setScheduleOS(ctx, plans, *at)
 	}
 	svc, err := renderService(plans, optional)
 	if err != nil {

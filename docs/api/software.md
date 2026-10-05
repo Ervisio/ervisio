@@ -182,3 +182,7 @@ Creates (or, with `null`, removes) the systemd timer pair
 their failure does not fail the run), then `daemon-reload` and `enable --now`. `at` is 24-hour server time
 (`invalid` otherwise). The scheduled time shows up as `schedule.at` in `software.summary`. To inspect:
 `systemctl list-timers ervisio-update.timer`, `journalctl -u ervisio-update.service`.
+
+### Windows: scheduled updates and OS updates
+
+On Windows, `software.schedule` registers the Task Scheduler task `\Ervisio\SoftwareUpdate` (runs as SYSTEM, daily at the given `HH:MM`, start when available, network required, 4 h limit) with one action per plan step, e.g. `winget upgrade --all --silent …`. Access denied maps to `needs_admin`. `software.summary` also carries `osUpdates`: the number of pending Windows Update software items (cached 30 minutes; `-1` when unknown or not on Windows).
