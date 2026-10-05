@@ -325,5 +325,24 @@
     "kwDashboard": "dashboard",
     "kwWidgets": "widgets",
     "kwLayout": "layout"
+  },
+  "win": {
+    "library": {
+      "service": {
+        "desc": "One or more Windows services"
+      }
+    },
+    "widgets": {
+      "service": {
+        "desc": "Watch the state of Windows services."
+      },
+      "log": {
+        "desc": "The latest lines of the Event Log or a log file."
+      }
+    },
+    "settings": {
+      "errPath": "Enter the full path of the folder, starting with a drive letter (C:\\) or \\\\.",
+      "errFile": "Enter the full path of the log file, starting with a drive letter (C:\\) or \\\\."
+    }
   }
 }

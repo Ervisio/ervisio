@@ -590,5 +590,12 @@
       "curl": "Provalo da un terminale:"
     },
     "title": "Attività create dai plugin"
+  },
+  "win": {
+    "updates": {
+      "run": {
+        "timeout": "Il server non ha risposto entro 3 minuti. Ricarica la pagina tra poco; se ancora non risponde, controlla %ProgramData%\\Ervisio\\logs\\ervisiod.log sul server."
+      }
+    }
   }
 }

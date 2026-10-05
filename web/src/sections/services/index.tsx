@@ -352,12 +352,14 @@ export default function ServicesPage() {
   );
 }
 
+const WIN_HINTS = new Set(['start-limit', 'env-setup']);
+
 function FailedBanner({ failed, win, t, onLog, onRestart, onDisable, onShow }: { failed: FailedUnit[]; win: boolean; t: ReturnType<typeof useT>; onLog(n: string): void; onRestart(n: string): void; onDisable(n: string): void; onShow(): void }) {
   const one = failed.length === 1 ? failed[0] : null;
   let text: string;
   if (one) {
     const reason = one.result === 'exit-code' ? t('banner.exitCode', { name: short(one.name), code: one.exitCode }) : one.result ? t('banner.result', { name: short(one.name), result: one.result }) : t('banner.failed', { name: short(one.name) });
-    const hint = one.hintId ? t(`hints.${one.hintId}`) || one.hint : one.hint;
+    const hint = one.hintId ? t(win && WIN_HINTS.has(one.hintId) ? `win.hints.${one.hintId}` : `hints.${one.hintId}`) || one.hint : one.hint;
     text = hint ? `${reason} ${hint}` : reason;
   } else {
     const names = failed.slice(0, 3).map((f) => short(f.name)).join(', ');

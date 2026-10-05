@@ -217,6 +217,10 @@
         "title": "Disable {name}?",
         "text": "Its start type will be set to Disabled: it will not start, not even when another service needs it, until you set it back to Manual."
       }
+    },
+    "hints": {
+      "start-limit": "It restarted too often and Windows gave up. Fix the cause in the service log, then start it again.",
+      "env-setup": "Windows could not prepare the environment for the service. The log has the details."
     }
   }
 }

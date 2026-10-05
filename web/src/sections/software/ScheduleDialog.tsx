@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ApiError, call } from '../../api';
+import { ApiError, call, useSession } from '../../api';
 import { useT } from '../../i18n';
 import { Button, Dialog, Input, toast } from '../../ui';
 import { loadSummary } from './store';
@@ -7,6 +7,7 @@ import { loadSummary } from './store';
 /** Schedule the nightly update: a systemd timer (ervisio-update.timer) that runs the same upgrade as "Update all". */
 export function ScheduleDialog({ open, onClose, current }: { open: boolean; onClose(): void; current: string | null }) {
   const t = useT('software');
+  const win = useSession().session?.os === 'windows';
   const [at, setAt] = useState('03:00');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -37,7 +38,7 @@ export function ScheduleDialog({ open, onClose, current }: { open: boolean; onCl
       open={open}
       onClose={onClose}
       title={t('schedule.title')}
-      description={t('schedule.text')}
+      description={t(win ? 'win.schedule.text' : 'schedule.text')}
       icon="clock"
       onSubmit={(e) => {
         e.preventDefault();

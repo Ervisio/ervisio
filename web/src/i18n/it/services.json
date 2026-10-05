@@ -217,6 +217,10 @@
         "title": "Disabilitare {name}?",
         "text": "Il tipo di avvio verrà impostato su Disabilitato: non partirà, nemmeno se un altro servizio ne ha bisogno, finché non lo reimposti su Manuale."
       }
+    },
+    "hints": {
+      "start-limit": "Si è riavviato troppe volte e Windows ha rinunciato. Correggi la causa nel log del servizio, poi avvialo di nuovo.",
+      "env-setup": "Windows non è riuscito a preparare l'ambiente del servizio. I dettagli sono nel log."
     }
   }
 }

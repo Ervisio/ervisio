@@ -443,7 +443,7 @@ function Folder({ w, ctx }: { w: Widget; ctx: WidgetCtx }) {
   const path = String(w.settings?.path ?? '');
   if (!path) return <div className="ov-card-fill"><SetUp ctx={ctx} w={w} text={t('folder.empty')} /></div>;
   const shown = session?.home && path.startsWith(session.home) ? `~${path.slice(session.home.length)}` : path;
-  const name = w.settings?.label?.trim() || path.replace(/\/+$/, '').split('/').pop() || '/';
+  const name = w.settings?.label?.trim() || path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || path;
   return (
     <button type="button" className="ov-tile ov-tile--big hue-file" onClick={() => go('files', { path })}>
       <Icon name="files" />

@@ -80,6 +80,8 @@ function ActionFields({ d, onChange, onRemove, compact }: { d: ActionDraft; onCh
 }
 const hueNav: Record<HueId, string> = { ov: 'overview', term: 'terminal', file: 'files', log: 'logs', svc: 'services', sw: 'software', usr: 'users', plg: 'plugins' };
 
+const WIN_DESC = new Set(['service', 'log']);
+
 export function SettingsDialog({ widget, onClose, onSave, pluginTitle }: { widget: Widget | null; onClose(): void; onSave(settings: Record<string, any>): void; pluginTitle?: string }) {
   if (!widget) return null;
   return <Inner key={widget.id} widget={widget} onClose={onClose} onSave={onSave} pluginTitle={pluginTitle} />;
@@ -148,7 +150,7 @@ function Inner({ widget, onClose, onSave, pluginTitle }: { widget: Widget; onClo
       case 'log':
         if (source === 'unit' && !unit.trim()) return setError(t('settings.errUnit'));
         if (source === 'evt' && !channel.trim()) return setError(t('settings.errChannel'));
-        if (source === 'file' && !(win ? /^([a-zA-Z]:[\\/]|\\\\)/.test(file.trim()) : file.trim().startsWith('/'))) return setError(t('settings.errFile'));
+        if (source === 'file' && !(win ? /^([a-zA-Z]:[\\/]|\\\\)/.test(file.trim()) : file.trim().startsWith('/'))) return setError(t(win ? 'win.settings.errFile' : 'settings.errFile'));
         Object.assign(base, { source: source === 'evt' ? `evt:${channel.trim()}` : source, lines: parseInt(lines, 10) || 12 });
         if (source === 'unit') base.unit = unit.trim();
         if (source === 'file') base.file = file.trim();
@@ -160,7 +162,7 @@ function Inner({ widget, onClose, onSave, pluginTitle }: { widget: Widget; onClo
         break;
       }
       case 'folder':
-        if (!path.trim().startsWith('/')) return setError(t('settings.errPath'));
+        if (!(win ? /^([a-zA-Z]:[\\/]|\\\\)/.test(path.trim()) : path.trim().startsWith('/'))) return setError(t(win ? 'win.settings.errPath' : 'settings.errPath'));
         Object.assign(base, { path: path.trim(), label: label.trim() });
         break;
       case 'action': {
@@ -196,7 +198,7 @@ function Inner({ widget, onClose, onSave, pluginTitle }: { widget: Widget; onClo
       size="lg"
       icon="cog"
       title={t('settings.title', { name: t(`widgets.${type}.title`) })}
-      description={t(`widgets.${type}.desc`) === `widgets.${type}.desc` ? undefined : t(`widgets.${type}.desc`)}
+      description={(() => { const k = win && WIN_DESC.has(type) ? `win.widgets.${type}.desc` : `widgets.${type}.desc`; return t(k) === k ? undefined : t(k); })()}
       onSubmit={submit}
       footer={
         <>

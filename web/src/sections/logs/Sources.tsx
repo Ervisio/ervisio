@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button, Checkbox, Chip, EmptyState, Icon, IconButton, Input, Select, Skeleton, type IconName } from '../../ui';
-import { call } from '../../api';
+import { call, useSession } from '../../api';
 import { useT } from '../../i18n';
 import { hueFor } from './helpers';
 import type { Source, SourcesResult, Watcher, WatchFormat } from './types';
@@ -137,6 +137,7 @@ function WatchForm({ watchers, onAdd, onClose }: { watchers: Watcher[]; onAdd(w:
 
 export function Sources({ data, error, selected, watchers, onSelect, onAddWatcher, onRemoveWatcher, onUnlock, onRetry, canUnlock }: Props) {
   const t = useT('logs');
+  const win = useSession().session?.os === 'windows';
   const [adding, setAdding] = useState(false);
   const allOn = selected.length === 1 && selected[0] === 'all';
 
@@ -167,7 +168,7 @@ export function Sources({ data, error, selected, watchers, onSelect, onAddWatche
         {data && !data.journalReadable && (
           <div className="logs-lockbox">
             <b>{t('sources.unlockTitle')}</b>
-            <small>{t('sources.unlockText')}</small>
+            <small>{t(win ? 'win.sources.unlockText' : 'sources.unlockText')}</small>
             {canUnlock && <Button size="sm" variant="primary" icon="unlock" onClick={onUnlock}>{t('sources.unlock')}</Button>}
           </div>
         )}

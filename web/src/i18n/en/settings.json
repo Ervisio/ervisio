@@ -590,5 +590,12 @@
       "curl": "Try it from a terminal:"
     },
     "title": "Jobs created by plugins"
+  },
+  "win": {
+    "updates": {
+      "run": {
+        "timeout": "The server did not answer within 3 minutes. Reload the page in a moment; if it still does not answer, check %ProgramData%\\Ervisio\\logs\\ervisiod.log on the server."
+      }
+    }
   }
 }
