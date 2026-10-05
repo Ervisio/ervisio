@@ -45,10 +45,7 @@ jobs:
       - name: go vet
         working-directory: server
         run: go vet ./...
-      # Reported but not blocking yet: many tests still assume Linux. The install
-      # and sign-in check below is what must pass.
       - name: go test
-        continue-on-error: true
         working-directory: server
         env:
           CGO_ENABLED: '0'
