@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -241,6 +242,11 @@ func (e *bridgeExecutor) proc(ctx context.Context, admin bool) (*bridge.Proc, er
 	}
 	p, err := e.s.jobPool.acquire(key, func() (*bridge.Proc, error) {
 		if admin {
+			if runtime.GOOS == "windows" {
+				// Windows has no root account and the daemon is not wired to a
+				// SYSTEM bridge for jobs yet: fail with a clear message.
+				return nil, rpc.Errorf(rpc.Unavailable, "Steps that need administrator rights are not supported on Windows yet.")
+			}
 			ra, err := account.Lookup("root")
 			if err != nil {
 				return nil, rpc.Errorf(rpc.Unavailable, "Cannot look up root: %v", err)

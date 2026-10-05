@@ -17,6 +17,7 @@ import (
 	"syscall"
 
 	"github.com/ervisio/ervisio/server/internal/brand"
+	"github.com/ervisio/ervisio/server/internal/bridge"
 	"github.com/ervisio/ervisio/server/internal/legacy"
 	"github.com/ervisio/ervisio/server/internal/modules"
 	configmod "github.com/ervisio/ervisio/server/internal/modules/config"
@@ -43,7 +44,7 @@ func main() {
 	log.SetFlags(0)
 	log.SetPrefix(brand.BridgeBinary + ": ")
 
-	if *admin && os.Geteuid() != 0 {
+	if *admin && !bridge.Privileged() {
 		log.Fatal("--admin requires root")
 	}
 	if *admin {

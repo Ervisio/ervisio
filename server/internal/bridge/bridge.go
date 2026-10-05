@@ -249,6 +249,9 @@ func classifySudo(line string) rpc.Code {
 // fails at once with "a password is required" (Invalid) without running
 // PAM authentication, so nothing counts toward pam_faillock.
 func StartAdmin(ctx context.Context, s *Spec, password string) (*Proc, error) {
+	if adminViaToken {
+		return startAdminToken(ctx, s, password)
+	}
 	if strings.ContainsAny(password, "\n\r\x00") || len(password) > 4096 {
 		return nil, rpc.Errorf(rpc.Invalid, "invalid password")
 	}

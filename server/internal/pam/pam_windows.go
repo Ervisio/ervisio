@@ -171,6 +171,13 @@ func UserToken(user string) (syscall.Token, bool) {
 	return syscall.Token(t), ok
 }
 
+func lookupToken(user string) (windows.Token, bool) {
+	tokMu.Lock()
+	defer tokMu.Unlock()
+	t, ok := tokens[tokenKey(user)]
+	return t, ok
+}
+
 // Forget closes and drops the kept token of user (e.g. when the account is
 // refused on re-validation).
 func Forget(user string) {

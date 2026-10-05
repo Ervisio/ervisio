@@ -65,6 +65,8 @@ func (w *alertWatch) fresh(cur []watchedAlert) []watchedAlert {
 func (s *Server) readAlerts(ctx context.Context) ([]watchedAlert, error) {
 	var p *bridge.Proc
 	var err error
+	// (On Windows Geteuid is -1, so this always takes the user branch and
+	// never looks up "root".)
 	if os.Geteuid() == 0 {
 		var ra *account.Account
 		if ra, err = account.Lookup("root"); err != nil {
