@@ -23,6 +23,8 @@ jobs:
         shell: pwsh
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # tags, for the build version
       - uses: actions/setup-go@v5
         with:
           go-version-file: server/go.mod
@@ -62,8 +64,13 @@ jobs:
         env:
           CGO_ENABLED: '0'
         run: |
-          go build -trimpath -o bin/windows-amd64/ervisiod.exe ./cmd/ervisiod
-          go build -trimpath -o bin/windows-amd64/ervisio-bridge.exe ./cmd/ervisio-bridge
+          # Last tag plus a suffix (e.g. 0.5.0-12-gabc1234): plugins check it against
+          # the core version they need, so a build without it looks like 0.1.0.
+          $ver = (git describe --tags --always).TrimStart('v')
+          $ld = "-X github.com/ervisio/ervisio/server/internal/brand.Version=$ver"
+          "version: $ver"
+          go build -trimpath -ldflags $ld -o bin/windows-amd64/ervisiod.exe ./cmd/ervisiod
+          go build -trimpath -ldflags $ld -o bin/windows-amd64/ervisio-bridge.exe ./cmd/ervisio-bridge
 
       - name: Stage install folder
         run: |
