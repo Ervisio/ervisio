@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -104,7 +105,7 @@ func TestChannelsOverRPCNeverReturnSecrets(t *testing.T) {
 		t.Fatalf("list: %d %s", code, body)
 	}
 	fi, err := os.Stat(filepath.Join(state, "notify.json"))
-	if err != nil || fi.Mode().Perm() != 0o600 {
+	if err != nil || (runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600) {
 		t.Fatalf("channels file: %v %v", err, fi)
 	}
 	// A plugin that does not exist cannot notify.

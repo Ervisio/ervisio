@@ -33,13 +33,19 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      - name: Parse PowerShell scripts
+        run: |
+          foreach ($f in 'install-windows.ps1', 'packaging\windows\install.ps1') {
+            $errs = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $f), [ref]$null, [ref]$errs) | Out-Null
+            if ($errs) { $errs | ForEach-Object { "${f}: $_" }; exit 1 }
+            "$f parses"
+          }
+
       - name: go vet
         working-directory: server
         run: go vet ./...
-      # Reported but not blocking yet: many tests still assume Linux. The install
-      # and sign-in check below is what must pass.
       - name: go test
-        continue-on-error: true
         working-directory: server
         env:
           CGO_ENABLED: '0'
@@ -100,16 +106,34 @@ jobs:
           $sess = Invoke-RestMethod "$base/api/auth/session" -WebSession $s @skip
           if ($sess.os -ne 'windows') { throw "session.os is '$($sess.os)'" }
 
-          foreach ($m in 'system.info', 'services.list', 'logs.sources', 'files.list') {
-            $params = @{}
-            if ($m -eq 'files.list') { $params = @{ path = 'C:\' } }
-            if ($m -eq 'services.list') { $params = @{ type = 'service' } }
-            $rb = @{ method = $m; params = $params } | ConvertTo-Json
-            $r = Invoke-RestMethod "$base/api/rpc" -Method Post -Body $rb -ContentType 'application/json' `
-              -Headers $hdr -WebSession $s @skip
-            if ($r.error) { throw "$m failed: $($r.error | ConvertTo-Json -Compress)" }
-            "$m ok"
+          # Each call is reported; the step fails at the end if any failed.
+          $calls = @(
+            @{ m = 'system.host'; p = @{} },
+            @{ m = 'system.metrics'; p = @{} },
+            @{ m = 'services.list'; p = @{ type = 'service' } },
+            @{ m = 'services.summary'; p = @{} },
+            @{ m = 'logs.sources'; p = @{} },
+            @{ m = 'logs.query'; p = @{ sources = @('evt:System'); limit = 5 } },
+            @{ m = 'files.places'; p = @{} },
+            @{ m = 'files.list'; p = @{ path = 'C:\' } },
+            @{ m = 'overview.processes'; p = @{} },
+            @{ m = 'users.list'; p = @{} }
+          )
+          $failed = 0
+          foreach ($c in $calls) {
+            $rb = @{ method = $c.m; params = $c.p } | ConvertTo-Json -Depth 5
+            try {
+              $r = Invoke-RestMethod "$base/api/rpc" -Method Post -Body $rb -ContentType 'application/json' `
+                -Headers $hdr -WebSession $s @skip
+              $out = $r.result | ConvertTo-Json -Depth 3 -Compress
+              if ($out.Length -gt 300) { $out = $out.Substring(0, 300) + '...' }
+              "OK   $($c.m): $out"
+            } catch {
+              $failed++
+              "FAIL $($c.m): $($_.ErrorDetails.Message)"
+            }
           }
+          if ($failed) { throw "$failed RPC call(s) failed" }
 
       - name: Service log
         if: always()

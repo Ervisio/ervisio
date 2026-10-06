@@ -20,6 +20,16 @@ const adminViaToken = true
 // Privileged reports whether the process token is elevated (--admin needs it).
 func Privileged() bool { return windows.GetCurrentProcessToken().IsElevated() }
 
+// RunningAsServiceIdentity reports whether the process runs as LocalSystem
+// (S-1-5-18, the service identity), where --dev-insecure-noauth is refused as
+// it is for root on Linux. An elevated interactive administrator is allowed:
+// on Windows that is a developer running as their own user (the dev server
+// does not switch users and listens on loopback only).
+func RunningAsServiceIdentity() bool {
+	u, err := windows.GetCurrentProcessToken().GetTokenUser()
+	return err != nil || u.User.Sid.IsWellKnown(windows.WinLocalSystemSid)
+}
+
 // startAdminToken is StartAdmin on Windows. The daemon (SYSTEM or an
 // administrator) re-verifies the password with LogonUser, takes the user's
 // elevated token (the linked token of a filtered UAC token, or the token

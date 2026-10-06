@@ -127,7 +127,7 @@ func New(opts Options) (*Server, error) {
 	if opts.DevAuthorizedKeys != "" && !opts.Dev {
 		return nil, errors.New("--dev-authorized-keys requires --dev")
 	}
-	if opts.NoAuth && bridge.Privileged() {
+	if opts.NoAuth && bridge.RunningAsServiceIdentity() {
 		return nil, errors.New("--dev-insecure-noauth refuses to run as root")
 	}
 	if !opts.Dev && !bridge.Privileged() {

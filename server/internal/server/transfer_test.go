@@ -27,7 +27,7 @@ import (
 )
 
 const xferManifest = `{"id":"xfer","name":"Xfer","version":"1.0.0","entry":"index.js",
- "capabilities":{"commands":[{"name":"seq","argv":["seq","1","{0}"],"args":[{"pattern":"[0-9]{1,6}"}],"admin":false}],
+ "capabilities":{"commands":[{"name":"seq","argv":%SEQ%,"args":[{"pattern":"[0-9]{1,6}"}],"admin":false}],
   "http":[{"name":"svc","socket":"%SOCK%","admin":false,"headers":["X-Registry-Auth","Content-Type"],
     "rules":[{"methods":["GET"],"path":"/dl/[a-z0-9]+"},{"methods":["POST","PUT"],"path":"/up"},{"methods":["POST"],"path":"/act"},{"methods":["POST"],"path":"/build"}],
     "maxBody":4096,"maxUpload":2000000,"timeoutSec":5},
@@ -35,6 +35,14 @@ const xferManifest = `{"id":"xfer","name":"Xfer","version":"1.0.0","entry":"inde
   "files":{"read":[],"write":[]},"sockets":[],"network":[]},
  "contributes":{"pages":[{"id":"main","title":"Xfer"}],"widgets":[],"snippets":[]},
  "visibleTo":{"groups":[]}}`
+
+// seqArgv is the manifest argv of the "seq" command: Unix seq 1 N, or the cmd.exe loop that prints the same lines.
+func seqArgv() string {
+	if runtime.GOOS == "windows" {
+		return `["cmd","/c","for /l %i in (1,1,{0}) do @echo %i"]`
+	}
+	return `["seq","1","{0}"]`
+}
 
 type xferEnv struct {
 	ts     *httptest.Server
@@ -105,7 +113,7 @@ func newXferEnv(t *testing.T) *xferEnv {
 	plugins := t.TempDir()
 	p := filepath.Join(plugins, "xfer")
 	os.MkdirAll(p, 0o755)
-	os.WriteFile(filepath.Join(p, "manifest.json"), []byte(strings.ReplaceAll(xferManifest, "%SOCK%", strings.ReplaceAll(sock, `\`, `\\`))), 0o644)
+	os.WriteFile(filepath.Join(p, "manifest.json"), []byte(strings.ReplaceAll(strings.ReplaceAll(xferManifest, "%SEQ%", seqArgv()), "%SOCK%", strings.ReplaceAll(sock, `\`, `\\`))), 0o644)
 	os.WriteFile(filepath.Join(p, "index.js"), []byte("export default () => {}"), 0o644)
 	web := t.TempDir()
 	os.WriteFile(filepath.Join(web, "index.html"), []byte("<!doctype html>app"), 0o644)
@@ -229,6 +237,7 @@ func TestPluginDownloadCommandAndChunked(t *testing.T) {
 	resp, _ := e.cl.Get(e.ts.URL + r["url"].(string))
 	b, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
+	b = []byte(strings.ReplaceAll(string(b), "\r\n", "\n")) // cmd.exe ends lines with CRLF
 	if !strings.HasPrefix(string(b), "1\n2\n3\n") || !strings.HasSuffix(string(b), "999\n1000\n") {
 		t.Fatalf("command output: %d bytes", len(b))
 	}

@@ -5,7 +5,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -135,7 +134,7 @@ func (s *Server) keyAuthorized(a *account.Account, pub ssh.PublicKey, fromIP str
 // readDevAuthorizedKeys reads the --dev-authorized-keys file after
 // checkDevAuthorizedKeys (at most 1 MiB).
 func readDevAuthorizedKeys(path string) ([]byte, error) {
-	f, err := os.OpenFile(path, os.O_RDONLY|oNoFollow|oNonBlock, 0)
+	f, err := openDevAuthorizedKeys(path)
 	if err != nil {
 		return nil, err
 	}

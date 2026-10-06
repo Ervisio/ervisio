@@ -139,6 +139,8 @@ To build:
 
 Ervisio needs Linux with systemd on x86-64 or ARM64, and glibc 2.17 or newer (Amazon Linux 2, RHEL 8, Debian 10, Ubuntu 20.04, or newer).
 
+On Windows, see [Windows](#windows): one command in an Administrator PowerShell.
+
 ### One-line install
 
 ```sh
@@ -256,7 +258,31 @@ Where things are installed, for each method, and how to publish more packages: [
 
 ## Windows
 
-Build with `make build-windows`, then run `packaging\windows\install.ps1` as Administrator: it installs the `Ervisio` service to `%ProgramFiles%\Ervisio`, keeps configuration and data in `%ProgramData%\Ervisio` and opens port 9090. `ervisiod.exe --dev` still works from a console. See [docs/PACKAGING.md](docs/PACKAGING.md#windows).
+Ervisio also runs on Windows 10 1809 / Windows Server 2019 or newer (x86-64 or ARM64). Windows support is new: it is built and tested on GitHub's Windows runners, but has had little use on real servers.
+
+### One-command install
+
+In an elevated (Administrator) PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/ervisio/ervisio/main/install-windows.ps1 | iex
+```
+
+The script downloads the latest release for your processor, checks the archive against the release's `SHA256SUMS`, installs the `Ervisio` service in `%ProgramFiles%\Ervisio` (it starts automatically, as LocalSystem), keeps configuration, certificate and data in `%ProgramData%\Ervisio` (readable only by SYSTEM and Administrators) and opens TCP port 9090 in the firewall. At the end it prints the addresses to open. Sign in with a Windows account of the machine (`Administrator`, `.\user` or `DOMAIN\user`); members of Administrators can unlock administrator rights. Running it again upgrades and keeps the configuration. It does not yet check the release signature (`install.sh` on Linux does), only the checksum.
+
+Options, or removal:
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/ervisio/ervisio/main/install-windows.ps1))) -Version 1.2.3 -Port 8443
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/ervisio/ervisio/main/install-windows.ps1))) -Uninstall            # keeps %ProgramData%\Ervisio
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/ervisio/ervisio/main/install-windows.ps1))) -Uninstall -PurgeData # removes it too
+```
+
+The service log is `%ProgramData%\Ervisio\logs\ervisiod.log`.
+
+### By hand or from source
+
+Each release has `ervisio-<version>-windows-<arch>.zip` with `ervisiod.exe`, `ervisio-bridge.exe`, `web\` and `install.ps1`: extract it and run `.\install.ps1` as Administrator. From source, `make build-windows` builds the binaries. `ervisiod.exe --dev` still works from a console. See [docs/PACKAGING.md](docs/PACKAGING.md#windows).
 
 ## Configuration
 

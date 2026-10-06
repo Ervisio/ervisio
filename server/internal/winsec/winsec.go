@@ -8,6 +8,7 @@ package winsec
 
 import (
 	"errors"
+	"fmt"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -193,4 +194,60 @@ func ProcessUser() (*windows.SID, error) {
 		return nil, err
 	}
 	return u.User.Sid, nil
+}
+
+// EnablePrivileges enables the named privileges (SeBackupPrivilege...) in the
+// process token, for the privileges it holds (an elevated administrator holds
+// them disabled). It reports the first failure; privileges the token does not
+// hold are an error too.
+func EnablePrivileges(names ...string) error {
+	var t windows.Token
+	if err := windows.OpenProcessToken(windows.CurrentProcess(), windows.TOKEN_ADJUST_PRIVILEGES|windows.TOKEN_QUERY, &t); err != nil {
+		return err
+	}
+	defer t.Close()
+	for _, n := range names {
+		var luid windows.LUID
+		if err := windows.LookupPrivilegeValue(nil, windows.StringToUTF16Ptr(n), &luid); err != nil {
+			return err
+		}
+		tp := windows.Tokenprivileges{PrivilegeCount: 1}
+		tp.Privileges[0] = windows.LUIDAndAttributes{Luid: luid, Attributes: windows.SE_PRIVILEGE_ENABLED}
+		if err := windows.AdjustTokenPrivileges(t, false, &tp, 0, nil, nil); err != nil {
+			return err
+		}
+		// AdjustTokenPrivileges succeeds when it assigned only some.
+		if windows.GetLastError() == windows.ERROR_NOT_ALL_ASSIGNED {
+			return fmt.Errorf("privilege %s is not held", n)
+		}
+	}
+	return nil
+}
+
+// TakeOwnership makes owner the owner of path and gives it a protected DACL of
+// entries (inheritable ones reach what the folder holds). It uses the path,
+// not a handle, so the system walks the children too; the process needs
+// SeTakeOwnershipPrivilege and SeRestorePrivilege (EnablePrivileges) when the
+// current DACL denies it.
+func TakeOwnership(path string, owner *windows.SID, entries []Entry) error {
+	ea := make([]windows.EXPLICIT_ACCESS, len(entries))
+	for i, e := range entries {
+		ea[i] = windows.EXPLICIT_ACCESS{
+			AccessPermissions: windows.ACCESS_MASK(e.Mask),
+			AccessMode:        windows.GRANT_ACCESS,
+			Inheritance:       e.Inherit,
+			Trustee: windows.TRUSTEE{
+				TrusteeForm:  windows.TRUSTEE_IS_SID,
+				TrusteeType:  windows.TRUSTEE_IS_UNKNOWN,
+				TrusteeValue: windows.TrusteeValueFromSID(e.SID),
+			},
+		}
+	}
+	acl, err := windows.ACLFromEntries(ea, nil)
+	if err != nil {
+		return err
+	}
+	return windows.SetNamedSecurityInfo(path, windows.SE_FILE_OBJECT,
+		windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION,
+		owner, nil, acl, nil)
 }

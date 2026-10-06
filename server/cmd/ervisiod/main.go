@@ -11,6 +11,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/ervisio/ervisio/server/internal/brand"
@@ -110,7 +111,7 @@ func run(ctx context.Context) {
 	if *noAuth && !*dev {
 		log.Fatal("--dev-insecure-noauth requires --dev")
 	}
-	if *noAuth && bridge.Privileged() {
+	if *noAuth && bridge.RunningAsServiceIdentity() {
 		log.Fatal("--dev-insecure-noauth refuses to run as root")
 	}
 	// A machine that ran LinuxAdmin: its configuration, certificate, plugins
@@ -207,8 +208,9 @@ func run(ctx context.Context) {
 	}
 
 	helper := ""
-	if !*dev {
-		// The daemon's own binary serves as the PAM session helper.
+	if !*dev && runtime.GOOS != "windows" {
+		// The daemon's own binary serves as the PAM session helper. Windows has
+		// no PAM session: the bridge starts directly with the user's token.
 		exe, err := os.Executable()
 		if err != nil {
 			log.Fatal(err)

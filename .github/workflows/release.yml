@@ -5,7 +5,7 @@
 # vX.Y.Z      -> stable release ("latest"): offered to every machine on the stable channel
 # vX.Y.Z-rc.1 -> pre-release: offered only to machines on the prerelease channel
 #
-# Assets: ervisio-<version>-linux-{amd64,arm64}.tar.gz, the packages
+# Assets: ervisio-<version>-linux-{amd64,arm64}.tar.gz, ervisio-<version>-windows-{amd64,arm64}.zip, the packages
 # ervisio_<version>_{amd64,arm64}.deb and ervisio-<version>-1.{x86_64,aarch64}.rpm
 # (nfpm), the compatibility archives linuxadmin-<version>-linux-{amd64,arm64}.tar.gz
 # that consoles still running LinuxAdmin (Ervisio's name up to 0.2.0) update
@@ -143,8 +143,42 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
+  windows:
+    needs: [meta, web]
+    runs-on: ubuntu-24.04
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+      - name: Build Windows archives (brand.Version = ${{ env.VERSION }})
+        run: |
+          make build-windows VERSION="$VERSION"
+          mkdir -p dist
+          for arch in amd64 arm64; do
+            d="$RUNNER_TEMP/ervisio-$VERSION-windows-$arch"
+            mkdir -p "$d"
+            cp server/bin/windows-$arch/*.exe packaging/windows/install.ps1 "$d/"
+            cp -r web/dist "$d/web"
+            (cd "$RUNNER_TEMP" && zip -qr "$GITHUB_WORKSPACE/dist/ervisio-$VERSION-windows-$arch.zip" "ervisio-$VERSION-windows-$arch")
+          done
+          ls -l dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-windows
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 3
+
   release:
-    needs: [meta, build]
+    needs: [meta, build, windows]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -181,7 +215,8 @@ jobs:
           assets=("ervisio-$VERSION-linux-amd64.tar.gz" "ervisio-$VERSION-linux-arm64.tar.gz"
                   "ervisio_${VERSION}_amd64.deb" "ervisio_${VERSION}_arm64.deb"
                   "ervisio-$VERSION-1.x86_64.rpm" "ervisio-$VERSION-1.aarch64.rpm"
-                  "linuxadmin-$VERSION-linux-amd64.tar.gz" "linuxadmin-$VERSION-linux-arm64.tar.gz")
+                  "linuxadmin-$VERSION-linux-amd64.tar.gz" "linuxadmin-$VERSION-linux-arm64.tar.gz"
+                  "ervisio-$VERSION-windows-amd64.zip" "ervisio-$VERSION-windows-arm64.zip")
           ls -l "${assets[@]}"
           # Every asset is listed, so the packages are covered by the signature too.
           sha256sum "${assets[@]}" > SHA256SUMS
@@ -213,6 +248,7 @@ jobs:
 
           ---
           Install: `curl -fsSL https://raw.githubusercontent.com/ervisio/ervisio/main/install.sh | sudo sh` (or download `install.sh`, read it, then `sudo sh install.sh`).
+          Windows (10 1809+ / Server 2019+), in an elevated PowerShell: `irm https://raw.githubusercontent.com/ervisio/ervisio/main/install-windows.ps1 | iex`.
           Packages: the `.deb` (Debian 12+, Ubuntu 22.04+) and `.rpm` (Fedora, RHEL 9+, openSUSE) below; a packaged install is updated by its package manager.
           Consoles installed with `install.sh` update from **Settings › About › Check for updates**.
           Ervisio was called LinuxAdmin: LinuxAdmin consoles update to Ervisio the same way (they use the `linuxadmin-*.tar.gz` archives), and `install.sh` or the packages move an existing LinuxAdmin with its settings.
@@ -227,7 +263,7 @@ jobs:
           if [ "$PRERELEASE" = true ]; then flags+=(--prerelease --latest=false); else flags+=(--latest); fi
           gh release create "$TAG" "${flags[@]}" \
             dist/ervisio-"$VERSION"-linux-*.tar.gz dist/ervisio_"$VERSION"_*.deb dist/ervisio-"$VERSION"-1.*.rpm \
-            dist/linuxadmin-"$VERSION"-linux-*.tar.gz \
+            dist/linuxadmin-"$VERSION"-linux-*.tar.gz dist/ervisio-"$VERSION"-windows-*.zip \
             dist/SHA256SUMS dist/SHA256SUMS.sig
 
   # AUR: off unless the AUR_SSH_KEY secret exists (docs/PACKAGING.md). Stable

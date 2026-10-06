@@ -12,10 +12,21 @@ import (
 	"github.com/ervisio/ervisio/server/internal/winsec"
 )
 
-const (
-	oNoFollow = 0
-	oNonBlock = 0
-)
+// openDevAuthorizedKeys opens the file itself, not what a symlink or junction
+// points to (FILE_FLAG_OPEN_REPARSE_POINT), so checkDevAuthorizedKeys sees
+// the reparse point and refuses it.
+func openDevAuthorizedKeys(path string) (*os.File, error) {
+	p, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return nil, &os.PathError{Op: "open", Path: path, Err: err}
+	}
+	h, err := windows.CreateFile(p, windows.GENERIC_READ, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE,
+		nil, windows.OPEN_EXISTING, windows.FILE_ATTRIBUTE_NORMAL|windows.FILE_FLAG_OPEN_REPARSE_POINT, 0)
+	if err != nil {
+		return nil, &os.PathError{Op: "open", Path: path, Err: err}
+	}
+	return os.NewFile(uintptr(h), path), nil
+}
 
 // checkDevAuthorizedKeys checks the --dev-authorized-keys file on its open
 // handle: a regular file owned by the daemon's user, SYSTEM or
@@ -26,7 +37,7 @@ func checkDevAuthorizedKeys(f *os.File) error {
 	if err != nil {
 		return err
 	}
-	if in.Dir || in.Reparse {
+	if in.Dir || in.Reparse { // a symlink or junction is refused, as O_NOFOLLOW does on unix
 		return fmt.Errorf("--dev-authorized-keys %s: not a regular file", f.Name())
 	}
 	me, err := winsec.ProcessUser()
@@ -54,4 +65,9 @@ func checkDevAuthorizedKeys(f *os.File) error {
 
 // keyLogonToken gets the user's token without a password (S4U logon, see
 // pam.AuthenticateS4U) so the bridge can start as the user.
-func (s *Server) keyLogonToken(name string) error { return pam.AuthenticateS4U(name) }
+func (s *Server) keyLogonToken(name string) error {
+	if s.opts.Dev { // --dev does not switch user: no token needed
+		return nil
+	}
+	return pam.AuthenticateS4U(name)
+}

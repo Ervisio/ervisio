@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf16"
 	"unsafe"
 
@@ -176,6 +177,13 @@ func startPTY(cmd *exec.Cmd, cols, rows uint16) (ptyConn, error) {
 	var si windows.StartupInfoEx
 	si.Cb = uint32(unsafe.Sizeof(si))
 	si.ProcThreadAttributeList = al.List()
+	// Without STARTF_USESTDHANDLES the child can get this process's own
+	// standard handles (a pipe or file when we run as a service or under a
+	// test runner) instead of the pseudo console: its output then goes to our
+	// stdout and the console stays empty. Naming invalid handles (as WezTerm does) makes it use the
+	// console it is attached to.
+	si.Flags |= windows.STARTF_USESTDHANDLES
+	si.StdInput, si.StdOutput, si.StdErr = windows.InvalidHandle, windows.InvalidHandle, windows.InvalidHandle
 
 	var pi windows.ProcessInformation
 	err = windows.CreateProcess(appName, cmdline, nil, nil, false,
@@ -209,6 +217,11 @@ func startPTY(cmd *exec.Cmd, cols, rows uint16) (ptyConn, error) {
 		windows.CloseHandle(h)
 		conPTYs.Delete(pid)
 		c.hangup()
+		// The console host can keep the output pipe open for a while after
+		// the process is gone; give the reader a moment to drain what is
+		// left, then close our end so the session sees the end.
+		time.Sleep(500 * time.Millisecond)
+		_ = c.out.Close()
 	}(pi.Process)
 	return c, nil
 }
@@ -222,7 +235,9 @@ func resizePTY(p ptyConn, cols, rows uint16) error {
 // went away. There are no process groups to signal, so self is ignored.
 func hangupProc(pid int, self bool) {
 	if v, ok := conPTYs.Load(pid); ok {
-		v.(*conPTY).hangup()
+		// ClosePseudoConsole can block until output is drained; don't hold
+		// up the caller (Kill falls back to TerminateProcess after its grace).
+		go v.(*conPTY).hangup()
 	}
 }
 

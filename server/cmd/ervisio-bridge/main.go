@@ -101,7 +101,7 @@ func main() {
 
 	err = rpc.Serve(ctx, reg, os.Stdin, proto, rpc.ServeOptions{
 		Admin:   *admin,
-		UID:     os.Geteuid(),
+		UID:     selfUID(),
 		Version: brand.Version,
 	})
 	if err != nil && err != context.Canceled {
