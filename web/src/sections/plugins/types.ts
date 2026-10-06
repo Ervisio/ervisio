@@ -8,6 +8,8 @@ export interface Command {
   timeoutSec?: number;
   /** Runs only in a terminal (sdk.api.pty). */
   pty?: boolean;
+  /** Systems this entry is for; missing = all the plugin's. */
+  platforms?: string[];
 }
 /** An HTTP API on a unix socket (capabilities.http, SDK v3). */
 export interface HttpApi {
@@ -20,9 +22,11 @@ export interface HttpApi {
   maxBody?: number;
   maxUpload?: number;
   timeoutSec?: number;
+  /** Systems this entry is for; on Windows `socket` may be a named pipe (\\.\pipe\name). */
+  platforms?: string[];
 }
 /** A capabilities.files entry: a path, or an object with admin / create (SDK v3). */
-export type Folder = string | { path: string; admin?: boolean; adminUnlessGroup?: string; create?: boolean };
+export type Folder = string | { path: string; admin?: boolean; adminUnlessGroup?: string; create?: boolean; platforms?: string[] };
 export interface Capabilities {
   commands: Command[];
   /** Missing from older daemons and catalogs. */

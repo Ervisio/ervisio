@@ -22,8 +22,8 @@ export interface PluginManifest {
   devUnsigned?: boolean;
   location?: string;
   capabilities?: {
-    commands?: { name: string; admin?: boolean; adminUnlessGroup?: string; args?: unknown[]; pty?: boolean; remote?: string }[];
-    http?: { name: string; socket: string; admin?: boolean; adminUnlessGroup?: string; headers?: string[]; rules?: { methods: string[]; path: string }[]; maxBody?: number; timeoutSec?: number; remote?: string }[];
+    commands?: { name: string; admin?: boolean; adminUnlessGroup?: string; args?: unknown[]; pty?: boolean; remote?: string; platforms?: string[] }[];
+    http?: { name: string; socket: string; admin?: boolean; adminUnlessGroup?: string; headers?: string[]; rules?: { methods: string[]; path: string }[]; maxBody?: number; timeoutSec?: number; remote?: string; platforms?: string[] }[];
     /** A path (SDK v2) or {path, admin, adminUnlessGroup, create} (SDK v3). */
     files?: { read?: PluginFolder[]; write?: PluginFolder[] };
     sockets?: string[];
@@ -40,7 +40,7 @@ export interface PluginManifest {
   };
 }
 
-export type PluginFolder = string | { path: string; admin?: boolean; adminUnlessGroup?: string; create?: boolean };
+export type PluginFolder = string | { path: string; admin?: boolean; adminUnlessGroup?: string; create?: boolean; platforms?: string[] };
 
 /** A page contributed by a plugin (from its manifest). It renders in the plugin's sandboxed frame. */
 export interface PluginPageInfo {

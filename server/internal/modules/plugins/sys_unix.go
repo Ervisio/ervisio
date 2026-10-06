@@ -3,7 +3,10 @@
 package plugins
 
 import (
+	"context"
+	"fmt"
 	"io/fs"
+	"net"
 	"os"
 	"os/user"
 	"syscall"
@@ -52,4 +55,9 @@ func platformCaller(c *caller) {
 			c.Admin = true // can unlock administrator rights
 		}
 	}
+}
+
+// dialPipe: named pipes exist only on Windows.
+func dialPipe(_ context.Context, name string) (net.Conn, error) {
+	return nil, fmt.Errorf("%s: named pipes are a Windows feature", name)
 }

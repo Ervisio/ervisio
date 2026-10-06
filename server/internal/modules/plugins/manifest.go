@@ -64,10 +64,16 @@ type Manifest struct {
 	Capabilities Capabilities      `json:"capabilities"`
 	Contributes  Contributes       `json:"contributes"`
 	VisibleTo    VisibleTo         `json:"visibleTo"`
+	// declared is Capabilities as written, with the entries for every
+	// system; Capabilities keeps only this system's (platform.go).
+	declared Capabilities
 }
 
 // Capabilities is everything a plugin may ask the host to do.
 type Capabilities struct {
+	// plats are the plugin's platforms, set by Manifest.validate so the
+	// entries are checked for the systems they run on.
+	plats    []string
 	Commands []Command `json:"commands"`
 	// HTTP lists the HTTP APIs on unix sockets the plugin may call (SDK v3).
 	HTTP    []HTTPAPI  `json:"http"`
@@ -103,10 +109,15 @@ type Folder struct {
 	AdminUnlessGroup string `json:"adminUnlessGroup,omitempty"`
 	// Create makes the daemon create the folder when a write targets it.
 	Create bool `json:"create,omitempty"`
+	// Platforms limits the entry to some systems (platform.go); empty = all
+	// the plugin's platforms.
+	Platforms []string `json:"platforms,omitempty"`
 }
 
 // plain reports whether the entry is a bare path (written as a string).
-func (f Folder) plain() bool { return !f.Admin && f.AdminUnlessGroup == "" && !f.Create }
+func (f Folder) plain() bool {
+	return !f.Admin && f.AdminUnlessGroup == "" && !f.Create && len(f.Platforms) == 0
+}
 
 // UnmarshalJSON accepts a path string or a strict object.
 func (f *Folder) UnmarshalJSON(b []byte) error {
@@ -120,7 +131,7 @@ func (f *Folder) UnmarshalJSON(b []byte) error {
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&v); err != nil {
-		return fmt.Errorf("a files entry is a path or {path, admin, adminUnlessGroup, create}: %v", err)
+		return fmt.Errorf("a files entry is a path or {path, admin, adminUnlessGroup, create, platforms}: %v", err)
 	}
 	*f = Folder(v)
 	return nil
@@ -159,6 +170,9 @@ type HTTPAPI struct {
 	TimeoutSec int `json:"timeoutSec,omitempty"`
 	// Remote ("docker") lets calls target an environment instead of Socket.
 	Remote string `json:"remote,omitempty"`
+	// Platforms limits the entry to some systems; empty = all the plugin's.
+	// On Windows Socket may be a named pipe (\\.\pipe\name).
+	Platforms []string `json:"platforms,omitempty"`
 }
 
 // HTTPRule allows Methods on the URL paths matching Path (a regexp that
@@ -186,6 +200,9 @@ type Command struct {
 	// Remote ("docker") lets the command run against an environment: argv
 	// holds one {env} item, replaced by the endpoint's address.
 	Remote string `json:"remote,omitempty"`
+	// Platforms limits the entry to some systems; empty = all the plugin's.
+	// Two entries may share a name when their platforms do not overlap.
+	Platforms []string `json:"platforms,omitempty"`
 }
 
 // ArgSpec constrains one {N} slot of argv.
@@ -241,6 +258,8 @@ func ParseManifest(data []byte) (*Manifest, error) {
 		return nil, err
 	}
 	m.normalise()
+	m.declared = m.Capabilities
+	m.Capabilities = m.Capabilities.forHost()
 	return &m, nil
 }
 
@@ -414,6 +433,7 @@ func (m *Manifest) validate() error {
 			return fmt.Errorf("files must list the entry file %q", m.Entry)
 		}
 	}
+	m.Capabilities.plats = effectivePlatforms(m.Platforms)
 	if err := m.Capabilities.validate(); err != nil {
 		return err
 	}
@@ -431,15 +451,30 @@ func (m *Manifest) validate() error {
 	return nil
 }
 
+// validAbsOn is validAbs for every system in on: a Linux path must be a
+// clean /path, a Windows one may also be C:\dir.
+func validAbsOn(p string, allowHome bool, on []string) bool {
+	for _, o := range on {
+		if !validAbsFor(p, allowHome, o == "windows") {
+			return false
+		}
+	}
+	return true
+}
+
 func validAbs(p string, allowHome bool) bool {
+	return validAbsFor(p, allowHome, runtime.GOOS == "windows")
+}
+
+func validAbsFor(p string, allowHome, windows bool) bool {
 	if len(p) == 0 || len(p) > 512 || strings.ContainsAny(p, "\x00\n") {
 		return false
 	}
 	if allowHome && (p == "~" || strings.HasPrefix(p, "~/")) {
 		return !strings.Contains(p, "..")
 	}
-	if runtime.GOOS == "windows" && filepath.VolumeName(p) != "" {
-		return filepath.IsAbs(p) && filepath.Clean(p) == p // C:\dir style
+	if windows && winDriveRe.MatchString(p) {
+		return !strings.Contains(p, "/") && !hasDotDot(p) && !strings.Contains(p, `\\`) && (len(p) == 3 || !strings.HasSuffix(p, `\`))
 	}
 	return path.IsAbs(p) && path.Clean(p) == p
 }
@@ -448,30 +483,34 @@ func (c *Capabilities) validate() error {
 	if len(c.Commands) > maxCommands {
 		return fmt.Errorf("capabilities.commands: at most %d commands", maxCommands)
 	}
-	seen := map[string]bool{}
+	seen := map[string][][]string{}
 	for i := range c.Commands {
 		cmd := &c.Commands[i]
+		if err := c.entryPlatforms(cmd.Platforms); err != nil {
+			return fmt.Errorf("command %q: %v", cmd.Name, err)
+		}
 		if err := cmd.validate(); err != nil {
 			return fmt.Errorf("command %q: %v", cmd.Name, err)
 		}
-		if seen[cmd.Name] {
-			return fmt.Errorf("command %q is declared twice", cmd.Name)
+		if c.clash(seen, cmd.Name, cmd.Platforms) {
+			return fmt.Errorf("command %q is declared twice for the same system", cmd.Name)
 		}
-		seen[cmd.Name] = true
 	}
 	if len(c.HTTP) > maxHTTPAPIs {
 		return fmt.Errorf("capabilities.http: at most %d entries", maxHTTPAPIs)
 	}
-	seen = map[string]bool{}
+	seen = map[string][][]string{}
 	for i := range c.HTTP {
 		h := &c.HTTP[i]
-		if err := h.validate(); err != nil {
+		if err := c.entryPlatforms(h.Platforms); err != nil {
 			return fmt.Errorf("http %q: %v", h.Name, err)
 		}
-		if seen[h.Name] {
-			return fmt.Errorf("http %q is declared twice", h.Name)
+		if err := h.validate(c.on(h.Platforms)); err != nil {
+			return fmt.Errorf("http %q: %v", h.Name, err)
 		}
-		seen[h.Name] = true
+		if c.clash(seen, h.Name, h.Platforms) {
+			return fmt.Errorf("http %q is declared twice for the same system", h.Name)
+		}
 	}
 	for _, l := range []struct {
 		what string
@@ -481,7 +520,10 @@ func (c *Capabilities) validate() error {
 			return fmt.Errorf("capabilities.%s has too many entries", l.what)
 		}
 		for _, f := range l.list {
-			if err := f.validate(); err != nil {
+			if err := c.entryPlatforms(f.Platforms); err != nil {
+				return fmt.Errorf("capabilities.%s %q: %v", l.what, f.Path, err)
+			}
+			if err := f.validate(c.on(f.Platforms)); err != nil {
 				return fmt.Errorf("capabilities.%s: %v", l.what, err)
 			}
 		}
@@ -490,7 +532,7 @@ func (c *Capabilities) validate() error {
 		return fmt.Errorf("capabilities.sockets has too many entries")
 	}
 	for _, p := range c.Sockets {
-		if !validAbs(p, false) {
+		if !validAbsOn(p, false, c.on(nil)) {
 			return fmt.Errorf("capabilities.sockets: %q must be a clean absolute path", p)
 		}
 	}
@@ -567,8 +609,8 @@ func (c *Command) validate() error {
 	return c.validateRemote()
 }
 
-func (f Folder) validate() error {
-	if !validAbs(f.Path, true) {
+func (f Folder) validate(on []string) error {
+	if !validAbsOn(f.Path, true, on) {
 		return fmt.Errorf("%q must be a clean absolute path (or one starting with ~/)", f.Path)
 	}
 	if f.AdminUnlessGroup != "" {
@@ -586,12 +628,17 @@ func (f Folder) validate() error {
 	return nil
 }
 
-func (h *HTTPAPI) validate() error {
+func (h *HTTPAPI) validate(on []string) error {
 	if !httpNameRe.MatchString(h.Name) {
 		return fmt.Errorf("name must be lowercase letters, digits or - (max 32), starting with a letter")
 	}
-	// 107 bytes: the size of sun_path without its NUL.
-	if !validAbs(h.Socket, false) || h.Socket == "/" || len(h.Socket) > 107 {
+	// 107 bytes: the size of sun_path without its NUL. A Windows-only entry
+	// may name a pipe instead.
+	if isPipe(h.Socket) {
+		if !pipeOnly(on) || !pipeRe.MatchString(h.Socket) {
+			return fmt.Errorf(`socket %q: a named pipe is \\.\pipe\<name>, in an entry for windows alone`, h.Socket)
+		}
+	} else if !validAbsOn(h.Socket, false, on) || h.Socket == "/" || len(h.Socket) > 107 {
 		return fmt.Errorf("socket %q must be a clean absolute path of at most 107 bytes", h.Socket)
 	}
 	if h.AdminUnlessGroup != "" {

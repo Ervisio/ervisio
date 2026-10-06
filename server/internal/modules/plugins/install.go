@@ -214,7 +214,7 @@ func install(ctx context.Context, req installRequest) (*Info, error) {
 	if msg := m.CoreProblem(); msg != "" {
 		return nil, rpc.Errorf(rpc.Conflict, "%s Nothing was installed.", msg)
 	}
-	if req.Consent != nil && !sameJSON(emptyIfNil(*req.Consent), m.Capabilities) {
+	if req.Consent != nil && !sameJSON(emptyIfNil(*req.Consent), m.declared) {
 		return nil, rpc.Errorf(rpc.Conflict, "%s asks for different permissions than the ones you were shown. Nothing was installed; open Browse again to review them.", m.Name)
 	}
 	if ex := find(p, m.ID); ex != nil && ex.Location != LocInstalled {
