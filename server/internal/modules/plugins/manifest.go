@@ -505,7 +505,7 @@ func (c *Capabilities) validate() error {
 		if err := c.entryPlatforms(h.Platforms); err != nil {
 			return fmt.Errorf("http %q: %v", h.Name, err)
 		}
-		if err := h.validate(c.on(h.Platforms)); err != nil {
+		if err := h.validate(h.Platforms); err != nil {
 			return fmt.Errorf("http %q: %v", h.Name, err)
 		}
 		if c.clash(seen, h.Name, h.Platforms) {
@@ -523,7 +523,7 @@ func (c *Capabilities) validate() error {
 			if err := c.entryPlatforms(f.Platforms); err != nil {
 				return fmt.Errorf("capabilities.%s %q: %v", l.what, f.Path, err)
 			}
-			if err := f.validate(c.on(f.Platforms)); err != nil {
+			if err := f.validate(checkOn(f.Platforms)); err != nil {
 				return fmt.Errorf("capabilities.%s: %v", l.what, err)
 			}
 		}
@@ -532,7 +532,7 @@ func (c *Capabilities) validate() error {
 		return fmt.Errorf("capabilities.sockets has too many entries")
 	}
 	for _, p := range c.Sockets {
-		if !validAbsOn(p, false, c.on(nil)) {
+		if !validAbs(p, false) {
 			return fmt.Errorf("capabilities.sockets: %q must be a clean absolute path", p)
 		}
 	}
@@ -628,14 +628,15 @@ func (f Folder) validate(on []string) error {
 	return nil
 }
 
-func (h *HTTPAPI) validate(on []string) error {
+func (h *HTTPAPI) validate(declared []string) error {
+	on := checkOn(declared)
 	if !httpNameRe.MatchString(h.Name) {
 		return fmt.Errorf("name must be lowercase letters, digits or - (max 32), starting with a letter")
 	}
 	// 107 bytes: the size of sun_path without its NUL. A Windows-only entry
 	// may name a pipe instead.
 	if isPipe(h.Socket) {
-		if !pipeOnly(on) || !pipeRe.MatchString(h.Socket) {
+		if !pipeOnly(declared) || !pipeRe.MatchString(h.Socket) {
 			return fmt.Errorf(`socket %q: a named pipe is \\.\pipe\<name>, in an entry for windows alone`, h.Socket)
 		}
 	} else if !validAbsOn(h.Socket, false, on) || h.Socket == "/" || len(h.Socket) > 107 {

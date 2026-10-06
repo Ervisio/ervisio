@@ -111,6 +111,17 @@ func (c *Capabilities) on(p []string) []string {
 	return p
 }
 
+// checkOn is the systems an entry's paths are checked for: the ones it
+// names, or, for an entry that names none, this system only (as before
+// entries could name systems; a path for the other system then fails
+// where it would be used).
+func checkOn(p []string) []string {
+	if len(p) == 0 {
+		return []string{hostPlatform()}
+	}
+	return p
+}
+
 // clash records name for the entry's systems and reports an overlap with an
 // earlier entry of the same name.
 func (c *Capabilities) clash(seen map[string][][]string, name string, p []string) bool {
