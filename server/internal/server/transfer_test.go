@@ -26,7 +26,7 @@ import (
 	"github.com/ervisio/ervisio/server/internal/bridge"
 )
 
-const xferManifest = `{"id":"xfer","name":"Xfer","version":"1.0.0","entry":"index.js",
+const xferManifest = `{"id":"xfer","name":"Xfer","version":"1.0.0","entry":"index.js","platforms":["linux","windows"],
  "capabilities":{"commands":[{"name":"seq","argv":%SEQ%,"args":[{"pattern":"[0-9]{1,6}"}],"admin":false}],
   "http":[{"name":"svc","socket":"%SOCK%","admin":false,"headers":["X-Registry-Auth","Content-Type"],
     "rules":[{"methods":["GET"],"path":"/dl/[a-z0-9]+"},{"methods":["POST","PUT"],"path":"/up"},{"methods":["POST"],"path":"/act"},{"methods":["POST"],"path":"/build"}],

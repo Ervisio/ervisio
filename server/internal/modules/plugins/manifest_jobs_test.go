@@ -13,7 +13,7 @@ func jobsManifest(jobs string, notify bool) string {
 		n = `"notify": true,`
 	}
 	return `{
-  "id": "jobs-test", "name": "Jobs test", "version": "1.0.0", "entry": "index.js",
+  "id": "jobs-test", "name": "Jobs test", "version": "1.0.0", "entry": "index.js", "platforms": ["linux", "windows"],
   "capabilities": {
     ` + n + `
     "commands": [

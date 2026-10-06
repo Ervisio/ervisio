@@ -13,7 +13,7 @@ import (
 	"github.com/ervisio/ervisio/server/internal/account"
 )
 
-const frameTestManifest = `{"id":"%ID%","name":"Demo","version":"1.0.0","entry":"index.js",
+const frameTestManifest = `{"id":"%ID%","name":"Demo","version":"1.0.0","entry":"index.js","platforms":["linux","windows"],
  "capabilities":{"commands":[],"files":{"read":[],"write":[]},"sockets":[],"network":["api.example.org"]},
  "contributes":{"pages":[{"id":"main","title":"Demo"}],"widgets":[],"snippets":[]},
  "visibleTo":{"groups":[%GROUPS%]}}`

@@ -19,7 +19,7 @@ import (
 )
 
 const testManifest = `{
-  "id": "jt", "name": "Jobs test", "version": "1.0.0", "entry": "index.js",
+  "id": "jt", "name": "Jobs test", "version": "1.0.0", "entry": "index.js", "platforms": ["linux", "windows"],
   "capabilities": {
     "notify": true,
     "commands": [

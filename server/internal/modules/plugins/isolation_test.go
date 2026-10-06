@@ -26,7 +26,7 @@ func call(t *testing.T, admin bool, params any) *rpc.Call {
 }
 
 const filesManifest = `{
-  "id": "files", "name": "Files demo", "version": "1.0.0", "entry": "index.js",
+  "id": "files", "name": "Files demo", "version": "1.0.0", "entry": "index.js", "platforms": ["linux", "windows"],
   "capabilities": {
     "commands": [{"name": "ps", "argv": ["echo", "ps"], "admin": false}],
     "files": {"read": ["%READ%"], "write": ["%WRITE%"]},

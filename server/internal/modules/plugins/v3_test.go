@@ -23,7 +23,7 @@ import (
 // SDK v3: capabilities.http, pty commands, admin folders, mkdir/remove.
 
 const v3Manifest = `{
-  "id": "v3", "name": "V3 demo", "version": "1.0.0", "entry": "index.js",
+  "id": "v3", "name": "V3 demo", "version": "1.0.0", "entry": "index.js", "platforms": ["linux", "windows"],
   "capabilities": {
     "commands": [
       {"name": "cat", "pty": true, "argv": ["cat"], "admin": false},

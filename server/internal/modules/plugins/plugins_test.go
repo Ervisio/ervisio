@@ -19,7 +19,7 @@ import (
 )
 
 const goodManifest = `{
-  "id": "demo", "name": "Demo", "version": "1.2.3", "author": "me", "entry": "index.js",
+  "id": "demo", "name": "Demo", "version": "1.2.3", "author": "me", "entry": "index.js", "platforms": ["linux", "windows"],
   "icon": "server", "color": "file",
   "capabilities": {
     "commands": [
