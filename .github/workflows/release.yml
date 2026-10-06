@@ -22,12 +22,19 @@ name: Release
 on:
   push:
     tags: ['v*.*.*']
+  # Or by hand (Actions > Release > Run workflow, on main): creates the tag on
+  # the commit it runs on, then releases it like a pushed tag.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Version tag to create and release, e.g. v1.2.0'
+        required: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref }}
   cancel-in-progress: false
 
 env:
@@ -39,16 +46,24 @@ env:
 jobs:
   meta:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write   # creates the tag on a manual run
     outputs:
       version: ${{ steps.v.outputs.version }}
       prerelease: ${{ steps.v.outputs.prerelease }}
     steps:
       - id: v
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "::error::tag '$TAG' is not vX.Y.Z or vX.Y.Z-pre"; exit 1
+          fi
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            if [ "$GITHUB_REF" != refs/heads/main ]; then echo "::error::run it on main"; exit 1; fi
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA" > /dev/null
+            echo "created tag $TAG at $GITHUB_SHA"
           fi
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
           if [[ "$TAG" == *-* ]]; then echo "prerelease=true"; else echo "prerelease=false"; fi >> "$GITHUB_OUTPUT"
@@ -183,7 +198,7 @@ jobs:
     permissions:
       contents: write
     env:
-      TAG: ${{ github.ref_name }}
+      TAG: ${{ inputs.tag || github.ref_name }}
       VERSION: ${{ needs.meta.outputs.version }}
       PRERELEASE: ${{ needs.meta.outputs.prerelease }}
     steps:
