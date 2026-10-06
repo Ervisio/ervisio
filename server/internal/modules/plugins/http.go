@@ -314,6 +314,9 @@ func unixClient(socket string, headerTimeout time.Duration) *http.Client {
 	tr := &http.Transport{
 		Proxy: nil,
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			if isPipe(socket) {
+				return dialPipe(ctx, socket)
+			}
 			var d net.Dialer
 			return d.DialContext(ctx, "unix", socket)
 		},

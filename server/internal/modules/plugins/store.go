@@ -345,7 +345,7 @@ func list(adminBridge bool) []Info {
 			in.Enabled = false
 		}
 		if e := cat.find(m.ID); e != nil && compareSemver(e.Version, m.Version) > 0 && f.Location != LocDev {
-			in.UpdateAvailable = &UpdateInfo{Version: e.Version, Notes: e.Notes, NewPermissions: !sameJSON(e.Capabilities, m.Capabilities), Source: e.Source, SHA256: e.SHA256}
+			in.UpdateAvailable = &UpdateInfo{Version: e.Version, Notes: e.Notes, NewPermissions: !sameJSON(e.Capabilities, m.declared), Source: e.Source, SHA256: e.SHA256}
 		}
 		out = append(out, in)
 	}

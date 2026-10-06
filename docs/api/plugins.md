@@ -207,6 +207,46 @@ Strict: unknown fields are rejected.
   (version `vX.Y.Z-N-g<hash>`, i.e. between releases) accepts every plugin, so the next release can be tried before it
   is tagged. Older cores do not know the fields and refuse the manifest as "unknown field", which has the same effect.
 
+## Windows plugins (core 0.6.2)
+
+A plugin runs on Windows when its manifest says `"platforms": ["windows"]` or `["linux", "windows"]`. The SDK, the
+sandboxed frame, the install and signing flow and the methods above are the same on both systems; what differs is
+what the plugin runs:
+
+* **Per-system entries.** `capabilities.commands`, `capabilities.http` and the `files.read` / `files.write` folders
+  (object form) take `"platforms"` too. An entry without it applies to every platform of the plugin; with it, only
+  to those (each must be one of the plugin's). Two entries may share a `name` when their platforms do not overlap,
+  so the page calls `sdk.api.exec("ls")` and gets the Linux or the Windows command. The daemon keeps only the entries
+  for the system it runs on; the install consent, the catalog and update checks compare the whole declaration.
+* **Commands** run without a shell, as on Linux: `argv[0]` is a program name found on the `PATH` (`powershell.exe`,
+  `sc.exe`, `netsh.exe`, `winget.exe`) or an absolute path (`C:\Program Files\Docker\Docker\resources\bin\docker.exe`).
+  For PowerShell use `["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "<fixed script>", "{0}"]` and
+  read arguments from `$args`; never build the script from an argument. `pty: true` commands run in a ConPTY.
+* **HTTP APIs** reach a unix socket (Windows 10 1803+ has `AF_UNIX`) or, in an entry for `windows` alone, a named
+  pipe: `"socket": "\\\\.\\pipe\\docker_engine"` (in JSON) for Docker Desktop or Docker Engine on Windows. The pipe is
+  opened by the bridge of the signed-in user, or by the elevated one for `admin: true`, so the pipe's own ACL decides.
+* **Folders** are absolute Windows paths (`C:\ProgramData\Demo`) or `~/...` (the user's profile). A Linux entry may
+  not use a drive path and the other way round.
+* **Admin**: `admin: true` runs on the elevated bridge after the user unlocks administrator rights (members of
+  Administrators). `adminUnlessGroup` names a Windows group (`docker-users`, `Hyper-V Administrators`).
+* `sdk.platform` is `"windows"` in the frame, for the page's own choices (labels, which command to offer).
+
+```json
+{
+  "platforms": ["linux", "windows"],
+  "capabilities": {
+    "commands": [
+      {"name": "services", "argv": ["systemctl", "list-units", "--type=service", "--no-pager"], "platforms": ["linux"]},
+      {"name": "services", "argv": ["powershell.exe", "-NoProfile", "-Command", "Get-Service | ConvertTo-Json"], "platforms": ["windows"]}
+    ],
+    "http": [
+      {"name": "docker", "socket": "/run/docker.sock", "platforms": ["linux"], "rules": [{"methods": ["GET"], "path": "/.*"}]},
+      {"name": "docker", "socket": "\\\\.\\pipe\\docker_engine", "platforms": ["windows"], "rules": [{"methods": ["GET"], "path": "/.*"}]}
+    ]
+  }
+}
+```
+
 ## Background jobs and notifications
 
 `plugins.jobs.*` (create, list, get, update, delete, runNow, history, webhooks) and `plugins.notify` are answered by the

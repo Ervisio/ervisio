@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.6.2] - 2026-10-06
+
+### Added
+- **Plugin SDK for Windows.** Commands, HTTP APIs and folders in a manifest can say `platforms`, so one plugin carries the Linux and the Windows form of the same command or API under one name; the daemon uses the entries for its own system. HTTP APIs reach Windows named pipes (`\\.\pipe\docker_engine`). See "Windows plugins" in `docs/api/plugins.md`.
+
 ## [0.6.1] - 2026-10-06
 
 ### Added
