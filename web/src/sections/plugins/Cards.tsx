@@ -1,7 +1,7 @@
 import { pluginLogoUrl } from '../../plugins';
 import { useT } from '../../i18n';
 import { Badge, Button, Switch } from '../../ui';
-import { hueOf, Tile, TrustBadge } from './Parts';
+import { hueOf, PlatformIcons, Tile, TrustBadge } from './Parts';
 import type { CatalogEntry, PluginInfo } from './types';
 
 /** Installed plugin card with the on/off switch. */
@@ -37,6 +37,7 @@ export function PluginCard({ p, active, onOpen, onToggle, busy }: { p: PluginInf
         {p.updateAvailable && <Badge tone="info" className="plugins-badge">{t('updateBadge', { version: p.updateAvailable.version })}</Badge>}
         {p.blocked && <Badge tone="warn">{t('blocked')}</Badge>}
         {p.incompatible && <Badge tone="warn">{t('incompatible')}</Badge>}
+        <PlatformIcons platforms={p.platforms} />
         {p.devUnsigned ? <Badge tone="warn">{t('devUnsignedBadge')}</Badge> : p.location === 'dev' && <Badge tone="neutral">{t('devBadge')}</Badge>}
       </div>
     </div>

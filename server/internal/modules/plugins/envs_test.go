@@ -17,7 +17,7 @@ import (
 // Environments (remote) and user-approved hosts.
 
 const envManifest = `{
-  "id": "envp", "name": "Env plugin", "version": "1.0.0", "entry": "index.js",
+  "id": "envp", "name": "Env plugin", "version": "1.0.0", "entry": "index.js", "platforms": ["linux", "windows"],
   "capabilities": {
     "commands": [
       {"name": "ps", "argv": ["docker", "-H", "{env}", "ps"], "admin": false, "remote": "docker"},

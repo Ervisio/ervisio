@@ -3,6 +3,20 @@ import { useT } from '../../i18n';
 import { Badge, Icon, type HueId } from '../../ui';
 import { describeCaps, whoCanUse } from './caps';
 import type { CatalogEntry, PluginInfo } from './types';
+import { DistroLogo } from '../../shell/DistroLogo';
+
+/** Linux and/or Windows marks: the systems a plugin works on. Both = works on both. */
+export function PlatformIcons({ platforms }: { platforms?: string[] }) {
+  const t = useT('plugins');
+  const ps = platforms && platforms.length ? platforms : ['linux'];
+  const label = ps.length > 1 ? t('platformBoth') : ps[0] === 'windows' ? t('platformWindows') : t('platformLinux');
+  return (
+    <span className="plugins-plat" title={label} aria-label={label} role="img">
+      {ps.includes('linux') && <DistroLogo id="linux" />}
+      {ps.includes('windows') && <DistroLogo id="windows" logo="windows-11" />}
+    </span>
+  );
+}
 
 export const hueOf = (c?: string): HueId => (['ov', 'term', 'file', 'log', 'svc', 'sw', 'usr', 'plg'].includes(c ?? '') ? (c as HueId) : 'plg');
 

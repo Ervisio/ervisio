@@ -38,6 +38,8 @@ type CatalogEntry struct {
 	// plugin needs; Browse shows it and the installer enforces it.
 	MinCore  string    `json:"minCore,omitempty"`
 	Requires *Requires `json:"requires,omitempty"`
+	// Platforms as in the manifest; the daemon fills in ["linux"] when empty.
+	Platforms []string `json:"platforms"`
 	// Incompatible is set by the daemon when this core is too old.
 	Incompatible string `json:"incompatible,omitempty"`
 	// Source is the https URL of the .tar.gz; SHA256 its checksum (optional).
@@ -452,6 +454,10 @@ func catalogView(ctx context.Context) (*CatalogView, error) {
 		if need, ok := highestCoreReq(e.MinCore, e.Requires.get()); ok {
 			e.Incompatible = coreProblem(e.Name, need)
 		}
+		if msg := platformProblem(e.Name, e.Platforms); msg != "" {
+			e.Incompatible = msg
+		}
+		e.Platforms = effectivePlatforms(e.Platforms)
 		it := CatalogItem{CatalogEntry: e}
 		it.InstalledVersion, it.Installed = installed[e.ID]
 		view.Plugins = append(view.Plugins, it)

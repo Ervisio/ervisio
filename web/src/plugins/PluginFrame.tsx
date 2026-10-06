@@ -116,7 +116,7 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
         const code = await r.text();
         if (dead) return;
         const { themeSnap: snap, lang: l } = live.current;
-        post({ la: 'plugin', t: 'init', plugin: { id: plugin.id, name: plugin.name, version: plugin.version }, view, lang: l, theme: snap(), appOrigin: consoleOrigin(), code });
+        post({ la: 'plugin', t: 'init', plugin: { id: plugin.id, name: plugin.name, version: plugin.version }, view, lang: l, theme: snap(), appOrigin: consoleOrigin(), platform: session?.os ?? 'linux', code });
       } catch (e) {
         fail(e instanceof Error ? e.message : String(e));
       }

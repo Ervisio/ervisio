@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/user"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -230,23 +229,8 @@ type caller struct {
 }
 
 func currentCaller(adminBridge bool) caller {
-	c := caller{Groups: map[string]bool{}, Admin: adminBridge || os.Geteuid() == 0}
-	u, err := user.Current()
-	if err != nil {
-		return c
-	}
-	c.Name = u.Username
-	ids, _ := u.GroupIds()
-	for _, id := range ids {
-		if g, err := user.LookupGroupId(id); err == nil {
-			c.Groups[g.Name] = true
-		}
-	}
-	for _, g := range []string{"sudo", "wheel", "admin"} {
-		if c.Groups[g] {
-			c.Admin = true // can unlock administrator rights
-		}
-	}
+	c := caller{Groups: map[string]bool{}, Admin: adminBridge}
+	platformCaller(&c)
 	return c
 }
 
@@ -295,7 +279,9 @@ type Info struct {
 	// DevUnsigned: a dev-folder plugin without a valid signature that runs
 	// only because developer mode is on (shown with an "Unsigned, dev" badge).
 	DevUnsigned bool `json:"devUnsigned,omitempty"`
-	// Incompatible: the plugin needs a newer Ervisio than this one (the message says which).
+	// Platforms: where the plugin runs ("linux", "windows"); never empty.
+	Platforms []string `json:"platforms"`
+	// Incompatible: the plugin cannot run here (another OS, or it needs a newer Ervisio); the message says why.
 	Incompatible string `json:"incompatible,omitempty"`
 	// Error: the folder holds a plugin that could not be loaded.
 	Error string `json:"error,omitempty"`
@@ -325,7 +311,7 @@ func list(adminBridge bool) []Info {
 	for _, f := range scan(p) {
 		if f.M == nil {
 			if who.Admin {
-				out = append(out, Info{ID: f.Name, Name: f.Name, Location: f.Location, Dir: f.Dir, Error: f.Err, Capabilities: emptyCaps(), Contributes: emptyContrib(), VisibleTo: VisibleTo{Groups: []string{}}})
+				out = append(out, Info{ID: f.Name, Name: f.Name, Location: f.Location, Dir: f.Dir, Error: f.Err, Capabilities: emptyCaps(), Contributes: emptyContrib(), VisibleTo: VisibleTo{Groups: []string{}}, Platforms: []string{}})
 			}
 			continue
 		}
@@ -339,6 +325,7 @@ func list(adminBridge bool) []Info {
 			Enabled: st.isEnabled(m.ID), Signed: f.Sig.Signed, Verified: f.Sig.Verified, SignatureError: f.Sig.Err,
 			Capabilities: m.Capabilities, Contributes: m.Contributes, VisibleTo: m.VisibleTo,
 			Location: f.Location, Removable: f.Location == LocInstalled, Dir: f.Dir, Unloadable: f.Location == LocDev && isLoadedDev(f.Dir),
+			Platforms: effectivePlatforms(m.Platforms),
 		}
 		if in.Icon == "" {
 			in.Icon = "plugins"

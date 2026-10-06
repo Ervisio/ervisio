@@ -49,7 +49,7 @@ func TestRootJobNeedsAnUnlockedApproval(t *testing.T) {
 }
 
 const paramManifest = `{
-  "id": "jt", "name": "J", "version": "1.0.0", "entry": "index.js",
+  "id": "jt", "name": "J", "version": "1.0.0", "entry": "index.js", "platforms": ["linux", "windows"],
   "capabilities": {
     "commands": [{"name": "rm", "admin": true, "argv": ["rm", "-rf", "/srv/{0}"], "args": [{"pattern": "[a-z]+"}]},
                  {"name": "echo", "argv": ["echo", "{0}"], "args": [{"pattern": "[a-z]+"}]}],

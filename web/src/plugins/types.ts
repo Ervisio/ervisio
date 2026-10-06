@@ -242,6 +242,8 @@ export interface PluginSDK {
   version: 3;
   /** SDK 0.2: the console's origin as the user reaches it (https://host:9090 or the proxied origin), no path. Use it to show webhook URLs (`${sdk.appOrigin}/hooks/...`): `location.origin` is opaque in a sandboxed frame. */
   appOrigin: string;
+  /** SDK 0.6.1: the server's operating system, 'linux' or 'windows'. Commands, paths and sockets differ: a plugin for both checks it. */
+  platform: 'linux' | 'windows';
   plugin: { id: string; name: string; version: string };
   /** What this frame shows: one page or one widget of the plugin. */
   view: { kind: 'page' | 'widget'; id: string };

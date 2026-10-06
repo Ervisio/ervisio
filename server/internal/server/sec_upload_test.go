@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-const hangManifest = `{"id":"hang","name":"Hang","version":"1.0.0","entry":"index.js",
+const hangManifest = `{"id":"hang","name":"Hang","version":"1.0.0","entry":"index.js","platforms":["linux","windows"],
  "capabilities":{"http":[{"name":"svc","socket":"%SOCK%","admin":false,"headers":[],
     "rules":[{"methods":["PUT"],"path":"/archive"}],"maxUpload":200000000,"timeoutSec":600}],
   "files":{"read":[],"write":[]},"sockets":[],"network":[]},

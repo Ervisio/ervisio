@@ -191,6 +191,13 @@ Strict: unknown fields are rejected.
   `{env}` (for example `["docker", "-H", "{env}", "compose", "up", "-d"]`). The item is the whole argv entry, never part
   of one, and `{env}` without `remote` is refused. Against an environment the call runs with the user's own rights and
   never as root, so `admin` and `adminUnlessGroup` do not apply to it.
+* `platforms` (core 0.6.1): the systems the plugin works on, `["linux"]`, `["windows"]` or `["linux", "windows"]`. A
+  manifest without it is a Linux plugin (every plugin written before Windows support was). On another system the plugin
+  is refused like one that needs a newer core: not installed, not enabled, every call `forbidden` ("<Name> works only on
+  Linux."); `plugins.list` and the catalog give `platforms` (never empty) and `incompatible`. Plugins and Browse show a
+  Linux and/or Windows mark next to Install. The catalog entry carries the same field. In the frame, `sdk.platform` is
+  `"linux"` or `"windows"`: commands, paths and sockets differ, so a plugin for both picks them from it (Windows has no
+  unix-socket services such as Docker's; commands run without a shell, e.g. `["powershell.exe", "-NoProfile", ...]`).
 * `minCore` / `requires` (core 0.5): the Ervisio version the plugin needs, `"minCore": "0.5.0"` or
   `"requires": {"ervisio": ">=0.5.0"}` (the same thing; give either or both, the higher counts; only `>=` or a bare
   `X.Y.Z` is understood, anything else is refused when the manifest is read). A core older than that refuses to install
@@ -280,7 +287,7 @@ moved atomically into place (an existing installed version is replaced = update)
 Errors: `invalid` (bad source, archive, manifest, checksum), `forbidden`, `conflict`, `not_found`, `unavailable` (download).
 
 ### `plugins.catalog` (user)
-Params `{}` → `{"categories":[{id,name,icon,color}], "plugins":[{id,name,version,author,description,icon,logo?,color,category,verified,installs,featured?,notes?,source,sha256?,capabilities,contributes,visibleTo,installed,installedVersion?,minCore?,requires?,incompatible?}], "warning"?, "moved":[{id,name,version}]}`.
+Params `{}` → `{"categories":[{id,name,icon,color}], "plugins":[{id,name,version,author,description,icon,logo?,color,category,verified,installs,featured?,notes?,source,sha256?,capabilities,contributes,visibleTo,installed,installedVersion?,minCore?,requires?,platforms,incompatible?}], "warning"?, "moved":[{id,name,version}]}`.
 `logo` is a `data:image/svg+xml;base64,…` or `data:image/png;base64,…` URL of at most 64 KiB, embedded in the signed catalog by the registry; any other value is dropped (the entry keeps its icon).
 Sources:
 

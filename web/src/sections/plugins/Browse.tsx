@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useT } from '../../i18n';
 import { Button, Chip, EmptyState, Icon } from '../../ui';
-import { H4, hueOf, Tile, TrustBadge } from './Parts';
+import { H4, hueOf, PlatformIcons, Tile, TrustBadge } from './Parts';
 import type { CatalogEntry, CatalogView } from './types';
 
 interface Props {
@@ -38,7 +38,8 @@ export function Browse({ catalog, query, busyId, onInstall }: Props) {
             <h2>{featured.name}</h2>
             <p>{featured.notes || featured.description}</p>
           </div>
-          <Button size="lg" loading={busyId === featured.id} onClick={() => onInstall(featured)}>{t('install')}</Button>
+          <PlatformIcons platforms={featured.platforms} />
+          <Button size="lg" disabled={!!featured.incompatible} title={featured.incompatible} loading={busyId === featured.id} onClick={() => onInstall(featured)}>{t('install')}</Button>
         </div>
       )}
       <div className="plugins-cats" role="group" aria-label={t('categories')}>
@@ -63,6 +64,7 @@ export function Browse({ catalog, query, busyId, onInstall }: Props) {
                   {e.installs > 0 && <span className="plugins-muted">{t('installs', { count: fmtInstalls(e.installs) })}</span>}
                 </div>
               </div>
+              <PlatformIcons platforms={e.platforms} />
               {e.installed ? (
                 <span className="plugins-installed"><Icon name="check" size={14} /> {t('installed')}</span>
               ) : e.incompatible ? (
