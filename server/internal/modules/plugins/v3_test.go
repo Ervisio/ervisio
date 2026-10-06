@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -85,6 +86,11 @@ func myGroup(t *testing.T) string {
 
 func setupV3(t *testing.T) *v3env {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		// The fixture runs Unix tools (seq, echo, a pty) and Unix paths. It
+		// used to be skipped there by myGroup, before Windows groups were read.
+		t.Skip("the v3 fixture needs Unix tools")
+	}
 	system, _ := setup(t)
 	base := t.TempDir()
 	e := &v3env{
