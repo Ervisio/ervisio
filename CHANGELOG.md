@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.6.1] - 2026-10-06
 
 ### Added
 - **Plugin platforms.** Manifests and catalog entries can say `platforms: ["linux", "windows"]`. Plugins and Browse show a Linux and/or Windows mark next to Install; a plugin for the other system cannot be installed, enabled or run, and says why. A plugin that does not say is Linux only.
