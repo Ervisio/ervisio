@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/user"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -230,23 +229,8 @@ type caller struct {
 }
 
 func currentCaller(adminBridge bool) caller {
-	c := caller{Groups: map[string]bool{}, Admin: adminBridge || os.Geteuid() == 0}
-	u, err := user.Current()
-	if err != nil {
-		return c
-	}
-	c.Name = u.Username
-	ids, _ := u.GroupIds()
-	for _, id := range ids {
-		if g, err := user.LookupGroupId(id); err == nil {
-			c.Groups[g.Name] = true
-		}
-	}
-	for _, g := range []string{"sudo", "wheel", "admin"} {
-		if c.Groups[g] {
-			c.Admin = true // can unlock administrator rights
-		}
-	}
+	c := caller{Groups: map[string]bool{}, Admin: adminBridge}
+	platformCaller(&c)
 	return c
 }
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- Windows: plugins limited to some groups (Docker, Firewall) were installed but did not show up: the console read only Linux groups. It now reads the Windows groups of the account, and members of Administrators see every plugin.
+
 ## [0.5.0] - 2026-10-02
 
 ### Added

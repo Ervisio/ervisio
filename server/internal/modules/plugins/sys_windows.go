@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"golang.org/x/sys/windows"
 
@@ -55,4 +56,36 @@ func socketOwnedByUs(p string, _ fs.FileInfo) bool {
 		return false
 	}
 	return winsec.SIDIn(in.Owner, winsec.System(), winsec.Administrators(), me)
+}
+
+// platformCaller reads the user and groups from the process token (os/user
+// needs a loaded profile, which a bridge started by the service may not
+// have). Group names are the plain account names (Administrators,
+// docker-users, ...). Members of Administrators are admins even when the
+// group is deny-only in a filtered token: they can unlock administrator
+// rights, like sudo/wheel members on Linux.
+func platformCaller(c *caller) {
+	tok := windows.GetCurrentProcessToken()
+	if tok.IsElevated() {
+		c.Admin = true
+	}
+	if tu, err := tok.GetTokenUser(); err == nil {
+		if name, _, _, err := tu.User.Sid.LookupAccount(""); err == nil {
+			c.Name = name
+		}
+	}
+	tg, err := tok.GetTokenGroups()
+	if err != nil {
+		return
+	}
+	admins, _ := windows.CreateWellKnownSid(windows.WinBuiltinAdministratorsSid)
+	for _, g := range tg.AllGroups() {
+		if admins != nil && g.Sid.Equals(admins) {
+			c.Admin = true
+		}
+		if name, _, _, err := g.Sid.LookupAccount(""); err == nil && name != "" {
+			c.Groups[name] = true
+			c.Groups[strings.ToLower(name)] = true
+		}
+	}
 }
