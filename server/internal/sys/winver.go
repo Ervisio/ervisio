@@ -23,5 +23,25 @@ func WindowsRelease(product, displayVersion, build string) OSRelease {
 	if dv := strings.TrimSpace(displayVersion); dv != "" {
 		pretty += " " + dv
 	}
-	return OSRelease{ID: "windows", Name: name, PrettyName: pretty, VersionID: strings.TrimSpace(displayVersion)}
+	return OSRelease{ID: "windows", Name: name, PrettyName: pretty, VersionID: strings.TrimSpace(displayVersion), Logo: windowsLogo(build)}
+}
+
+// windowsLogo picks the mark of the Windows generation from the build number,
+// the same for client and Server editions: 22000+ is Windows 11 (and Server
+// 2025), 10240+ Windows 10 (Server 2016-2022), 9200+ Windows 8 (Server 2012),
+// anything older the classic flag.
+func windowsLogo(build string) string {
+	n, err := strconv.Atoi(strings.TrimSpace(build))
+	switch {
+	case err != nil:
+		return "windows-11"
+	case n >= 22000:
+		return "windows-11"
+	case n >= 10240:
+		return "windows-10"
+	case n >= 9200:
+		return "windows-8"
+	default:
+		return "windows-7"
+	}
 }

@@ -58,6 +58,29 @@ const ART: Record<string, Art> = {
       <path {...S} d="M8 16.5c2.2-2.8 5.8-2.8 8 0" />
     </g>
   ),
+  // Windows: flat four tiles (11), tiles in perspective (10 / 8), waving flag (7 and older).
+  'windows-11': () => (
+    <g fill="currentColor">
+      <rect x="3" y="3" width="8.5" height="8.5" rx=".6" />
+      <rect x="12.5" y="3" width="8.5" height="8.5" rx=".6" />
+      <rect x="3" y="12.5" width="8.5" height="8.5" rx=".6" />
+      <rect x="12.5" y="12.5" width="8.5" height="8.5" rx=".6" />
+    </g>
+  ),
+  'windows-10': () => (
+    <path fill="currentColor" d="M2.5 5.2 10.4 4.1v7.5H2.5zM11.4 3.9 21.5 2.5v9.1H11.4zM2.5 12.5h7.9V20L2.5 18.9zM11.4 12.5h10.1v9L11.4 20.2z" />
+  ),
+  'windows-8': () => (
+    <path fill="currentColor" d="M3 5.6 10.4 4.6v7H3zM11.4 4.5 21 3.2v8.4h-9.6zM3 12.6h7.4v7L3 18.5zM11.4 12.6H21v8.3l-9.6-1.3z" />
+  ),
+  'windows-7': () => (
+    <g fill="currentColor">
+      <path d="M3.2 5.6c2.4-1.1 4.8-1.1 7.2 0l-1.1 6.2c-2.4-1.1-4.8-1.1-7.2 0z" />
+      <path d="M11.4 6c2.4 1.1 4.8 1.1 7.2 0l-1.1 6.2c-2.4 1.1-4.8 1.1-7.2 0z" />
+      <path d="M2 12.8c2.4-1.1 4.8-1.1 7.2 0l-1.1 6.2c-2.4-1.1-4.8-1.1-7.2 0z" />
+      <path d="M10.2 13.2c2.4 1.1 4.8 1.1 7.2 0l-1.1 6.2c-2.4 1.1-4.8 1.1-7.2 0z" />
+    </g>
+  ),
   tux: () => (
     <g>
       <path fill="currentColor" d="M12 2.4c-2.6 0-4 2.2-4 5 0 1.7-.6 2.6-1.7 4.2C5 13.5 4 15.4 4 17.2c0 1.4.8 2 2 2.3.4 1.4 1.5 2.4 3 2.4h6c1.5 0 2.6-1 3-2.4 1.2-.3 2-.9 2-2.3 0-1.8-1-3.7-2.3-5.6C16.6 10 16 9.1 16 7.4c0-2.8-1.4-5-4-5z" />
@@ -77,6 +100,7 @@ const ALIASES: Record<string, string> = {
   linuxmint: 'linuxmint', mint: 'linuxmint', 'linuxmint-logo': 'linuxmint', 'distributor-logo-linuxmint': 'linuxmint',
   opensuse: 'opensuse', 'opensuse-leap': 'opensuse', 'opensuse-tumbleweed': 'opensuse', 'distributor-logo-opensuse': 'opensuse', suse: 'opensuse',
   pop: 'pop', pop_os: 'pop', 'pop-os': 'pop', 'distributor-logo-pop_os': 'pop',
+  'windows-11': 'windows-11', 'windows-10': 'windows-10', 'windows-8': 'windows-8', 'windows-7': 'windows-7', windows: 'windows-11',
   endeavouros: 'endeavouros', 'endeavouros-logo': 'endeavouros', 'distributor-logo-endeavouros': 'endeavouros',
 };
 

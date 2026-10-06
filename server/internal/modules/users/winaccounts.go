@@ -162,9 +162,8 @@ func (s *winSnapshot) userInfo(u winUser, now time.Time) userInfo {
 		Name: u.Name, SID: u.SID, UID: ridOf(u.SID), FullName: u.FullName,
 		Home: u.Profile, Groups: groups, IsAdmin: admin, Locked: &locked,
 		PasswordState: state, PasswordChanged: daysAgo(u.PasswordLastSet, now),
-		MustChange:   u.Enabled && u.PasswordRequire && u.PasswordLastSet == 0,
-		Expired:      u.AccountExpires > 0 && u.AccountExpires < now.Unix(),
-		NoLoginShell: true,
+		MustChange: u.Enabled && u.PasswordRequire && u.PasswordLastSet == 0,
+		Expired:    u.AccountExpires > 0 && u.AccountExpires < now.Unix(),
 	}
 	if u.LastLogon > 0 {
 		info.LastLogin = &loginInfo{At: u.LastLogon}

@@ -18,3 +18,11 @@ func TestWindowsRelease(t *testing.T) {
 		t.Fatal("win10 kept")
 	}
 }
+
+func TestWindowsLogo(t *testing.T) {
+	for build, want := range map[string]string{"26100": "windows-11", "22631": "windows-11", "20348": "windows-10", "19045": "windows-10", "14393": "windows-10", "9600": "windows-8", "7601": "windows-7", "": "windows-11"} {
+		if got := WindowsRelease("Windows", "", build).Logo; got != want {
+			t.Errorf("build %q: logo %q, want %q", build, got, want)
+		}
+	}
+}
