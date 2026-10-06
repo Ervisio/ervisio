@@ -9,6 +9,18 @@
 ### Fixed
 - Windows: plugins limited to some groups (Docker, Firewall) were installed but did not show up: the console read only Linux groups. It now reads the Windows groups of the account, and members of Administrators see every plugin.
 
+## [0.6.0] - 2026-10-06
+
+### Added
+- **Windows.** Ervisio runs on Windows 10 1809 / Windows Server 2019 or newer, x86-64 and ARM64, as the `Ervisio` service. Sign-in with Windows accounts (local, `.\user`, `DOMAIN\user`), administrator unlock for members of Administrators, SSH-key sign-in through S4U. Overview and processes, terminal (PowerShell through ConPTY), files, logs (Event Log), services (Service Control Manager), software (winget, scheduled checks with Task Scheduler), local users and groups, plugins and environments. The console shows the Windows 11, 10, 8 or 7 mark from the build number, Server editions included.
+- `install-windows.ps1`: one-command install from an elevated PowerShell (`irm https://raw.githubusercontent.com/ervisio/ervisio/main/install-windows.ps1 | iex`), with `-Version`, `-Port`, `-Uninstall` and `-PurgeData`. It checks the archive against `SHA256SUMS`; it does not check the signature yet.
+- Releases include `ervisio-<version>-windows-amd64.zip` and `-arm64.zip` (binaries, web app, `install.ps1`).
+- A manual GitHub Actions workflow (Actions › Windows) runs the tests natively on Windows, installs Ervisio, signs in and calls the main sections, and keeps the build as an artifact. The Release workflow can also be started by hand with a tag to create.
+
+### Fixed
+- Windows: local users were all shown as "Login disabled".
+- Windows workflow builds carry the version from the last tag, so plugins no longer report that they need a newer Ervisio.
+
 ## [0.5.0] - 2026-10-02
 
 ### Added

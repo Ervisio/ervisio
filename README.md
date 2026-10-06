@@ -1,6 +1,6 @@
 <h1><picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/ervisio-dark.png"><img src="docs/brand/ervisio-light.png" alt="Ervisio" width="280"></picture></h1>
 
-A web console for managing a Linux server from the browser, in the spirit of Cockpit. You sign in with your Linux account and get an overview, a terminal, a file manager, logs, services, software updates, user management and a plugin system.
+A web console for managing a Linux or Windows server from the browser, in the spirit of Cockpit. You sign in with your Linux or Windows account and get an overview, a terminal, a file manager, logs, services, software updates, user management and a plugin system.
 
 Ervisio was called LinuxAdmin up to version 0.2.0. An existing LinuxAdmin moves to Ervisio with its settings, certificate and plugins: through its own updater (Settings > About), with `install.sh`, or by installing the `ervisio` package (see [Coming from LinuxAdmin](#coming-from-linuxadmin)).
 
@@ -17,6 +17,7 @@ Ervisio is early software. It runs and I use it on my own machine, but it has ha
 - Releases are published on GitHub with signed archives and, from 0.1.1, `.deb` and `.rpm` packages. The AUR packages are written but not published yet.
 - Self-update from GitHub releases is implemented (Settings > About) but has not yet been exercised on a live install.
 - The move from LinuxAdmin to Ervisio was tested in containers: the transition started the way LinuxAdmin 0.2.0's updater starts it (on Debian 12, including a failed start that rolled back), `install.sh` over LinuxAdmin 0.2.0, and the `.deb` (Debian 12), `.rpm` (Fedora) and AUR (Arch) packages replacing `linuxadmin`.
+- Windows (from 0.6.0) is built and tested on GitHub's Windows Server runners: native tests, install with `install.ps1`, sign-in and the main sections. It has had little use on real machines.
 - A security review of the code is in [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md). It lists each finding and how it was fixed. It is a self review, not an external audit.
 
 ## Features
@@ -124,7 +125,7 @@ Run it only on networks you trust until it has had more review. A binary that ru
 
 ## Requirements
 
-To run:
+To run (for Windows see [Windows](#windows)):
 
 - Linux with systemd, PAM and `sudo`, x86-64 or ARM64, glibc 2.17 or newer
 - A user in a sudoers rule that allows running the bridge (on Arch, `%wheel ALL=(ALL) ALL`)
@@ -258,7 +259,11 @@ Where things are installed, for each method, and how to publish more packages: [
 
 ## Windows
 
-Ervisio also runs on Windows 10 1809 / Windows Server 2019 or newer (x86-64 or ARM64). Windows support is new: it is built and tested on GitHub's Windows runners, but has had little use on real servers.
+Ervisio also runs on Windows 10 1809 / Windows Server 2019 or newer (x86-64 or ARM64), from version 0.6.0. Windows support is new: it is built and tested on GitHub's Windows runners, but has had little use on real servers.
+
+The sections adapt to Windows: services come from the Service Control Manager, logs from the Event Log, software from winget, users and groups are the local accounts, the terminal is PowerShell (ConPTY), and the console shows the Windows 11, 10, 8 or 7 mark of the machine (Server editions included).
+
+Plugins say which systems they work on (`platforms` in the manifest): Plugins and Browse show a Linux and/or Windows mark next to Install, and a plugin for the other system cannot be installed. A plugin that does not say is Linux only, which is the case for the plugins published so far.
 
 ### One-command install
 
@@ -279,6 +284,10 @@ Options, or removal:
 ```
 
 The service log is `%ProgramData%\Ervisio\logs\ervisiod.log`.
+
+To try an unreleased build, run the manual workflow **Actions › Windows › Run workflow**, download its `ervisio-windows-x64` artifact, extract it and run `Set-ExecutionPolicy -Scope Process Bypass; .\install.ps1` as Administrator.
+
+To stop the service: `Stop-Service Ervisio` (add `Set-Service Ervisio -StartupType Disabled` to keep it off after a restart).
 
 ### By hand or from source
 
@@ -405,6 +414,7 @@ docs/              architecture, API notes, design rules, security review
 
 - Test and fix on Debian, Fedora and openSUSE
 - Publish the AUR packages, then package repositories (COPR, OBS or an apt repository)
+- Check the release signature in `install-windows.ps1`; test Windows on real servers and domains; Windows versions of the first-party plugins
 - Desktop app wrapper
 - More first-party plugins
 
