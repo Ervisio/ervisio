@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+- **Plugin platforms.** Manifests and catalog entries can say `platforms: ["linux", "windows"]`. Plugins and Browse show a Linux and/or Windows mark next to Install; a plugin for the other system cannot be installed, enabled or run, and says why. A plugin that does not say is Linux only.
+- `sdk.platform` (`"linux"` or `"windows"`) tells a plugin which system the server runs.
+
 ### Fixed
 - Windows: plugins limited to some groups (Docker, Firewall) were installed but did not show up: the console read only Linux groups. It now reads the Windows groups of the account, and members of Administrators see every plugin.
 

@@ -138,8 +138,12 @@ func coreProblem(name, need string) string {
 	return fmt.Sprintf("%s needs Ervisio %d.%d.%d or newer; this server runs %d.%d.%d. Update Ervisio first.", name, want[0], want[1], want[2], have[0], have[1], have[2])
 }
 
-// CoreProblem is coreProblem for a manifest.
+// CoreProblem says why the plugin cannot run here: another operating system
+// (platform.go) or a core that is too old. "" = it can.
 func (m *Manifest) CoreProblem() string {
+	if msg := platformProblem(m.Name, m.Platforms); msg != "" {
+		return msg
+	}
 	need, _ := m.requiredCore()
 	return coreProblem(m.Name, need)
 }

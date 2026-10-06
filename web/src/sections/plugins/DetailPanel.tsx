@@ -4,7 +4,7 @@ import { call } from '../../api';
 import { useT } from '../../i18n';
 import { Badge, Button, ConfirmDialog, Dialog, Icon, Panel, toast } from '../../ui';
 import { errMsg } from './data';
-import { CapList, H4, hueOf, WhoCanUse } from './Parts';
+import { CapList, H4, hueOf, PlatformIcons, WhoCanUse } from './Parts';
 import type { PluginInfo } from './types';
 
 interface Props {
@@ -65,6 +65,7 @@ export function DetailPanel({ p, onClose, onToggle, onUpdate, refresh, busy }: P
     >
       {p.error && <div className="plugins-note is-err">{p.error}</div>}
       {p.blocked && <div className="plugins-note is-warn">{t('blockedText')}</div>}
+      <div className="plugins-plat-row"><PlatformIcons platforms={p.platforms} /></div>
       {p.incompatible && <div className="plugins-note is-warn">{p.incompatible}</div>}
       {p.devUnsigned && <div className="plugins-note is-warn">{t('devUnsignedText')}</div>}
       {p.updateAvailable && (

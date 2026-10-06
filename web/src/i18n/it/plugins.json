@@ -33,7 +33,7 @@
   "signedOk": "Firmato dal team Ervisio",
   "broken": "Non caricabile",
   "blocked": "Bloccato",
-  "incompatible": "Serve un Ervisio più recente",
+  "incompatible": "Non compatibile",
   "devBadge": "Dev",
   "blockedText": "Questo server accetta solo plugin firmati, quindi resta spento. Attiva plugins.allow_unsigned nelle Impostazioni per usarlo.",
   "updateBadge": "Aggiornamento {version}",
@@ -186,5 +186,8 @@
     "title": "{name} ora è nel marketplace",
     "text": "{name} non è più incluso in Ervisio. Installalo dal marketplace per continuare a usarlo qui; è firmato dal team di Ervisio.",
     "dismiss": "Non ora"
-  }
+  },
+  "platformLinux": "Funziona solo su Linux",
+  "platformWindows": "Funziona solo su Windows",
+  "platformBoth": "Funziona su Linux e Windows"
 }

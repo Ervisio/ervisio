@@ -56,8 +56,10 @@ type Manifest struct {
 	Color       string `json:"color,omitempty"`
 	Entry       string `json:"entry"`
 	// MinCore and Requires say which Ervisio the plugin needs (corecompat.go).
-	MinCore      string            `json:"minCore,omitempty"`
-	Requires     Requires          `json:"requires,omitempty"`
+	MinCore  string   `json:"minCore,omitempty"`
+	Requires Requires `json:"requires,omitempty"`
+	// Platforms: "linux" and/or "windows"; empty = Linux only (platform.go).
+	Platforms    []string          `json:"platforms,omitempty"`
 	Files        map[string]string `json:"files,omitempty"` // path -> sha256 hex; required for signed plugins
 	Capabilities Capabilities      `json:"capabilities"`
 	Contributes  Contributes       `json:"contributes"`
@@ -380,6 +382,9 @@ func (m *Manifest) validate() error {
 	}
 	if !semverRe.MatchString(m.Version) {
 		return fmt.Errorf("version %q is not a semantic version (like 1.4.0)", m.Version)
+	}
+	if err := validatePlatforms(m.Platforms); err != nil {
+		return err
 	}
 	if err := m.validateCoreReq(); err != nil {
 		return err

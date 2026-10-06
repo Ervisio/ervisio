@@ -141,7 +141,7 @@ async function startDownload(args: Record<string, unknown>, onDone?: (r: Downloa
 }
 
 /* ---------- SDK ---------- */
-function makeSdk(plugin: { id: string; name: string; version: string }, view: FrameView, appOrigin: string) {
+function makeSdk(plugin: { id: string; name: string; version: string }, view: FrameView, appOrigin: string, platform: 'linux' | 'windows') {
   const pages = new Map<string, ViewDef<unknown>>();
   const widgets = new Map<string, ViewDef<unknown>>();
   const strings: Record<string, Record<string, string>> = {};
@@ -150,6 +150,8 @@ function makeSdk(plugin: { id: string; name: string; version: string }, view: Fr
     version: 3 as const,
     /** The console's origin as the user reaches it, for building URLs such as webhooks (location.origin is opaque in a frame). */
     appOrigin,
+    /** The server's operating system: 'linux' or 'windows'. */
+    platform,
     plugin,
     view,
     react: React,
@@ -317,7 +319,7 @@ async function start(m: Extract<HostToFrame, { t: 'init' }>) {
   applyTheme(m.theme);
   document.documentElement.dataset.view = m.view.kind;
   document.documentElement.lang = getLang();
-  const { sdk, pages, widgets } = makeSdk(m.plugin, m.view, m.appOrigin);
+  const { sdk, pages, widgets } = makeSdk(m.plugin, m.view, m.appOrigin, m.platform ?? 'linux');
   const url = URL.createObjectURL(new Blob([m.code], { type: 'text/javascript' }));
   const mod = (await import(/* @vite-ignore */ url)) as { default?: unknown; activate?: unknown };
   URL.revokeObjectURL(url);
