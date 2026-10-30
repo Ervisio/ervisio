@@ -8,6 +8,7 @@ import (
 	"github.com/ervisio/ervisio/server/internal/modules/overview"
 	"github.com/ervisio/ervisio/server/internal/modules/plugins"
 	"github.com/ervisio/ervisio/server/internal/modules/prefs"
+	"github.com/ervisio/ervisio/server/internal/modules/remote"
 	"github.com/ervisio/ervisio/server/internal/modules/services"
 	"github.com/ervisio/ervisio/server/internal/modules/software"
 	"github.com/ervisio/ervisio/server/internal/modules/system"
@@ -25,6 +26,7 @@ func RegisterAll(r *rpc.Registry) {
 	configmod.Register(r)
 	terminal.Register(r)
 	files.Register(r)
+	remote.Register(r)
 	logs.Register(r)
 	services.Register(r)
 	software.Register(r)

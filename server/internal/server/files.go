@@ -28,21 +28,64 @@ var safeInline = map[string]bool{
 	"video/mp4": true, "video/webm": true, "audio/mpeg": true, "audio/ogg": true, "audio/wav": true,
 }
 
-func transferParams(r *http.Request) (string, bool, *rpc.Error) {
-	q := r.URL.Query()
-	p := q.Get("path")
-	if p == "" || len(p) > 4096 || !filepath.IsAbs(p) || strings.ContainsRune(p, 0) {
-		return "", false, rpc.Errorf(rpc.Invalid, "path must be an absolute path")
+// fileTarget is what a download or upload URL names: a local path (on the
+// user or root bridge), or with remote=<id> a path on a saved remote
+// connection (always on the user bridge, docs/api/remote.md).
+type fileTarget struct {
+	path   string
+	admin  bool
+	remote string
+}
+
+func (t fileTarget) method(local, remote string) string {
+	if t.remote != "" {
+		return remote
 	}
-	admin := false
+	return local
+}
+
+func (t fileTarget) params() map[string]any {
+	m := map[string]any{"path": t.path}
+	if t.remote != "" {
+		m["conn"] = t.remote
+	}
+	return m
+}
+
+func validRemoteID(s string) bool {
+	if len(s) != 16 {
+		return false
+	}
+	for _, c := range s {
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func transferParams(r *http.Request) (fileTarget, *rpc.Error) {
+	q := r.URL.Query()
+	t := fileTarget{path: q.Get("path"), remote: q.Get("remote")}
+	if t.remote != "" {
+		if !validRemoteID(t.remote) {
+			return t, rpc.Errorf(rpc.Invalid, "remote must be a connection id")
+		}
+		if t.path == "" || len(t.path) > 4096 || !path.IsAbs(t.path) || strings.ContainsRune(t.path, 0) {
+			return t, rpc.Errorf(rpc.Invalid, "path must be an absolute path")
+		}
+	} else if t.path == "" || len(t.path) > 4096 || !filepath.IsAbs(t.path) || strings.ContainsRune(t.path, 0) {
+		return t, rpc.Errorf(rpc.Invalid, "path must be an absolute path")
+	}
 	switch q.Get("admin") {
 	case "", "0", "false":
 	case "1", "true":
-		admin = true
+		// Administrator rights here do not reach another server.
+		t.admin = t.remote == ""
 	default:
-		return "", false, rpc.Errorf(rpc.Invalid, "admin must be 0 or 1")
+		return t, rpc.Errorf(rpc.Invalid, "admin must be 0 or 1")
 	}
-	return p, admin, nil
+	return t, nil
 }
 
 // fileMeta is the first event of files.readStream.
@@ -53,20 +96,21 @@ type fileMeta struct {
 }
 
 func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request, sess *Session) {
-	p, admin, e := transferParams(r)
+	t, e := transferParams(r)
 	if e != nil {
 		writeError(w, e)
 		return
 	}
+	p := t.path
 	inline := r.URL.Query().Get("inline") == "1"
-	const method = "files.readStream"
-	b, isAdmin, e := s.route(r.Context(), sess, method, admin)
+	method := t.method("files.readStream", "remote.readStream")
+	b, isAdmin, e := s.route(r.Context(), sess, method, t.admin)
 	if e != nil {
 		writeError(w, e)
 		return
 	}
 	defer sess.hold(b, isAdmin)()
-	st, err := b.Stream(r.Context(), method, map[string]string{"path": p})
+	st, err := b.Stream(r.Context(), method, t.params())
 	if err != nil {
 		writeError(w, rpc.ToError(err, false))
 		return
@@ -79,13 +123,13 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request, sess *Se
 		if err := st.Err(); err != nil {
 			writeError(w, rpc.ToError(err, false))
 		} else {
-			writeError(w, rpc.Errorf(rpc.Internal, "files.readStream ended without data"))
+			writeError(w, rpc.Errorf(rpc.Internal, "%s ended without data", method))
 		}
 		return
 	}
 	var meta fileMeta
 	if ev.B64 || json.Unmarshal(ev.Data, &meta) != nil {
-		writeError(w, rpc.Errorf(rpc.Internal, "files.readStream: first event must be metadata"))
+		writeError(w, rpc.Errorf(rpc.Internal, "%s: first event must be metadata", method))
 		return
 	}
 	name := meta.Name
@@ -147,20 +191,21 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request, sess *Se
 }
 
 func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request, sess *Session) {
-	p, admin, e := transferParams(r)
+	t, e := transferParams(r)
 	if e != nil {
 		writeError(w, e)
 		return
 	}
 	overwrite := r.URL.Query().Get("overwrite") == "1"
-	const method = "files.writeStream"
-	b, isAdmin, e := s.route(r.Context(), sess, method, admin)
+	method := t.method("files.writeStream", "remote.writeStream")
+	b, isAdmin, e := s.route(r.Context(), sess, method, t.admin)
 	if e != nil {
 		writeError(w, e)
 		return
 	}
 	defer sess.hold(b, isAdmin)()
-	params := map[string]any{"path": p, "size": r.ContentLength, "overwrite": overwrite}
+	params := t.params()
+	params["size"], params["overwrite"] = r.ContentLength, overwrite
 	st, err := b.Stream(r.Context(), method, params)
 	if err != nil {
 		writeError(w, rpc.ToError(err, false))
