@@ -7,7 +7,7 @@
 
 pkgname=ervisio-bin
 _pkgname=ervisio
-pkgver=0.5.0
+pkgver=0.6.4
 pkgrel=1
 pkgdesc='Web console for managing a Linux server from the browser (prebuilt; formerly LinuxAdmin)'
 arch=('x86_64' 'aarch64')
@@ -25,8 +25,8 @@ source_x86_64=("https://github.com/ervisio/ervisio/releases/download/v$pkgver/er
 source_aarch64=("https://github.com/ervisio/ervisio/releases/download/v$pkgver/ervisio-$pkgver-linux-arm64.tar.gz")
 # Set by update-pkgbuild.sh from the signed SHA256SUMS of the release.
 sha256sums=('698517efd8015f508f626e67830e46700dc675fd1208414f29f73d92671df6dd' '1f0fc6193955474569e821518ac8334e06a93fe16173851cb69e4327edda0bb3')
-sha256sums_x86_64=('9f8db60182d9828e179cee345cb80ababda8d131c05e6027c220b69641a01778')
-sha256sums_aarch64=('8642cda564a5fee983e4733f9eb84682454e79b8e063c5c972a7b3dd4bb64ede')
+sha256sums_x86_64=('2f8828091027dca36eabec4267ebbd2c9ab07458685ffa4a302ce6a2453c1a16')
+sha256sums_aarch64=('f3f9f0764fc711c73c318e7f61dba0c9094897a6772c4555bf1c447695cf2b86')
 
 package() {
 	local _arch=amd64

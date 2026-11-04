@@ -1,6 +1,6 @@
 pkgbase = ervisio-bin
 	pkgdesc = Web console for managing a Linux server from the browser (prebuilt; formerly LinuxAdmin)
-	pkgver = 0.5.0
+	pkgver = 0.6.4
 	pkgrel = 1
 	url = https://github.com/ervisio/ervisio
 	install = ervisio.install
@@ -11,7 +11,7 @@ pkgbase = ervisio-bin
 	depends = pam
 	depends = sudo
 	depends = systemd
-	provides = ervisio=0.5.0
+	provides = ervisio=0.6.4
 	conflicts = ervisio
 	conflicts = linuxadmin
 	conflicts = linuxadmin-bin
@@ -23,9 +23,9 @@ pkgbase = ervisio-bin
 	source = package-service.sh
 	sha256sums = 698517efd8015f508f626e67830e46700dc675fd1208414f29f73d92671df6dd
 	sha256sums = 1f0fc6193955474569e821518ac8334e06a93fe16173851cb69e4327edda0bb3
-	source_x86_64 = https://github.com/ervisio/ervisio/releases/download/v0.5.0/ervisio-0.5.0-linux-amd64.tar.gz
-	sha256sums_x86_64 = 9f8db60182d9828e179cee345cb80ababda8d131c05e6027c220b69641a01778
-	source_aarch64 = https://github.com/ervisio/ervisio/releases/download/v0.5.0/ervisio-0.5.0-linux-arm64.tar.gz
-	sha256sums_aarch64 = 8642cda564a5fee983e4733f9eb84682454e79b8e063c5c972a7b3dd4bb64ede
+	source_x86_64 = https://github.com/ervisio/ervisio/releases/download/v0.6.4/ervisio-0.6.4-linux-amd64.tar.gz
+	sha256sums_x86_64 = 2f8828091027dca36eabec4267ebbd2c9ab07458685ffa4a302ce6a2453c1a16
+	source_aarch64 = https://github.com/ervisio/ervisio/releases/download/v0.6.4/ervisio-0.6.4-linux-arm64.tar.gz
+	sha256sums_aarch64 = f3f9f0764fc711c73c318e7f61dba0c9094897a6772c4555bf1c447695cf2b86
 
 pkgname = ervisio-bin
