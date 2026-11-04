@@ -1,0 +1,19 @@
+# Context index
+- now.md: current task, plan, next step. Always loaded.
+- decisions.md: architectural decisions and why. Read before structural changes.
+- map/server.md: daemon, bridge, privilege boundaries and server checks. Read before server changes.
+- map/web.md: app providers, API transport, sections, plugins and frontend checks. Read before web changes.
+- ../README.md: product features, platform support, installation and development. Read for project orientation; support claims are documented, not revalidated by init.
+- ../CHANGELOG.md: shipped changes. Read when assessing compatibility or preparing release notes.
+- ../docs/ARCHITECTURE.md: process model, protocols and repository ownership. Read before cross-cutting changes; check platform details against current code.
+- ../docs/DESIGN-RULES.md: approved visual rules, themes and copy. Read before UI changes.
+- ../docs/dev/docker-v2-plan.md: earlier Docker SDK plan. Read only for relevant historical contracts; verify against current implementation.
+- ../docs/PACKAGING.md: packages, paths and installation lifecycle. Read before packaging changes.
+- ../docs/PLUGIN-SIGNING.md: plugin trust and signatures. Read before signing changes.
+- ../docs/RELEASING.md: release and update procedures. Read before release work.
+- ../docs/SECTION-AGENT-BRIEF.md: section ownership and end-to-end workflow. Read before delegating section work.
+- ../docs/SECURITY-REVIEW.md: prior self-review and remediation evidence. Read before security-sensitive changes; historical findings are not a fresh audit.
+- ../packaging/README.md: packaging entry points. Read before changing distribution artifacts.
+- ../plugins/README.md: local development plugin folder. Read before adding plugin fixtures.
+- ../server/README.md: server build, runtime and development flags. Read before running the daemon.
+- ../web/CONTRIBUTING-SECTIONS.md: frontend section contracts. Read before adding or changing sections.
