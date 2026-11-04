@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.4] - 2026-11-04
+
+### Changed
+- Marketplace plugin cards show the logo beside the name, an icon-only verified check using the existing green colours, and a full-width description. Supported systems sit at the bottom left and Install or installation status at the bottom right.
+- Removed the featured plugin banner from Browse.
+
 ## [0.6.2] - 2026-10-06
 
 ### Added
