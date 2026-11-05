@@ -82,36 +82,15 @@ func RunSessionHelper(args []string) int {
 		fmt.Fprintf(os.Stderr, "pam session: "+format+"\n", a...)
 		return 1
 	}
-	fs := flag.NewFlagSet(HelperFlag, flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	user := fs.String("user", "", "")
-	uid := fs.Uint64("uid", 0, "")
-	service := fs.String("service", "", "")
-	rhost := fs.String("rhost", "", "")
-	if err := fs.Parse(args); err != nil {
+	ha, err := parseHelperArgs(args)
+	if err != nil {
 		return fail("%v", err)
 	}
-	argv := fs.Args()
-	if len(argv) == 0 || !filepath.IsAbs(argv[0]) {
-		return fail("missing absolute bridge path")
-	}
-	if os.Geteuid() != 0 {
-		return fail("must run as root")
-	}
-	if *service == "" || strings.ContainsAny(*service, "/\x00") {
-		return fail("invalid PAM service")
-	}
-	a, err := account.Lookup(*user)
+	a, err := lookupHelperAccount(ha)
 	if err != nil {
-		return fail("account %q: %v", *user, err)
+		return fail("%v", err)
 	}
-	if uint64(a.UID) != *uid {
-		return fail("account %q now has uid %d, expected %d", a.Name, a.UID, *uid)
-	}
-	if !account.ShellAllowed(a.Shell) {
-		return fail("account %q has no login shell (%q)", a.Name, a.Shell)
-	}
-	ps, err := pam.OpenSession(*service, a.Name, *rhost)
+	ps, err := pam.OpenSession(ha.service, a.Name, ha.rhost)
 	if err != nil {
 		return fail("open session for %q: %v", a.Name, err)
 	}
@@ -121,7 +100,7 @@ func RunSessionHelper(args []string) int {
 		}
 	}()
 
-	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd := exec.Command(ha.argv[0], ha.argv[1:]...)
 	cmd.Env = mergeEnv(os.Environ(), ps.Env())
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	cmd.Dir = "/"
@@ -144,6 +123,60 @@ func RunSessionHelper(args []string) int {
 	}()
 	err = cmd.Wait()
 	signal.Stop(sigs)
+	return bridgeExitStatus(err, fail)
+}
+
+type helperArgs struct {
+	user    string
+	uid     uint64
+	service string
+	rhost   string
+	argv    []string
+}
+
+// parseHelperArgs reads and validates the helper's command line.
+func parseHelperArgs(args []string) (helperArgs, error) {
+	var ha helperArgs
+	fs := flag.NewFlagSet(HelperFlag, flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	fs.StringVar(&ha.user, "user", "", "")
+	fs.Uint64Var(&ha.uid, "uid", 0, "")
+	fs.StringVar(&ha.service, "service", "", "")
+	fs.StringVar(&ha.rhost, "rhost", "", "")
+	if err := fs.Parse(args); err != nil {
+		return ha, err
+	}
+	ha.argv = fs.Args()
+	if len(ha.argv) == 0 || !filepath.IsAbs(ha.argv[0]) {
+		return ha, errors.New("missing absolute bridge path")
+	}
+	if os.Geteuid() != 0 {
+		return ha, errors.New("must run as root")
+	}
+	if ha.service == "" || strings.ContainsAny(ha.service, "/\x00") {
+		return ha, errors.New("invalid PAM service")
+	}
+	return ha, nil
+}
+
+// lookupHelperAccount resolves the account and checks it still matches the
+// uid and login-shell policy the daemon saw.
+func lookupHelperAccount(ha helperArgs) (*account.Account, error) {
+	a, err := account.Lookup(ha.user)
+	if err != nil {
+		return nil, fmt.Errorf("account %q: %v", ha.user, err)
+	}
+	if uint64(a.UID) != ha.uid {
+		return nil, fmt.Errorf("account %q now has uid %d, expected %d", a.Name, a.UID, ha.uid)
+	}
+	if !account.ShellAllowed(a.Shell) {
+		return nil, fmt.Errorf("account %q has no login shell (%q)", a.Name, a.Shell)
+	}
+	return a, nil
+}
+
+// bridgeExitStatus maps the bridge's Wait error to the helper's exit status.
+func bridgeExitStatus(err error, fail func(string, ...any) int) int {
 	var ee *exec.ExitError
 	if errors.As(err, &ee) {
 		if ee.ExitCode() >= 0 {

@@ -89,6 +89,33 @@ func (s *Server) revalidate(sess *Session, full bool) string {
 		s.log.Printf("revalidate %q: lookup: %v (session kept)", name, err)
 		return ""
 	}
+	if reason := s.accountRefusal(sess, a); reason != "" {
+		return reason
+	}
+	reason, runPAM := s.shadowRefusal(c, sess)
+	if reason != "" {
+		return reason
+	}
+	if reason := s.keyRefusal(c, sess, a); reason != "" {
+		return reason
+	}
+	if full || runPAM {
+		if err := c.pamAcct(name, sess.RHost); err != nil {
+			if errors.Is(err, pam.ErrAccount) {
+				return fmt.Sprintf("PAM account check refused the account: %v", err)
+			}
+			s.log.Printf("revalidate %q: %v (session kept)", name, err)
+		}
+	}
+	sess.mu.Lock()
+	sess.checked = c.now()
+	sess.mu.Unlock()
+	return ""
+}
+
+// accountRefusal checks the looked-up account against the session and the
+// current config; "" means it is still fine.
+func (s *Server) accountRefusal(sess *Session, a *account.Account) string {
 	if !account.SameUser(a, sess.Account) {
 		return fmt.Sprintf("the account's uid changed (%d → %d)", sess.Account.UID, a.UID)
 	}
@@ -108,50 +135,50 @@ func (s *Server) revalidate(sess *Session, full bool) string {
 	if g := account.LostGroup(sess.Account, a); g != "" {
 		return fmt.Sprintf("the account left group %s", g)
 	}
-	runPAM := full
+	return ""
+}
+
+// shadowRefusal checks the shadow entry; runPAM says PAM must decide too.
+func (s *Server) shadowRefusal(c *accountChecker, sess *Session) (reason string, runPAM bool) {
+	name := sess.Account.Name
 	sh, err := c.shadow(name)
 	switch {
 	case err == nil:
 		if sh.Locked && sess.sshKey == nil {
-			return "the account's password is locked"
+			return "the account's password is locked", false
 		}
 		if sh.Expired(c.now()) {
-			return "the account expired"
+			return "the account expired", false
 		}
 		sess.mu.Lock()
 		fp := sess.shadowFP
 		sess.mu.Unlock()
 		if fp != "" && fingerprintChanged(fp, sh.Fingerprint) && sess.sshKey == nil {
-			return "the account's password changed"
+			return "the account's password changed", false
 		}
+		return "", false
 	case errors.Is(err, account.ErrNoShadowEntry):
 		// Not a local shadow account (LDAP, homed…): ask PAM.
-		runPAM = true
 	case errors.Is(err, fs.ErrPermission), errors.Is(err, fs.ErrNotExist):
-		runPAM = true
 	default:
 		s.log.Printf("revalidate %q: shadow: %v", name, err)
-		runPAM = true
 	}
-	if sess.sshKey != nil && c.keyAuth != nil {
-		if err := c.keyAuth(a, sess.sshKey.pub, sess.sshKey.fromIP); err != nil {
-			if errors.Is(err, sshauth.ErrNotAuthorized) {
-				return fmt.Sprintf("the SSH key %s is no longer authorized: %v", sess.sshKey.fingerprint, err)
-			}
-			s.log.Printf("revalidate %q: key check: %v (session kept)", name, err)
-		}
+	return "", true
+}
+
+// keyRefusal checks an SSH-key session's key against authorized_keys.
+func (s *Server) keyRefusal(c *accountChecker, sess *Session, a *account.Account) string {
+	if sess.sshKey == nil || c.keyAuth == nil {
+		return ""
 	}
-	if runPAM {
-		if err := c.pamAcct(name, sess.RHost); err != nil {
-			if errors.Is(err, pam.ErrAccount) {
-				return fmt.Sprintf("PAM account check refused the account: %v", err)
-			}
-			s.log.Printf("revalidate %q: %v (session kept)", name, err)
-		}
+	err := c.keyAuth(a, sess.sshKey.pub, sess.sshKey.fromIP)
+	if err == nil {
+		return ""
 	}
-	sess.mu.Lock()
-	sess.checked = c.now()
-	sess.mu.Unlock()
+	if errors.Is(err, sshauth.ErrNotAuthorized) {
+		return fmt.Sprintf("the SSH key %s is no longer authorized: %v", sess.sshKey.fingerprint, err)
+	}
+	s.log.Printf("revalidate %q: key check: %v (session kept)", sess.Account.Name, err)
 	return ""
 }
 

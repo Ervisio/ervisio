@@ -75,26 +75,9 @@ type sftpFS struct {
 }
 
 func dialSFTP(ctx context.Context, spec *Conn) (*sftpFS, error) {
-	var auth []ssh.AuthMethod
-	if spec.Auth == "key" {
-		if spec.secret(secKey) == "" {
-			return nil, rpc.Errorf(rpc.Invalid, "No private key is saved for this connection.")
-		}
-		signer, err := parsePrivateKey(spec.secret(secKey), spec.secret(secPassphrase))
-		if err != nil {
-			return nil, err
-		}
-		auth = append(auth, ssh.PublicKeys(signer))
-	} else {
-		pw := spec.secret(secPassword)
-		auth = append(auth, ssh.Password(pw), ssh.KeyboardInteractive(func(_, _ string, qs []string, _ []bool) ([]string, error) {
-			// Servers that ask for the password through keyboard-interactive.
-			a := make([]string, len(qs))
-			for i := range qs {
-				a[i] = pw
-			}
-			return a, nil
-		}))
+	auth, err := sftpAuthMethods(spec)
+	if err != nil {
+		return nil, err
 	}
 	var pinned ssh.PublicKey
 	if spec.HostKey != "" {
@@ -104,6 +87,56 @@ func dialSFTP(ctx context.Context, spec *Conn) (*sftpFS, error) {
 		}
 		pinned = k
 	}
+	cfg := sftpClientConfig(spec, auth, pinned)
+	addr := spec.address()
+	conn, err := dialTCP(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+	_ = conn.SetDeadline(time.Now().Add(dialTimeout))
+	cc, chans, reqs, err := ssh.NewClientConn(conn, addr, cfg)
+	if err != nil {
+		conn.Close()
+		return nil, handshakeError(spec, addr, err)
+	}
+	_ = conn.SetDeadline(time.Time{})
+	client := ssh.NewClient(cc, chans, reqs)
+	sc, err := sftp.NewClient(client, sftp.UseConcurrentWrites(true))
+	if err != nil {
+		client.Close()
+		return nil, rpc.Errorf(rpc.Unavailable, "The server does not offer SFTP: %v", err)
+	}
+	f := &sftpFS{ssh: client, c: sc, stop: make(chan struct{})}
+	go f.keepalive()
+	return f, nil
+}
+
+// sftpAuthMethods builds the SSH auth methods from the saved secrets.
+func sftpAuthMethods(spec *Conn) ([]ssh.AuthMethod, error) {
+	if spec.Auth == "key" {
+		if spec.secret(secKey) == "" {
+			return nil, rpc.Errorf(rpc.Invalid, "No private key is saved for this connection.")
+		}
+		signer, err := parsePrivateKey(spec.secret(secKey), spec.secret(secPassphrase))
+		if err != nil {
+			return nil, err
+		}
+		return []ssh.AuthMethod{ssh.PublicKeys(signer)}, nil
+	}
+	pw := spec.secret(secPassword)
+	return []ssh.AuthMethod{ssh.Password(pw), ssh.KeyboardInteractive(func(_, _ string, qs []string, _ []bool) ([]string, error) {
+		// Servers that ask for the password through keyboard-interactive.
+		a := make([]string, len(qs))
+		for i := range qs {
+			a[i] = pw
+		}
+		return a, nil
+	})}, nil
+}
+
+// sftpClientConfig builds the SSH config; a nil pinned key makes every
+// host key an error carrying the key to trust.
+func sftpClientConfig(spec *Conn, auth []ssh.AuthMethod, pinned ssh.PublicKey) *ssh.ClientConfig {
 	cfg := &ssh.ClientConfig{
 		User: spec.User,
 		Auth: auth,
@@ -124,34 +157,19 @@ func dialSFTP(ctx context.Context, spec *Conn) (*sftpFS, error) {
 			cfg.HostKeyAlgorithms = []string{ssh.KeyAlgoRSASHA512, ssh.KeyAlgoRSASHA256, ssh.KeyAlgoRSA}
 		}
 	}
-	addr := spec.address()
-	conn, err := dialTCP(ctx, addr)
-	if err != nil {
-		return nil, err
+	return cfg
+}
+
+// handshakeError turns an SSH handshake failure into the user-facing error.
+func handshakeError(spec *Conn, addr string, err error) error {
+	var hk *hostKeyError
+	if errors.As(err, &hk) {
+		return hk
 	}
-	_ = conn.SetDeadline(time.Now().Add(dialTimeout))
-	cc, chans, reqs, err := ssh.NewClientConn(conn, addr, cfg)
-	if err != nil {
-		conn.Close()
-		var hk *hostKeyError
-		if errors.As(err, &hk) {
-			return nil, hk
-		}
-		if strings.Contains(err.Error(), "unable to authenticate") {
-			return nil, rpc.Errorf(rpc.Forbidden, "The server refused the sign-in of %s. Check the user name and the %s.", spec.User, map[bool]string{true: "private key", false: "password"}[spec.Auth == "key"])
-		}
-		return nil, rpc.Errorf(rpc.Unavailable, "The SSH handshake with %s failed: %v", addr, err)
+	if strings.Contains(err.Error(), "unable to authenticate") {
+		return rpc.Errorf(rpc.Forbidden, "The server refused the sign-in of %s. Check the user name and the %s.", spec.User, map[bool]string{true: "private key", false: "password"}[spec.Auth == "key"])
 	}
-	_ = conn.SetDeadline(time.Time{})
-	client := ssh.NewClient(cc, chans, reqs)
-	sc, err := sftp.NewClient(client, sftp.UseConcurrentWrites(true))
-	if err != nil {
-		client.Close()
-		return nil, rpc.Errorf(rpc.Unavailable, "The server does not offer SFTP: %v", err)
-	}
-	f := &sftpFS{ssh: client, c: sc, stop: make(chan struct{})}
-	go f.keepalive()
-	return f, nil
+	return rpc.Errorf(rpc.Unavailable, "The SSH handshake with %s failed: %v", addr, err)
 }
 
 // keepalive notices a dead connection (and keeps NAT mappings open).
