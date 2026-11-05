@@ -12,6 +12,7 @@ import {
   type View,
 } from './types';
 import { dirname, isVirtual, nextId } from './util';
+import { isRemoteLocation } from './remoteLocation';
 
 type SetPref = ReturnType<typeof usePrefs>['set'];
 type RestoredTabs = { tabs: TabState[]; active: string };
@@ -20,7 +21,8 @@ const SORT0: SortState = { key: 'name', dir: 'asc' };
 const none = new Set<string>();
 const SAVE_TABS_DELAY_MS = 500;
 // The bridge validates paths against its platform; accept Windows drive and UNC links too.
-const absolutePath = (path: string) => path.startsWith('/') || /^[a-z]:[\\/]/i.test(path) || path.startsWith('\\\\');
+const absolutePath = (path: string) =>
+  path.startsWith('/') || /^[a-z]:[\\/]/i.test(path) || path.startsWith('\\\\');
 
 const newPane = (loc: string, view: View = 'grid'): PaneState => ({ loc, view, admin: false });
 const newTab = (home: string, loc = home): TabState => ({
@@ -34,7 +36,8 @@ function sanitizeTabs(raw: unknown, home: string): RestoredTabs | null {
   const arr = Array.isArray(raw) ? raw : raw && typeof raw === 'object' ? (raw as any).tabs : null;
   if (!Array.isArray(arr) || arr.length === 0) return null;
   const okLoc = (l: unknown) =>
-    typeof l === 'string' && (absolutePath(l) || ['trash:', 'recent:', 'starred:'].includes(l))
+    typeof l === 'string' &&
+    (absolutePath(l) || isRemoteLocation(l) || ['trash:', 'recent:', 'starred:'].includes(l))
       ? l
       : home;
   const okView = (v: unknown): View => (v === 'list' ? 'list' : 'grid');
@@ -75,7 +78,7 @@ function useLinkPath(ready: boolean, open: (dir: string, select?: string) => voi
   const [params, setParams] = useSearchParams();
   const linkPath = params.get('path');
   useEffect(() => {
-    if (!ready || !linkPath || !absolutePath(linkPath)) return;
+    if (!ready || !linkPath || (!absolutePath(linkPath) && !isRemoteLocation(linkPath))) return;
     let live = true;
     const openOnce = (dir: string, select?: string) => {
       if (!live) return;
@@ -175,7 +178,9 @@ export function useFilesTabs({ home, mobile, ready, savedTabs, set }: TabsArgs) 
           : x,
       ),
     );
-  const elevate = (s: Side) => () => updPane(s, { admin: true });
+  const elevate = (s: Side) => () => {
+    if (!isRemoteLocation(pane(s).loc)) updPane(s, { admin: true });
+  };
   const toggleSplit = () =>
     setTabs((ts) => ts.map((x) => (x.id === tab.id ? { ...x, split: !x.split } : x)));
   const clearSel = (s?: Side) => setSel((c) => (s ? { ...c, [s]: none } : { L: none, R: none }));
@@ -187,7 +192,7 @@ export function useFilesTabs({ home, mobile, ready, savedTabs, set }: TabsArgs) 
 
   const navigate = (s: Side, loc: string) => {
     const l = loc === 'home:' ? home : loc;
-    updPane(s, { loc: l });
+    updPane(s, { loc: l, ...(isRemoteLocation(l) ? { admin: false } : {}) });
     setQuery((q) => ({ ...q, [s]: '' }));
     clearSel(s);
   };

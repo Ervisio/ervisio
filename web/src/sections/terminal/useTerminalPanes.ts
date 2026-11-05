@@ -97,6 +97,7 @@ interface PanesInput {
   loaded: boolean;
   loadError: string;
   lastInfo: MutableRefObject<Map<string, SessionInfo>>;
+  launchRequested: boolean;
   refresh(): Promise<void>;
 }
 
@@ -109,6 +110,7 @@ export function useTerminalPanes({
   loadError,
   lastInfo,
   refresh,
+  launchRequested,
 }: PanesInput) {
   const { layout, patch } = useStoredLayout();
   const { open, panes, split } = layout;
@@ -167,6 +169,8 @@ export function useTerminalPanes({
   useEffect(() => {
     if (!loaded || loadError || didBoot.current) return;
     didBoot.current = true;
+    // The route handler owns this first session, including its exact working directory.
+    if (launchRequested) return;
     const [first, second] = bootPanes(panes, open, byId, sessions);
     if (first) {
       patch((l) => ({
@@ -174,13 +178,12 @@ export function useTerminalPanes({
         panes: [first, second && second !== first ? second : null],
         open: withOpen(l.open, first),
       }));
-    } else if (!bootstrapping && !new URLSearchParams(window.location.search).has('cmd')) {
-      // (with ?cmd= the command link handler starts the session)
+    } else if (!bootstrapping) {
       bootstrapping = true;
       void create({}).finally(() => (bootstrapping = false));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, loadError]);
+  }, [loaded, loadError, launchRequested]);
 
   // Forget open ids whose session ended (panes keep showing their "ended" bar until closed).
   useEffect(() => {

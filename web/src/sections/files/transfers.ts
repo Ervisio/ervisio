@@ -1,7 +1,9 @@
-import { ApiError, requestUnlock, stream, uploadUrl } from '../../api';
-import { emitChanged, fcall, isUnlocked } from './fapi';
+import { ApiError, requestUnlock, stream } from '../../api';
+import { emitChanged, fcall, fileUploadUrl, isUnlocked } from './fapi';
+import { remoteCopyPlan, remoteTarget } from './remoteLocation';
 import { useStore } from '../../lib/useStore';
-import { basename, dirname, nextId } from './util';
+import { toast } from '../../ui';
+import { basename, dirname, join, nextId } from './util';
 
 export type TransferKind = 'upload' | 'copy' | 'move';
 export type TransferStatus = 'queued' | 'running' | 'done' | 'error' | 'cancelled';
@@ -120,10 +122,10 @@ function parseJson(text: string): any {
 
 export function enqueueUpload(o: UploadOpts) {
   const rel = o.rel ?? o.file.name;
-  const target = o.dest === '/' ? '/' + rel : o.dest + '/' + rel;
+  const target = join(o.dest, rel);
   const id = nextId();
   let xhr: XMLHttpRequest | null = null;
-  let admin = o.admin;
+  let admin = remoteTarget(o.dest) ? false : o.admin;
   let overwrite = false;
   let elevated = false;
   let last = { t: 0, b: 0 };
@@ -166,7 +168,7 @@ export function enqueueUpload(o: UploadOpts) {
     }
     const body = parseJson(req.responseText);
     const code = uploadErrorCode(req.status, body);
-    if (code === 'needs_admin' && !admin && !elevated) {
+    if (code === 'needs_admin' && !remoteTarget(o.dest) && !admin && !elevated) {
       elevateAndRestart(code, body);
       return;
     }
@@ -176,7 +178,7 @@ export function enqueueUpload(o: UploadOpts) {
   const start = () => {
     const req = new XMLHttpRequest();
     xhr = req;
-    req.open('POST', uploadUrl(target, admin, overwrite));
+    req.open('POST', fileUploadUrl(target, admin, overwrite));
     req.setRequestHeader('X-Requested-With', 'ervisio');
     req.withCredentials = true;
     last = { t: performance.now(), b: 0 };
@@ -235,10 +237,17 @@ export interface CopyOpts {
 type CopyMsg = { type?: string; total?: number; items?: number; done?: number; current?: string };
 
 export function enqueueCopy(o: CopyOpts) {
+  let remote;
+  try {
+    remote = remoteCopyPlan(o.from, o.to);
+  } catch (error) {
+    toast.err(error instanceof Error ? error.message : String(error));
+    return;
+  }
   const id = nextId();
   const label = o.from.length === 1 ? basename(o.from[0]) : `${o.from.length} items`;
   let handle: { close(): void } | null = null;
-  let admin = o.admin;
+  let admin = remote ? false : o.admin;
   let elevated = false;
 
   const onData = (m: CopyMsg) => {
@@ -264,7 +273,7 @@ export function enqueueCopy(o: CopyOpts) {
   const onError = (e: { code: string; message: string }) => {
     const j = jobs.find((x) => x.id === id);
     if (!j || j.status === 'cancelled') return;
-    if (e.code === 'needs_admin' && !admin && !elevated && isUnlocked()) {
+    if (e.code === 'needs_admin' && !remote && !admin && !elevated && isUnlocked()) {
       // the stream layer already asked for the password; run the copy on the root bridge now
       elevated = true;
       admin = true;
@@ -279,8 +288,8 @@ export function enqueueCopy(o: CopyOpts) {
   const begin = () => {
     patch(id, { status: 'running', done: 0, error: undefined });
     handle = stream<CopyMsg>(
-      'files.copy',
-      { from: o.from, to: o.to, move: o.move },
+      remote ? 'remote.copy' : 'files.copy',
+      { ...(remote ?? { from: o.from, to: o.to }), move: o.move },
       { admin, onData, onEnd, onError },
     );
   };

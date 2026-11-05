@@ -28,7 +28,7 @@ Purpose: reach other machines (SFTP/FTP/SMB/WebDAV file connections, Ervisio-to-
 - `Insecure` (skip TLS verify) exists only for FTP and WebDAV; `build` forces it false elsewhere.
 
 ## Gotchas
-- `remote.*` backend is complete but the Files UI does not call it yet: `Places.tsx` shows a "soon" toast for add/open remote.
+- Files now uses `remote.*` in both shells: `RemoteConnections.tsx` manages SFTP test/trust/save/forget and SMB network folders. SMB address parser `networkPath.ts` accepts UNC/smb://, rejects credential-bearing addresses and resolves host/share/subpath; no OS mount. Places opens saved connections. `remoteLocation.ts` + `fapi.ts` adapt encoded navigation paths, and `transfers.ts` supports remote uploads/downloads/copy/move. Secrets remain in the account's backend connection store, never prefs.
 - `HostsBlock` edits the `hosts` config key, but `server/internal/config` has no `hosts` field; `supported={server.hasKey('hosts')}` hides the add button ("later").
 - `remotes.key` sits beside `remotes.json` in the same user folder: sealing guards against casual leaks (backups, screenshots of the file), not against the account itself or root.
 - Cross-origin `VITE_API_BASE`: session cookie is `SameSite=Strict` and the server sends no CORS headers, so it works only same-site (e.g. another port or a wrapper behind the same host) and the page origin must be in `web.allowed_origins`.
@@ -40,7 +40,7 @@ Purpose: reach other machines (SFTP/FTP/SMB/WebDAV file connections, Ervisio-to-
 ## Commands and references
 - `cd server && go test ./internal/modules/remote ./internal/envs ./internal/server` (`pair_test.go`, `envpair_test.go`, `security_test.go`).
 - `docs/api/environments.md` (pairing), `docs/api/plugins.md` (network capability), `docs/api/auth.md` (`public/host`).
-- `remote.go` header cites `docs/api/remote.md`, which does not exist.
+- `docs/api/remote.md` documents connection trust, storage, and file/transfer methods.
 Related: map/auth.md, map/server.md, map/web.md
 
 Sweep helpers (2026-11-05): checkoutPath, bindPathParams (remote.go); server/envpair.go relayPeerLine.

@@ -97,7 +97,7 @@
   "focusTip": "Modalità focus (nasconde l'app, F11 o Ctrl+Maiusc+F per uscire)",
   "focusMode": "Modalità focus",
   "focusOff": "Esci dalla modalità focus",
-  "paletteTip": "Tavolozza comandi (Ctrl+Maiusc+P)",
+  "paletteTip": "Cerca comandi, sessioni e cronologia (Ctrl+Maiusc+P)",
   "showSnippets": "Mostra i chip dei comandi",
   "hideSnippets": "Nascondi i chip dei comandi",
   "extraKeys": "Tasti extra",
@@ -106,7 +106,7 @@
   "keyLeft": "Freccia sinistra",
   "keyRight": "Freccia destra",
   "palette": {
-    "title": "Tavolozza",
+    "title": "Comandi",
     "placeholder": "Cerca comandi, sessioni e cronologia",
     "empty": "Nessun risultato. Prova un'altra parola.",
     "snippets": "Comandi salvati",

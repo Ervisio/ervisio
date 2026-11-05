@@ -5,6 +5,8 @@
     "overview": "Overview",
     "terminal": "Terminal",
     "files": "Files",
+    "notepad": "Notepad",
+    "editor": "Code editor",
     "logs": "Logs",
     "services": "Services",
     "software": "Software",
@@ -63,6 +65,8 @@
     "notFoundText": "This plugin page is not installed or has been disabled."
   },
   "desktop": {
+    "icons": "Desktop shortcuts",
+    "selectedIcons": "{count} shortcuts selected",
     "prefsFailed": "Your preferences could not be loaded",
     "retry": "Retry",
     "emptyDrop": "No readable files were dropped.",

@@ -15,6 +15,10 @@ export interface WindowBounds {
   width: number;
   height: number;
 }
+export interface DesktopPosition {
+  column: number;
+  row: number;
+}
 export interface DesktopData {
   version: 1;
   folders: DesktopFolder[];
@@ -22,6 +26,8 @@ export interface DesktopData {
   pinned: string[];
   wallpaper: 'bloom' | 'mint' | 'sunset' | 'plain';
   bounds: Record<string, WindowBounds>;
+  /** Logical cells, independent of screen pixels. Missing on desktops saved before grid placement. */
+  positions: Record<string, DesktopPosition>;
 }
 export const DEFAULT_APPS = ['this-pc', 'files', 'overview', 'terminal', 'plugins', 'settings'];
 const text = (x: unknown, max = 160): x is string =>
@@ -40,6 +46,7 @@ export function defaultDesktop(apps: string[]): DesktopData {
     pinned: ['files', 'terminal', 'plugins', 'settings'].filter((a) => apps.includes(a)),
     wallpaper: 'bloom',
     bounds: {},
+    positions: {},
   };
 }
 
@@ -97,6 +104,21 @@ export function readDesktop(value: unknown, apps: string[]): DesktopData {
           height: Math.max(240, Math.min(8000, height as number)),
         };
     }
+  const positions: Record<string, DesktopPosition> = Object.create(null);
+  const itemIds = new Set([...folders.map((f) => f.id), ...shortcuts.map((s) => s.id)]);
+  if (record(value.positions))
+    for (const [id, cell] of Object.entries(value.positions).slice(0, 1280)) {
+      if (!itemIds.has(id) || !record(cell)) continue;
+      if (
+        Number.isInteger(cell.column) &&
+        Number.isInteger(cell.row) &&
+        (cell.column as number) >= 0 &&
+        (cell.row as number) >= 0 &&
+        (cell.column as number) <= 4096 &&
+        (cell.row as number) <= 4096
+      )
+        positions[id] = { column: cell.column as number, row: cell.row as number };
+    }
   return {
     version: 1,
     folders,
@@ -108,7 +130,89 @@ export function readDesktop(value: unknown, apps: string[]): DesktopData {
       ? (value.wallpaper as DesktopData['wallpaper'])
       : 'bloom',
     bounds,
+    positions,
   };
+}
+
+export const DESKTOP_CELL = { width: 102, height: 104 };
+
+/** Reflow for this viewport without overwriting the user's layout on a larger screen. */
+export function layoutDesktopItems(
+  ids: string[],
+  positions: Record<string, DesktopPosition>,
+  columns: number,
+  rows: number,
+): Record<string, DesktopPosition> {
+  const cols = Math.max(1, Math.floor(columns));
+  const countRows = Math.max(1, Math.floor(rows), Math.ceil(ids.length / cols));
+  const result: Record<string, DesktopPosition> = Object.create(null);
+  const occupied = new Set<string>();
+  const pending: string[] = [];
+  const key = (cell: DesktopPosition) => `${cell.column}:${cell.row}`;
+  for (const id of ids) {
+    const saved = positions[id];
+    if (!saved) {
+      pending.push(id);
+      continue;
+    }
+    const cell = {
+      column: Math.max(0, Math.min(cols - 1, saved.column)),
+      row: Math.max(0, Math.min(countRows - 1, saved.row)),
+    };
+    if (occupied.has(key(cell))) pending.push(id);
+    else {
+      result[id] = cell;
+      occupied.add(key(cell));
+    }
+  }
+  let cursor = 0;
+  for (const id of pending) {
+    let cell: DesktopPosition;
+    do {
+      cell = { column: Math.floor(cursor / countRows), row: cursor % countRows };
+      cursor += 1;
+    } while (occupied.has(key(cell)));
+    result[id] = cell;
+    occupied.add(key(cell));
+  }
+  return result;
+}
+
+/** Move a selected group together; occupied cells are relocated, never stacked or lost. */
+export function placeDesktopItems(
+  data: DesktopData,
+  visible: string[],
+  selected: string[],
+  anchor: string,
+  target: DesktopPosition,
+  columns: number,
+  rows: number,
+): DesktopData {
+  const moving = [...new Set(selected)].filter((id) => visible.includes(id));
+  if (!moving.includes(anchor)) return data;
+  const cols = Math.max(1, Math.floor(columns));
+  const countRows = Math.max(1, Math.floor(rows), Math.ceil(visible.length / cols));
+  const current = layoutDesktopItems(visible, data.positions, cols, countRows);
+  const cells = moving.map((id) => current[id]);
+  const minColumn = Math.min(...cells.map((cell) => cell.column));
+  const maxColumn = Math.max(...cells.map((cell) => cell.column));
+  const minRow = Math.min(...cells.map((cell) => cell.row));
+  const maxRow = Math.max(...cells.map((cell) => cell.row));
+  const dx = Math.max(
+    -minColumn,
+    Math.min(cols - 1 - maxColumn, target.column - current[anchor].column),
+  );
+  const dy = Math.max(-minRow, Math.min(countRows - 1 - maxRow, target.row - current[anchor].row));
+  const requested = { ...current };
+  for (const id of moving)
+    requested[id] = { column: current[id].column + dx, row: current[id].row + dy };
+  const arranged = layoutDesktopItems(
+    [...moving, ...visible.filter((id) => !moving.includes(id))],
+    requested,
+    cols,
+    countRows,
+  );
+  return { ...data, positions: { ...data.positions, ...arranged } };
 }
 
 export function addShortcut(data: DesktopData, app: string, folder: string | null): DesktopData {

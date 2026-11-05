@@ -12,6 +12,8 @@ import type { FilesActions } from './useFilesActions';
 import type { FilesPanel } from './useFilesPanel';
 import type { FilesPrefs } from './useFilesPrefs';
 import type { FilesTabs } from './useFilesTabs';
+import { isRemoteLocation } from './remoteLocation';
+import type { EditorMode } from '../editor/document';
 
 interface MenuOps {
   restore(): void;
@@ -19,6 +21,8 @@ interface MenuOps {
   remove(): void;
   emptyTrash(): void;
   open(e: FEntry): void;
+  openEditor(e: FEntry, mode: EditorMode): void;
+  terminal(path: string): void;
   navigate(s: Side, loc: string): void;
   openTab(loc: string): void;
   download(es: FEntry[]): void;
@@ -148,6 +152,28 @@ function entryOpenItems(ctx: MenuContext, one: FEntry): MenuItem[] {
       icon: 'plus',
       onSelect: () => ops.openTab(one.path),
     });
+  if (!isRemoteLocation(one.path))
+    items.push({
+      id: 'terminal',
+      label: t('act.terminalHere'),
+      icon: 'terminal',
+      onSelect: () => ops.terminal(dirLike ? one.path : dirname(one.path)),
+    });
+  if (!dirLike && looksTextual(one))
+    items.push(
+      {
+        id: 'notepad',
+        label: t('act.openNotepad'),
+        icon: 'file',
+        onSelect: () => ops.openEditor(one, 'text'),
+      },
+      {
+        id: 'code',
+        label: t('act.openCodeEditor'),
+        icon: 'code',
+        onSelect: () => ops.openEditor(one, 'code'),
+      },
+    );
   if (isVirtual(ctx.loc) || ctx.searching)
     items.push({
       id: 'show',
@@ -268,6 +294,13 @@ function backgroundMenu({
       onSelect: ops.toggleHidden,
     },
   ];
+  if (!isVirtual(loc) && !isRemoteLocation(loc))
+    items.push({
+      id: 'terminal',
+      label: t('act.terminalHere'),
+      icon: 'terminal',
+      onSelect: () => ops.terminal(loc),
+    });
   if (can && loc !== '/')
     items.push({
       id: 'bm',
@@ -337,6 +370,8 @@ export function useFilesMenu(args: FilesMenuArgs) {
     remove: () => actions.requestDelete(es, s),
     emptyTrash: actions.askEmptyTrash,
     open: (e) => actions.openEntry(e, s),
+    openEditor: (e, mode) => actions.openEditor(e, s, mode),
+    terminal: (path) => actions.openTerminal(path, s),
     navigate: tabs.navigate,
     openTab: tabs.openTab,
     download: (list) => actions.download(list, s),

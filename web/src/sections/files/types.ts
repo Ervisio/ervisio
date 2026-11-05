@@ -66,8 +66,21 @@ export interface Places {
 }
 
 export interface Remote {
+  id: string;
   name: string;
+  kind: 'sftp' | 'ftp' | 'smb' | 'webdav';
   host?: string;
+  port?: number;
+  user?: string;
+  path?: string;
+  auth?: string;
+  hostKey?: string;
+  fingerprint?: string;
+  hasPassword?: boolean;
+  hasKey?: boolean;
+  hasPassphrase?: boolean;
+  share?: string;
+  domain?: string;
 }
 
 export const isDirLike = (e: Pick<RawEntry, 'type' | 'targetType'>) =>

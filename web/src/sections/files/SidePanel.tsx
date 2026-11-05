@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { ApiError, downloadUrl } from '../../api';
+import { ApiError } from '../../api';
 import { useI18n, useT } from '../../i18n';
 import { formatBytes } from '../../lib/format';
 import { Button, Checkbox, Dialog, Icon, IconButton, Panel, Skeleton, Tabs, toast } from '../../ui';
-import { emitChanged, fcall } from './fapi';
+import { emitChanged, fcall, fileDownloadUrl } from './fapi';
+import { isRemoteLocation } from './remoteLocation';
 import { KIND_ICON, canInlineImage, kindOf, looksTextual } from './kinds';
 import { Thumb } from './Thumb';
 import { NativeFileIcon } from './NativeFileIcon';
@@ -183,7 +184,9 @@ function Details({ e, p, t }: { e: FEntry; p: SidePanelProps; t: ReturnType<type
           </>
         )}
       </dl>
-      {!p.inTrash && e.type !== 'symlink' && <Permissions e={e} admin={p.admin} t={t} />}
+      {!p.inTrash && e.type !== 'symlink' && !isRemoteLocation(e.path) && (
+        <Permissions e={e} admin={p.admin} t={t} />
+      )}
       <div className="files-acts">
         {!dir && !p.inTrash && (
           <button type="button" onClick={() => p.onDownload([e])}>
@@ -352,7 +355,7 @@ function Preview({ e, p, t }: { e: FEntry; p: SidePanelProps; t: ReturnType<type
     return (
       <div className="files-side">
         <div className="files-pv files-pv--img">
-          <img src={downloadUrl(e.path, p.admin, true)} alt={e.name} />
+          <img src={fileDownloadUrl(e.path, p.admin, true)} alt={e.name} />
         </div>
       </div>
     );

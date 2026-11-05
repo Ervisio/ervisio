@@ -107,7 +107,9 @@ export function usePaneData(a: Args): PaneData {
     };
     loadLocation(a.loc, starredKey, a.showHidden, opts, onTruncated).then((list) => {
       if (!live) return;
-      setEntries(list);
+      setEntries(
+        q ? list.filter((e) => e.name.toLocaleLowerCase().includes(q.toLocaleLowerCase())) : list,
+      );
       setLoading(false);
     }, fail);
     return () => {

@@ -8,7 +8,7 @@ Purpose: dual-pane file manager (browse, edit, copy/move, trash, upload/download
 - Shared with `modules/remote`: `export.go` (ModeString, TypeOf, MimeOf, DecodeText/EncodeText, CheckNotProtected, MaxReadText). Remote imports files, never the reverse.
 - HTTP: `server/internal/server/files.go:handleDownload` (GET `/api/files/download`) and `handleUpload` (POST `/api/files/upload`, needs `X-Requested-With`, CSRF). They wrap `files.readStream` / `files.writeStream`, or `remote.*Stream` when `remote=<id>` is given (`fileTarget`).
 - Frontend `web/src/sections/files/`: `index.tsx` page (tabs, optional split panes); `Pane.tsx`; `data.ts` loaders (list/trash/recent/starred/search); `fapi.ts` `fcall` + thumbnail/snippet loaders; `transfers.ts` queue; `dropfiles.ts` folder drops.
-- Prefs keys: `files.tabs`, `files.bookmarks`, `files.starred`, `files.showHidden`, `files.remotes`.
+- Prefs keys: `files.tabs`, `files.bookmarks`, `files.starred`, `files.showHidden`. Remote connection metadata and sealed credentials use the backend account store, never preferences.
 
 ## Flow
 - Browse: `fcall('files.list')`; pseudo-locations `trash:`, `recent:`, `starred:` map to `trashList` / `places` / `stat`.
@@ -31,7 +31,7 @@ Purpose: dual-pane file manager (browse, edit, copy/move, trash, upload/download
 - `files.move` is routed to `hRename`; cross-directory move of trees is done through `files.copy` with `move:true`.
 - `files.delete` with `trash:true` moves to trash; permanent delete uses `removePath` (no symlink following).
 - Windows: `safefs_windows.go` `errUnsupported` for dirfd primitives; copies never follow reparse points; no chown. Unix/windows variants split by build tags: `*_unix.go`, `*_windows.go`.
-- Frontend `downloadUrl` / `uploadUrl` have no `remote` parameter and Places shows remote entries as "soon": remote is backend-ready but not wired in this UI.
+- SFTP and SMB connections are integrated in both shells through `RemoteConnections.tsx`. SMB accepts UNC or smb:// addresses via `networkPath.ts`, saves a per-user network folder without mounting the host OS. `remoteLocation.ts` stores navigation as `remote:<id>:/path`; `fapi.ts` routes allowed operations through the user bridge and adds HTTP remote transfer params. Remote deletion is permanent behind confirmation; unsupported chmod/chown and local-terminal actions stay unavailable.
 - Thumb cache key is `admin:path:mtime:size`; user and root views cache separately.
 - Upload `status 403` maps to `needs_admin` on the client when no JSON error body is present.
 - Large bodies bypass the 16 MiB RPC line limit only because transfers are streams; do not use `writeText` for big files.

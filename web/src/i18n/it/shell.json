@@ -5,6 +5,8 @@
     "overview": "Panoramica",
     "terminal": "Terminale",
     "files": "File",
+    "notepad": "Blocco note",
+    "editor": "Editor di codice",
     "logs": "Log",
     "services": "Servizi",
     "software": "Software",
@@ -63,6 +65,8 @@
     "notFoundText": "Questa pagina del plugin non è installata o è stata disattivata."
   },
   "desktop": {
+    "icons": "Collegamenti del desktop",
+    "selectedIcons": "{count} collegamenti selezionati",
     "prefsFailed": "Non è stato possibile caricare le preferenze",
     "retry": "Riprova",
     "emptyDrop": "Nessun file leggibile trascinato.",

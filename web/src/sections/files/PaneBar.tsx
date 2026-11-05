@@ -4,6 +4,7 @@ import { Badge, Button, DropdownMenu, Icon, IconButton, Segmented, type MenuItem
 import { nextSort, VIRTUAL_ICON } from './paneUtil';
 import type { PaneState, SortKey, SortState, View } from './types';
 import { basename, crumbs, isVirtual } from './util';
+import { remoteLocation, remoteTarget } from './remoteLocation';
 
 interface PaneBarProps {
   native?: boolean;
@@ -24,7 +25,7 @@ interface PaneBarProps {
 export function PaneBar({ label, state, t, ...p }: PaneBarProps) {
   const { loc } = state;
   const virtual = isVirtual(loc);
-  const canUp = !virtual && loc !== '/';
+  const canUp = !virtual && (remoteTarget(loc)?.path ?? loc) !== '/';
   const title = virtual ? t(`place.${loc.replace(':', '')}`) : basename(loc) || '/';
   const [history, setHistory] = useState({ key: p.navigationKey, paths: [loc], index: 0 });
   useEffect(() => {
@@ -160,8 +161,9 @@ function Crumbs({
   t: ReturnType<typeof useT>;
 }) {
   const [edit, setEdit] = useState(false);
-  const [val, setVal] = useState(loc);
-  useEffect(() => setVal(loc), [loc]);
+  const remote = remoteTarget(loc);
+  const [val, setVal] = useState(remote?.path ?? loc);
+  useEffect(() => setVal(remoteTarget(loc)?.path ?? loc), [loc]);
   if (isVirtual(loc)) {
     return (
       <div className="files-crumb">
@@ -180,7 +182,10 @@ function Crumbs({
           e.preventDefault();
           setEdit(false);
           const v = val.trim();
-          if (v.startsWith('/')) onNavigate(v.length > 1 ? v.replace(/\/+$/, '') : '/');
+          if (v.startsWith('/')) {
+            const path = v.length > 1 ? v.replace(/\/+$/, '') : '/';
+            onNavigate(remote ? remoteLocation(remote.conn, path) : path);
+          }
         }}
       >
         <input
@@ -231,7 +236,7 @@ function Crumbs({
             className={i === shown.length - 1 ? 'is-last' : ''}
             onClick={() => onNavigate(c.path)}
           >
-            {c.name}
+            {remote && c.name === '/' ? t('remote.title') : c.name}
           </button>
         </span>
       ))}

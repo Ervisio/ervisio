@@ -26,6 +26,7 @@ export const NAMESPACES = [
   'taskmanager',
   'terminal',
   'files',
+  'editor',
   'logs',
   'services',
   'software',

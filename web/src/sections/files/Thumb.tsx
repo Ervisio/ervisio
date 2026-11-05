@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { downloadUrl } from '../../api';
 import { Icon } from '../../ui';
-import { cachedSnippet, cachedThumb, loadSnippet, loadThumb, thumbKey } from './fapi';
+import {
+  cachedSnippet,
+  cachedThumb,
+  loadSnippet,
+  loadThumb,
+  thumbKey,
+  fileDownloadUrl,
+} from './fapi';
+import { isRemoteLocation } from './remoteLocation';
 import { KIND_ICON, canInlineImage, canThumb, kindOf, looksTextual } from './kinds';
 import type { FEntry } from './types';
 
@@ -29,7 +36,7 @@ export function Thumb({ e, admin }: { e: FEntry; admin: boolean }) {
   const kind = kindOf(e);
   const [ref, vis] = useVisible<HTMLDivElement>();
   const stamp = `${e.mtime}:${e.size}`;
-  const isThumb = kind === 'img' && canThumb(e.name) && e.size > 0;
+  const isThumb = kind === 'img' && canThumb(e.name) && e.size > 0 && !isRemoteLocation(e.path);
   const isText =
     (kind === 'code' || kind === 'txt' || kind === 'other') &&
     looksTextual(e) &&
@@ -69,7 +76,7 @@ export function Thumb({ e, admin }: { e: FEntry; admin: boolean }) {
     inner = (
       <img
         className="files-th-img"
-        src={downloadUrl(e.path, admin, true)}
+        src={fileDownloadUrl(e.path, admin, true)}
         alt=""
         loading="lazy"
         draggable={false}

@@ -1,16 +1,34 @@
 import { formatTime } from '../../lib/format';
 import type { FEntry, RawEntry, SortState } from './types';
 import { isDirLike } from './types';
+import { remoteLocation, remoteTarget } from './remoteLocation';
 
-export const join = (dir: string, name: string) => (dir === '/' ? '/' + name : dir + '/' + name);
-export const dirname = (p: string) => {
+export const join = (dir: string, name: string) => {
+  const remote = remoteTarget(dir);
+  if (remote)
+    return remoteLocation(remote.conn, remote.path === '/' ? '/' + name : remote.path + '/' + name);
+  return dir === '/' ? '/' + name : dir + '/' + name;
+};
+export const dirname = (p: string): string => {
+  const remote = remoteTarget(p);
+  if (remote) return remoteLocation(remote.conn, dirname(remote.path));
   const i = p.lastIndexOf('/');
   return i <= 0 ? '/' : p.slice(0, i);
 };
 export const basename = (p: string) => (p === '/' ? '/' : p.slice(p.lastIndexOf('/') + 1));
-export const isVirtual = (loc: string) => !loc.startsWith('/');
+export const isVirtual = (loc: string) =>
+  !loc.startsWith('/') &&
+  !remoteTarget(loc) &&
+  !/^[a-z]:[\\/]/i.test(loc) &&
+  !loc.startsWith('\\\\');
 
 export function crumbs(path: string): { name: string; path: string }[] {
+  const remote = remoteTarget(path);
+  if (remote)
+    return crumbs(remote.path).map((c, i) => ({
+      name: i === 0 ? '/' : c.name,
+      path: remoteLocation(remote.conn, c.path),
+    }));
   const out = [{ name: '/', path: '/' }];
   let acc = '';
   for (const part of path.split('/').filter(Boolean)) {

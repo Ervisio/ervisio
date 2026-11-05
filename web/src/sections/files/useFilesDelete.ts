@@ -6,6 +6,7 @@ import type { BatchFailure, DeleteRequest, Side } from './filesPageTypes';
 import { fail, toastFailed, undoTrash } from './filesOps';
 import type { FEntry } from './types';
 import type { FilesTabs } from './useFilesTabs';
+import { isRemoteLocation } from './remoteLocation';
 
 /** Trash, permanent delete (behind a confirmation), restore and empty trash. */
 export function useFilesDelete(t: TFn, isRoot: boolean, tabs: FilesTabs) {
@@ -37,21 +38,30 @@ export function useFilesDelete(t: TFn, isRoot: boolean, tabs: FilesTabs) {
 
   const doPermanent = async (es: FEntry[], s: Side, fromTrash: boolean) => {
     try {
+      let deleted = es.length;
       if (fromTrash)
         await fcall(
           'files.trashDelete',
           { ids: es.map((e) => e.trashId).filter(Boolean) },
           { admin: adminOf(s) },
         );
-      else
-        await fcall(
+      else {
+        const result = await fcall<{ deleted: string[]; failed: BatchFailure[] }>(
           'files.delete',
           { paths: es.map((e) => e.path), trash: false },
           { admin: adminOf(s) },
         );
+        deleted = result.deleted?.length ?? 0;
+        if (result.failed?.length) {
+          emitChanged();
+          throw new Error(
+            `${t('err.someNotDeleted', { count: result.failed.length })}: ${result.failed[0].message}`,
+          );
+        }
+      }
       clearSel(s);
       emitChanged();
-      toast.ok(t('deleted', { count: es.length }));
+      if (deleted) toast.ok(t('deleted', { count: deleted }));
     } catch (x) {
       fail(t('err.delete'), x);
       throw x;
@@ -61,7 +71,7 @@ export function useFilesDelete(t: TFn, isRoot: boolean, tabs: FilesTabs) {
   const requestDelete = (es: FEntry[], s: Side, permanent = false) => {
     if (es.length === 0) return;
     const inTrash = pane(s).loc === 'trash:';
-    if (inTrash || permanent || pane(s).admin || isRoot)
+    if (inTrash || permanent || isRemoteLocation(pane(s).loc) || pane(s).admin || isRoot)
       setDel({ entries: es, side: s, trash: inTrash });
     else void doTrash(es, s);
   };

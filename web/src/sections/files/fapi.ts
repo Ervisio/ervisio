@@ -1,4 +1,5 @@
-import { ApiError, call, requestUnlock } from '../../api';
+import { ApiError, call, downloadUrl, uploadUrl, requestUnlock } from '../../api';
+import { remoteCallPlan, remoteLocation, remoteTarget } from './remoteLocation';
 
 let unlockedProbe: () => boolean = () => false;
 /** The page tells fapi whether administrator rights are currently unlocked (skips a second password prompt). */
@@ -25,6 +26,21 @@ export async function fcall<T = unknown>(
   params: unknown,
   o: RunOpts = {},
 ): Promise<T> {
+  const remote = remoteCallPlan(method, params);
+  if (remote) {
+    const value = await call<unknown>(remote.method, remote.params, {
+      noUnlock: true,
+      signal: o.signal,
+    });
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const result = { ...value } as Record<string, unknown>;
+      for (const key of ['path', 'parent'])
+        if (typeof result[key] === 'string' && result[key])
+          result[key] = remoteLocation(remote.conn, result[key] as string);
+      return result as T;
+    }
+    return value as T;
+  }
   try {
     return await call<T>(method, params, { admin: o.admin, noUnlock: true, signal: o.signal });
   } catch (e) {
@@ -36,6 +52,21 @@ export async function fcall<T = unknown>(
     }
     throw e;
   }
+}
+
+/** The daemon streams remote transfers through the same authenticated HTTP endpoint. */
+export function fileDownloadUrl(path: string, admin = false, inline = false) {
+  const target = remoteTarget(path);
+  return target
+    ? `${downloadUrl(target.path, false, inline)}&remote=${encodeURIComponent(target.conn)}`
+    : downloadUrl(path, admin, inline);
+}
+
+export function fileUploadUrl(path: string, admin = false, overwrite = false) {
+  const target = remoteTarget(path);
+  return target
+    ? `${uploadUrl(target.path, false, overwrite)}&remote=${encodeURIComponent(target.conn)}`
+    : uploadUrl(path, admin, overwrite);
 }
 
 /* ---------- change bus: panes reload when something happened in a folder ---------- */
@@ -91,6 +122,7 @@ export const cachedThumb = (key: string) => thumbs.get(key);
 export const cachedSnippet = (key: string) => snippets.get(key);
 
 export function loadThumb(path: string, stamp: string, admin: boolean): Promise<string | null> {
+  if (remoteTarget(path)) return Promise.resolve(null);
   return thumbs.load(`${admin ? 'a' : 'u'}:${path}:${stamp}`, async () => {
     const r = await call<{ data: string }>(
       'files.thumbnail',
@@ -103,10 +135,10 @@ export function loadThumb(path: string, stamp: string, admin: boolean): Promise<
 
 export function loadSnippet(path: string, stamp: string, admin: boolean): Promise<string | null> {
   return snippets.load(`${admin ? 'a' : 'u'}:${path}:${stamp}`, async () => {
-    const r = await call<{ content: string }>(
+    const r = await fcall<{ content: string }>(
       'files.readText',
       { path, maxBytes: 1200 },
-      { admin, noUnlock: true },
+      { admin },
     );
     return r.content
       .split('\n')

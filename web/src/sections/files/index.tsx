@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { downloadUrl, usePrefs, useSession } from '../../api';
+import { usePrefs, useSession } from '../../api';
 import { useT, type TFn } from '../../i18n';
 import {
   Button,
@@ -18,7 +18,9 @@ import { NativeComputer, NativeFilesCommandBar } from './NativeFiles';
 import { PlacesList } from './Places';
 import { SidePanel } from './SidePanel';
 import { TransferBar } from './TransferBar';
-import { setUnlockProbe } from './fapi';
+import { fileDownloadUrl, setUnlockProbe } from './fapi';
+import { useRemoteConnections } from './RemoteConnections';
+import { isRemoteLocation } from './remoteLocation';
 import { copyText } from './filesOps';
 import {
   otherOf,
@@ -307,7 +309,10 @@ function FileDialog({ dialog, onClose, onSubmitName }: FileDialogProps) {
         footer={<Button onClick={onClose}>{t('edit.close')}</Button>}
       >
         <div className="files-lightbox">
-          <img src={downloadUrl(dialog.entry.path, dialog.admin, true)} alt={dialog.entry.name} />
+          <img
+            src={fileDownloadUrl(dialog.entry.path, dialog.admin, true)}
+            alt={dialog.entry.name}
+          />
         </div>
       </Dialog>
     );
@@ -435,6 +440,7 @@ export default function FilesPage() {
     setComputer(false);
     tabs.navigate(side, loc);
   };
+  const remotes = useRemoteConnections(goPlace, pane(side).loc);
   useFilesPalette({
     t,
     home,
@@ -496,7 +502,11 @@ export default function FilesPage() {
     home,
     loc: pane(side).loc,
     bookmarks: prefs.bookmarks,
-    remotes: prefs.remotes,
+    remotes: remotes.connections,
+    onRemote: remotes.open,
+    onAddRemote: remotes.add,
+    onEditRemote: remotes.edit,
+    onForgetRemote: remotes.forget,
     onGo: goPlace,
     onRemoveBookmark: prefs.removeBookmark,
     onNew: menu.newItems(side),
@@ -602,9 +612,9 @@ export default function FilesPage() {
           inline={!split && !mobile}
           inTrash={inTrash}
           starred={panel.entries.length === 1 && prefs.starred.has(panel.entries[0].path)}
-          canChown={!!session?.canSudo}
+          canChown={!!session?.canSudo && !isRemoteLocation(pane(side).loc)}
           onClose={panel.dismiss}
-          onEdit={(e) => actions.setDialog({ kind: 'edit', entry: e, admin: adminOf(side) })}
+          onEdit={(e) => actions.openEditor(e, side)}
           onDownload={(es) => actions.download(es)}
           onCopyPath={(e) => void copyText(e.path, t)}
           onTrash={(es) => actions.requestDelete(es, side)}
@@ -621,6 +631,7 @@ export default function FilesPage() {
         </Sheet>
       )}
       <UploadInput inputRef={fileInput} onPick={actions.uploadPicked} />
+      {remotes.dialogs}
       {menu.menu && (
         <Menu
           items={menu.menu.items}

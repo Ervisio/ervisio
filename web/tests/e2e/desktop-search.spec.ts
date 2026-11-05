@@ -16,7 +16,7 @@ test('search selects the first result immediately and Enter opens it', async ({ 
   const input = page.getByRole('combobox', { name: 'Cerca app e plugin' });
   await expect(input).toBeFocused();
   await input.fill('impost');
-  const selected = page.getByRole('option', { selected: true });
+  const selected = page.locator('.eos-panel--start').getByRole('option', { selected: true });
   await expect(selected).toHaveCount(1);
   await expect(selected).toHaveAttribute('aria-label', 'Impostazioni');
   await expect(input).toHaveAttribute(
@@ -33,27 +33,28 @@ test('arrows choose another app and a new query or reopened launcher resets the 
 }) => {
   const input = page.getByRole('combobox');
   await input.fill('i');
-  const first = await page.getByRole('option').first().getAttribute('aria-label');
+  const launcher = page.locator('.eos-panel--start');
+  const first = await launcher.getByRole('option').first().getAttribute('aria-label');
   await input.press('ArrowDown');
-  const second = await page.getByRole('option', { selected: true }).getAttribute('aria-label');
+  const second = await launcher.getByRole('option', { selected: true }).getAttribute('aria-label');
   expect(second).not.toBe(first);
   await input.press('ArrowUp');
-  await expect(page.getByRole('option', { selected: true })).toHaveAttribute(
+  await expect(launcher.getByRole('option', { selected: true })).toHaveAttribute(
     'aria-label',
     first || '',
   );
   await input.press('ArrowDown');
   await input.fill('term');
-  await expect(page.getByRole('option', { selected: true })).toHaveAttribute(
+  await expect(launcher.getByRole('option', { selected: true })).toHaveAttribute(
     'aria-label',
     'Terminale',
   );
   await input.press('Escape');
   await page.getByRole('button', { name: 'Start', exact: true }).click();
   await expect(input).toHaveValue('');
-  await expect(page.getByRole('option').first()).toHaveAttribute('aria-selected', 'true');
+  await expect(launcher.getByRole('option').first()).toHaveAttribute('aria-selected', 'true');
   await input.press('ArrowDown');
-  const app = await page.getByRole('option', { selected: true }).getAttribute('aria-label');
+  const app = await launcher.getByRole('option', { selected: true }).getAttribute('aria-label');
   await input.press('Enter');
   await expect(page.getByRole('region', { name: app || '', exact: true })).toBeVisible();
 });
@@ -61,7 +62,7 @@ test('arrows choose another app and a new query or reopened launcher resets the 
 test('no results and IME composition never open an app accidentally', async ({ page }) => {
   const input = page.getByRole('combobox');
   await input.fill('zzzz-no-result');
-  await expect(page.getByRole('option')).toHaveCount(0);
+  await expect(page.locator('.eos-panel--start').getByRole('option')).toHaveCount(0);
   await expect(input).not.toHaveAttribute('aria-activedescendant');
   await input.press('ArrowDown');
   await input.press('Enter');

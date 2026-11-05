@@ -1,10 +1,20 @@
-import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
+import {
+  createContext,
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent,
+  type ReactNode,
+} from 'react';
 import { Icon } from '../ui';
 import { useT } from '../i18n';
 import { clampBounds, type WindowBounds } from './model';
 
 const DRAG_THRESHOLD = 6;
 const SNAP_EDGE = 12;
+
+/** The terminal mounts its tabs here while keeping window drag/resize owned by the desktop. */
+export const WindowTitlebarSlot = createContext<HTMLDivElement | null>(null);
 
 export interface DesktopWindow {
   id: string;
@@ -42,6 +52,8 @@ export function AppWindow({
   const t = useT('shell');
   const el = useRef<HTMLElement>(null);
   const [dragging, setDragging] = useState(false);
+  const [titlebarSlot, setTitlebarSlot] = useState<HTMLDivElement | null>(null);
+  const terminal = win.app === 'terminal';
   const preview = useRef(win.bounds);
   const drag = useRef<{
     pointerId: number;
@@ -157,6 +169,7 @@ export function AppWindow({
   return (
     <section
       ref={el}
+      data-window-id={win.id}
       className={`eos-window${active ? ' is-active' : ''}${win.maximized ? ' is-maximized' : ''}${win.snap ? ` is-snapped-${win.snap}` : ''}${dragging ? ' is-dragging' : ''}`}
       style={{
         left: win.bounds.x,
@@ -168,32 +181,80 @@ export function AppWindow({
       }}
       role="region"
       aria-label={title}
-      onPointerDownCapture={onFocus}
+      onPointerDownCapture={(event) => {
+        onFocus();
+        // Portalled terminal tabs bubble through their React parent (the body),
+        // so drag the shared titlebar from this common window ancestor.
+        if (terminal && (event.target as HTMLElement).closest('.terminal-window-titlebar'))
+          begin(event, false);
+      }}
+      onPointerMove={
+        terminal
+          ? (event) => event.currentTarget.hasPointerCapture(event.pointerId) && move(event)
+          : undefined
+      }
+      onPointerUp={
+        terminal
+          ? (event) => event.currentTarget.hasPointerCapture(event.pointerId) && end(event)
+          : undefined
+      }
+      onPointerCancel={
+        terminal
+          ? (event) => event.currentTarget.hasPointerCapture(event.pointerId) && end(event, false)
+          : undefined
+      }
+      onLostPointerCapture={
+        terminal
+          ? (event) => {
+              if (drag.current && !drag.current.resize) end(event, false);
+            }
+          : undefined
+      }
+      onDoubleClick={
+        terminal
+          ? (event) => {
+              if (
+                (event.target as HTMLElement).closest('.terminal-window-titlebar') &&
+                !(event.target as HTMLElement).closest('button')
+              )
+                onChange({ maximized: !win.maximized, snap: undefined });
+            }
+          : undefined
+      }
     >
       <header
-        className="eos-titlebar"
-        onPointerDown={(e) => begin(e, false)}
-        onPointerMove={move}
-        onPointerUp={(e) => end(e)}
-        onPointerCancel={(e) => end(e, false)}
-        onLostPointerCapture={(e) => end(e, false)}
+        className={`eos-titlebar${terminal ? ' terminal-window-titlebar' : ''}`}
+        onPointerDown={terminal ? undefined : (e) => begin(e, false)}
+        onPointerMove={terminal ? undefined : move}
+        onPointerUp={terminal ? undefined : (e) => end(e)}
+        onPointerCancel={terminal ? undefined : (e) => end(e, false)}
+        onLostPointerCapture={terminal ? undefined : (e) => end(e, false)}
         onDoubleClick={(e) =>
+          !terminal &&
           !(e.target as HTMLElement).closest('button') &&
           onChange({ maximized: !win.maximized, snap: undefined })
         }
       >
-        <span className="eos-title-icon">{icon}</span>
-        <span className="eos-title">{title}</span>
+        {terminal ? (
+          <div ref={setTitlebarSlot} className="terminal-titlebar-slot" />
+        ) : (
+          <>
+            <span className="eos-title-icon">{icon}</span>
+            <span className="eos-title">{title}</span>
+          </>
+        )}
         <div className="eos-window-controls">
-          <button
-            title={t('desktop.snapLeft')}
-            aria-label={t('desktop.snapLeft')}
-            onClick={() =>
-              onChange({ snap: win.snap === 'left' ? undefined : 'left', maximized: false })
-            }
-          >
-            <Icon name="split" />
-          </button>
+          {!terminal && (
+            <button
+              title={t('desktop.snapLeft')}
+              aria-label={t('desktop.snapLeft')}
+              onClick={() =>
+                onChange({ snap: win.snap === 'left' ? undefined : 'left', maximized: false })
+              }
+            >
+              <Icon name="split" />
+            </button>
+          )}
           <button
             title={t('desktop.minimize')}
             aria-label={t('desktop.minimize')}
@@ -218,7 +279,9 @@ export function AppWindow({
           </button>
         </div>
       </header>
-      <div className="eos-window-body">{children}</div>
+      <div className="eos-window-body">
+        <WindowTitlebarSlot.Provider value={titlebarSlot}>{children}</WindowTitlebarSlot.Provider>
+      </div>
       {!win.maximized && !win.snap && (
         <div
           className="eos-resize"
