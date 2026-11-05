@@ -100,17 +100,25 @@ func (sm *sampler) metrics(ctx context.Context) (*Metrics, error) {
 	if prev == nil || cur.at.Sub(prev.at) > 30*time.Second || len(prev.cpu) != len(cur.cpu) {
 		// No usable baseline: take a short second sample.
 		prev = cur
-		select {
-		case <-time.After(250 * time.Millisecond):
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-		if cur, err = takeSample(); err != nil {
+		if cur, err = resample(ctx); err != nil {
 			return nil, err
 		}
 	}
 	sm.prev = cur
+	return buildMetrics(prev, cur), nil
+}
 
+// resample waits briefly, then takes a fresh sample.
+func resample(ctx context.Context) (*sample, error) {
+	select {
+	case <-time.After(250 * time.Millisecond):
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	return takeSample()
+}
+
+func buildMetrics(prev, cur *sample) *Metrics {
 	dt := cur.at.Sub(prev.at).Seconds()
 	m := &Metrics{Time: cur.at.UnixMilli(), Interval: round(dt, 3), Disks: []Disk{}, Net: []Net{}}
 	if len(cur.cpu) > 0 {
@@ -126,7 +134,7 @@ func (sm *sampler) metrics(ctx context.Context) (*Metrics, error) {
 	}
 	m.Disks = readDisks()
 	m.Net = netFrom(prev.net, cur.net, dt)
-	return m, nil
+	return m
 }
 
 func cpuPercent(a, b cpuTimes) float64 {
@@ -292,19 +300,8 @@ func parseMountinfo(r io.Reader) []mountEntry {
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 64<<10), 1<<20)
 	for sc.Scan() {
-		pre, post, ok := strings.Cut(sc.Text(), " - ")
+		e, ok := parseMountLine(sc.Text())
 		if !ok {
-			continue
-		}
-		a, b := strings.Fields(pre), strings.Fields(post)
-		if len(a) < 5 || len(b) < 2 {
-			continue
-		}
-		e := mountEntry{devID: a[2], mount: unescapeMount(a[4]), fstype: b[0], source: unescapeMount(b[1])}
-		if !realFS[e.fstype] {
-			continue
-		}
-		if strings.HasPrefix(e.mount, "/proc") || strings.HasPrefix(e.mount, "/sys") || strings.HasPrefix(e.mount, "/dev/") {
 			continue
 		}
 		if old, ok := byDev[e.devID]; !ok || len(e.mount) < len(old.mount) {
@@ -317,6 +314,27 @@ func parseMountinfo(r io.Reader) []mountEntry {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].mount < out[j].mount })
 	return out
+}
+
+// parseMountLine parses one mountinfo line; ok is false for lines that are
+// malformed, not a real filesystem, or under /proc, /sys or /dev/.
+func parseMountLine(line string) (mountEntry, bool) {
+	pre, post, ok := strings.Cut(line, " - ")
+	if !ok {
+		return mountEntry{}, false
+	}
+	a, b := strings.Fields(pre), strings.Fields(post)
+	if len(a) < 5 || len(b) < 2 {
+		return mountEntry{}, false
+	}
+	e := mountEntry{devID: a[2], mount: unescapeMount(a[4]), fstype: b[0], source: unescapeMount(b[1])}
+	if !realFS[e.fstype] {
+		return mountEntry{}, false
+	}
+	if strings.HasPrefix(e.mount, "/proc") || strings.HasPrefix(e.mount, "/sys") || strings.HasPrefix(e.mount, "/dev/") {
+		return mountEntry{}, false
+	}
+	return e, true
 }
 
 // unescapeMount decodes the octal escapes (\040 etc.) used in mountinfo.

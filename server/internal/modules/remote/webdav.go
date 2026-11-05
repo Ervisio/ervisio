@@ -153,22 +153,19 @@ func statusErr(method, p string, code int) error {
 	return &davStatusError{Method: method, Path: p, Code: code}
 }
 
+// davRequest is one request for do. size is the body length.
+type davRequest struct {
+	method, target string
+	body           io.Reader
+	size           int64
+	hdr            map[string]string
+}
+
 // do sends one request. A body is only replayed when it is nil or a
 // *bytes.Reader (Digest needs a second round trip the first time).
-func (f *davFS) do(ctx context.Context, method, target string, body io.Reader, size int64, hdr map[string]string) (*http.Response, error) {
+func (f *davFS) do(ctx context.Context, rq davRequest) (*http.Response, error) {
 	for attempt := 0; ; attempt++ {
-		req, err := http.NewRequestWithContext(ctx, method, target, body)
-		if err != nil {
-			return nil, err
-		}
-		if body != nil {
-			req.ContentLength = size
-		}
-		for k, v := range hdr {
-			req.Header.Set(k, v)
-		}
-		f.authorize(req)
-		res, err := f.client.Do(req)
+		res, err := f.send(ctx, rq)
 		if err != nil {
 			return nil, err
 		}
@@ -176,12 +173,7 @@ func (f *davFS) do(ctx context.Context, method, target string, body io.Reader, s
 			return res, nil
 		}
 		ch := parseDigest(res.Header.Values("Www-Authenticate"))
-		replay := body == nil
-		if br, ok := body.(*bytes.Reader); ok {
-			_, _ = br.Seek(0, io.SeekStart)
-			replay = true
-		}
-		if ch == nil || !replay {
+		if ch == nil || !rewindBody(rq.body) {
 			return res, nil
 		}
 		drain(res)
@@ -189,6 +181,33 @@ func (f *davFS) do(ctx context.Context, method, target string, body io.Reader, s
 		f.digest, f.nc = ch, 0
 		f.mu.Unlock()
 	}
+}
+
+func (f *davFS) send(ctx context.Context, rq davRequest) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, rq.method, rq.target, rq.body)
+	if err != nil {
+		return nil, err
+	}
+	if rq.body != nil {
+		req.ContentLength = rq.size
+	}
+	for k, v := range rq.hdr {
+		req.Header.Set(k, v)
+	}
+	f.authorize(req)
+	return f.client.Do(req)
+}
+
+// rewindBody reports whether the body can be sent again, rewinding it.
+func rewindBody(body io.Reader) bool {
+	if body == nil {
+		return true
+	}
+	if br, ok := body.(*bytes.Reader); ok {
+		_, _ = br.Seek(0, io.SeekStart)
+		return true
+	}
+	return false
 }
 
 func drain(res *http.Response) {
@@ -209,7 +228,7 @@ func (f *davFS) authorize(req *http.Request) {
 		req.SetBasicAuth(f.user, f.pass)
 		return
 	}
-	req.Header.Set("Authorization", digestHeader(ch, f.user, f.pass, req.Method, req.URL.RequestURI(), nc))
+	req.Header.Set("Authorization", digestHeader(ch, digestRequest{f.user, f.pass, req.Method, req.URL.RequestURI(), nc}))
 }
 
 // parseDigest returns the parameters of a Digest challenge, or nil.
@@ -218,32 +237,7 @@ func parseDigest(vals []string) map[string]string {
 		if len(v) < 7 || !strings.EqualFold(v[:7], "digest ") {
 			continue
 		}
-		m := map[string]string{}
-		s := v[7:]
-		for len(s) > 0 {
-			s = strings.TrimLeft(s, " ,")
-			eq := strings.IndexByte(s, '=')
-			if eq <= 0 {
-				break
-			}
-			k := strings.ToLower(strings.TrimSpace(s[:eq]))
-			s = s[eq+1:]
-			var val string
-			if strings.HasPrefix(s, `"`) {
-				end := strings.IndexByte(s[1:], '"')
-				if end < 0 {
-					break
-				}
-				val, s = s[1:end+1], s[end+2:]
-			} else {
-				end := strings.IndexByte(s, ',')
-				if end < 0 {
-					end = len(s)
-				}
-				val, s = strings.TrimSpace(s[:end]), s[end:]
-			}
-			m[k] = val
-		}
+		m := parseDigestParams(v[7:])
 		alg := strings.ToUpper(m["algorithm"])
 		if m["nonce"] != "" && (alg == "" || alg == "MD5" || alg == "SHA-256") {
 			return m
@@ -252,7 +246,48 @@ func parseDigest(vals []string) map[string]string {
 	return nil
 }
 
-func digestHeader(ch map[string]string, user, pass, method, uri string, nc uint32) string {
+// parseDigestParams reads the comma-separated key=value list of a challenge.
+func parseDigestParams(s string) map[string]string {
+	m := map[string]string{}
+	for len(s) > 0 {
+		s = strings.TrimLeft(s, " ,")
+		eq := strings.IndexByte(s, '=')
+		if eq <= 0 {
+			break
+		}
+		k := strings.ToLower(strings.TrimSpace(s[:eq]))
+		val, rest, ok := digestValue(s[eq+1:])
+		if !ok {
+			break
+		}
+		m[k], s = val, rest
+	}
+	return m
+}
+
+// digestValue reads one quoted or bare value and returns the text after it.
+func digestValue(s string) (val, rest string, ok bool) {
+	if strings.HasPrefix(s, `"`) {
+		end := strings.IndexByte(s[1:], '"')
+		if end < 0 {
+			return "", "", false
+		}
+		return s[1 : end+1], s[end+2:], true
+	}
+	end := strings.IndexByte(s, ',')
+	if end < 0 {
+		end = len(s)
+	}
+	return strings.TrimSpace(s[:end]), s[end:], true
+}
+
+// digestRequest is the credentials and request a Digest response is for.
+type digestRequest struct {
+	user, pass, method, uri string
+	nc                      uint32
+}
+
+func digestHeader(ch map[string]string, rq digestRequest) string {
 	alg := strings.ToUpper(ch["algorithm"])
 	var h func() hash.Hash = md5.New
 	if alg == "SHA-256" {
@@ -263,27 +298,11 @@ func digestHeader(ch map[string]string, user, pass, method, uri string, nc uint3
 		x.Write([]byte(s))
 		return hex.EncodeToString(x.Sum(nil))
 	}
-	ha1 := sum(user + ":" + ch["realm"] + ":" + pass)
-	ha2 := sum(method + ":" + uri)
-	qop := ""
-	for _, q := range strings.Split(ch["qop"], ",") {
-		if strings.TrimSpace(q) == "auth" {
-			qop = "auth"
-		}
-	}
-	var resp, extra string
-	if qop != "" {
-		cb := make([]byte, 8)
-		_, _ = rand.Read(cb)
-		cnonce := hex.EncodeToString(cb)
-		ncs := fmt.Sprintf("%08x", nc)
-		resp = sum(ha1 + ":" + ch["nonce"] + ":" + ncs + ":" + cnonce + ":auth:" + ha2)
-		extra = fmt.Sprintf(`, qop=auth, nc=%s, cnonce="%s"`, ncs, cnonce)
-	} else {
-		resp = sum(ha1 + ":" + ch["nonce"] + ":" + ha2)
-	}
+	ha1 := sum(rq.user + ":" + ch["realm"] + ":" + rq.pass)
+	ha2 := sum(rq.method + ":" + rq.uri)
+	resp, extra := digestResponse(ch, rq.nc, ha1, ha2, sum)
 	q := func(s string) string { return strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) }
-	out := fmt.Sprintf(`Digest username="%s", realm="%s", nonce="%s", uri="%s", response="%s"%s`, q(user), q(ch["realm"]), q(ch["nonce"]), q(uri), resp, extra)
+	out := fmt.Sprintf(`Digest username="%s", realm="%s", nonce="%s", uri="%s", response="%s"%s`, q(rq.user), q(ch["realm"]), q(ch["nonce"]), q(rq.uri), resp, extra)
 	if ch["opaque"] != "" {
 		out += fmt.Sprintf(`, opaque="%s"`, q(ch["opaque"]))
 	}
@@ -291,6 +310,28 @@ func digestHeader(ch map[string]string, user, pass, method, uri string, nc uint3
 		out += ", algorithm=" + alg
 	}
 	return out
+}
+
+// digestResponse computes the response hash and the qop header suffix.
+func digestResponse(ch map[string]string, nc uint32, ha1, ha2 string, sum func(string) string) (resp, extra string) {
+	if !offersAuthQop(ch["qop"]) {
+		return sum(ha1 + ":" + ch["nonce"] + ":" + ha2), ""
+	}
+	cb := make([]byte, 8)
+	_, _ = rand.Read(cb)
+	cnonce := hex.EncodeToString(cb)
+	ncs := fmt.Sprintf("%08x", nc)
+	resp = sum(ha1 + ":" + ch["nonce"] + ":" + ncs + ":" + cnonce + ":auth:" + ha2)
+	return resp, fmt.Sprintf(`, qop=auth, nc=%s, cnonce="%s"`, ncs, cnonce)
+}
+
+func offersAuthQop(qop string) bool {
+	for _, q := range strings.Split(qop, ",") {
+		if strings.TrimSpace(q) == "auth" {
+			return true
+		}
+	}
+	return false
 }
 
 /* ---------- PROPFIND ---------- */
@@ -321,8 +362,11 @@ type davProp struct {
 const propfindBody = `<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/><d:getcontentlength/><d:getlastmodified/><d:getcontenttype/></d:prop></d:propfind>`
 
 func (f *davFS) propfind(ctx context.Context, p string, depth string, dir bool) ([]davResponse, error) {
-	res, err := f.do(ctx, "PROPFIND", f.urlOf(p, dir), bytes.NewReader([]byte(propfindBody)), int64(len(propfindBody)),
-		map[string]string{"Depth": depth, "Content-Type": "application/xml; charset=utf-8"})
+	res, err := f.do(ctx, davRequest{
+		method: "PROPFIND", target: f.urlOf(p, dir),
+		body: bytes.NewReader([]byte(propfindBody)), size: int64(len(propfindBody)),
+		hdr: map[string]string{"Depth": depth, "Content-Type": "application/xml; charset=utf-8"},
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -425,22 +469,30 @@ func (f *davFS) Stat(ctx context.Context, p string) (Entry, error) {
 	return Entry{}, &os.PathError{Op: "stat", Path: p, Err: os.ErrNotExist}
 }
 
-func (f *davFS) simple(ctx context.Context, method, p string, dir bool, hdr map[string]string, ok ...int) error {
-	res, err := f.do(ctx, method, f.urlOf(p, dir), nil, 0, hdr)
+// davSimple is a body-less request answered by one of the ok status codes.
+type davSimple struct {
+	method, path string
+	dir          bool
+	hdr          map[string]string
+	ok           []int
+}
+
+func (f *davFS) simple(ctx context.Context, rq davSimple) error {
+	res, err := f.do(ctx, davRequest{method: rq.method, target: f.urlOf(rq.path, rq.dir), hdr: rq.hdr})
 	if err != nil {
 		return err
 	}
 	drain(res)
-	for _, c := range ok {
+	for _, c := range rq.ok {
 		if res.StatusCode == c {
 			return nil
 		}
 	}
-	return statusErr(method, p, res.StatusCode)
+	return statusErr(rq.method, rq.path, res.StatusCode)
 }
 
 func (f *davFS) Mkdir(ctx context.Context, p string) error {
-	return f.simple(ctx, "MKCOL", p, true, nil, 201, 200, 204)
+	return f.simple(ctx, davSimple{method: "MKCOL", path: p, dir: true, ok: []int{201, 200, 204}})
 }
 
 func (f *davFS) Rename(ctx context.Context, from, to string) error {
@@ -449,11 +501,15 @@ func (f *davFS) Rename(ctx context.Context, from, to string) error {
 		return err
 	}
 	dir := e.Type == "dir"
-	return f.simple(ctx, "MOVE", from, dir, map[string]string{"Destination": f.urlOf(to, dir), "Overwrite": "F"}, 201, 204)
+	return f.simple(ctx, davSimple{
+		method: "MOVE", path: from, dir: dir,
+		hdr: map[string]string{"Destination": f.urlOf(to, dir), "Overwrite": "F"},
+		ok:  []int{201, 204},
+	})
 }
 
 func (f *davFS) Remove(ctx context.Context, p string, dir bool) error {
-	return f.simple(ctx, "DELETE", p, dir, nil, 200, 204)
+	return f.simple(ctx, davSimple{method: "DELETE", path: p, dir: dir, ok: []int{200, 204}})
 }
 
 // RemoveAll: DELETE removes a collection with everything inside.
@@ -467,7 +523,7 @@ func (f *davFS) RemoveAll(ctx context.Context, p string) error {
 
 func (f *davFS) Open(ctx context.Context, p string) (io.ReadCloser, error) {
 	// The body outlives this call: it is read by the caller's stream.
-	res, err := f.do(context.WithoutCancel(ctx), http.MethodGet, f.urlOf(p, false), nil, 0, nil)
+	res, err := f.do(context.WithoutCancel(ctx), davRequest{method: http.MethodGet, target: f.urlOf(p, false)})
 	if err != nil {
 		return nil, err
 	}
@@ -485,7 +541,7 @@ func (f *davFS) Create(ctx context.Context, p string, size int64) (io.WriteClose
 		if size == 0 {
 			body = http.NoBody
 		}
-		res, err := f.do(context.WithoutCancel(ctx), http.MethodPut, target, body, size, nil)
+		res, err := f.do(context.WithoutCancel(ctx), davRequest{method: http.MethodPut, target: target, body: body, size: size})
 		if err != nil {
 			return err
 		}

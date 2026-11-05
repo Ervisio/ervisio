@@ -208,35 +208,47 @@ func updatesFrom(pkgs []string) []Alert {
 // when no package manager could be queried. It never refreshes from the network.
 func pendingUpdates(ctx context.Context) ([]string, bool) {
 	has := func(n string) bool { _, err := sys.LookPath(n); return err == nil }
-	// checkupdates is deliberately not used: it downloads fresh databases.
-	// pacman -Qu answers from the databases the system last synced.
 	switch {
 	case has("pacman"):
-		out, err := sys.Output(ctx, "pacman", "-Qu")
-		if err != nil {
-			if ee, isExit := err.(*sys.ExitError); isExit && ee.Code == 1 && len(out) == 0 {
-				return nil, true // nothing to upgrade
-			}
-			return nil, false
-		}
-		return parseArchUpdates(out), true
+		return pacmanUpdates(ctx)
 	case has("apt"):
-		out, err := sys.Output(ctx, "apt", "list", "--upgradable")
-		if err != nil {
-			return nil, false
-		}
-		return parseAptUpdates(out), true
+		return aptUpdates(ctx)
 	case has("dnf"):
-		out, err := sys.Output(ctx, "dnf", "check-update", "--quiet", "--cacheonly")
-		if err != nil {
-			if ee, isExit := err.(*sys.ExitError); isExit && ee.Code == 100 {
-				return parseDnfUpdates(out), true
-			}
-			return nil, false
-		}
-		return parseDnfUpdates(out), true
+		return dnfUpdates(ctx)
 	}
 	return nil, false
+}
+
+// pacmanUpdates answers from the databases the system last synced.
+// checkupdates is deliberately not used: it downloads fresh databases.
+func pacmanUpdates(ctx context.Context) ([]string, bool) {
+	out, err := sys.Output(ctx, "pacman", "-Qu")
+	if err != nil {
+		if ee, isExit := err.(*sys.ExitError); isExit && ee.Code == 1 && len(out) == 0 {
+			return nil, true // nothing to upgrade
+		}
+		return nil, false
+	}
+	return parseArchUpdates(out), true
+}
+
+func aptUpdates(ctx context.Context) ([]string, bool) {
+	out, err := sys.Output(ctx, "apt", "list", "--upgradable")
+	if err != nil {
+		return nil, false
+	}
+	return parseAptUpdates(out), true
+}
+
+func dnfUpdates(ctx context.Context) ([]string, bool) {
+	out, err := sys.Output(ctx, "dnf", "check-update", "--quiet", "--cacheonly")
+	if err != nil {
+		if ee, isExit := err.(*sys.ExitError); isExit && ee.Code == 100 {
+			return parseDnfUpdates(out), true
+		}
+		return nil, false
+	}
+	return parseDnfUpdates(out), true
 }
 
 // parseArchUpdates parses "name old -> new" lines (checkupdates, pacman -Qu).
