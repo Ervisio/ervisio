@@ -12,3 +12,4 @@ __pycache__/
 !/plugins/README.md
 .context/now.md
 .context/.last-nudge
+.context/sweep/

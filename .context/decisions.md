@@ -5,3 +5,6 @@
 2026-11-04 · Route visible frontend text through i18n · English is default and Italian is selectable; section changes must preserve localization.
 2026-11-04 · Treat plugins as separate repositories and local plugins/ as development input · The current architecture describes signed marketplace distribution; the older Docker plan is historical.
 2026-11-04 · Keep shared context in git and personal checkpoints ignored; keeper remains off · Maps and decisions are durable project knowledge, while now.md is session state.
+2026-11-05 · Go lint with golangci-lint (config in server/) · sweep: no linter beyond gofmt/vet; approved by user.
+2026-11-05 · Web formatting with Prettier alongside ESLint, single quotes + semicolons · sweep: 79.9% single quotes, 73.3% semicolons already; approved by user.
+2026-11-05 · Go exported PascalCase and React components PascalCase are not naming findings · sweep analyzer misfires on them.

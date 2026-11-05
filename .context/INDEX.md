@@ -1,8 +1,23 @@
 # Context index
 - now.md: current task, plan, next step. Always loaded.
 - decisions.md: architectural decisions and why. Read before structural changes.
+- sweep/report.md: code-health findings and fix plan. Read when doing cleanup.
 - map/server.md: daemon, bridge, privilege boundaries and server checks. Read before server changes.
 - map/web.md: app providers, API transport, sections, plugins and frontend checks. Read before web changes.
+- map/auth.md: PAM/LogonUser login, sessions, CSRF, SSH-key auth, admin unlock. Read before auth or privilege changes.
+- map/remote-hosts.md: remote connections (sftp/smb/ftp/webdav), host pairing, cross-origin API. Read before remote or hosts work.
+- map/plugins.md: plugin install, signing, trust, frame CSP, broker, capabilities. Read before plugin system changes.
+- map/packaging.md: build scripts, installers, systemd/PAM, Arch, Windows, legacy migration. Read before packaging changes.
+- map/updates.md: release signing, CI release workflow, self-update, Updates UI. Read before release or update work.
+- map/settings.md: settings section, config/prefs modules, jobs, notify, audit, environments. Read before settings work.
+- map/shell-ui.md: shell, UI kit, theme engine, i18n, format helpers. Read before shared frontend changes.
+- map/overview.md: overview dashboard, widgets, system host/metrics/disks. Read before overview or system module work.
+- map/logs.md: logs section and module, watchers, histogram, streams. Read before logs work.
+- map/services.md: services section and module (systemd/Windows SCM). Read before services work.
+- map/files.md: file manager, transfers, thumbnails. Read before files work.
+- map/terminal.md: PTY sessions, terminal streams. Read before terminal work.
+- map/users.md: users/groups section and module, admin groups. Read before users work.
+- map/software.md: package managers, transactions, history. Read before software work.
 - ../README.md: product features, platform support, installation and development. Read for project orientation; support claims are documented, not revalidated by init.
 - ../CHANGELOG.md: shipped changes. Read when assessing compatibility or preparing release notes.
 - ../docs/ARCHITECTURE.md: process model, protocols and repository ownership. Read before cross-cutting changes; check platform details against current code.
