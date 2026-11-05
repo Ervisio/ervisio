@@ -142,8 +142,8 @@ func ValidMethodName(s string) bool {
 	dot := false
 	for i, c := range s {
 		switch {
-		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z':
-		case c >= '0' && c <= '9', c == '_', c == '-':
+		case isLetter(c):
+		case isDigit(c), c == '_', c == '-':
 			if i == 0 {
 				return false
 			}
@@ -158,3 +158,7 @@ func ValidMethodName(s string) bool {
 	}
 	return dot
 }
+
+func isLetter(c rune) bool { return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' }
+
+func isDigit(c rune) bool { return c >= '0' && c <= '9' }

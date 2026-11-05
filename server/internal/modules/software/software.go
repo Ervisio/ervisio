@@ -45,14 +45,8 @@ func ms(t time.Time) int64 {
 	return t.UnixMilli()
 }
 
-func buildSummary(ctx context.Context, m *manager, force bool) (map[string]any, error) {
-	ups, at, warns, err := m.updates(ctx, force)
-	if err != nil {
-		return nil, err
-	}
-	var size int64
-	counts := map[string]int{KindRepo: 0, KindAUR: 0, KindFlatpak: 0}
-	reboot, security := false, 0
+func tallyUpdates(ups []Update) (counts map[string]int, size int64, reboot bool, security int) {
+	counts = map[string]int{KindRepo: 0, KindAUR: 0, KindFlatpak: 0}
 	for _, u := range ups {
 		counts[u.Kind]++
 		if u.Kind != KindAUR {
@@ -65,6 +59,15 @@ func buildSummary(ctx context.Context, m *manager, force bool) (map[string]any, 
 			security++
 		}
 	}
+	return counts, size, reboot, security
+}
+
+func buildSummary(ctx context.Context, m *manager, force bool) (map[string]any, error) {
+	ups, at, warns, err := m.updates(ctx, force)
+	if err != nil {
+		return nil, err
+	}
+	counts, size, reboot, security := tallyUpdates(ups)
 	manager := ""
 	if m.primary != nil {
 		manager = m.primary.Name()

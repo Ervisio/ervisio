@@ -269,17 +269,7 @@ func (m *Manifest) normalise() {
 	if c.Commands == nil {
 		c.Commands = []Command{}
 	}
-	if c.HTTP == nil {
-		c.HTTP = []HTTPAPI{}
-	}
-	for i := range c.HTTP {
-		if c.HTTP[i].Headers == nil {
-			c.HTTP[i].Headers = []string{}
-		}
-		if c.HTTP[i].Rules == nil {
-			c.HTTP[i].Rules = []HTTPRule{}
-		}
-	}
+	c.normaliseHTTP()
 	if c.Files.Read == nil {
 		c.Files.Read = []Folder{}
 	}
@@ -293,6 +283,32 @@ func (m *Manifest) normalise() {
 		c.Network = []string{}
 	}
 	c.normaliseJobs()
+	m.normaliseContributes()
+	if m.VisibleTo.Groups == nil {
+		m.VisibleTo.Groups = []string{}
+	}
+	for i := range c.Commands {
+		if c.Commands[i].Argv == nil {
+			c.Commands[i].Argv = []string{}
+		}
+	}
+}
+
+func (c *Capabilities) normaliseHTTP() {
+	if c.HTTP == nil {
+		c.HTTP = []HTTPAPI{}
+	}
+	for i := range c.HTTP {
+		if c.HTTP[i].Headers == nil {
+			c.HTTP[i].Headers = []string{}
+		}
+		if c.HTTP[i].Rules == nil {
+			c.HTTP[i].Rules = []HTTPRule{}
+		}
+	}
+}
+
+func (m *Manifest) normaliseContributes() {
 	if m.Contributes.Pages == nil {
 		m.Contributes.Pages = []Contribution{}
 	}
@@ -301,14 +317,6 @@ func (m *Manifest) normalise() {
 	}
 	if m.Contributes.Snippets == nil {
 		m.Contributes.Snippets = []Snippet{}
-	}
-	if m.VisibleTo.Groups == nil {
-		m.VisibleTo.Groups = []string{}
-	}
-	for i := range c.Commands {
-		if c.Commands[i].Argv == nil {
-			c.Commands[i].Argv = []string{}
-		}
 	}
 }
 
@@ -411,12 +419,33 @@ func (m *Manifest) validate() error {
 	if len(m.Author) > 80 || len(m.Description) > 300 || len(m.Homepage) > 200 {
 		return fmt.Errorf("author, description or homepage is too long")
 	}
+	if err := m.validateLook(); err != nil {
+		return err
+	}
+	if err := m.validateFiles(); err != nil {
+		return err
+	}
+	m.Capabilities.plats = effectivePlatforms(m.Platforms)
+	if err := m.Capabilities.validate(); err != nil {
+		return err
+	}
+	if err := m.Contributes.validate(); err != nil {
+		return err
+	}
+	return m.validateVisibleTo()
+}
+
+func (m *Manifest) validateLook() error {
 	if m.Icon != "" && !iconRe.MatchString(m.Icon) {
 		return fmt.Errorf("icon %q is invalid", m.Icon)
 	}
 	if m.Color != "" && !hues[m.Color] {
 		return fmt.Errorf("color %q must be one of ov, term, file, log, svc, sw, usr, plg", m.Color)
 	}
+	return nil
+}
+
+func (m *Manifest) validateFiles() error {
 	if !validRelPath(m.Entry) || !(strings.HasSuffix(m.Entry, ".js") || strings.HasSuffix(m.Entry, ".mjs")) {
 		return fmt.Errorf("entry %q must be a relative .js or .mjs path inside the plugin folder", m.Entry)
 	}
@@ -433,13 +462,10 @@ func (m *Manifest) validate() error {
 			return fmt.Errorf("files must list the entry file %q", m.Entry)
 		}
 	}
-	m.Capabilities.plats = effectivePlatforms(m.Platforms)
-	if err := m.Capabilities.validate(); err != nil {
-		return err
-	}
-	if err := m.Contributes.validate(); err != nil {
-		return err
-	}
+	return nil
+}
+
+func (m *Manifest) validateVisibleTo() error {
 	if len(m.VisibleTo.Groups) > maxListItems {
 		return fmt.Errorf("visibleTo.groups has too many entries")
 	}
@@ -474,12 +500,35 @@ func validAbsFor(p string, allowHome, windows bool) bool {
 		return !strings.Contains(p, "..")
 	}
 	if windows && winDriveRe.MatchString(p) {
-		return !strings.Contains(p, "/") && !hasDotDot(p) && !strings.Contains(p, `\\`) && (len(p) == 3 || !strings.HasSuffix(p, `\`))
+		return validWinDrivePath(p)
 	}
 	return path.IsAbs(p) && path.Clean(p) == p
 }
 
+func validWinDrivePath(p string) bool {
+	if strings.Contains(p, "/") || hasDotDot(p) || strings.Contains(p, `\\`) {
+		return false
+	}
+	return len(p) == 3 || !strings.HasSuffix(p, `\`)
+}
+
 func (c *Capabilities) validate() error {
+	if err := c.validateCommands(); err != nil {
+		return err
+	}
+	if err := c.validateHTTP(); err != nil {
+		return err
+	}
+	if err := c.validateFolders(); err != nil {
+		return err
+	}
+	if err := c.validateSocketsNetwork(); err != nil {
+		return err
+	}
+	return c.validateJobs()
+}
+
+func (c *Capabilities) validateCommands() error {
 	if len(c.Commands) > maxCommands {
 		return fmt.Errorf("capabilities.commands: at most %d commands", maxCommands)
 	}
@@ -496,10 +545,14 @@ func (c *Capabilities) validate() error {
 			return fmt.Errorf("command %q is declared twice for the same system", cmd.Name)
 		}
 	}
+	return nil
+}
+
+func (c *Capabilities) validateHTTP() error {
 	if len(c.HTTP) > maxHTTPAPIs {
 		return fmt.Errorf("capabilities.http: at most %d entries", maxHTTPAPIs)
 	}
-	seen = map[string][][]string{}
+	seen := map[string][][]string{}
 	for i := range c.HTTP {
 		h := &c.HTTP[i]
 		if err := c.entryPlatforms(h.Platforms); err != nil {
@@ -512,6 +565,10 @@ func (c *Capabilities) validate() error {
 			return fmt.Errorf("http %q is declared twice for the same system", h.Name)
 		}
 	}
+	return nil
+}
+
+func (c *Capabilities) validateFolders() error {
 	for _, l := range []struct {
 		what string
 		list []Folder
@@ -528,6 +585,10 @@ func (c *Capabilities) validate() error {
 			}
 		}
 	}
+	return nil
+}
+
+func (c *Capabilities) validateSocketsNetwork() error {
 	if len(c.Sockets) > maxListItems {
 		return fmt.Errorf("capabilities.sockets has too many entries")
 	}
@@ -544,13 +605,37 @@ func (c *Capabilities) validate() error {
 			return fmt.Errorf("capabilities.network: %q is not a host name (like api.example.org, *.example.org or host:8443)", h)
 		}
 	}
-	return c.validateJobs()
+	return nil
 }
 
 func (c *Command) validate() error {
 	if !cmdNameRe.MatchString(c.Name) {
 		return fmt.Errorf("name must be letters, digits, _ or - (max 32)")
 	}
+	if err := c.validateArgv(); err != nil {
+		return err
+	}
+	if len(c.Args) > maxArgs {
+		return fmt.Errorf("at most %d args", maxArgs)
+	}
+	if err := c.validateArgs(); err != nil {
+		return err
+	}
+	if c.AdminUnlessGroup != "" {
+		if !c.Admin {
+			return fmt.Errorf("adminUnlessGroup only makes sense with admin: true")
+		}
+		if !groupRe.MatchString(c.AdminUnlessGroup) {
+			return fmt.Errorf("adminUnlessGroup %q is not a group name", c.AdminUnlessGroup)
+		}
+	}
+	if c.TimeoutSec < 0 || c.TimeoutSec > 600 {
+		return fmt.Errorf("timeoutSec must be between 0 and 600")
+	}
+	return c.validateRemote()
+}
+
+func (c *Command) validateArgv() error {
 	if len(c.Argv) == 0 || len(c.Argv) > 64 {
 		return fmt.Errorf("argv must hold between 1 and 64 items")
 	}
@@ -565,9 +650,11 @@ func (c *Command) validate() error {
 			return fmt.Errorf("argv holds an invalid item")
 		}
 	}
-	if len(c.Args) > maxArgs {
-		return fmt.Errorf("at most %d args", maxArgs)
-	}
+	return nil
+}
+
+// validateArgs checks every declared arg is used by argv and compiles its pattern.
+func (c *Command) validateArgs() error {
 	used := map[int]bool{}
 	for _, a := range c.Argv[1:] {
 		for _, mm := range slotRe.FindAllStringSubmatch(a, -1) {
@@ -595,18 +682,7 @@ func (c *Command) validate() error {
 			return fmt.Errorf("args[%d] maxLen is out of range", i)
 		}
 	}
-	if c.AdminUnlessGroup != "" {
-		if !c.Admin {
-			return fmt.Errorf("adminUnlessGroup only makes sense with admin: true")
-		}
-		if !groupRe.MatchString(c.AdminUnlessGroup) {
-			return fmt.Errorf("adminUnlessGroup %q is not a group name", c.AdminUnlessGroup)
-		}
-	}
-	if c.TimeoutSec < 0 || c.TimeoutSec > 600 {
-		return fmt.Errorf("timeoutSec must be between 0 and 600")
-	}
-	return c.validateRemote()
+	return nil
 }
 
 func (f Folder) validate(on []string) error {
@@ -650,6 +726,28 @@ func (h *HTTPAPI) validate(declared []string) error {
 			return fmt.Errorf("adminUnlessGroup %q is not a group name", h.AdminUnlessGroup)
 		}
 	}
+	if err := h.validateHeaders(); err != nil {
+		return err
+	}
+	if err := h.validateRemote(); err != nil {
+		return err
+	}
+	if err := h.validateRules(); err != nil {
+		return err
+	}
+	if h.MaxBody < 0 || h.MaxBody > maxHTTPBodyLimit {
+		return fmt.Errorf("maxBody must be between 0 and %d", maxHTTPBodyLimit)
+	}
+	if h.MaxUpload < 0 || h.MaxUpload > maxHTTPUploadLimit {
+		return fmt.Errorf("maxUpload must be between 0 and %d", maxHTTPUploadLimit)
+	}
+	if h.TimeoutSec < 0 || h.TimeoutSec > 600 {
+		return fmt.Errorf("timeoutSec must be between 0 and 600")
+	}
+	return nil
+}
+
+func (h *HTTPAPI) validateHeaders() error {
 	if len(h.Headers) > maxHTTPHeaders {
 		return fmt.Errorf("at most %d headers", maxHTTPHeaders)
 	}
@@ -667,9 +765,10 @@ func (h *HTTPAPI) validate(declared []string) error {
 		}
 		seen[k] = true
 	}
-	if err := h.validateRemote(); err != nil {
-		return err
-	}
+	return nil
+}
+
+func (h *HTTPAPI) validateRules() error {
 	if len(h.Rules) == 0 || len(h.Rules) > maxHTTPRules {
 		return fmt.Errorf("rules must hold between 1 and %d entries", maxHTTPRules)
 	}
@@ -692,19 +791,25 @@ func (h *HTTPAPI) validate(declared []string) error {
 		}
 		r.re = re
 	}
-	if h.MaxBody < 0 || h.MaxBody > maxHTTPBodyLimit {
-		return fmt.Errorf("maxBody must be between 0 and %d", maxHTTPBodyLimit)
-	}
-	if h.MaxUpload < 0 || h.MaxUpload > maxHTTPUploadLimit {
-		return fmt.Errorf("maxUpload must be between 0 and %d", maxHTTPUploadLimit)
-	}
-	if h.TimeoutSec < 0 || h.TimeoutSec > 600 {
-		return fmt.Errorf("timeoutSec must be between 0 and 600")
-	}
 	return nil
 }
 
 func (c *Contributes) validate() error {
+	if err := c.validateLists(); err != nil {
+		return err
+	}
+	if len(c.Snippets) > maxListItems {
+		return fmt.Errorf("contributes.snippets has too many entries")
+	}
+	for _, s := range c.Snippets {
+		if strings.TrimSpace(s.Name) == "" || len(s.Name) > 60 || s.Command == "" || len(s.Command) > 512 {
+			return fmt.Errorf("contributes.snippets: %q needs a name and a command", s.Name)
+		}
+	}
+	return nil
+}
+
+func (c *Contributes) validateLists() error {
 	for _, l := range []struct {
 		what string
 		list []Contribution
@@ -724,14 +829,6 @@ func (c *Contributes) validate() error {
 				return fmt.Errorf("contributes.%s: id %q is used twice", l.what, p.ID)
 			}
 			seen[p.ID] = true
-		}
-	}
-	if len(c.Snippets) > maxListItems {
-		return fmt.Errorf("contributes.snippets has too many entries")
-	}
-	for _, s := range c.Snippets {
-		if strings.TrimSpace(s.Name) == "" || len(s.Name) > 60 || s.Command == "" || len(s.Command) > 512 {
-			return fmt.Errorf("contributes.snippets: %q needs a name and a command", s.Name)
 		}
 	}
 	return nil
