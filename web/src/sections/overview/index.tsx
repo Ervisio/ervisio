@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as RPointerEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as RPointerEvent, type RefObject } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { usePrefs, useSession } from '../../api';
-import { useT } from '../../i18n';
-import { usePlugins } from '../../plugins';
+import { useT, type TFn } from '../../i18n';
+import { usePlugins, type PluginWidgetInfo } from '../../plugins';
 import { Button, ConfirmDialog, Icon, Page, Sheet, toast, useMediaQuery } from '../../ui';
 import { requestConfirm, runAction, useConfirmRequest } from './actions';
 import { OutputDialog } from './OutputDialog';
@@ -16,6 +16,10 @@ import { WidgetBody, widgetTitle, type WidgetCtx } from './widgets';
 import './overview.css';
 
 const GAP = 14;
+const GRID_COLUMNS = 12;
+const DRAG_THRESHOLD = 5;
+const EDGE_SCROLL_ZONE = 70;
+const EDGE_SCROLL_STEP = 14;
 
 function move<T>(list: T[], from: number, to: number): T[] {
   if (from === to || from < 0 || to < 0 || to >= list.length) return list;
@@ -48,6 +52,260 @@ interface DragRun {
   raf?: number;
 }
 
+
+type WidgetKeyAction = 'grow' | 'shrink' | 'prev' | 'next' | 'settings' | 'remove';
+
+const WIDGET_KEYS = new Map<string, WidgetKeyAction>([
+  ['ArrowLeft', 'prev'],
+  ['ArrowUp', 'prev'],
+  ['ArrowRight', 'next'],
+  ['ArrowDown', 'next'],
+  ['Enter', 'settings'],
+  [' ', 'settings'],
+  ['Delete', 'remove'],
+  ['Backspace', 'remove'],
+]);
+
+function widgetKeyAction(e: KeyboardEvent): WidgetKeyAction | undefined {
+  if (e.shiftKey && e.key === 'ArrowRight') return 'grow';
+  if (e.shiftKey && e.key === 'ArrowLeft') return 'shrink';
+  return WIDGET_KEYS.get(e.key);
+}
+
+function isInside(el: Element | null | undefined, x: number, y: number): boolean {
+  if (!el) return false;
+  const r = el.getBoundingClientRect();
+  return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+}
+
+function widgetAt(grid: HTMLElement | null, x: number, y: number): string | undefined {
+  for (const el of grid?.querySelectorAll<HTMLElement>('[data-wid]') ?? []) {
+    if (isInside(el, x, y)) return el.dataset.wid;
+  }
+  return undefined;
+}
+
+function createGhost(el: HTMLElement): HTMLElement {
+  const r = el.getBoundingClientRect();
+  const g = el.cloneNode(true) as HTMLElement;
+  g.removeAttribute('data-wid');
+  g.classList.add('ov-ghost');
+  Object.assign(g.style, { position: 'fixed', left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px`, margin: '0', zIndex: '1000', pointerEvents: 'none' });
+  document.body.appendChild(g);
+  return g;
+}
+
+// Scrolls while the pointer of a running drag sits near the top or bottom edge.
+function startEdgeScroll(dragRun: RefObject<DragRun | null>, scroller: HTMLElement | null): number {
+  const tick = () => {
+    const cur = dragRun.current;
+    if (!cur || !cur.started) return;
+    const host = scroller ?? document.scrollingElement;
+    if (host) {
+      const rect = scroller ? scroller.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
+      if (cur.py < rect.top + EDGE_SCROLL_ZONE) host.scrollTop -= EDGE_SCROLL_STEP;
+      else if (cur.py > rect.bottom - EDGE_SCROLL_ZONE) host.scrollTop += EDGE_SCROLL_STEP;
+    }
+    cur.raf = requestAnimationFrame(tick);
+  };
+  return requestAnimationFrame(tick);
+}
+
+function trackResize(grid: HTMLElement, el: HTMLElement, startX: number, onCols: (cols: number) => void, onEnd: () => void) {
+  const colW = (grid.getBoundingClientRect().width + GAP) / GRID_COLUMNS;
+  const startW = el.getBoundingClientRect().width;
+  const handleMove = (ev: PointerEvent) => onCols((startW + (ev.clientX - startX) + GAP) / colW);
+  const handleUp = () => {
+    window.removeEventListener('pointermove', handleMove);
+    window.removeEventListener('pointerup', handleUp);
+    window.removeEventListener('pointercancel', handleUp);
+    document.body.classList.remove('ov-dragging');
+    onEnd();
+  };
+  document.body.classList.add('ov-dragging');
+  window.addEventListener('pointermove', handleMove);
+  window.addEventListener('pointerup', handleUp);
+  window.addEventListener('pointercancel', handleUp);
+}
+
+function dashboardSummary(t: TFn, alerts: { severity: string }[] | null, host: string): string {
+  if (alerts === null) return t('summary.checking', { host });
+  const issues = alerts.filter((a) => a.severity !== 'ok').length;
+  return issues === 0 ? t('summary.ok', { host }) : t('summary.issues', { host, count: issues });
+}
+
+function pluginTitleOf(widget: Widget | null, plugins: PluginWidgetInfo[]): string | undefined {
+  if (widget?.type !== 'plugin') return undefined;
+  return plugins.find((p) => p.plugin === widget.settings?.plugin && p.id === widget.settings?.widget)?.title;
+}
+
+function widgetClass(w: Widget, dragUi: DragUi | null): string {
+  const dragged = dragUi?.id === w.id ? ' ov-w--drag' : '';
+  const target = dragUi?.overId === w.id && dragUi.kind === 'new' ? ' ov-w--target' : '';
+  return `ov-w ov-c${w.cols}${dragged}${target}`;
+}
+
+interface WidgetDragOptions {
+  gridRef: RefObject<HTMLDivElement | null>;
+  dropRef: RefObject<HTMLDivElement | null>;
+  draftRef: RefObject<Widget[] | null>;
+  moveWidget: (id: string, to: number, say?: boolean) => void;
+  addItem: (item: LibItem, at?: number) => void;
+  announceMoved: (id: string) => void;
+}
+
+// Pointer drag for widgets and library items.
+function useWidgetDrag({ gridRef, dropRef, draftRef, moveWidget, addItem, announceMoved }: WidgetDragOptions) {
+  const [dragUi, setDragUi] = useState<DragUi | null>(null);
+  const dragRun = useRef<DragRun | null>(null);
+  const endDrag = useRef<() => void>(() => undefined);
+  const onMove = useRef<(e: PointerEvent) => void>(() => undefined);
+  const onUp = useRef<(e: PointerEvent) => void>(() => undefined);
+
+  onMove.current = (e) => {
+    const d = dragRun.current;
+    if (!d) return;
+    d.px = e.clientX;
+    d.py = e.clientY;
+    if (!d.started) {
+      if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < DRAG_THRESHOLD) return;
+      d.started = true;
+      d.ghost = createGhost(d.el);
+      document.body.classList.add('ov-dragging');
+      setDragUi({ kind: d.kind, id: d.id });
+      d.raf = startEdgeScroll(dragRun, d.el.closest('.app-content') as HTMLElement | null);
+    }
+    if (d.ghost) d.ghost.style.transform = `translate(${e.clientX - d.sx}px, ${e.clientY - d.sy}px)`;
+    const over = widgetAt(gridRef.current, e.clientX, e.clientY);
+    if (d.kind === 'widget') {
+      if (d.id && over && over !== d.id) {
+        const idx = draftRef.current?.findIndex((w) => w.id === over) ?? -1;
+        moveWidget(d.id, idx, false);
+      }
+      return;
+    }
+    const overEnd = !over && (isInside(dropRef.current, e.clientX, e.clientY) || isInside(gridRef.current, e.clientX, e.clientY));
+    if (over !== d.overId || overEnd !== d.overEnd) {
+      d.overId = over;
+      d.overEnd = overEnd;
+      setDragUi({ kind: 'new', overId: over, overEnd });
+    }
+  };
+
+  endDrag.current = () => {
+    const d = dragRun.current;
+    window.removeEventListener('pointermove', handlePointerMove);
+    window.removeEventListener('pointerup', handlePointerUp);
+    window.removeEventListener('pointercancel', handlePointerCancel);
+    window.removeEventListener('keydown', handleEscape);
+    if (d?.raf) cancelAnimationFrame(d.raf);
+    d?.ghost?.remove();
+    document.body.classList.remove('ov-dragging');
+    dragRun.current = null;
+    setDragUi(null);
+  };
+  onUp.current = (e) => {
+    const d = dragRun.current;
+    if (!d) return;
+    const dropOver = d.overId;
+    const dropEnd = d.overEnd;
+    const ok = e.type === 'pointerup';
+    endDrag.current();
+    if (!ok) return;
+    if (d.kind === 'new' && d.item) {
+      if (!d.started) addItem(d.item); // a plain click adds at the end
+      else if (dropOver) addItem(d.item, draftRef.current?.findIndex((w) => w.id === dropOver));
+      else if (dropEnd) addItem(d.item);
+    } else if (d.kind === 'widget' && d.started && d.id) {
+      announceMoved(d.id);
+    }
+  };
+  // stable listener identities, so they can be removed
+  const handlePointerMove = useCallback((e: PointerEvent) => onMove.current(e), []);
+  const handlePointerUp = useCallback((e: PointerEvent) => onUp.current(e), []);
+  const handlePointerCancel = handlePointerUp;
+  const handleEscape = useCallback((e: globalThis.KeyboardEvent) => {
+    if (e.key === 'Escape') endDrag.current();
+  }, []);
+  useEffect(() => () => endDrag.current(), []);
+
+  const beginDrag = (run: Omit<DragRun, 'started' | 'px' | 'py'>, e: RPointerEvent) => {
+    if (dragRun.current) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    dragRun.current = { ...run, started: false, px: e.clientX, py: e.clientY };
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerCancel);
+    window.addEventListener('keydown', handleEscape);
+  };
+
+  const onWidgetPointerDown = (w: Widget, e: RPointerEvent<HTMLDivElement>) => {
+    const tg = e.target as HTMLElement;
+    if (tg.closest('[data-nodrag]')) return;
+    if (e.pointerType === 'touch' && !tg.closest('[data-grip]')) return;
+    if (e.pointerType !== 'touch') e.preventDefault();
+    beginDrag({ kind: 'widget', id: w.id, el: e.currentTarget, sx: e.clientX, sy: e.clientY }, e);
+    if (e.pointerType !== 'touch') e.currentTarget.focus({ preventScroll: true });
+  };
+  const onLibPointerDown = (item: LibItem, e: RPointerEvent<HTMLElement>) => {
+    if (e.pointerType === 'touch') return; // touch uses the click handler below
+    e.preventDefault();
+    beginDrag({ kind: 'new', item, el: e.currentTarget, sx: e.clientX, sy: e.clientY }, e);
+  };
+
+  return { dragUi, onWidgetPointerDown, onLibPointerDown };
+}
+
+interface EditBarProps {
+  t: TFn;
+  wide: boolean;
+  onAdd: () => void;
+  onCancel: () => void;
+  onSave: () => void;
+}
+
+function EditBar({ t, wide, onAdd, onCancel, onSave }: EditBarProps) {
+  return (
+    <div className="ov-editbar" role="region" aria-label={t('edit.title')}>
+      <Icon name="edit" />
+      <b>{t('edit.title')}</b>
+      <span>{t('edit.hint')}</span>
+      <div className="ov-editbar-r">
+        {!wide && <Button size="sm" icon="plus" variant="ghost" onClick={onAdd}>{t('edit.addWidget')}</Button>}
+        <Button size="sm" variant="ghost" onClick={onCancel}>{t('cancel')}</Button>
+        <Button size="sm" className="ov-save" onClick={onSave}>{t('edit.save')}</Button>
+      </div>
+    </div>
+  );
+}
+
+interface WidgetToolsProps {
+  t: TFn;
+  name: string;
+  onSettings: () => void;
+  onRemove: () => void;
+  onResizeDown: (e: RPointerEvent<HTMLElement>) => void;
+}
+
+function WidgetTools({ t, name, onSettings, onRemove, onResizeDown }: WidgetToolsProps) {
+  return (
+    <>
+      <div className="ov-tools">
+        <button type="button" className="ov-grip" data-grip aria-label={t('edit.drag')} title={t('edit.drag')}>
+          <Icon name="grip" />
+        </button>
+        <button type="button" data-nodrag aria-label={t('edit.settings', { name })} title={t('edit.settingsShort')} onClick={onSettings}>
+          <Icon name="edit" />
+        </button>
+        <button type="button" data-nodrag aria-label={t('edit.remove', { name })} title={t('edit.removeShort')} onClick={onRemove}>
+          <Icon name="plus" style={{ transform: 'rotate(45deg)' }} />
+        </button>
+      </div>
+      <span className="ov-res" data-nodrag onPointerDown={onResizeDown} aria-hidden="true" />
+    </>
+  );
+}
+
 export default function OverviewPage() {
   const t = useT('overview');
   const tc = useT('common');
@@ -74,10 +332,8 @@ export default function OverviewPage() {
   const [libOpen, setLibOpen] = useState(false);
   const [announce, setAnnounce] = useState('');
   const [focusReq, setFocusReq] = useState<{ id: string; n: number } | null>(null);
-  const [dragUi, setDragUi] = useState<DragUi | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
-  const dragRun = useRef<DragRun | null>(null);
 
   const confirmReq = useConfirmRequest();
   useEffect(() => {
@@ -110,7 +366,6 @@ export default function OverviewPage() {
     }
   };
 
-  /* ----- draft edits ----- */
   const update = useCallback((fn: (l: Widget[]) => Widget[]) => setDraft((d) => (d ? fn(d) : d)), []);
   const nameOf = useCallback((w: Widget) => widgetTitle(w, t), [t]);
 
@@ -155,6 +410,15 @@ export default function OverviewPage() {
     setDraft(defaultLayout().widgets);
     setAnnounce(t('edit.reset'));
   };
+  const announceMoved = (id: string) => {
+    const cur = draftRef.current;
+    const w = cur?.find((x) => x.id === id);
+    if (cur && w) setAnnounce(t('edit.moved', { name: nameOf(w), pos: cur.indexOf(w) + 1, total: cur.length }));
+  };
+  const announceResized = (id: string) => {
+    const cur = draftRef.current?.find((x) => x.id === id);
+    if (cur) setAnnounce(t('edit.resized', { name: nameOf(cur), cols: cur.cols }));
+  };
 
   useLayoutEffect(() => {
     if (!focusReq) return;
@@ -165,134 +429,7 @@ export default function OverviewPage() {
     }
   }, [focusReq]);
 
-  /* ----- pointer drag: widgets and library items ----- */
-  const hit = (x: number, y: number): string | undefined => {
-    for (const el of gridRef.current?.querySelectorAll<HTMLElement>('[data-wid]') ?? []) {
-      const r = el.getBoundingClientRect();
-      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return el.dataset.wid;
-    }
-    return undefined;
-  };
-  const inside = (el: Element | null | undefined, x: number, y: number) => {
-    if (!el) return false;
-    const r = el.getBoundingClientRect();
-    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
-  };
-
-  const endDrag = useRef<() => void>(() => undefined);
-  const onMove = useRef<(e: PointerEvent) => void>(() => undefined);
-  const onUp = useRef<(e: PointerEvent) => void>(() => undefined);
-
-  onMove.current = (e) => {
-    const d = dragRun.current;
-    if (!d) return;
-    d.px = e.clientX;
-    d.py = e.clientY;
-    if (!d.started) {
-      if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < 5) return;
-      d.started = true;
-      const r = d.el.getBoundingClientRect();
-      const g = d.el.cloneNode(true) as HTMLElement;
-      g.removeAttribute('data-wid');
-      g.classList.add('ov-ghost');
-      Object.assign(g.style, { position: 'fixed', left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px`, margin: '0', zIndex: '1000', pointerEvents: 'none' });
-      document.body.appendChild(g);
-      d.ghost = g;
-      document.body.classList.add('ov-dragging');
-      setDragUi({ kind: d.kind, id: d.id });
-      const scroller = d.el.closest('.app-content') as HTMLElement | null;
-      const tick = () => {
-        const cur = dragRun.current;
-        if (!cur || !cur.started) return;
-        const host = scroller ?? document.scrollingElement;
-        if (host) {
-          const rect = scroller ? scroller.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
-          if (cur.py < rect.top + 70) host.scrollTop -= 14;
-          else if (cur.py > rect.bottom - 70) host.scrollTop += 14;
-        }
-        cur.raf = requestAnimationFrame(tick);
-      };
-      d.raf = requestAnimationFrame(tick);
-    }
-    if (d.ghost) d.ghost.style.transform = `translate(${e.clientX - d.sx}px, ${e.clientY - d.sy}px)`;
-    const over = hit(e.clientX, e.clientY);
-    if (d.kind === 'widget') {
-      if (d.id && over && over !== d.id) {
-        const idx = draftRef.current?.findIndex((w) => w.id === over) ?? -1;
-        moveWidget(d.id, idx, false);
-      }
-    } else {
-      const overEnd = !over && (inside(dropRef.current, e.clientX, e.clientY) || inside(gridRef.current, e.clientX, e.clientY));
-      if (over !== d.overId || overEnd !== d.overEnd) {
-        d.overId = over;
-        d.overEnd = overEnd;
-        setDragUi({ kind: 'new', overId: over, overEnd });
-      }
-    }
-  };
-
-  endDrag.current = () => {
-    const d = dragRun.current;
-    window.removeEventListener('pointermove', pm);
-    window.removeEventListener('pointerup', pu);
-    window.removeEventListener('pointercancel', pc);
-    window.removeEventListener('keydown', pk);
-    if (d?.raf) cancelAnimationFrame(d.raf);
-    d?.ghost?.remove();
-    document.body.classList.remove('ov-dragging');
-    dragRun.current = null;
-    setDragUi(null);
-  };
-  onUp.current = (e) => {
-    const d = dragRun.current;
-    if (!d) return;
-    const dropOver = d.overId;
-    const dropEnd = d.overEnd;
-    const ok = e.type === 'pointerup';
-    endDrag.current();
-    if (!ok) return;
-    if (d.kind === 'new' && d.item) {
-      if (!d.started) addItem(d.item); // a plain click adds at the end
-      else if (dropOver) addItem(d.item, draftRef.current?.findIndex((w) => w.id === dropOver));
-      else if (dropEnd) addItem(d.item);
-    } else if (d.kind === 'widget' && d.started && d.id) {
-      const cur = draftRef.current;
-      const w = cur?.find((x) => x.id === d.id);
-      if (cur && w) setAnnounce(t('edit.moved', { name: nameOf(w), pos: cur.indexOf(w) + 1, total: cur.length }));
-    }
-  };
-  // stable listener identities, so they can be removed
-  const pm = useCallback((e: PointerEvent) => onMove.current(e), []);
-  const pu = useCallback((e: PointerEvent) => onUp.current(e), []);
-  const pc = pu;
-  const pk = useCallback((e: globalThis.KeyboardEvent) => {
-    if (e.key === 'Escape') endDrag.current();
-  }, []);
-  useEffect(() => () => endDrag.current(), []);
-
-  const beginDrag = (run: Omit<DragRun, 'started' | 'px' | 'py'>, e: RPointerEvent) => {
-    if (dragRun.current) return;
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
-    dragRun.current = { ...run, started: false, px: e.clientX, py: e.clientY };
-    window.addEventListener('pointermove', pm);
-    window.addEventListener('pointerup', pu);
-    window.addEventListener('pointercancel', pc);
-    window.addEventListener('keydown', pk);
-  };
-
-  const onWidgetPointerDown = (w: Widget, e: RPointerEvent<HTMLDivElement>) => {
-    const tg = e.target as HTMLElement;
-    if (tg.closest('[data-nodrag]')) return;
-    if (e.pointerType === 'touch' && !tg.closest('[data-grip]')) return;
-    if (e.pointerType !== 'touch') e.preventDefault();
-    beginDrag({ kind: 'widget', id: w.id, el: e.currentTarget, sx: e.clientX, sy: e.clientY }, e);
-    if (e.pointerType !== 'touch') e.currentTarget.focus({ preventScroll: true });
-  };
-  const onLibPointerDown = (item: LibItem, e: RPointerEvent<HTMLElement>) => {
-    if (e.pointerType === 'touch') return; // touch uses the click handler below
-    e.preventDefault();
-    beginDrag({ kind: 'new', item, el: e.currentTarget, sx: e.clientX, sy: e.clientY }, e);
-  };
+  const { dragUi, onWidgetPointerDown, onLibPointerDown } = useWidgetDrag({ gridRef, dropRef, draftRef, moveWidget, addItem, announceMoved });
 
   const onResizeDown = (w: Widget, e: RPointerEvent<HTMLElement>) => {
     e.preventDefault();
@@ -300,48 +437,37 @@ export default function OverviewPage() {
     const grid = gridRef.current;
     const el = (e.currentTarget.closest('[data-wid]') as HTMLElement) ?? null;
     if (!grid || !el) return;
-    const colW = (grid.getBoundingClientRect().width + GAP) / 12;
-    const startW = el.getBoundingClientRect().width;
-    const sx = e.clientX;
-    const mv = (ev: PointerEvent) => resizeWidget(w.id, (startW + (ev.clientX - sx) + GAP) / colW);
-    const up = () => {
-      window.removeEventListener('pointermove', mv);
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', up);
-      document.body.classList.remove('ov-dragging');
-      const cur = draftRef.current?.find((x) => x.id === w.id);
-      if (cur) setAnnounce(t('edit.resized', { name: nameOf(cur), cols: cur.cols }));
-    };
-    document.body.classList.add('ov-dragging');
-    window.addEventListener('pointermove', mv);
-    window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', up);
+    trackResize(grid, el, e.clientX, (cols) => resizeWidget(w.id, cols), () => announceResized(w.id));
   };
 
   const onWidgetKey = (w: Widget, i: number, e: KeyboardEvent<HTMLDivElement>) => {
     if (e.target !== e.currentTarget) return;
+    const action = widgetKeyAction(e);
+    if (!action) return;
+    e.preventDefault();
     const len = draftRef.current?.length ?? 0;
-    if (e.shiftKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
-      e.preventDefault();
-      resizeWidget(w.id, stepCols(w.cols, e.key === 'ArrowRight' ? 1 : -1), true);
-    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-      e.preventDefault();
-      moveWidget(w.id, i - 1);
-      setFocusReq({ id: w.id, n: Date.now() });
-    } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-      e.preventDefault();
-      moveWidget(w.id, Math.min(len - 1, i + 1));
-      setFocusReq({ id: w.id, n: Date.now() });
-    } else if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      setSettingsId(w.id);
-    } else if (e.key === 'Delete' || e.key === 'Backspace') {
-      e.preventDefault();
-      removeWidget(w.id);
+    switch (action) {
+      case 'grow':
+      case 'shrink':
+        resizeWidget(w.id, stepCols(w.cols, action === 'grow' ? 1 : -1), true);
+        break;
+      case 'prev':
+        moveWidget(w.id, i - 1);
+        setFocusReq({ id: w.id, n: Date.now() });
+        break;
+      case 'next':
+        moveWidget(w.id, Math.min(len - 1, i + 1));
+        setFocusReq({ id: w.id, n: Date.now() });
+        break;
+      case 'settings':
+        setSettingsId(w.id);
+        break;
+      case 'remove':
+        removeWidget(w.id);
+        break;
     }
   };
 
-  /* ----- actions ----- */
   const run = useCallback(
     (a: DashAction) => {
       if (a.confirm) setConfirm(a);
@@ -352,13 +478,17 @@ export default function OverviewPage() {
   const ctx: WidgetCtx = useMemo(() => ({ editing, run, configure: (id) => setSettingsId(id) }), [editing, run]);
 
   const settingsWidget = list.find((w) => w.id === settingsId) ?? null;
-  const pluginTitle = settingsWidget?.type === 'plugin' ? pluginWidgets.find((p) => p.plugin === settingsWidget.settings?.plugin && p.id === settingsWidget.settings?.widget)?.title : undefined;
+  const pluginTitle = pluginTitleOf(settingsWidget, pluginWidgets);
+  const saveSettings = (s: Widget['settings']) => {
+    const id = settingsId;
+    setSettingsId(null);
+    if (!id) return;
+    if (editing) update((l) => l.map((w) => (w.id === id ? { ...w, settings: s } : w)));
+    else void set('dashboard', { version: 1, widgets: saved.map((w) => (w.id === id ? { ...w, settings: s } : w)) });
+  };
 
-  /* ----- greeting ----- */
   const name = session?.name?.trim().split(/\s+/)[0] || session?.user || '';
-  const hostName = host?.hostname || 'this machine';
-  const issues = (alerts ?? []).filter((a) => a.severity !== 'ok').length;
-  const summary = alerts === null ? t('summary.checking', { host: hostName }) : issues === 0 ? t('summary.ok', { host: hostName }) : t('summary.issues', { host: hostName, count: issues });
+  const summary = dashboardSummary(t, alerts, host?.hostname || 'this machine');
 
   const library = <Library onAdd={(i) => addItem(i)} onPointerDown={onLibPointerDown} onReset={resetLayout} className={wide ? '' : 'ov-lib--sheet'} />;
 
@@ -379,18 +509,7 @@ export default function OverviewPage() {
     >
       <div className={`ov${editing ? ' ov--editing' : ''}${editing && wide ? ' ov--lib' : ''}`}>
         <div className="ov-main">
-          {editing && (
-            <div className="ov-editbar" role="region" aria-label={t('edit.title')}>
-              <Icon name="edit" />
-              <b>{t('edit.title')}</b>
-              <span>{t('edit.hint')}</span>
-              <div className="ov-editbar-r">
-                {!wide && <Button size="sm" icon="plus" variant="ghost" onClick={() => setLibOpen(true)}>{t('edit.addWidget')}</Button>}
-                <Button size="sm" variant="ghost" onClick={cancel}>{t('cancel')}</Button>
-                <Button size="sm" className="ov-save" onClick={() => void save()}>{t('edit.save')}</Button>
-              </div>
-            </div>
-          )}
+          {editing && <EditBar t={t} wide={wide} onAdd={() => setLibOpen(true)} onCancel={cancel} onSave={() => void save()} />}
           <div className="ov-canvas">
           <div ref={gridRef} className="ov-grid" role="list">
             {list.map((w, i) => (
@@ -398,7 +517,7 @@ export default function OverviewPage() {
                 key={w.id}
                 role="listitem"
                 data-wid={w.id}
-                className={`ov-w ov-c${w.cols}${dragUi?.id === w.id ? ' ov-w--drag' : ''}${dragUi?.overId === w.id && dragUi.kind === 'new' ? ' ov-w--target' : ''}`}
+                className={widgetClass(w, dragUi)}
                 tabIndex={editing ? 0 : undefined}
                 aria-roledescription={editing ? t('edit.roleDesc') : undefined}
                 aria-label={editing ? t('edit.widgetLabel', { name: nameOf(w), pos: i + 1, total: list.length }) : undefined}
@@ -406,20 +525,13 @@ export default function OverviewPage() {
                 onKeyDown={editing ? (e) => onWidgetKey(w, i, e) : undefined}
               >
                 {editing && (
-                  <>
-                    <div className="ov-tools">
-                      <button type="button" className="ov-grip" data-grip aria-label={t('edit.drag')} title={t('edit.drag')}>
-                        <Icon name="grip" />
-                      </button>
-                      <button type="button" data-nodrag aria-label={t('edit.settings', { name: nameOf(w) })} title={t('edit.settingsShort')} onClick={() => setSettingsId(w.id)}>
-                        <Icon name="edit" />
-                      </button>
-                      <button type="button" data-nodrag aria-label={t('edit.remove', { name: nameOf(w) })} title={t('edit.removeShort')} onClick={() => removeWidget(w.id)}>
-                        <Icon name="plus" style={{ transform: 'rotate(45deg)' }} />
-                      </button>
-                    </div>
-                    <span className="ov-res" data-nodrag onPointerDown={(e) => onResizeDown(w, e)} aria-hidden="true" />
-                  </>
+                  <WidgetTools
+                    t={t}
+                    name={nameOf(w)}
+                    onSettings={() => setSettingsId(w.id)}
+                    onRemove={() => removeWidget(w.id)}
+                    onResizeDown={(e) => onResizeDown(w, e)}
+                  />
                 )}
                 <div className="ov-w-body" {...(editing ? ({ inert: '' } as object) : {})}>
                   <WidgetBody w={w} ctx={ctx} />
@@ -445,18 +557,7 @@ export default function OverviewPage() {
 
       <div className="ov-sr" role="status" aria-live="polite">{announce}</div>
 
-      <SettingsDialog
-        widget={settingsWidget}
-        pluginTitle={pluginTitle}
-        onClose={() => setSettingsId(null)}
-        onSave={(s) => {
-          const id = settingsId;
-          setSettingsId(null);
-          if (!id) return;
-          if (editing) update((l) => l.map((w) => (w.id === id ? { ...w, settings: s } : w)));
-          else void set('dashboard', { version: 1, widgets: saved.map((w) => (w.id === id ? { ...w, settings: s } : w)) });
-        }}
-      />
+      <SettingsDialog widget={settingsWidget} pluginTitle={pluginTitle} onClose={() => setSettingsId(null)} onSave={saveSettings} />
       <OutputDialog />
       <ConfirmDialog
         open={!!confirm}
