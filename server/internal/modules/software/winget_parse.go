@@ -105,38 +105,58 @@ func wingetTable(out string) [][]string {
 		if strings.TrimSpace(header) == "" {
 			continue
 		}
-		if !strings.HasPrefix(header, "Name") && !strings.HasPrefix(header, "Id") {
-			header = spinnerRe.ReplaceAllString(header, "") // a spinner glyph before the header
-			if !isHeaderWord(header) {
-				// localized header: keep it as is, unless it starts with a lone spinner glyph
-				header = lines[i-1]
-			}
-		}
-		starts := columnStarts(header)
+		starts := columnStarts(tableHeader(header))
 		if len(starts) < 2 {
 			continue
 		}
-		for i++; i < len(lines); i++ {
-			l := lines[i]
-			if strings.TrimSpace(l) == "" {
-				break
-			}
-			if isSeparator(l) {
-				i--
-				break
-			}
-			row := make([]string, len(starts))
-			for c := range starts {
-				end := -1
-				if c+1 < len(starts) {
-					end = starts[c+1]
-				}
-				row[c] = strings.TrimSpace(strings.TrimSuffix(cellSlice(l, starts[c], end), "…"))
-			}
-			rows = append(rows, row)
-		}
+		var got [][]string
+		got, i = tableRows(lines, i+1, starts)
+		rows = append(rows, got...)
 	}
 	return rows
+}
+
+// tableHeader strips a spinner glyph before the header; a localized header is
+// kept as is.
+func tableHeader(header string) string {
+	if isHeaderWord(header) {
+		return header
+	}
+	if stripped := spinnerRe.ReplaceAllString(header, ""); isHeaderWord(stripped) {
+		return stripped
+	}
+	return header
+}
+
+// tableRows reads rows from line from until a blank line or the next
+// separator; it returns the rows and the index of the last line consumed.
+func tableRows(lines []string, from int, starts []int) ([][]string, int) {
+	var rows [][]string
+	i := from
+	for ; i < len(lines); i++ {
+		l := lines[i]
+		if strings.TrimSpace(l) == "" {
+			break
+		}
+		if isSeparator(l) {
+			i--
+			break
+		}
+		rows = append(rows, tableRow(l, starts))
+	}
+	return rows, i
+}
+
+func tableRow(l string, starts []int) []string {
+	row := make([]string, len(starts))
+	for c := range starts {
+		end := -1
+		if c+1 < len(starts) {
+			end = starts[c+1]
+		}
+		row[c] = strings.TrimSpace(strings.TrimSuffix(cellSlice(l, starts[c], end), "…"))
+	}
+	return row
 }
 
 func isHeaderWord(h string) bool { return strings.HasPrefix(h, "Name") || strings.HasPrefix(h, "Id") }
@@ -214,8 +234,12 @@ func parseWingetLine(line string, p *Progress) bool {
 // parseWingetShow parses `winget show` into fields: the "Found Name [Id]" line
 // gives the title; the key/value stanza stops at the Installer section.
 func parseWingetShow(out string) (title string, fields []Field) {
-	lines := cleanWingetOutput(out)
-	var body []string
+	title, body := wingetShowBody(cleanWingetOutput(out))
+	return title, parseKV(strings.TrimLeft(strings.Join(foldMultiline(body), "\n"), "\n"))
+}
+
+// wingetShowBody returns the title and the lines before the Installer section.
+func wingetShowBody(lines []string) (title string, body []string) {
 	for _, l := range lines {
 		t := strings.TrimSpace(l)
 		if strings.HasPrefix(t, "Found ") && title == "" {
@@ -224,12 +248,17 @@ func parseWingetShow(out string) (title string, fields []Field) {
 			}
 			continue
 		}
-		if len(l) > 0 && l[0] != ' ' && strings.HasSuffix(t, ":") && len(body) > 0 && (t == "Installer:" || t == "Installers:") {
+		if len(l) > 0 && l[0] != ' ' && len(body) > 0 && (t == "Installer:" || t == "Installers:") {
 			break
 		}
 		body = append(body, l)
 	}
-	// "Key:" alone followed by indented lines is a multi-line value: fold it into one line.
+	return title, body
+}
+
+// foldMultiline: "Key:" alone followed by indented lines is a multi-line
+// value, folded into one line.
+func foldMultiline(body []string) []string {
 	var folded []string
 	for i := 0; i < len(body); i++ {
 		l := body[i]
@@ -245,5 +274,5 @@ func parseWingetShow(out string) (title string, fields []Field) {
 		}
 		folded = append(folded, l)
 	}
-	return title, parseKV(strings.TrimLeft(strings.Join(folded, "\n"), "\n"))
+	return folded
 }

@@ -18,11 +18,7 @@ const (
 // decodeText turns raw bytes into a string and names the encoding.
 // It refuses binary data.
 func decodeText(b []byte, truncated bool) (string, string, error) {
-	probe := b
-	if len(probe) > 8000 {
-		probe = probe[:8000]
-	}
-	if bytes.IndexByte(probe, 0) >= 0 || bytes.HasPrefix(b, []byte{0xFF, 0xFE}) || bytes.HasPrefix(b, []byte{0xFE, 0xFF}) {
+	if looksBinary(b) {
 		return "", "", rpc.Errorf(rpc.Invalid, "This looks like a binary file, so it cannot be shown as text.")
 	}
 	if bytes.HasPrefix(b, []byte{0xEF, 0xBB, 0xBF}) {
@@ -45,6 +41,14 @@ func decodeText(b []byte, truncated bool) (string, string, error) {
 		r[i] = rune(c)
 	}
 	return string(r), "latin1", nil
+}
+
+func looksBinary(b []byte) bool {
+	probe := b
+	if len(probe) > 8000 {
+		probe = probe[:8000]
+	}
+	return bytes.IndexByte(probe, 0) >= 0 || bytes.HasPrefix(b, []byte{0xFF, 0xFE}) || bytes.HasPrefix(b, []byte{0xFE, 0xFF})
 }
 
 func trimPartialRune(b []byte) []byte {
@@ -94,13 +98,6 @@ func hReadText(ctx context.Context, c *rpc.Call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	max := p.MaxBytes
-	if max <= 0 {
-		max = defaultReadText
-	}
-	if max > maxReadText {
-		max = maxReadText
-	}
 	fi, err := os.Stat(path)
 	if err != nil {
 		return nil, err
@@ -108,18 +105,9 @@ func hReadText(ctx context.Context, c *rpc.Call) (any, error) {
 	if !fi.Mode().IsRegular() {
 		return nil, rpc.Errorf(rpc.Invalid, "Only regular files can be opened as text.")
 	}
-	f, err := os.Open(path)
+	buf, truncated, err := readCapped(path, clampReadText(p.MaxBytes))
 	if err != nil {
 		return nil, err
-	}
-	defer f.Close()
-	buf, err := io.ReadAll(io.LimitReader(f, max+1))
-	if err != nil {
-		return nil, err
-	}
-	truncated := int64(len(buf)) > max
-	if truncated {
-		buf = buf[:max]
 	}
 	content, enc, err := decodeText(buf, truncated)
 	if err != nil {
@@ -129,6 +117,30 @@ func hReadText(ctx context.Context, c *rpc.Call) (any, error) {
 		"path": path, "content": content, "encoding": enc, "size": fi.Size(),
 		"mtime": fi.ModTime().UnixMilli(), "truncated": truncated,
 	}, nil
+}
+
+func clampReadText(n int64) int64 {
+	if n <= 0 {
+		return defaultReadText
+	}
+	return min(n, maxReadText)
+}
+
+// readCapped reads at most max bytes of path and reports whether the file was longer.
+func readCapped(path string, max int64) ([]byte, bool, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, false, err
+	}
+	defer f.Close()
+	buf, err := io.ReadAll(io.LimitReader(f, max+1))
+	if err != nil {
+		return nil, false, err
+	}
+	if int64(len(buf)) > max {
+		return buf[:max], true, nil
+	}
+	return buf, false, nil
 }
 
 func hWriteText(ctx context.Context, c *rpc.Call) (any, error) {

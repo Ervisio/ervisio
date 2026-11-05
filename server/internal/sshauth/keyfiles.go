@@ -115,16 +115,8 @@ func authorizedKeysDirective(file string, depth int) ([]string, error) {
 		case "match":
 			return nil, nil // the rest of this file is conditional
 		case "include":
-			for _, pat := range words[1:] {
-				if !filepath.IsAbs(pat) {
-					pat = filepath.Join(filepath.Dir(SSHDConfig), pat)
-				}
-				matches, _ := filepath.Glob(pat)
-				for _, m := range matches {
-					if v, _ := authorizedKeysDirective(m, depth+1); v != nil {
-						return v, nil
-					}
-				}
+			if v := includedDirective(words[1:], depth); v != nil {
+				return v, nil
 			}
 		case "authorizedkeysfile":
 			if len(words) > 1 {
@@ -133,6 +125,23 @@ func authorizedKeysDirective(file string, depth int) ([]string, error) {
 		}
 	}
 	return nil, sc.Err()
+}
+
+// includedDirective returns the first AuthorizedKeysFile found in the files
+// matched by the Include patterns.
+func includedDirective(patterns []string, depth int) []string {
+	for _, pat := range patterns {
+		if !filepath.IsAbs(pat) {
+			pat = filepath.Join(filepath.Dir(SSHDConfig), pat)
+		}
+		matches, _ := filepath.Glob(pat)
+		for _, m := range matches {
+			if v, _ := authorizedKeysDirective(m, depth+1); v != nil {
+				return v
+			}
+		}
+	}
+	return nil
 }
 
 // splitConfigLine splits an sshd_config line into words: "key value",
@@ -145,9 +154,22 @@ func splitConfigLine(line string) []string {
 	if k, v, ok := strings.Cut(line, "="); ok && !strings.ContainsAny(k, " \t\"") {
 		line = k + " " + v
 	}
+	return splitWords(line)
+}
+
+// splitWords splits on blanks outside double quotes and stops at a # that
+// starts a word.
+func splitWords(line string) []string {
 	var out []string
 	var cur strings.Builder
 	inQ, have := false, false
+	flush := func() {
+		if have {
+			out = append(out, cur.String())
+			cur.Reset()
+			have = false
+		}
+	}
 	for i := 0; i < len(line); i++ {
 		c := line[i]
 		switch {
@@ -155,11 +177,7 @@ func splitConfigLine(line string) []string {
 			inQ = !inQ
 			have = true
 		case !inQ && (c == ' ' || c == '\t'):
-			if have {
-				out = append(out, cur.String())
-				cur.Reset()
-				have = false
-			}
+			flush()
 		case !inQ && c == '#' && !have:
 			return out
 		default:
@@ -167,9 +185,7 @@ func splitConfigLine(line string) []string {
 			have = true
 		}
 	}
-	if have {
-		out = append(out, cur.String())
-	}
+	flush()
 	return out
 }
 
