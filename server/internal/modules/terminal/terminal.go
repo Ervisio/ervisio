@@ -251,71 +251,101 @@ func buildSpec(p createParams, admin bool) (spec, error) {
 	if home == "" {
 		home = defaultHome()
 	}
-	host, _ := os.Hostname()
+	sp := spec{Cols: c16, Rows: r16}
+	switch p.Kind {
+	case "", "local", "root":
+		err = fillLocalSpec(&sp, p, admin, u, home, &name)
+	case "ssh":
+		err = fillSSHSpec(&sp, p, u, home, &name)
+	default:
+		err = rpc.Errorf(rpc.Invalid, "Unknown session kind %q. Use local, root or ssh.", p.Kind)
+	}
+	if err != nil {
+		return spec{}, err
+	}
+	sp.Name = name
+	return sp, nil
+}
+
+// fillLocalSpec sets up a local or root shell session; name is defaulted
+// when empty.
+func fillLocalSpec(sp *spec, p createParams, admin bool, u *user.User, home string, name *string) error {
+	if p.Kind == "root" && !admin {
+		return rpc.Errorf(rpc.NeedsAdmin, "A root shell needs administrator rights.")
+	}
+	shell, err := resolveShell(p.Shell, u.Username)
+	if err != nil {
+		return err
+	}
+	dir := home
+	if p.Cwd != "" {
+		if err := checkStartDir(p.Cwd); err != nil {
+			return err
+		}
+		dir = p.Cwd
+	}
 	kind := KindLocal
 	if admin {
 		kind = KindRoot
 	}
-	sp := spec{Cols: c16, Rows: r16}
-	switch p.Kind {
-	case "", "local", "root":
-		if p.Kind == "root" && !admin {
-			return spec{}, rpc.Errorf(rpc.NeedsAdmin, "A root shell needs administrator rights.")
-		}
-		shell, err := resolveShell(p.Shell, u.Username)
-		if err != nil {
-			return spec{}, err
-		}
-		dir := home
-		if p.Cwd != "" {
-			if !filepath.IsAbs(p.Cwd) {
-				return spec{}, rpc.Errorf(rpc.Invalid, "The start folder must be an absolute path.")
-			}
-			fi, err := os.Stat(p.Cwd)
-			if err != nil || !fi.IsDir() {
-				return spec{}, rpc.Errorf(rpc.NotFound, "The folder %s does not exist.", p.Cwd)
-			}
-			dir = p.Cwd
-		}
-		base := filepath.Base(shell)
-		sp.Kind, sp.Path, sp.Dir, sp.Shell = kind, shell, dir, base
-		sp.Argv = shellArgv(base)
-		if name == "" {
-			name = u.Username + "@" + host
-		}
-		sp.Env = termEnv(u, home, shell)
-	case "ssh":
-		if !hostRe.MatchString(p.Host) {
-			return spec{}, rpc.Errorf(rpc.Invalid, "Enter a valid host name or IP address.")
-		}
-		if p.User != "" && !userRe.MatchString(p.User) {
-			return spec{}, rpc.Errorf(rpc.Invalid, "Enter a valid SSH user name.")
-		}
-		if p.Port != 0 && (p.Port < 1 || p.Port > 65535) {
-			return spec{}, rpc.Errorf(rpc.Invalid, "The SSH port must be between 1 and 65535.")
-		}
-		ssh, err := lookSSH()
-		if err != nil {
-			return spec{}, rpc.Errorf(rpc.Unavailable, "The ssh client is not installed. Install openssh and try again.")
-		}
-		argv := []string{"ssh", "-o", "ServerAliveInterval=30"}
-		if p.Port != 0 {
-			argv = append(argv, "-p", strconv.Itoa(p.Port))
-		}
-		if p.User != "" {
-			argv = append(argv, "-l", p.User)
-		}
-		argv = append(argv, "--", p.Host)
-		sp.Kind, sp.Path, sp.Argv, sp.Dir, sp.Shell = KindSSH, ssh, argv, home, "ssh"
-		if name == "" {
-			name = p.Host
-		}
-		sp.Env = termEnv(u, home, "")
-	default:
-		return spec{}, rpc.Errorf(rpc.Invalid, "Unknown session kind %q. Use local, root or ssh.", p.Kind)
+	base := filepath.Base(shell)
+	sp.Kind, sp.Path, sp.Dir, sp.Shell = kind, shell, dir, base
+	sp.Argv = shellArgv(base)
+	if *name == "" {
+		host, _ := os.Hostname()
+		*name = u.Username + "@" + host
 	}
-	sp.Name = name
-	return sp, nil
+	sp.Env = termEnv(u, home, shell)
+	return nil
+}
+
+func checkStartDir(dir string) error {
+	if !filepath.IsAbs(dir) {
+		return rpc.Errorf(rpc.Invalid, "The start folder must be an absolute path.")
+	}
+	fi, err := os.Stat(dir)
+	if err != nil || !fi.IsDir() {
+		return rpc.Errorf(rpc.NotFound, "The folder %s does not exist.", dir)
+	}
+	return nil
+}
+
+// fillSSHSpec sets up an ssh session; name is defaulted when empty.
+func fillSSHSpec(sp *spec, p createParams, u *user.User, home string, name *string) error {
+	if err := checkSSHTarget(p); err != nil {
+		return err
+	}
+	ssh, err := lookSSH()
+	if err != nil {
+		return rpc.Errorf(rpc.Unavailable, "The ssh client is not installed. Install openssh and try again.")
+	}
+	argv := []string{"ssh", "-o", "ServerAliveInterval=30"}
+	if p.Port != 0 {
+		argv = append(argv, "-p", strconv.Itoa(p.Port))
+	}
+	if p.User != "" {
+		argv = append(argv, "-l", p.User)
+	}
+	argv = append(argv, "--", p.Host)
+	sp.Kind, sp.Path, sp.Argv, sp.Dir, sp.Shell = KindSSH, ssh, argv, home, "ssh"
+	if *name == "" {
+		*name = p.Host
+	}
+	sp.Env = termEnv(u, home, "")
+	return nil
+}
+
+func checkSSHTarget(p createParams) error {
+	if !hostRe.MatchString(p.Host) {
+		return rpc.Errorf(rpc.Invalid, "Enter a valid host name or IP address.")
+	}
+	if p.User != "" && !userRe.MatchString(p.User) {
+		return rpc.Errorf(rpc.Invalid, "Enter a valid SSH user name.")
+	}
+	if p.Port != 0 && (p.Port < 1 || p.Port > 65535) {
+		return rpc.Errorf(rpc.Invalid, "The SSH port must be between 1 and 65535.")
+	}
+	return nil
 }
 
 func parsePasswdShell(r io.Reader, username string) string {

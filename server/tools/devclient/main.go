@@ -64,52 +64,63 @@ func main() {
 	}
 	switch mode {
 	case "rpc":
-		body, _ := json.Marshal(map[string]any{"method": method, "params": params, "admin": *admin})
-		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, *base+"/api/rpc", bytes.NewReader(body))
-		req.Header = hdr
-		req.Header.Set("Content-Type", "application/json")
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			fail(err.Error())
-		}
-		defer resp.Body.Close()
-		out, _ := io.ReadAll(resp.Body)
-		fmt.Printf("HTTP %d\n%s", resp.StatusCode, out)
+		doRPC(ctx, hdr, *base, method, params, *admin)
 	case "stream":
-		u, _ := url.Parse(*base)
-		u.Scheme = strings.Replace(u.Scheme, "http", "ws", 1)
-		u.Path = "/api/ws"
-		c, _, err := websocket.Dial(ctx, u.String(), &websocket.DialOptions{HTTPHeader: hdr})
-		if err != nil {
-			fail(err.Error())
-		}
-		defer c.CloseNow()
-		open, _ := json.Marshal(map[string]any{"ch": 1, "op": "open", "method": method, "params": params, "admin": *admin})
-		if err := c.Write(ctx, websocket.MessageText, open); err != nil {
-			fail(err.Error())
-		}
-		got := 0
-		for {
-			_, data, err := c.Read(ctx)
-			if err != nil {
-				fail(err.Error())
-			}
-			fmt.Println(string(data))
-			var f struct{ Op string }
-			_ = json.Unmarshal(data, &f)
-			if f.Op == "end" || f.Op == "error" {
-				return
-			}
-			got++
-			if *n > 0 && got >= *n {
-				closeMsg, _ := json.Marshal(map[string]any{"ch": 1, "op": "close"})
-				_ = c.Write(ctx, websocket.MessageText, closeMsg)
-				*n = 0 // read until "end"
-			}
-		}
+		doStream(ctx, hdr, *base, method, params, *admin, *n)
 	default:
 		flag.Usage()
 		os.Exit(2)
+	}
+}
+
+// doRPC posts one call to /api/rpc and prints the status and body.
+func doRPC(ctx context.Context, hdr http.Header, base, method string, params json.RawMessage, admin bool) {
+	body, _ := json.Marshal(map[string]any{"method": method, "params": params, "admin": admin})
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, base+"/api/rpc", bytes.NewReader(body))
+	req.Header = hdr
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		fail(err.Error())
+	}
+	defer resp.Body.Close()
+	out, _ := io.ReadAll(resp.Body)
+	fmt.Printf("HTTP %d\n%s", resp.StatusCode, out)
+}
+
+// doStream opens a WebSocket stream and prints frames until it ends, or
+// until n data frames when n > 0.
+func doStream(ctx context.Context, hdr http.Header, base, method string, params json.RawMessage, admin bool, n int) {
+	u, _ := url.Parse(base)
+	u.Scheme = strings.Replace(u.Scheme, "http", "ws", 1)
+	u.Path = "/api/ws"
+	c, _, err := websocket.Dial(ctx, u.String(), &websocket.DialOptions{HTTPHeader: hdr})
+	if err != nil {
+		fail(err.Error())
+	}
+	defer c.CloseNow()
+	open, _ := json.Marshal(map[string]any{"ch": 1, "op": "open", "method": method, "params": params, "admin": admin})
+	if err := c.Write(ctx, websocket.MessageText, open); err != nil {
+		fail(err.Error())
+	}
+	got := 0
+	for {
+		_, data, err := c.Read(ctx)
+		if err != nil {
+			fail(err.Error())
+		}
+		fmt.Println(string(data))
+		var f struct{ Op string }
+		_ = json.Unmarshal(data, &f)
+		if f.Op == "end" || f.Op == "error" {
+			return
+		}
+		got++
+		if n > 0 && got >= n {
+			closeMsg, _ := json.Marshal(map[string]any{"ch": 1, "op": "close"})
+			_ = c.Write(ctx, websocket.MessageText, closeMsg)
+			n = 0 // read until "end"
+		}
 	}
 }
 

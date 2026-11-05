@@ -107,40 +107,54 @@ func parseJournalLine(line string) (*Entry, bool) {
 func journalReadable() bool {
 	denied := false
 	for _, d := range []string{"/var/log/journal", "/run/log/journal"} {
-		ents, err := os.ReadDir(d)
-		if err != nil {
-			if os.IsPermission(err) {
-				denied = true
-			}
-			continue
+		ok, den := journalRootReadable(d)
+		if ok {
+			return true
 		}
-		for _, m := range ents {
-			if !m.IsDir() {
-				continue
-			}
-			files, err := os.ReadDir(filepath.Join(d, m.Name()))
-			if err != nil {
-				if os.IsPermission(err) {
-					denied = true
-				}
-				continue
-			}
-			for _, f := range files {
-				if !strings.HasSuffix(f.Name(), ".journal") {
-					continue
-				}
-				fh, err := os.Open(filepath.Join(d, m.Name(), f.Name()))
-				if err == nil {
-					fh.Close()
-					return true
-				}
-				if os.IsPermission(err) {
-					denied = true
-				}
-			}
-		}
+		denied = denied || den
 	}
 	return !denied
+}
+
+// journalRootReadable scans the machine directories under one journal root.
+func journalRootReadable(root string) (ok, denied bool) {
+	ents, err := os.ReadDir(root)
+	if err != nil {
+		return false, os.IsPermission(err)
+	}
+	for _, m := range ents {
+		if !m.IsDir() {
+			continue
+		}
+		ok, den := journalDirReadable(filepath.Join(root, m.Name()))
+		if ok {
+			return true, denied
+		}
+		denied = denied || den
+	}
+	return false, denied
+}
+
+// journalDirReadable tries to open each .journal file in dir.
+func journalDirReadable(dir string) (ok, denied bool) {
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return false, os.IsPermission(err)
+	}
+	for _, f := range files {
+		if !strings.HasSuffix(f.Name(), ".journal") {
+			continue
+		}
+		fh, err := os.Open(filepath.Join(dir, f.Name()))
+		if err == nil {
+			fh.Close()
+			return true, denied
+		}
+		if os.IsPermission(err) {
+			denied = true
+		}
+	}
+	return false, denied
 }
 
 func errNeedsAdmin() error {
