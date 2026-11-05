@@ -60,11 +60,12 @@ type taskSample struct {
 	processes map[int]taskCounter
 }
 type taskSampler struct {
-	gate   chan struct{}
-	prev   *taskSample
-	cached *TaskSnapshot
-	read   func(context.Context) (*taskSample, error)
-	gpus   func(context.Context) []TaskGPU
+	gate     chan struct{}
+	prev     *taskSample
+	cached   *TaskSnapshot
+	cachedAt time.Time
+	read     func(context.Context) (*taskSample, error)
+	gpus     func(context.Context) []TaskGPU
 }
 
 func newTaskSampler() *taskSampler {
@@ -93,7 +94,7 @@ func (s *taskSampler) snapshot(ctx context.Context, privileged bool) (*TaskSnaps
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if s.cached != nil && time.Since(time.UnixMilli(s.cached.Time)) < time.Second {
+	if s.cached != nil && time.Since(s.cachedAt) < time.Second {
 		return s.cached, nil
 	}
 	prev := s.prev
@@ -126,6 +127,7 @@ func (s *taskSampler) snapshot(ctx context.Context, privileged bool) (*TaskSnaps
 		return nil, err
 	}
 	s.cached = result
+	s.cachedAt = time.Now()
 	return result, nil
 }
 

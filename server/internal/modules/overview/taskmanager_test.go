@@ -92,6 +92,36 @@ func TestTaskGPUUnknownIsNull(t *testing.T) {
 	}
 }
 
+func TestTaskSnapshotCacheStartsAfterSlowGPUProbe(t *testing.T) {
+	sampler := newTaskSampler()
+	sampler.prev = &taskSample{at: time.Now().Add(-time.Second), processes: map[int]taskCounter{}}
+	var scans, gpuQueries atomic.Int32
+	sampler.read = func(context.Context) (*taskSample, error) {
+		scans.Add(1)
+		return &taskSample{at: time.Now(), processes: map[int]taskCounter{}}, nil
+	}
+	sampler.gpus = func(context.Context) []TaskGPU {
+		gpuQueries.Add(1)
+		// A real command timeout can exceed the one-second cache TTL.
+		time.Sleep(1100 * time.Millisecond)
+		return []TaskGPU{}
+	}
+	var calls sync.WaitGroup
+	for range 6 {
+		calls.Add(1)
+		go func() {
+			defer calls.Done()
+			if _, err := sampler.snapshot(context.Background(), false); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	calls.Wait()
+	if scans.Load() != 1 || gpuQueries.Load() != 1 {
+		t.Fatalf("slow probe expired the cache before completion: scans=%d gpuQueries=%d", scans.Load(), gpuQueries.Load())
+	}
+}
+
 func TestTaskManagerLiveReadOnly(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

@@ -68,9 +68,12 @@ func winSample() []winProc {
 				var c, x, k, u windows.Filetime
 				if windows.GetProcessTimes(h, &c, &x, &k, &u) == nil {
 					p.cpu100ns = filetime100ns(k) + filetime100ns(u)
+					p.created = filetime100ns(c)
+					p.cpuKnown = true
 				}
 				if ws, ok := workingSet(h); ok {
 					p.rss = ws
+					p.memoryKnown = true
 				}
 				windows.CloseHandle(h)
 			}
