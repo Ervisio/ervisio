@@ -129,45 +129,18 @@ func (m *Manager) alert(in *Instance, status, prev, errMsg string) {
 // runSteps does the work of one run and returns its final status, an
 // error message and the step output hashes to remember.
 func (m *Manager) runSteps(ctx context.Context, in *Instance, run *Run, tr Trigger) (status, errMsg string, outputs map[string]string) {
-	chk, reason, st := m.check(in)
-	if st != checkOK {
-		if st == checkDisable {
-			m.mu.Lock()
-			if cur := m.findLocked(in.ID); cur != nil && cur.Enabled {
-				m.disableLocked(cur, reason)
-			}
-			m.mu.Unlock()
-		}
+	chk, params, reason, ok := m.prepareRun(in, tr)
+	if !ok {
 		return "failed", reason, nil
 	}
 	// The values check looked at, not a second lookup (the plugin may have
 	// been turned off in between).
 	man, job, owner := chk.man, chk.job, chk.owner
 
-	// The values of an instance that runs steps as root are the ones an
-	// administrator approved: nothing from the trigger replaces them
-	// (HandleHook already refuses such a call; this is the backstop).
-	if chk.admin && len(tr.Params) > 0 {
-		return "failed", "This job runs steps with administrator rights, so a webhook cannot change its values.", nil
-	}
-	params := map[string]string{}
-	for k, v := range in.Params {
-		params[k] = v
-	}
-	for k, v := range tr.Params {
-		params[k] = v
-	}
-	params, err := job.ResolveParams(params)
-	if err != nil {
-		return "failed", err.Error(), nil
-	}
-
 	jctx, cancel := context.WithTimeout(ctx, time.Duration(job.Timeout())*time.Second)
 	defer cancel()
 	ex := m.env.NewExecutor(owner)
 	defer ex.Close()
-	groups := groupSet(owner)
-	root := owner.IsRoot()
 	budget := &logBudget{left: runLogBudget}
 	results := map[string]*outcome{}
 	outputs = map[string]string{}
@@ -178,6 +151,7 @@ func (m *Manager) runSteps(ctx context.Context, in *Instance, run *Run, tr Trigg
 	if label == "" {
 		label = in.ID
 	}
+	env := &stepEnv{ex: ex, man: man, in: in, tr: tr, val: stepValues(man, job, params, label, results), root: owner.IsRoot(), groups: groupSet(owner)}
 
 	for i := range job.Steps {
 		s := &job.Steps[i]
@@ -187,36 +161,9 @@ func (m *Manager) runSteps(ctx context.Context, in *Instance, run *Run, tr Trigg
 			m.addStep(run, sr)
 			continue
 		}
-		val := func(r plugins.Ref) (string, error) {
-			switch r.Kind {
-			case "param":
-				return params[r.Name], nil
-			case "job":
-				return job.Name, nil
-			case "instance":
-				return label, nil
-			case "plugin":
-				return man.Name, nil
-			}
-			o := results[r.Name]
-			if o == nil {
-				return "", nil
-			}
-			switch r.Field {
-			case "stdout":
-				return o.stdout, nil
-			case "stderr":
-				return o.stderr, nil
-			case "exitCode":
-				return o.exit, nil
-			case "status":
-				return o.status, nil
-			}
-			return o.body, nil
-		}
 		started := m.env.Now()
 		sr.Started = started.UnixMilli()
-		o, failMsg := m.doStep(jctx, ex, man, in, tr, s, &sr, val, root, groups)
+		o, failMsg := m.doStep(jctx, env, s, &sr)
 		sr.Duration = m.env.Now().Sub(started).Milliseconds()
 		if o != nil {
 			results[s.ID] = o
@@ -234,21 +181,104 @@ func (m *Manager) runSteps(ctx context.Context, in *Instance, run *Run, tr Trigg
 			continue
 		}
 		sr.Status, sr.Error = "failed", failMsg
-		if jctx.Err() == nil && s.ContinueOnError {
-			sr.Handled = true
-			m.addStep(run, sr)
+		handled := jctx.Err() == nil && s.ContinueOnError
+		sr.Handled = handled
+		m.addStep(run, sr)
+		if handled {
 			continue
 		}
-		m.addStep(run, sr)
-		switch {
-		case errors.Is(jctx.Err(), context.DeadlineExceeded):
-			return "timeout", fmt.Sprintf("The job took longer than %d seconds.", job.Timeout()), outputs
-		case ctx.Err() != nil:
-			return "cancelled", "The run was cancelled.", outputs
-		}
-		return "failed", fmt.Sprintf("Step %s failed: %s", s.ID, failMsg), outputs
+		status, errMsg = stopReason(ctx, jctx, job, s, failMsg)
+		return status, errMsg, outputs
 	}
 	return "ok", "", outputs
+}
+
+// prepareRun runs the pre-flight checks and merges the trigger's values
+// into the instance's. When ok is false the run fails with reason.
+func (m *Manager) prepareRun(in *Instance, tr Trigger) (chk *checked, params map[string]string, reason string, ok bool) {
+	chk, reason, st := m.check(in)
+	if st != checkOK {
+		if st == checkDisable {
+			m.mu.Lock()
+			if cur := m.findLocked(in.ID); cur != nil && cur.Enabled {
+				m.disableLocked(cur, reason)
+			}
+			m.mu.Unlock()
+		}
+		return nil, nil, reason, false
+	}
+	// The values of an instance that runs steps as root are the ones an
+	// administrator approved: nothing from the trigger replaces them
+	// (HandleHook already refuses such a call; this is the backstop).
+	if chk.admin && len(tr.Params) > 0 {
+		return nil, nil, "This job runs steps with administrator rights, so a webhook cannot change its values.", false
+	}
+	merged := map[string]string{}
+	for k, v := range in.Params {
+		merged[k] = v
+	}
+	for k, v := range tr.Params {
+		merged[k] = v
+	}
+	params, err := chk.job.ResolveParams(merged)
+	if err != nil {
+		return nil, nil, err.Error(), false
+	}
+	return chk, params, "", true
+}
+
+// stopReason is the final status and message of a run that a failed step
+// ends.
+func stopReason(ctx, jctx context.Context, job *plugins.JobDef, s *plugins.JobStep, failMsg string) (string, string) {
+	switch {
+	case errors.Is(jctx.Err(), context.DeadlineExceeded):
+		return "timeout", fmt.Sprintf("The job took longer than %d seconds.", job.Timeout())
+	case ctx.Err() != nil:
+		return "cancelled", "The run was cancelled."
+	}
+	return "failed", fmt.Sprintf("Step %s failed: %s", s.ID, failMsg)
+}
+
+// commonRef resolves the placeholders every job view shares: a param, the
+// job's name and the plugin's name.
+func commonRef(r plugins.Ref, params map[string]string, jobName, pluginName string) (string, bool) {
+	switch r.Kind {
+	case "param":
+		return params[r.Name], true
+	case "job":
+		return jobName, true
+	case "plugin":
+		return pluginName, true
+	}
+	return "", false
+}
+
+// stepValues fills the placeholders of a step: params, names, and what
+// earlier steps produced (read from results as the run goes on).
+func stepValues(man *plugins.Manifest, job *plugins.JobDef, params map[string]string, label string, results map[string]*outcome) func(plugins.Ref) (string, error) {
+	return func(r plugins.Ref) (string, error) {
+		if v, ok := commonRef(r, params, job.Name, man.Name); ok {
+			return v, nil
+		}
+		if r.Kind == "instance" {
+			return label, nil
+		}
+		o := results[r.Name]
+		if o == nil {
+			return "", nil
+		}
+		switch r.Field {
+		case "stdout":
+			return o.stdout, nil
+		case "stderr":
+			return o.stderr, nil
+		case "exitCode":
+			return o.exit, nil
+		case "status":
+			return o.status, nil
+		}
+		return o.body, nil
+	}
 }
 
 func (m *Manager) addStep(run *Run, sr StepRun) {
@@ -282,121 +312,154 @@ func holds(c *plugins.JobCond, res map[string]*outcome, prev map[string]string) 
 	return false
 }
 
+// stepEnv is what every step of one run shares.
+type stepEnv struct {
+	ex     Executor
+	man    *plugins.Manifest
+	in     *Instance
+	tr     Trigger
+	val    func(plugins.Ref) (string, error)
+	root   bool
+	groups map[string]bool
+}
+
 // doStep runs one step. It returns what later steps see (nil for a step
 // that did not produce anything) and, on failure, why.
-func (m *Manager) doStep(ctx context.Context, ex Executor, man *plugins.Manifest, in *Instance, tr Trigger, s *plugins.JobStep, sr *StepRun,
-	val func(plugins.Ref) (string, error), root bool, groups map[string]bool) (*outcome, string) {
+func (m *Manager) doStep(ctx context.Context, env *stepEnv, s *plugins.JobStep, sr *StepRun) (*outcome, string) {
 	switch s.Kind() {
 	case "command":
-		args := make([]string, len(s.Args))
-		for i, a := range s.Args {
-			v, err := plugins.RenderTemplate(a, val, nil)
-			if err != nil {
-				return nil, err.Error()
-			}
-			args[i] = v
-		}
-		cmd := man.Command(s.Command)
-		admin := cmd.Admin && !root && !(cmd.AdminUnlessGroup != "" && groups[cmd.AdminUnlessGroup])
-		sr.Admin = admin
-		target := audit.CommandTarget(s.Command, args)
-		r, err := ex.Exec(ctx, admin, plugins.ExecParams{Plugin: in.Plugin, Command: s.Command, Args: args, TimeoutSec: s.TimeoutSec})
-		if err != nil {
-			m.auditStep(in, tr, "command", "", target, admin, nil, false, errText(err))
-			return nil, errText(err)
-		}
-		code := r.ExitCode
-		m.auditStep(in, tr, "command", "", target, admin, &code, code == 0, "")
-		sr.ExitCode, sr.Stdout, sr.Stderr = &code, r.Stdout, r.Stderr
-		o := &outcome{ok: code == 0, output: strings.TrimSpace(r.Stdout), stdout: clip(strings.TrimSpace(r.Stdout), 4096), stderr: clip(strings.TrimSpace(r.Stderr), 4096), exit: strconv.Itoa(code)}
-		if code != 0 {
-			return o, fmt.Sprintf("The command exited with code %d.", code)
-		}
-		return o, ""
-
+		return m.doCommand(ctx, env, s, sr)
 	case "http":
-		h := s.HTTP
-		api := man.API(h.API)
-		path, err := plugins.RenderTemplate(h.Path, val, url.PathEscape)
-		if err != nil {
-			return nil, err.Error()
-		}
-		query, err := plugins.RenderTemplate(h.Query, val, url.QueryEscape)
-		if err != nil {
-			return nil, err.Error()
-		}
-		esc := func(v string) string { return v }
-		if h.JSON {
-			esc = func(v string) string { b, _ := json.Marshal(v); return string(b[1 : len(b)-1]) }
-		}
-		body, err := plugins.RenderTemplate(h.Body, val, esc)
-		if err != nil {
-			return nil, err.Error()
-		}
-		var hdr map[string]string
-		if len(h.Headers) > 0 {
-			hdr = map[string]string{}
-			for k, v := range h.Headers {
-				if hdr[k], err = plugins.RenderTemplate(v, val, nil); err != nil {
-					return nil, err.Error()
-				}
-			}
-		}
-		admin := api.Admin && !root && !(api.AdminUnlessGroup != "" && groups[api.AdminUnlessGroup])
-		sr.Admin = admin
-		logged := h.Method != "GET" && h.Method != "HEAD"
-		target := audit.HTTPTarget(h.Method, path, query)
-		r, err := ex.HTTP(ctx, admin, plugins.HTTPParams{Plugin: in.Plugin, Name: h.API, Method: h.Method, Path: path, Query: query, Headers: hdr, Body: body, JSON: h.JSON})
-		if err != nil {
-			if logged {
-				m.auditStep(in, tr, "http", h.API, target, admin, nil, false, errText(err))
-			}
-			return nil, errText(err)
-		}
-		if logged {
-			st := r.Status
-			m.auditStep(in, tr, "http", h.API, target, admin, &st, st < 400, "")
-		}
-		text := r.Body
-		if r.B64 {
-			if b, err := base64.StdEncoding.DecodeString(r.Body); err == nil {
-				text = string(b)
-			}
-		}
-		sr.HTTPStatus, sr.Stdout = r.Status, strings.ToValidUTF8(text, "?")
-		o := &outcome{ok: r.Status >= 200 && r.Status < 300, output: strings.TrimSpace(text), status: strconv.Itoa(r.Status), body: clip(strings.TrimSpace(text), 4096)}
-		if !o.ok {
-			return o, fmt.Sprintf("The server answered %d.", r.Status)
-		}
-		return o, ""
-
+		return m.doHTTP(ctx, env, s, sr)
 	case "notify":
-		n := s.Notify
-		// The source names the job and its owner: whoever reads the
-		// notification sees which instance, run as whom, sent it.
-		msg := notify.Message{Level: n.Level, Source: fmt.Sprintf("%s job %s (%s)", man.Name, jobLabel(in), in.Owner)}
-		var err error
-		if msg.Title, err = plugins.RenderTemplate(n.Title, val, nil); err == nil {
-			if msg.Body, err = plugins.RenderTemplate(n.Body, val, nil); err == nil {
-				msg.Link, err = plugins.RenderTemplate(n.Link, val, nil)
-			}
-		}
-		if err != nil {
-			return nil, err.Error()
-		}
-		if !notify.ValidLink(msg.Link) {
-			msg.Link = ""
-		}
-		if m.env.Notify == nil {
-			return nil, "Notifications are not available."
-		}
-		if err := m.env.Notify(ctx, in.Plugin, in.ID, msg); err != nil {
-			return nil, errText(err)
-		}
-		sr.Stdout = msg.Title
-		return nil, ""
+		return m.doNotify(ctx, env, s, sr)
 	}
 	return nil, "unknown step"
+}
+
+func (m *Manager) doCommand(ctx context.Context, env *stepEnv, s *plugins.JobStep, sr *StepRun) (*outcome, string) {
+	in := env.in
+	args := make([]string, len(s.Args))
+	for i, a := range s.Args {
+		v, err := plugins.RenderTemplate(a, env.val, nil)
+		if err != nil {
+			return nil, err.Error()
+		}
+		args[i] = v
+	}
+	cmd := env.man.Command(s.Command)
+	admin := !env.root && runsAsRoot(cmd.Admin, cmd.AdminUnlessGroup, env.groups)
+	sr.Admin = admin
+	target := audit.CommandTarget(s.Command, args)
+	r, err := env.ex.Exec(ctx, admin, plugins.ExecParams{Plugin: in.Plugin, Command: s.Command, Args: args, TimeoutSec: s.TimeoutSec})
+	if err != nil {
+		m.auditStep(in, env.tr, "command", "", target, admin, nil, false, errText(err))
+		return nil, errText(err)
+	}
+	code := r.ExitCode
+	m.auditStep(in, env.tr, "command", "", target, admin, &code, code == 0, "")
+	sr.ExitCode, sr.Stdout, sr.Stderr = &code, r.Stdout, r.Stderr
+	o := &outcome{ok: code == 0, output: strings.TrimSpace(r.Stdout), stdout: clip(strings.TrimSpace(r.Stdout), 4096), stderr: clip(strings.TrimSpace(r.Stderr), 4096), exit: strconv.Itoa(code)}
+	if code != 0 {
+		return o, fmt.Sprintf("The command exited with code %d.", code)
+	}
+	return o, ""
+}
+
+// httpRequest is an HTTP step with its placeholders filled in.
+type httpRequest struct {
+	path, query, body string
+	headers           map[string]string
+}
+
+func renderHTTP(h *plugins.JobHTTP, val func(plugins.Ref) (string, error)) (httpRequest, error) {
+	var req httpRequest
+	var err error
+	if req.path, err = plugins.RenderTemplate(h.Path, val, url.PathEscape); err != nil {
+		return req, err
+	}
+	if req.query, err = plugins.RenderTemplate(h.Query, val, url.QueryEscape); err != nil {
+		return req, err
+	}
+	esc := func(v string) string { return v }
+	if h.JSON {
+		esc = func(v string) string { b, _ := json.Marshal(v); return string(b[1 : len(b)-1]) }
+	}
+	if req.body, err = plugins.RenderTemplate(h.Body, val, esc); err != nil {
+		return req, err
+	}
+	if len(h.Headers) > 0 {
+		req.headers = map[string]string{}
+		for k, v := range h.Headers {
+			if req.headers[k], err = plugins.RenderTemplate(v, val, nil); err != nil {
+				return req, err
+			}
+		}
+	}
+	return req, nil
+}
+
+func (m *Manager) doHTTP(ctx context.Context, env *stepEnv, s *plugins.JobStep, sr *StepRun) (*outcome, string) {
+	in, h := env.in, s.HTTP
+	api := env.man.API(h.API)
+	req, err := renderHTTP(h, env.val)
+	if err != nil {
+		return nil, err.Error()
+	}
+	admin := !env.root && runsAsRoot(api.Admin, api.AdminUnlessGroup, env.groups)
+	sr.Admin = admin
+	logged := h.Method != "GET" && h.Method != "HEAD"
+	target := audit.HTTPTarget(h.Method, req.path, req.query)
+	r, err := env.ex.HTTP(ctx, admin, plugins.HTTPParams{Plugin: in.Plugin, Name: h.API, Method: h.Method, Path: req.path, Query: req.query, Headers: req.headers, Body: req.body, JSON: h.JSON})
+	if err != nil {
+		if logged {
+			m.auditStep(in, env.tr, "http", h.API, target, admin, nil, false, errText(err))
+		}
+		return nil, errText(err)
+	}
+	if logged {
+		st := r.Status
+		m.auditStep(in, env.tr, "http", h.API, target, admin, &st, st < 400, "")
+	}
+	text := r.Body
+	if r.B64 {
+		if b, err := base64.StdEncoding.DecodeString(r.Body); err == nil {
+			text = string(b)
+		}
+	}
+	sr.HTTPStatus, sr.Stdout = r.Status, strings.ToValidUTF8(text, "?")
+	o := &outcome{ok: r.Status >= 200 && r.Status < 300, output: strings.TrimSpace(text), status: strconv.Itoa(r.Status), body: clip(strings.TrimSpace(text), 4096)}
+	if !o.ok {
+		return o, fmt.Sprintf("The server answered %d.", r.Status)
+	}
+	return o, ""
+}
+
+func (m *Manager) doNotify(ctx context.Context, env *stepEnv, s *plugins.JobStep, sr *StepRun) (*outcome, string) {
+	in, n := env.in, s.Notify
+	// The source names the job and its owner: whoever reads the
+	// notification sees which instance, run as whom, sent it.
+	msg := notify.Message{Level: n.Level, Source: fmt.Sprintf("%s job %s (%s)", env.man.Name, jobLabel(in), in.Owner)}
+	var err error
+	if msg.Title, err = plugins.RenderTemplate(n.Title, env.val, nil); err == nil {
+		if msg.Body, err = plugins.RenderTemplate(n.Body, env.val, nil); err == nil {
+			msg.Link, err = plugins.RenderTemplate(n.Link, env.val, nil)
+		}
+	}
+	if err != nil {
+		return nil, err.Error()
+	}
+	if !notify.ValidLink(msg.Link) {
+		msg.Link = ""
+	}
+	if m.env.Notify == nil {
+		return nil, "Notifications are not available."
+	}
+	if err := m.env.Notify(ctx, in.Plugin, in.ID, msg); err != nil {
+		return nil, errText(err)
+	}
+	sr.Stdout = msg.Title
+	return nil, ""
 }
 
 func clip(s string, n int) string {

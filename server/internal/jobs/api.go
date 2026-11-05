@@ -77,18 +77,20 @@ type AdminStep struct {
 	HTTP string `json:"http,omitempty"`
 }
 
+// runsAsRoot tells whether a command or API marked admin runs as root for
+// an owner with these groups.
+func runsAsRoot(admin bool, unlessGroup string, groups map[string]bool) bool {
+	return admin && !(unlessGroup != "" && groups[unlessGroup])
+}
+
 // adminSteps lists the steps of job that run as root for an owner with
 // these groups, with the instance's param values filled in.
 func adminSteps(man *plugins.Manifest, job *plugins.JobDef, params map[string]string, groups map[string]bool) []AdminStep {
 	val := func(r plugins.Ref) (string, error) {
-		switch r.Kind {
-		case "param":
-			return params[r.Name], nil
-		case "job":
-			return job.Name, nil
-		case "plugin":
-			return man.Name, nil
-		case "step":
+		if v, ok := commonRef(r, params, job.Name, man.Name); ok {
+			return v, nil
+		}
+		if r.Kind == "step" {
 			if r.Field != "" {
 				return "{step." + r.Name + "." + r.Field + "}", nil
 			}
@@ -108,27 +110,39 @@ func adminSteps(man *plugins.Manifest, job *plugins.JobDef, params map[string]st
 		s := &job.Steps[i]
 		switch {
 		case s.Command != "":
-			c := man.Command(s.Command)
-			if c == nil || !c.Admin || (c.AdminUnlessGroup != "" && groups[c.AdminUnlessGroup]) {
-				continue
+			if step, ok := adminCommandStep(man, s, groups, render); ok {
+				out = append(out, step)
 			}
-			argv := make([]string, len(c.Argv))
-			for j, a := range c.Argv {
-				for k := range s.Args {
-					a = strings.ReplaceAll(a, "{"+strconv.Itoa(k)+"}", render(s.Args[k]))
-				}
-				argv[j] = a
-			}
-			out = append(out, AdminStep{ID: s.ID, Kind: "command", Command: s.Command, Argv: argv})
 		case s.HTTP != nil:
-			a := man.API(s.HTTP.API)
-			if a == nil || !a.Admin || (a.AdminUnlessGroup != "" && groups[a.AdminUnlessGroup]) {
-				continue
+			if step, ok := adminHTTPStep(man, s, groups, render); ok {
+				out = append(out, step)
 			}
-			out = append(out, AdminStep{ID: s.ID, Kind: "http", HTTP: s.HTTP.Method + " " + s.HTTP.API + " " + render(s.HTTP.Path)})
 		}
 	}
 	return out
+}
+
+func adminCommandStep(man *plugins.Manifest, s *plugins.JobStep, groups map[string]bool, render func(string) string) (AdminStep, bool) {
+	c := man.Command(s.Command)
+	if c == nil || !runsAsRoot(c.Admin, c.AdminUnlessGroup, groups) {
+		return AdminStep{}, false
+	}
+	argv := make([]string, len(c.Argv))
+	for j, a := range c.Argv {
+		for k := range s.Args {
+			a = strings.ReplaceAll(a, "{"+strconv.Itoa(k)+"}", render(s.Args[k]))
+		}
+		argv[j] = a
+	}
+	return AdminStep{ID: s.ID, Kind: "command", Command: s.Command, Argv: argv}, true
+}
+
+func adminHTTPStep(man *plugins.Manifest, s *plugins.JobStep, groups map[string]bool, render func(string) string) (AdminStep, bool) {
+	a := man.API(s.HTTP.API)
+	if a == nil || !runsAsRoot(a.Admin, a.AdminUnlessGroup, groups) {
+		return AdminStep{}, false
+	}
+	return AdminStep{ID: s.ID, Kind: "http", HTTP: s.HTTP.Method + " " + s.HTTP.API + " " + render(s.HTTP.Path)}, true
 }
 
 // WebhookView is a webhook without its token hash.
@@ -165,19 +179,7 @@ func (m *Manager) view(in *Instance) InstanceView {
 	}
 	if man, err := m.env.Manifest(in.Plugin); err == nil {
 		if job := man.Job(in.Job); job != nil {
-			if a, err := m.env.Account(in.Owner); err == nil && a != nil {
-				g := groupSet(a)
-				v.NeedsAdmin = man.JobNeedsAdmin(job, a.IsRoot(), g)
-				if v.NeedsAdmin {
-					v.AdminSteps = adminSteps(man, job, in.Params, g)
-				}
-			} else {
-				v.NeedsAdmin = in.Approval != nil
-			}
-			if in.Approval != nil {
-				v.Approval = &ApprovalView{By: in.Approval.By, At: in.Approval.At, Valid: in.Approval.Sig == approvalSig(man, job, in.Params)}
-			}
-			v.AwaitingApproval = v.NeedsAdmin && (v.Approval == nil || !v.Approval.Valid)
+			m.viewAdmin(&v, in, man, job)
 		}
 	} else if in.Approval != nil {
 		v.NeedsAdmin = true
@@ -196,6 +198,23 @@ func (m *Manager) view(in *Instance) InstanceView {
 		v.Last = summary(&runs[n-1])
 	}
 	return v
+}
+
+// viewAdmin fills the administrator-rights and approval fields of v.
+func (m *Manager) viewAdmin(v *InstanceView, in *Instance, man *plugins.Manifest, job *plugins.JobDef) {
+	if a, err := m.env.Account(in.Owner); err == nil && a != nil {
+		g := groupSet(a)
+		v.NeedsAdmin = man.JobNeedsAdmin(job, a.IsRoot(), g)
+		if v.NeedsAdmin {
+			v.AdminSteps = adminSteps(man, job, in.Params, g)
+		}
+	} else {
+		v.NeedsAdmin = in.Approval != nil
+	}
+	if in.Approval != nil {
+		v.Approval = &ApprovalView{By: in.Approval.By, At: in.Approval.At, Valid: in.Approval.Sig == approvalSig(man, job, in.Params)}
+	}
+	v.AwaitingApproval = v.NeedsAdmin && (v.Approval == nil || !v.Approval.Valid)
 }
 
 func (m *Manager) readRunsLocked(id string) []Run {
@@ -264,23 +283,9 @@ func (m *Manager) Approve(c Caller, id string) (*InstanceView, error) {
 	if err != nil {
 		return nil, err
 	}
-	man, err := m.env.Manifest(cur.Plugin)
+	man, job, err := m.approvable(cur)
 	if err != nil {
 		return nil, err
-	}
-	job := man.Job(cur.Job)
-	if job == nil {
-		return nil, rpc.Errorf(rpc.Unavailable, "%s no longer declares the job %s.", man.Name, cur.Job)
-	}
-	a, err := m.env.Account(cur.Owner)
-	if err != nil || a == nil || a.UID != cur.OwnerUID {
-		return nil, rpc.Errorf(rpc.Invalid, "The account %s no longer exists.", cur.Owner)
-	}
-	if !man.JobNeedsAdmin(job, a.IsRoot(), groupSet(a)) {
-		return nil, rpc.Errorf(rpc.Invalid, "This job does not run anything with administrator rights; it needs no approval.")
-	}
-	if !a.CanSudo() {
-		return nil, rpc.Errorf(rpc.Invalid, "%s cannot administer this machine, so the job cannot run its administrator steps as %s.", cur.Owner, cur.Owner)
 	}
 	m.mu.Lock()
 	stored := m.findLocked(id)
@@ -301,6 +306,29 @@ func (m *Manager) Approve(c Caller, id string) (*InstanceView, error) {
 	return &v, nil
 }
 
+// approvable finds the manifest and job of an instance that has steps to
+// approve, and checks its owner can still run them.
+func (m *Manager) approvable(cur *Instance) (*plugins.Manifest, *plugins.JobDef, error) {
+	man, err := m.env.Manifest(cur.Plugin)
+	if err != nil {
+		return nil, nil, err
+	}
+	job := man.Job(cur.Job)
+	if job == nil {
+		return nil, nil, rpc.Errorf(rpc.Unavailable, "%s no longer declares the job %s.", man.Name, cur.Job)
+	}
+	a, err := m.env.Account(cur.Owner)
+	if err != nil || a == nil || a.UID != cur.OwnerUID {
+		return nil, nil, rpc.Errorf(rpc.Invalid, "The account %s no longer exists.", cur.Owner)
+	}
+	if !man.JobNeedsAdmin(job, a.IsRoot(), groupSet(a)) {
+		return nil, nil, rpc.Errorf(rpc.Invalid, "This job does not run anything with administrator rights; it needs no approval.")
+	}
+	if !a.CanSudo() {
+		return nil, nil, rpc.Errorf(rpc.Invalid, "%s cannot administer this machine, so the job cannot run its administrator steps as %s.", cur.Owner, cur.Owner)
+	}
+	return man, job, nil
+}
 func validLabel(s string, max int) (string, error) {
 	s = strings.TrimSpace(s)
 	if len(s) > max || strings.ContainsAny(s, "\r\n\x00") {
@@ -311,19 +339,9 @@ func validLabel(s string, max int) (string, error) {
 
 // Create makes a job instance owned by the caller.
 func (m *Manager) Create(c Caller, req CreateReq) (*InstanceView, error) {
-	man, err := m.env.Manifest(req.Plugin)
+	man, job, err := m.creatable(c, req)
 	if err != nil {
 		return nil, err
-	}
-	if !man.CanBeUsedBy(c.Groups, c.CanSudo) {
-		return nil, rpc.Errorf(rpc.Forbidden, "%s is not available to your account.", man.Name)
-	}
-	job := man.Job(req.Job)
-	if job == nil {
-		return nil, rpc.Errorf(rpc.NotFound, "%s does not declare a job %q.", man.Name, req.Job)
-	}
-	if req.RunAs != "" && req.RunAs != c.Name {
-		return nil, rpc.Errorf(rpc.Forbidden, "A job runs as the user who creates it. Leave runAs out, or use your own user name.")
 	}
 	name, err := validLabel(req.Name, 60)
 	if err != nil {
@@ -346,19 +364,9 @@ func (m *Manager) Create(c Caller, req CreateReq) (*InstanceView, error) {
 		return nil, err
 	}
 	m.mu.Lock()
-	if len(m.list) >= MaxInstances {
+	if err := m.limitsLocked(req.Plugin, man.Name); err != nil {
 		m.mu.Unlock()
-		return nil, rpc.Errorf(rpc.Unavailable, "This server already has %d job instances. Delete some first.", MaxInstances)
-	}
-	n := 0
-	for _, o := range m.list {
-		if o.Plugin == req.Plugin {
-			n++
-		}
-	}
-	if n >= MaxPerPlugin {
-		m.mu.Unlock()
-		return nil, rpc.Errorf(rpc.Unavailable, "%s already has %d job instances. Delete some first.", man.Name, MaxPerPlugin)
+		return nil, err
 	}
 	m.list = append(m.list, in)
 	lv := &live{}
@@ -371,6 +379,44 @@ func (m *Manager) Create(c Caller, req CreateReq) (*InstanceView, error) {
 	}
 	v := m.view(in)
 	return &v, nil
+}
+
+// creatable finds the plugin and job a Create names and checks the caller
+// may use them.
+func (m *Manager) creatable(c Caller, req CreateReq) (*plugins.Manifest, *plugins.JobDef, error) {
+	man, err := m.env.Manifest(req.Plugin)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !man.CanBeUsedBy(c.Groups, c.CanSudo) {
+		return nil, nil, rpc.Errorf(rpc.Forbidden, "%s is not available to your account.", man.Name)
+	}
+	job := man.Job(req.Job)
+	if job == nil {
+		return nil, nil, rpc.Errorf(rpc.NotFound, "%s does not declare a job %q.", man.Name, req.Job)
+	}
+	if req.RunAs != "" && req.RunAs != c.Name {
+		return nil, nil, rpc.Errorf(rpc.Forbidden, "A job runs as the user who creates it. Leave runAs out, or use your own user name.")
+	}
+	return man, job, nil
+}
+
+// limitsLocked checks the server and the plugin have room for one more
+// instance; the caller holds m.mu.
+func (m *Manager) limitsLocked(plugin, pluginName string) error {
+	if len(m.list) >= MaxInstances {
+		return rpc.Errorf(rpc.Unavailable, "This server already has %d job instances. Delete some first.", MaxInstances)
+	}
+	n := 0
+	for _, o := range m.list {
+		if o.Plugin == plugin {
+			n++
+		}
+	}
+	if n >= MaxPerPlugin {
+		return rpc.Errorf(rpc.Unavailable, "%s already has %d job instances. Delete some first.", pluginName, MaxPerPlugin)
+	}
+	return nil
 }
 
 // List returns the instances the caller may see: their own, or every one
@@ -462,23 +508,9 @@ func (m *Manager) Update(c Caller, req UpdateReq) (*InstanceView, error) {
 		}
 	}
 	if req.Params != nil {
-		if job == nil {
-			return nil, rpc.Errorf(rpc.Unavailable, "The plugin no longer declares this job.")
-		}
-		params, perr := job.ResolveParams(*req.Params)
-		if perr != nil {
-			return nil, rpc.Errorf(rpc.Invalid, "%v", perr)
-		}
-		// New values of a job that runs steps as root need a new approval:
-		// the approval covers the values (approvalSig).
-		needs, err := m.checkOwnerMayAdmin(c, man, job, &in)
-		if err != nil {
+		if err := m.updateParams(c, man, job, &in, *req.Params); err != nil {
 			return nil, err
 		}
-		if needs && !mapsEqual(params, in.Params) {
-			in.Approval = nil
-		}
-		in.Params = params
 	}
 	if req.Schedule.Set {
 		if in.Schedule, err = req.Schedule.Value.Validate(); err != nil {
@@ -491,6 +523,39 @@ func (m *Manager) Update(c Caller, req UpdateReq) (*InstanceView, error) {
 			return nil, rpc.Errorf(rpc.Invalid, "This job instance cannot be switched on: %s", reason)
 		}
 	}
+	cp, err := m.storeUpdate(&in, req.Enabled)
+	if err != nil {
+		return nil, err
+	}
+	v := m.view(cp)
+	return &v, nil
+}
+
+// updateParams sets new param values on in. New values of a job that runs
+// steps as root need a new approval: the approval covers the values
+// (approvalSig).
+func (m *Manager) updateParams(c Caller, man *plugins.Manifest, job *plugins.JobDef, in *Instance, given map[string]string) error {
+	if job == nil {
+		return rpc.Errorf(rpc.Unavailable, "The plugin no longer declares this job.")
+	}
+	params, perr := job.ResolveParams(given)
+	if perr != nil {
+		return rpc.Errorf(rpc.Invalid, "%v", perr)
+	}
+	needs, err := m.checkOwnerMayAdmin(c, man, job, in)
+	if err != nil {
+		return err
+	}
+	if needs && !mapsEqual(params, in.Params) {
+		in.Approval = nil
+	}
+	in.Params = params
+	return nil
+}
+
+// storeUpdate copies the changed fields of in onto the stored instance,
+// saves, and returns a copy of the result.
+func (m *Manager) storeUpdate(in *Instance, enabled *bool) (*Instance, error) {
 	m.mu.Lock()
 	stored := m.findLocked(in.ID)
 	if stored == nil {
@@ -498,22 +563,21 @@ func (m *Manager) Update(c Caller, req UpdateReq) (*InstanceView, error) {
 		return nil, notFound()
 	}
 	stored.Name, stored.Params, stored.Schedule, stored.Approval = in.Name, in.Params, in.Schedule, in.Approval
-	if req.Enabled != nil {
-		stored.Enabled = *req.Enabled
+	if enabled != nil {
+		stored.Enabled = *enabled
 		if stored.Enabled {
 			stored.DisabledReason = ""
 		}
 	}
 	stored.Updated = m.env.Now().UnixMilli()
 	m.reschedule(stored, m.live[stored.ID], m.env.Now())
-	err = m.saveLocked()
+	err := m.saveLocked()
 	cp := *stored
 	m.mu.Unlock()
 	if err != nil {
 		return nil, rpc.Errorf(rpc.Internal, "Could not save the job instance: %v", err)
 	}
-	v := m.view(&cp)
-	return &v, nil
+	return &cp, nil
 }
 
 // Delete removes an instance and its runs, cancelling a run in progress.
