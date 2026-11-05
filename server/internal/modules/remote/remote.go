@@ -318,43 +318,51 @@ func (m *module) hMkdir(ctx context.Context, c *rpc.Call) (any, error) {
 	}
 	err = m.run(ctx, p.Conn, func(h *handle) error {
 		if !p.Parents {
-			if ok, err := exists(ctx, h, pth); err != nil {
-				return err
-			} else if ok {
-				return rpc.Errorf(rpc.Conflict, "%s already exists.", path.Base(pth))
-			}
-			return h.Mkdir(ctx, pth)
+			return mkdirOne(ctx, h, pth)
 		}
-		// Make every missing parent; an existing folder is a conflict only
-		// at the end (like mkdir -p reports nothing, files.mkdir does).
-		var todo []string
-		for d := pth; d != "/"; d = path.Dir(d) {
-			e, err := h.Stat(ctx, d)
-			if err == nil {
-				if !isDirLike(e) {
-					return rpc.Errorf(rpc.Invalid, "%s is not a folder.", d)
-				}
-				if d == pth {
-					return rpc.Errorf(rpc.Conflict, "%s already exists.", path.Base(pth))
-				}
-				break
-			}
-			if !errors.Is(err, fs.ErrNotExist) {
-				return err
-			}
-			todo = append(todo, d)
-		}
-		for i := len(todo) - 1; i >= 0; i-- {
-			if err := h.Mkdir(ctx, todo[i]); err != nil {
-				return err
-			}
-		}
-		return nil
+		return mkdirParents(ctx, h, pth)
 	})
 	if err != nil {
 		return nil, err
 	}
 	return map[string]string{"path": pth}, nil
+}
+
+func mkdirOne(ctx context.Context, h *handle, pth string) error {
+	if ok, err := exists(ctx, h, pth); err != nil {
+		return err
+	} else if ok {
+		return rpc.Errorf(rpc.Conflict, "%s already exists.", path.Base(pth))
+	}
+	return h.Mkdir(ctx, pth)
+}
+
+// mkdirParents makes every missing parent; an existing folder is a conflict
+// only at the end (like mkdir -p reports nothing, files.mkdir does).
+func mkdirParents(ctx context.Context, h *handle, pth string) error {
+	var todo []string
+	for d := pth; d != "/"; d = path.Dir(d) {
+		e, err := h.Stat(ctx, d)
+		if err == nil {
+			if !isDirLike(e) {
+				return rpc.Errorf(rpc.Invalid, "%s is not a folder.", d)
+			}
+			if d == pth {
+				return rpc.Errorf(rpc.Conflict, "%s already exists.", path.Base(pth))
+			}
+			break
+		}
+		if !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+		todo = append(todo, d)
+	}
+	for i := len(todo) - 1; i >= 0; i-- {
+		if err := h.Mkdir(ctx, todo[i]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (m *module) hCreate(ctx context.Context, c *rpc.Call) (any, error) {
@@ -385,38 +393,48 @@ func (m *module) hRename(ctx context.Context, c *rpc.Call) (any, error) {
 	if err := c.Bind(&p); err != nil {
 		return nil, err
 	}
-	from, err := cleanRemote(p.From)
+	from, to, err := cleanRenamePaths(p.From, p.To)
 	if err != nil {
-		return nil, err
-	}
-	to, err := cleanRemote(p.To)
-	if err != nil {
-		return nil, err
-	}
-	if from == "/" || to == "/" {
-		return nil, rpc.Errorf(rpc.Invalid, "The top folder cannot be renamed.")
-	}
-	if err := validName(path.Base(to)); err != nil {
 		return nil, err
 	}
 	if from == to {
 		return map[string]string{"path": to}, nil
 	}
-	if strings.HasPrefix(to, from+"/") {
-		return nil, rpc.Errorf(rpc.Invalid, "A folder cannot be moved into itself.")
-	}
 	err = m.run(ctx, p.Conn, func(h *handle) error {
-		if ok, err := exists(ctx, h, to); err != nil {
-			return err
-		} else if ok && !strings.EqualFold(from, to) {
-			return rpc.Errorf(rpc.Conflict, "%s already exists. Choose another name.", path.Base(to))
-		}
-		return h.Rename(ctx, from, to)
+		return renameChecked(ctx, h, from, to)
 	})
 	if err != nil {
 		return nil, err
 	}
 	return map[string]string{"path": to}, nil
+}
+
+func cleanRenamePaths(rawFrom, rawTo string) (from, to string, err error) {
+	if from, err = cleanRemote(rawFrom); err != nil {
+		return "", "", err
+	}
+	if to, err = cleanRemote(rawTo); err != nil {
+		return "", "", err
+	}
+	if from == "/" || to == "/" {
+		return "", "", rpc.Errorf(rpc.Invalid, "The top folder cannot be renamed.")
+	}
+	if err := validName(path.Base(to)); err != nil {
+		return "", "", err
+	}
+	if from != to && strings.HasPrefix(to, from+"/") {
+		return "", "", rpc.Errorf(rpc.Invalid, "A folder cannot be moved into itself.")
+	}
+	return from, to, nil
+}
+
+func renameChecked(ctx context.Context, h *handle, from, to string) error {
+	if ok, err := exists(ctx, h, to); err != nil {
+		return err
+	} else if ok && !strings.EqualFold(from, to) {
+		return rpc.Errorf(rpc.Conflict, "%s already exists. Choose another name.", path.Base(to))
+	}
+	return h.Rename(ctx, from, to)
 }
 
 func (m *module) hRemove(ctx context.Context, c *rpc.Call) (any, error) {
@@ -478,43 +496,52 @@ func (m *module) hReadText(ctx context.Context, c *rpc.Call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	max := p.MaxBytes
-	if max <= 0 {
-		max = 1 << 20
-	}
-	if max > files.MaxReadText {
-		max = files.MaxReadText
-	}
+	max := clampReadMax(p.MaxBytes)
 	var out map[string]any
 	err = m.run(ctx, p.Conn, func(h *handle) error {
-		e, err := h.Stat(ctx, pth)
-		if err != nil {
-			return err
-		}
-		if !isFileLike(e) {
-			return rpc.Errorf(rpc.Invalid, "Only regular files can be opened as text.")
-		}
-		r, err := h.Open(ctx, pth)
-		if err != nil {
-			return err
-		}
-		buf, err := io.ReadAll(io.LimitReader(r, max+1))
-		r.Close()
-		if err != nil {
-			return err
-		}
-		truncated := int64(len(buf)) > max
-		if truncated {
-			buf = buf[:max]
-		}
-		content, enc, err := files.DecodeText(buf, truncated)
-		if err != nil {
-			return err
-		}
-		out = map[string]any{"path": pth, "content": content, "encoding": enc, "size": e.Size, "mtime": e.MTime, "truncated": truncated}
-		return nil
+		var err error
+		out, err = readTextFile(ctx, h, pth, max)
+		return err
 	})
 	return out, err
+}
+
+func clampReadMax(n int64) int64 {
+	if n <= 0 {
+		n = 1 << 20
+	}
+	if n > files.MaxReadText {
+		n = files.MaxReadText
+	}
+	return n
+}
+
+func readTextFile(ctx context.Context, h *handle, pth string, max int64) (map[string]any, error) {
+	e, err := h.Stat(ctx, pth)
+	if err != nil {
+		return nil, err
+	}
+	if !isFileLike(e) {
+		return nil, rpc.Errorf(rpc.Invalid, "Only regular files can be opened as text.")
+	}
+	r, err := h.Open(ctx, pth)
+	if err != nil {
+		return nil, err
+	}
+	buf, err := io.ReadAll(io.LimitReader(r, max+1))
+	r.Close()
+	if err != nil {
+		return nil, err
+	}
+	truncated := int64(len(buf)) > max
+	if truncated {
+		buf = buf[:max]
+	}
+	content, enc, err := files.DecodeText(buf, truncated)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"path": pth, "content": content, "encoding": enc, "size": e.Size, "mtime": e.MTime, "truncated": truncated}, nil
 }
 
 func (m *module) hWriteText(ctx context.Context, c *rpc.Call) (any, error) {
@@ -540,26 +567,31 @@ func (m *module) hWriteText(ctx context.Context, c *rpc.Call) (any, error) {
 	}
 	var out map[string]any
 	err = m.run(ctx, p.Conn, func(h *handle) error {
-		e, err := h.Stat(ctx, pth)
-		switch {
-		case err == nil:
-			if p.ExpectedMtime != 0 && e.MTime != p.ExpectedMtime {
-				return rpc.Errorf(rpc.Conflict, "The file changed on the server since it was opened.")
-			}
-		case !errors.Is(err, fs.ErrNotExist):
-			return err
-		}
-		if _, err := writeFile(ctx, h, posixOps, pth, strings.NewReader(string(data)), int64(len(data)), true, nil); err != nil {
-			return err
-		}
-		ne, err := h.Stat(ctx, pth)
-		if err != nil {
-			return err
-		}
-		out = map[string]any{"path": pth, "size": ne.Size, "mtime": ne.MTime}
-		return nil
+		var err error
+		out, err = writeTextFile(ctx, h, pth, data, p.ExpectedMtime)
+		return err
 	})
 	return out, err
+}
+
+func writeTextFile(ctx context.Context, h *handle, pth string, data []byte, expectedMtime int64) (map[string]any, error) {
+	e, err := h.Stat(ctx, pth)
+	switch {
+	case err == nil:
+		if expectedMtime != 0 && e.MTime != expectedMtime {
+			return nil, rpc.Errorf(rpc.Conflict, "The file changed on the server since it was opened.")
+		}
+	case !errors.Is(err, fs.ErrNotExist):
+		return nil, err
+	}
+	if _, err := writeFile(ctx, h, posixOps, pth, strings.NewReader(string(data)), int64(len(data)), true, nil); err != nil {
+		return nil, err
+	}
+	ne, err := h.Stat(ctx, pth)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"path": pth, "size": ne.Size, "mtime": ne.MTime}, nil
 }
 
 /* ---------- streams (docs/api/files-transfer.md) ---------- */
@@ -601,8 +633,8 @@ func readStream(ctx context.Context, h *handle, pth string, s rpc.Stream) error 
 	}
 	defer r.Close()
 	buf := make([]byte, 64<<10)
-	n, rerr := io.ReadFull(r, buf)
-	if rerr != nil && rerr != io.EOF && rerr != io.ErrUnexpectedEOF {
+	n, rerr := readChunk(r, buf)
+	if rerr != nil && rerr != io.EOF {
 		return rerr
 	}
 	mt := mimeOf(e.Name)
@@ -612,29 +644,46 @@ func readStream(ctx context.Context, h *handle, pth string, s rpc.Stream) error 
 	if err := s.Send(map[string]any{"name": e.Name, "size": e.Size, "mime": mt}); err != nil {
 		return err
 	}
-	var sent int64
-	for {
-		if n > 0 {
-			if err := s.SendBytes(buf[:n]); err != nil {
-				return err
-			}
-			sent += int64(n)
-		}
-		if rerr != nil {
-			break
-		}
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		n, rerr = io.ReadFull(r, buf)
-		if rerr != nil && rerr != io.EOF && rerr != io.ErrUnexpectedEOF {
-			return rerr
-		}
+	sent, err := sendChunks(ctx, r, s, buf, n, rerr)
+	if err != nil {
+		return err
 	}
 	if sent != e.Size {
 		return rpc.Errorf(rpc.Internal, "The file changed while it was being read (%d of %d bytes).", sent, e.Size)
 	}
 	return s.Send(map[string]bool{"done": true})
+}
+
+// readChunk fills buf; a short read is reported as io.EOF, a real error as is.
+func readChunk(r io.Reader, buf []byte) (int, error) {
+	n, err := io.ReadFull(r, buf)
+	if err == io.ErrUnexpectedEOF {
+		err = io.EOF
+	}
+	return n, err
+}
+
+// sendChunks streams the first n bytes of buf, then keeps reading until EOF.
+func sendChunks(ctx context.Context, r io.Reader, s rpc.Stream, buf []byte, n int, rerr error) (int64, error) {
+	var sent int64
+	for {
+		if n > 0 {
+			if err := s.SendBytes(buf[:n]); err != nil {
+				return sent, err
+			}
+			sent += int64(n)
+		}
+		if rerr != nil {
+			return sent, nil
+		}
+		if err := ctx.Err(); err != nil {
+			return sent, err
+		}
+		n, rerr = readChunk(r, buf)
+		if rerr != nil && rerr != io.EOF {
+			return sent, rerr
+		}
+	}
 }
 
 // statFollow describes what a symlink points to (one level, via its parent

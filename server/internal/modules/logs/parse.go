@@ -141,44 +141,69 @@ func parseTime(line string, now time.Time, loc *time.Location) (t time.Time, res
 	if len(head) > 200 {
 		head = head[:200]
 	}
-	if m := reISO.FindStringSubmatchIndex(head); m != nil {
-		g := func(i int) string { return head[m[2*i]:m[2*i+1]] }
-		var ns int
-		if m[2*7] >= 0 {
-			f := g(7)
-			for len(f) < 9 {
-				f += "0"
-			}
-			ns = atoi(f)
-		}
-		var z string
-		if m[2*8] >= 0 {
-			z = g(8)
-		}
-		t = time.Date(atoi(g(1)), time.Month(atoi(g(2))), atoi(g(3)), atoi(g(4)), atoi(g(5)), atoi(g(6)), ns, zoneOf(z, loc))
-		return t, line[m[1]:], true
+	if t, rest, ok := parseISOTime(head, line, loc); ok {
+		return t, rest, true
 	}
-	if m := reSyslog.FindStringSubmatchIndex(head); m != nil {
-		g := func(i int) string { return head[m[2*i]:m[2*i+1]] }
-		mon, found := months[strings.ToLower(g(1))]
-		if found {
-			t = time.Date(now.Year(), mon, atoi(g(2)), atoi(g(3)), atoi(g(4)), atoi(g(5)), 0, loc)
-			if t.After(now.Add(24 * time.Hour)) {
-				t = t.AddDate(-1, 0, 0)
-			}
-			return t, line[m[1]:], true
-		}
+	if t, rest, ok := parseSyslogTime(head, line, now, loc); ok {
+		return t, rest, true
 	}
 	if strings.IndexByte(head, '[') >= 0 {
-		if m := reApache.FindStringSubmatch(head); m != nil {
-			mon, found := months[strings.ToLower(m[2])]
-			if found {
-				t = time.Date(atoi(m[3]), mon, atoi(m[1]), atoi(m[4]), atoi(m[5]), atoi(m[6]), 0, zoneOf(m[7], loc))
-				return t, line, true
-			}
+		if t, ok := parseApacheTime(head, loc); ok {
+			return t, line, true
 		}
 	}
 	return time.Time{}, line, false
+}
+
+func parseISOTime(head, line string, loc *time.Location) (time.Time, string, bool) {
+	m := reISO.FindStringSubmatchIndex(head)
+	if m == nil {
+		return time.Time{}, "", false
+	}
+	g := func(i int) string { return head[m[2*i]:m[2*i+1]] }
+	var ns int
+	if m[2*7] >= 0 {
+		f := g(7)
+		for len(f) < 9 {
+			f += "0"
+		}
+		ns = atoi(f)
+	}
+	var z string
+	if m[2*8] >= 0 {
+		z = g(8)
+	}
+	t := time.Date(atoi(g(1)), time.Month(atoi(g(2))), atoi(g(3)), atoi(g(4)), atoi(g(5)), atoi(g(6)), ns, zoneOf(z, loc))
+	return t, line[m[1]:], true
+}
+
+func parseSyslogTime(head, line string, now time.Time, loc *time.Location) (time.Time, string, bool) {
+	m := reSyslog.FindStringSubmatchIndex(head)
+	if m == nil {
+		return time.Time{}, "", false
+	}
+	g := func(i int) string { return head[m[2*i]:m[2*i+1]] }
+	mon, found := months[strings.ToLower(g(1))]
+	if !found {
+		return time.Time{}, "", false
+	}
+	t := time.Date(now.Year(), mon, atoi(g(2)), atoi(g(3)), atoi(g(4)), atoi(g(5)), 0, loc)
+	if t.After(now.Add(24 * time.Hour)) {
+		t = t.AddDate(-1, 0, 0)
+	}
+	return t, line[m[1]:], true
+}
+
+func parseApacheTime(head string, loc *time.Location) (time.Time, bool) {
+	m := reApache.FindStringSubmatch(head)
+	if m == nil {
+		return time.Time{}, false
+	}
+	mon, found := months[strings.ToLower(m[2])]
+	if !found {
+		return time.Time{}, false
+	}
+	return time.Date(atoi(m[3]), mon, atoi(m[1]), atoi(m[4]), atoi(m[5]), atoi(m[6]), 0, zoneOf(m[7], loc)), true
 }
 
 // ---------- JSON lines ----------
@@ -217,53 +242,53 @@ func parseJSONLine(line string, now time.Time, loc *time.Location) (msg, level s
 	}
 	ok = true
 	for _, k := range jsonTimeKeys {
-		v, has := m[k]
-		if !has {
-			continue
-		}
-		switch x := v.(type) {
-		case float64:
-			if tt, good := numberToTime(x); good {
-				t = tt
-			}
-		case string:
-			if tt, _, good := parseTime(x, now, loc); good {
-				t = tt
-			} else if tt, err := time.Parse(time.RFC3339Nano, x); err == nil {
-				t = tt
-			}
-		}
-		if !t.IsZero() {
+		if t = jsonTime(m[k], now, loc); !t.IsZero() {
 			break
 		}
 	}
 	for _, k := range jsonLevelKeys {
-		v, has := m[k]
-		if !has {
-			continue
-		}
-		switch x := v.(type) {
-		case string:
-			level = levelFromString(x)
-		case float64:
-			level = levelFromNumber(x)
-		}
-		if level != "" {
+		if level = jsonLevel(m[k]); level != "" {
 			break
 		}
 	}
 	for _, k := range jsonMsgKeys {
-		if v, has := m[k]; has {
-			if str, isStr := v.(string); isStr && str != "" {
-				msg = strings.TrimRight(str, "\n")
-				break
-			}
+		if str, isStr := m[k].(string); isStr && str != "" {
+			msg = strings.TrimRight(str, "\n")
+			break
 		}
 	}
 	if msg == "" {
 		msg = s
 	}
 	return
+}
+
+// jsonTime reads a timestamp field; the zero time means missing or unparsable.
+func jsonTime(v any, now time.Time, loc *time.Location) time.Time {
+	switch x := v.(type) {
+	case float64:
+		if t, good := numberToTime(x); good {
+			return t
+		}
+	case string:
+		if t, _, good := parseTime(x, now, loc); good {
+			return t
+		}
+		if t, err := time.Parse(time.RFC3339Nano, x); err == nil {
+			return t
+		}
+	}
+	return time.Time{}
+}
+
+func jsonLevel(v any) string {
+	switch x := v.(type) {
+	case string:
+		return levelFromString(x)
+	case float64:
+		return levelFromNumber(x)
+	}
+	return ""
 }
 
 // lineEntry builds an entry from one text line. hasTs reports whether a
