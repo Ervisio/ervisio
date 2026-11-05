@@ -342,8 +342,6 @@ func (s *Server) rootSpec(ra *account.Account) *bridge.Spec {
 	return sp
 }
 
-// ---- who is calling ----
-
 // isAdmin: the session has administrator rights now. Root always has them;
 // others after unlocking. A --dev-insecure-noauth daemon is not root and
 // has no sudo, so there its (insecure) sessions count as unlocked.
@@ -359,8 +357,6 @@ func (s *Server) jobCaller(sess *Session) jobs.Caller {
 	}
 	return jobs.Caller{Name: a.Name, UID: a.UID, Groups: g, Admin: s.isAdmin(sess), CanSudo: a.CanSudo(), IsRoot: a.IsRoot()}
 }
-
-// ---- RPC methods of the daemon ----
 
 type localHandler func(ctx context.Context, s *Server, sess *Session, params json.RawMessage) (any, error)
 
@@ -788,8 +784,6 @@ func (s *Server) handleLocalRPC(w http.ResponseWriter, r *http.Request, sess *Se
 	}{res})
 	return true
 }
-
-// ---- webhooks ----
 
 // handleHook serves POST /hooks/<plugin>/<token>: no session, no CSRF
 // header (CI systems and registries call it). Whatever goes wrong, the

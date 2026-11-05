@@ -96,6 +96,15 @@ func durationRange(min, max time.Duration) func(any) error {
 	}
 }
 
+func intRange(min, max int, msg string) func(any) error {
+	return func(v any) error {
+		if n := v.(int); n < min || n > max {
+			return errors.New(msg)
+		}
+		return nil
+	}
+}
+
 func noCheck(any) error { return nil }
 
 var keys = []Key{
@@ -108,12 +117,7 @@ var keys = []Key{
 		get: func(c *Config) any { return c.Login.ShowIP }, set: func(c *Config, v any) { c.Login.ShowIP = v.(bool) }, validate: noCheck},
 	{Name: "login.max_failures", Type: Int,
 		get: func(c *Config) any { return c.Login.MaxFailures }, set: func(c *Config, v any) { c.Login.MaxFailures = v.(int) },
-		validate: func(v any) error {
-			if n := v.(int); n < 1 || n > 1000 {
-				return errors.New("must be between 1 and 1000")
-			}
-			return nil
-		}},
+		validate: intRange(1, 1000, "must be between 1 and 1000")},
 	{Name: "auth.ssh_keys", Type: Bool,
 		get: func(c *Config) any { return c.Auth.SSHKeys }, set: func(c *Config, v any) { c.Auth.SSHKeys = v.(bool) }, validate: noCheck},
 	{Name: "auth.allow_users", Type: List,
@@ -160,12 +164,7 @@ var keys = []Key{
 		get: func(c *Config) any { return c.Audit.Enabled }, set: func(c *Config, v any) { c.Audit.Enabled = v.(bool) }, validate: noCheck},
 	{Name: "audit.retention_days", Type: Int,
 		get: func(c *Config) any { return c.Audit.RetentionDays }, set: func(c *Config, v any) { c.Audit.RetentionDays = v.(int) },
-		validate: func(v any) error {
-			if n := v.(int); n < 0 || n > 3650 {
-				return errors.New("must be between 0 (keep forever) and 3650 days")
-			}
-			return nil
-		}},
+		validate: intRange(0, 3650, "must be between 0 (keep forever) and 3650 days")},
 	{Name: "updates.channel", Type: Enum, Values: []string{"stable", "prerelease"},
 		get: func(c *Config) any { return c.Updates.Channel }, set: func(c *Config, v any) { c.Updates.Channel = v.(string) },
 		validate: func(v any) error {
@@ -209,7 +208,6 @@ var errClock = errors.New(`must be a time of day "HH:MM" (00:00 to 23:59)`)
 // Keys returns the description of every configuration key, in file order.
 func Keys() []Key { return keys }
 
-// Lookup finds a key by its dotted name.
 func Lookup(name string) (Key, bool) {
 	for _, k := range keys {
 		if k.Name == name {

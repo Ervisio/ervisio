@@ -177,8 +177,6 @@ func (m *Manager) RevokePairing(id string) (bool, error) { return m.st.removePai
 // NotePairUse records that a pairing was used.
 func (m *Manager) NotePairUse(id, via, addr string) { m.st.touchPairing(id, via, addr) }
 
-// ---- client side (A) ----
-
 func hostPort(base string) (scheme, host, hp string, err error) {
 	u, err := url.Parse(base)
 	if err != nil {
@@ -465,5 +463,4 @@ func (m *Manager) pairPing(ctx context.Context, e *Env) (string, error) {
 // credentials) in the last 15 minutes.
 func (m *Manager) AuthBlocked(addr string) bool { return m.tooManyFails(addr) }
 
-// NoteAuthFail counts a failed attempt from addr.
 func (m *Manager) NoteAuthFail(addr string) { m.noteFail(addr) }
