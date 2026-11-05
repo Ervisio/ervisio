@@ -7,7 +7,7 @@
   "network": "Rete",
   "gpu": "GPU",
   "hostCpu": "CPU totale del server",
-  "hostAggregate": "Tutte le interfacce del server",
+  "hostAggregate": "Totale rete del server",
   "hostTelemetry": "Hardware del server · dati in tempo reale",
   "waiting": "In attesa di un campione",
   "gpuUnavailable": "Dati GPU non disponibili",

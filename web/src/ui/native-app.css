@@ -167,6 +167,15 @@
 .eos-native-frame .ui-table th {
   font-weight: 500;
 }
+/* Long distro package versions must wrap within native window columns. */
+.eos-native-frame .sw-ur .sw-ver {
+  display: block;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.eos-native-frame .sw-ur .sw-ver b {
+  white-space: normal;
+}
 @container (max-width:760px) {
   .eos-native-sidebar {
     width: 150px;

@@ -7,7 +7,7 @@
   "network": "Network",
   "gpu": "GPU",
   "hostCpu": "Total host CPU",
-  "hostAggregate": "All host interfaces",
+  "hostAggregate": "Host network total",
   "hostTelemetry": "Server hardware · live telemetry",
   "waiting": "Waiting for a sample",
   "gpuUnavailable": "GPU telemetry unavailable",
