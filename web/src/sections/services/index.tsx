@@ -1,51 +1,38 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, call, stream, usePrefs, useSession } from '../../api';
-import { useI18n, useT } from '../../i18n';
+import { useT } from '../../i18n';
 import {
-  Badge,
   Button,
   Chip,
-  DropdownMenu,
-  EmptyState,
   Icon,
-  IconButton,
   Input,
   Page,
   Segmented,
-  Skeleton,
-  Switch,
-  Table,
   Tabs,
   useIsMobile,
   useMediaQuery,
-  type Column,
-  type MenuItem,
 } from '../../ui';
 import { useRailBadge } from '../index';
-import { bootMode, short, stateKey, stateTone } from './helpers';
+import { short } from './helpers';
 import { UnitPanel } from './UnitPanel';
 import { publishRunning, publishSummary } from './store';
-import type { Action, FailedUnit, PanelTab, Summary, Unit, UnitKind } from './types';
+import type { Action, FailedUnit, Summary, Unit, UnitKind } from './types';
 import { PURPOSES } from './types';
 import { useActions } from './useActions';
-import { formatBytes, relativeTime } from '../../lib/format';
+import { ServicesBody, type View } from './ServicesBody';
+import { isRunning, useServiceCells } from './useServiceCells';
+import { useServicesRoute, type Tab } from './useServicesRoute';
 import { usePolling, useRefreshInterval } from '../../lib/refresh';
 import './services.css';
 
-type Tab = 'all' | 'running' | 'failed' | 'stopped' | 'timers' | 'sockets';
-const TAB_IDS: Tab[] = ['all', 'running', 'failed', 'stopped', 'timers', 'sockets'];
 type Purpose = 'all' | (typeof PURPOSES)[number];
 const PURPOSE_HUE = { web: 'term', containers: 'plg', system: 'ov' } as const;
 type T = ReturnType<typeof useT>;
-type View = 'table' | 'cards';
 type CpuSample = { ns: number; at: number };
 type WatchEvent = { units: Unit[]; removed: string[] };
 
 const kindOf = (tab: Tab): UnitKind =>
   tab === 'timers' ? 'timer' : tab === 'sockets' ? 'socket' : 'service';
-const isRunning = (u: Unit) => u.state === 'running' || u.state === 'finished';
-const SOCKET_TYPE_SUFFIX = / \((Stream|Datagram|SequentialPacket|Netlink|Special|FIFO)\)$/;
 
 /** CPU % per unit since its previous sample; records the new samples in prev. */
 function sampleCpu(
@@ -193,206 +180,6 @@ function useUnitData(kind: UnitKind) {
 
   useUnitWatch(kind, setLists, loadSummary, setPanelRev);
 
-  return { lists, summary, error, setError, cpu, panelRev, setPanelRev, loadList, loadSummary };
-}
-
-type MenuDeps = {
-  win: boolean;
-  t: T;
-  run: (name: string, a: Action) => void;
-  openUnit: (name: string, tab: PanelTab) => void;
-  openLogs: (name: string) => void;
-};
-
-function unitMenu(u: Unit, { win, t, run, openUnit, openLogs }: MenuDeps): MenuItem[] {
-  const running = isRunning(u);
-  const isMasked = win ? u.enabled === 'masked' : u.load === 'masked';
-  return [
-    running
-      ? { id: 'stop', label: t('actions.stop'), icon: 'power', onSelect: () => run(u.name, 'stop') }
-      : {
-          id: 'start',
-          label: t('actions.start'),
-          icon: 'play',
-          onSelect: () => run(u.name, 'start'),
-        },
-    {
-      id: 'restart',
-      label: t('actions.restart'),
-      icon: 'refresh',
-      onSelect: () => run(u.name, 'restart'),
-    },
-    ...(win
-      ? [
-          u.sub === 'paused'
-            ? {
-                id: 'continue',
-                label: t('actions.continue'),
-                icon: 'play' as const,
-                onSelect: () => run(u.name, 'continue'),
-              }
-            : {
-                id: 'pause',
-                label: t('actions.pause'),
-                icon: 'power' as const,
-                disabled: !running,
-                onSelect: () => run(u.name, 'pause'),
-              },
-        ]
-      : [
-          {
-            id: 'reload',
-            label: t('actions.reload'),
-            icon: 'refresh' as const,
-            disabled: !running,
-            onSelect: () => run(u.name, 'reload'),
-          },
-          { type: 'separator' as const },
-          {
-            id: 'logs',
-            label: t('rowMenu.logs'),
-            icon: 'logs' as const,
-            onSelect: () => openUnit(u.name, 'logs'),
-          },
-          {
-            id: 'file',
-            label: t('rowMenu.unitFile'),
-            icon: 'file' as const,
-            onSelect: () => openUnit(u.name, 'unit'),
-          },
-          {
-            id: 'inlogs',
-            label: t('openInLogs'),
-            icon: 'externallink' as const,
-            onSelect: () => openLogs(u.name),
-          },
-        ]),
-    { type: 'separator' },
-    isMasked
-      ? {
-          id: 'unmask',
-          label: win ? t('win.unmask') : t('actions.unmask'),
-          icon: 'unlock',
-          onSelect: () => run(u.name, 'unmask'),
-        }
-      : {
-          id: 'mask',
-          label: win ? t('win.mask') : t('actions.mask'),
-          icon: 'lock',
-          danger: true,
-          onSelect: () => run(u.name, 'mask'),
-        },
-  ];
-}
-
-const serviceColumns = (
-  cpu: Record<string, number>,
-  t: T,
-  dash: React.ReactNode,
-): Column<Unit>[] => [
-  {
-    key: 'mem',
-    header: t('col.memory'),
-    sortable: true,
-    mono: true,
-    value: (u) => u.memory ?? -1,
-    render: (u) => (u.memory != null ? formatBytes(u.memory) : dash),
-  },
-  {
-    key: 'cpu',
-    header: t('col.cpu'),
-    sortable: true,
-    mono: true,
-    value: (u) => cpu[u.name] ?? -1,
-    render: (u) =>
-      cpu[u.name] != null && u.state === 'running' ? `${cpu[u.name].toFixed(1)}%` : dash,
-  },
-];
-
-function timerColumns(compact: boolean, lang: string, t: T, dash: React.ReactNode): Column<Unit>[] {
-  const next: Column<Unit> = {
-    key: 'next',
-    header: t('col.next'),
-    sortable: true,
-    value: (u) => u.next ?? 0,
-    render: (u) => (u.next ? relativeTime(u.next * 1000, lang) : dash),
-  };
-  if (compact) return [next];
-  return [
-    next,
-    {
-      key: 'last',
-      header: t('col.last'),
-      sortable: true,
-      value: (u) => u.last ?? 0,
-      render: (u) => (u.last ? relativeTime(u.last * 1000, lang) : dash),
-    },
-  ];
-}
-
-const socketColumns = (t: T, dash: React.ReactNode): Column<Unit>[] => [
-  {
-    key: 'listen',
-    header: t('col.listen'),
-    mono: true,
-    render: (u) =>
-      u.listen?.length ? u.listen.map((l) => l.replace(SOCKET_TYPE_SUFFIX, '')).join(', ') : dash,
-  },
-];
-
-/** Columns between "boot" and the row actions; they depend on the unit kind and the room left. */
-function kindColumns(
-  kind: UnitKind,
-  compact: boolean,
-  cpu: Record<string, number>,
-  lang: string,
-  t: T,
-  dash: React.ReactNode,
-): Column<Unit>[] {
-  if (kind === 'timer') return timerColumns(compact, lang, t, dash);
-  if (compact) return [];
-  return kind === 'service' ? serviceColumns(cpu, t, dash) : socketColumns(t, dash);
-}
-
-export default function ServicesPage() {
-  const t = useT('services');
-  const { lang } = useI18n();
-  const mobile = useIsMobile();
-  const wide = useMediaQuery('(min-width: 1241px)');
-  const nav = useNavigate();
-  const [params, setParams] = useSearchParams();
-  const { prefs, set: setPref } = usePrefs();
-  const win = useSession().session?.os === 'windows';
-  const view: View = prefs['services.view'] === 'cards' ? 'cards' : 'table';
-
-  // ?unit=nginx or ?unit=nginx.service (links from Overview / Logs); ?state=failed|running|… picks the tab.
-  const unitParam = params.get('unit');
-  const selected = unitParam
-    ? win || /\.[a-z]+$/.test(unitParam)
-      ? unitParam
-      : `${unitParam}.service`
-    : null;
-  const rawTab = (params.get('tab') as PanelTab | null) ?? 'info';
-  const panelTab: PanelTab = win && (rawTab === 'logs' || rawTab === 'unit') ? 'info' : rawTab;
-
-  const stateParam = params.get('state');
-  const tabOk = (v: string | null): v is Tab =>
-    TAB_IDS.includes(v as Tab) && !(win && (v === 'timers' || v === 'sockets'));
-  const [tab, setTab] = useState<Tab>(() => (tabOk(stateParam) ? stateParam : 'all'));
-  useEffect(() => {
-    if (tabOk(stateParam)) setTab(stateParam);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stateParam, win]);
-  const [purpose, setPurpose] = useState<Purpose>('all');
-  const [q, setQ] = useState('');
-  const kind = kindOf(tab);
-
-  const { lists, summary, error, setError, cpu, panelRev, setPanelRev, loadList, loadSummary } =
-    useUnitData(kind);
-
-  const failed = summary?.failed ?? [];
-  useRailBadge('services', failed.length);
-
   const refreshAfter = useCallback(
     (_name: string, action: Action) => {
       void loadList(
@@ -404,184 +191,66 @@ export default function ServicesPage() {
     },
     [kind, loadList, loadSummary, setPanelRev],
   );
-  const { run, busy, dialog } = useActions(refreshAfter);
+  const retry = () => {
+    setError(null);
+    void loadList(kind);
+    void loadSummary();
+  };
 
-  const openUnit = (name: string, tabId: PanelTab = 'info', replace = false) => {
-    const p = new URLSearchParams(params);
-    p.set('unit', name);
-    if (tabId === 'info') p.delete('tab');
-    else p.set('tab', tabId);
-    setParams(p, { replace });
-  };
-  const closePanel = () => {
-    const p = new URLSearchParams(params);
-    p.delete('unit');
-    p.delete('tab');
-    setParams(p, { replace: true });
-  };
-  const setPanelTab = (tb: PanelTab) => openUnit(selected ?? '', tb, true);
+  return { lists, summary, error, cpu, panelRev, refreshAfter, retry };
+}
+
+function tabItems(t: T, summary: Summary | null, win: boolean) {
+  const allTabs = [
+    { id: 'all' as const, label: t('tabs.all'), count: summary?.total },
+    { id: 'running' as const, label: t('tabs.running'), count: summary?.running },
+    {
+      id: 'failed' as const,
+      label: t('tabs.failed'),
+      count: summary ? (summary.failed ?? []).length : undefined,
+    },
+    { id: 'stopped' as const, label: t('tabs.stopped'), count: summary?.stopped },
+    { id: 'timers' as const, label: t('tabs.timers'), count: summary?.timers },
+    { id: 'sockets' as const, label: t('tabs.sockets'), count: summary?.sockets },
+  ];
+  return win ? allTabs.filter((x) => x.id !== 'timers' && x.id !== 'sockets') : allTabs;
+}
+
+export default function ServicesPage() {
+  const t = useT('services');
+  const mobile = useIsMobile();
+  const wide = useMediaQuery('(min-width: 1241px)');
+  const { prefs, set: setPref } = usePrefs();
+  const win = useSession().session?.os === 'windows';
+  const view: View = prefs['services.view'] === 'cards' ? 'cards' : 'table';
+  const { selected, panelTab, tab, setTab, openUnit, closePanel, setPanelTab } =
+    useServicesRoute(win);
+  const [purpose, setPurpose] = useState<Purpose>('all');
+  const [q, setQ] = useState('');
+  const kind = kindOf(tab);
+
+  const { lists, summary, error, cpu, panelRev, refreshAfter, retry } = useUnitData(kind);
+  const failed = summary?.failed ?? [];
+  useRailBadge('services', failed.length);
+  const { run, busy, dialog } = useActions(refreshAfter);
 
   const all = lists[kind];
   const rows = useMemo(
     () => (all ? filterUnits(all, kind, tab, purpose, q) : []),
     [all, kind, tab, purpose, q],
   );
-
-  const allTabs = [
-    { id: 'all' as const, label: t('tabs.all'), count: summary?.total },
-    { id: 'running' as const, label: t('tabs.running'), count: summary?.running },
-    { id: 'failed' as const, label: t('tabs.failed'), count: summary ? failed.length : undefined },
-    { id: 'stopped' as const, label: t('tabs.stopped'), count: summary?.stopped },
-    { id: 'timers' as const, label: t('tabs.timers'), count: summary?.timers },
-    { id: 'sockets' as const, label: t('tabs.sockets'), count: summary?.sockets },
-  ];
-  const tabs = win ? allTabs.filter((x) => x.id !== 'timers' && x.id !== 'sockets') : allTabs;
-  const bootLabel = (v: string) =>
-    win ? t(`win.boot.${v}`) || t(`boot.${v}`) : v ? t(`boot.${v}`) : '';
-
-  const toggleBoot = (u: Unit) => run(u.name, bootMode(u.enabled) === 'on' ? 'disable' : 'enable');
-
-  const bootCell = (u: Unit) => {
-    const m = bootMode(u.enabled);
-    if (m === 'fixed')
-      return <span className="svc-fixed">{u.enabled ? bootLabel(u.enabled) : '—'}</span>;
-    return (
-      <Switch
-        checked={m === 'on'}
-        disabled={busy.has(u.name)}
-        onChange={() => toggleBoot(u)}
-        aria-label={t('boot.label', { name: short(u.name) })}
-      />
-    );
-  };
-
-  const menuFor = (u: Unit) =>
-    unitMenu(u, {
-      win,
-      t,
-      run,
-      openUnit,
-      openLogs: (n) => nav(`/logs?unit=${encodeURIComponent(n)}`),
-    });
-
-  const rowActions = (u: Unit) => (
-    <span className="svc-rowact" onClick={(e) => e.stopPropagation()}>
-      {kind === 'service' && (
-        <IconButton
-          icon="refresh"
-          label={t('actions.restart')}
-          disabled={busy.has(u.name)}
-          onClick={() => run(u.name, 'restart')}
-        />
-      )}
-      <DropdownMenu
-        items={menuFor(u)}
-        aria-label={t('rowMenu.label', { name: short(u.name) })}
-        trigger={(p) => <IconButton icon="more" label={t('more')} {...p} />}
-      />
-    </span>
-  );
-
-  const nameCell = (u: Unit) => (
-    <div className="svc-nm">
-      <b>{u.name}</b>
-      <small>{u.description}</small>
-    </div>
-  );
-  const stateCell = (u: Unit) => <Badge tone={stateTone(u)}>{t(`state.${stateKey(u)}`)}</Badge>;
-  const dash = <span className="svc-muted">—</span>;
-
   const compact = mobile || (!!selected && wide);
-  const columns: Column<Unit>[] = [
-    { key: 'name', header: t('col.name'), sortable: true, value: (u) => u.name, render: nameCell },
-    {
-      key: 'state',
-      header: t('col.state'),
-      sortable: true,
-      value: (u) => u.state,
-      render: stateCell,
-    },
-    { key: 'boot', header: t('col.boot'), render: bootCell },
-    ...kindColumns(kind, compact, cpu, lang, t, dash),
-    { key: 'act', header: '', align: 'right', render: rowActions },
-  ];
-
-  const banner = failed.length > 0 && kind === 'service' && (
-    <FailedBanner
-      failed={failed}
-      t={t}
-      win={win}
-      onLog={(n) => openUnit(n, 'logs')}
-      onRestart={(n) => run(n, 'restart')}
-      onDisable={(n) => run(n, 'disable')}
-      onShow={() => setTab('failed')}
-    />
-  );
-
-  const retry = () => {
-    setError(null);
-    void loadList(kind);
-    void loadSummary();
-  };
-  const emptyState = (
-    <EmptyState icon="services" hue="svc" title={t('empty.title')} text={t('empty.text')} />
-  );
-
-  const body = (() => {
-    if (error && !all)
-      return (
-        <EmptyState
-          icon="alert"
-          hue="svc"
-          title={t('error.title')}
-          text={error.message}
-          action={<Button onClick={retry}>{t('retry')}</Button>}
-        />
-      );
-    if (!all)
-      return (
-        <div className="svc-skel">
-          <Skeleton lines={8} height={44} />
-        </div>
-      );
-    if (view === 'table')
-      return (
-        <Table
-          columns={columns}
-          rows={rows}
-          rowKey={(u) => u.name}
-          activeKey={selected ?? undefined}
-          onRowClick={(u) => openUnit(u.name)}
-          caption={t('title')}
-          empty={emptyState}
-        />
-      );
-    if (rows.length === 0) return emptyState;
-    return (
-      <UnitCards
-        rows={rows}
-        win={win}
-        t={t}
-        renderCard={(u) => (
-          <UnitCard
-            key={u.name}
-            u={u}
-            bad={u.state === 'failed'}
-            busy={busy.has(u.name)}
-            active={selected === u.name}
-            mem={u.memory}
-            cpu={cpu[u.name]}
-            t={t}
-            boot={bootCell(u)}
-            menu={menuFor(u)}
-            onOpen={() => openUnit(u.name)}
-            onAct={(a) => run(u.name, a)}
-            onLogs={win ? undefined : () => openUnit(u.name, 'logs')}
-          />
-        )}
-      />
-    );
-  })();
+  const { columns, renderCard } = useServiceCells({
+    kind,
+    compact,
+    selected,
+    cpu,
+    win,
+    t,
+    run,
+    busy,
+    openUnit,
+  });
 
   return (
     <Page flush hue="svc">
@@ -589,7 +258,7 @@ export default function ServicesPage() {
         <div className="svc-main">
           <ServicesToolbar
             t={t}
-            tabs={tabs}
+            tabs={tabItems(t, summary, win)}
             tab={tab}
             onTab={setTab}
             showPurpose={kind === 'service' && !win}
@@ -600,8 +269,32 @@ export default function ServicesPage() {
             view={view}
             onView={(v) => void setPref('services.view', v)}
           />
-          {banner}
-          <div className="svc-body">{body}</div>
+          {failed.length > 0 && kind === 'service' && (
+            <FailedBanner
+              failed={failed}
+              t={t}
+              win={win}
+              onLog={(n) => openUnit(n, 'logs')}
+              onRestart={(n) => run(n, 'restart')}
+              onDisable={(n) => run(n, 'disable')}
+              onShow={() => setTab('failed')}
+            />
+          )}
+          <div className="svc-body">
+            <ServicesBody
+              t={t}
+              win={win}
+              error={error}
+              all={all}
+              rows={rows}
+              view={view}
+              columns={columns}
+              selected={selected}
+              renderCard={renderCard}
+              onOpen={(n) => openUnit(n)}
+              onRetry={retry}
+            />
+          </div>
         </div>
         {selected && (
           <UnitPanel
@@ -698,40 +391,6 @@ function ServicesToolbar({
   );
 }
 
-/** Card view: one section per purpose (a single flat section on Windows). */
-function UnitCards({
-  rows,
-  win,
-  t,
-  renderCard,
-}: {
-  rows: Unit[];
-  win: boolean;
-  t: T;
-  renderCard: (u: Unit) => React.ReactNode;
-}) {
-  const grouped: { p: (typeof PURPOSES)[number] | null; units: Unit[] }[] = win
-    ? [{ p: null, units: rows }]
-    : PURPOSES.map((p) => ({ p, units: rows.filter((u) => u.purpose === p) })).filter(
-        (g) => g.units.length,
-      );
-  return (
-    <div className="svc-cards-wrap">
-      {grouped.map((g) => (
-        <section key={g.p ?? 'all'}>
-          {g.p && (
-            <h3 className="svc-gt">
-              <span className={`svc-dot svc-dot--${g.p}`} />
-              {t(`purpose.${g.p}`)} <span className="svc-muted">{g.units.length}</span>
-            </h3>
-          )}
-          <div className="svc-cards">{g.units.map(renderCard)}</div>
-        </section>
-      ))}
-    </div>
-  );
-}
-
 const WIN_HINTS = new Set(['start-limit', 'env-setup']);
 
 function FailedBanner({
@@ -800,81 +459,6 @@ function FailedBanner({
             {t('banner.show')}
           </Button>
         )}
-      </div>
-    </div>
-  );
-}
-
-function UnitCard({
-  u,
-  bad,
-  busy,
-  active,
-  mem,
-  cpu,
-  t,
-  boot,
-  menu,
-  onOpen,
-  onAct,
-  onLogs,
-}: {
-  u: Unit;
-  bad: boolean;
-  busy: boolean;
-  active: boolean;
-  mem: number | null;
-  cpu?: number;
-  t: ReturnType<typeof useT>;
-  boot: React.ReactNode;
-  menu: MenuItem[];
-  onOpen(): void;
-  onAct(a: Action): void;
-  onLogs?: () => void;
-}) {
-  const running = u.state === 'running' || u.state === 'finished';
-  return (
-    <div className={`svc-card${bad ? ' svc-card--bad' : ''}${active ? ' svc-card--on' : ''}`}>
-      <button className="svc-card-hd" type="button" onClick={onOpen}>
-        <span className={`svc-tile svc-tile--${bad ? 'bad' : running ? 'ok' : 'off'}`}>
-          <Icon name="services" />
-        </span>
-        <span className="svc-card-tx">
-          <b>{u.name}</b>
-          <small>{u.description}</small>
-        </span>
-      </button>
-      <div className="svc-card-m">
-        <Badge tone={stateTone(u)}>{t(`state.${stateKey(u)}`)}</Badge>
-        <span className="svc-muted svc-mono">
-          {mem != null ? formatBytes(mem) : ''}
-          {mem != null && cpu != null && u.state === 'running' ? ` · ${cpu.toFixed(1)}%` : ''}
-        </span>
-      </div>
-      <div className="svc-card-f">
-        <label className="svc-boot">
-          {boot}
-          <span>{t('boot.short')}</span>
-        </label>
-        <div className="svc-q">
-          <IconButton
-            icon="refresh"
-            label={t('actions.restart')}
-            disabled={busy}
-            onClick={() => onAct('restart')}
-          />
-          <IconButton
-            icon={running ? 'power' : 'play'}
-            label={running ? t('actions.stop') : t('actions.start')}
-            disabled={busy}
-            onClick={() => onAct(running ? 'stop' : 'start')}
-          />
-          {onLogs && <IconButton icon="logs" label={t('rowMenu.logs')} onClick={onLogs} />}
-          <DropdownMenu
-            items={menu}
-            trigger={(p) => <IconButton icon="more" label={t('more')} {...p} />}
-          />
-        </div>
       </div>
     </div>
   );
