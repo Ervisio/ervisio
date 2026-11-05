@@ -25,7 +25,11 @@ var DaemonDev bool
 // Package state, replaceable by tests.
 var (
 	checker    = update.NewChecker()
-	newUpdater = func() *update.Updater { return update.New(checker) }
+	newUpdater = func() *update.Updater {
+		u := update.New(checker)
+		u.ConfigPath = configmod.Path
+		return u
+	}
 	executable = func() string {
 		exe, err := os.Executable()
 		if err != nil {

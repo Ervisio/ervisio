@@ -201,8 +201,12 @@ func NewHTTPHealth(configPath string) *HTTPHealth {
 	if err != nil || cfg == nil {
 		cfg = config.Default()
 	}
+	scheme := "https://"
+	if cfg.TLS.Mode == config.TLSHTTP {
+		scheme = "http://"
+	}
 	return &HTTPHealth{
-		Base: "https://" + LoopbackAddr(cfg.Listen),
+		Base: scheme + LoopbackAddr(cfg.Listen),
 		Client: &http.Client{
 			Timeout: 3 * time.Second,
 			Transport: &http.Transport{

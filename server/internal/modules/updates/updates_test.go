@@ -48,6 +48,15 @@ func TestCheck(t *testing.T) {
 	}
 }
 
+func TestUpdaterUsesActiveConfiguration(t *testing.T) {
+	old := configmod.Path
+	configmod.Path = filepath.Join(t.TempDir(), "custom daemon.conf")
+	t.Cleanup(func() { configmod.Path = old })
+	if got := newUpdater().ConfigPath; got != configmod.Path {
+		t.Fatalf("updater config path %q, want %q", got, configmod.Path)
+	}
+}
+
 func TestStatusDevAndErrors(t *testing.T) {
 	DaemonDev = true
 	defer func() { DaemonDev = false }()
