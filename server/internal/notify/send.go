@@ -146,8 +146,6 @@ func redactText(msg string, spec *Spec) string {
 	return msg
 }
 
-// ---- sending ----
-
 // Hooks for tests.
 var (
 	// telegramBase is the Bot API address.
@@ -309,8 +307,6 @@ func sendGotify(ctx context.Context, s *Spec, m Message) error {
 	req.Header.Set("X-Gotify-Key", s.Token)
 	return do(req)
 }
-
-// ---- email ----
 
 func newMessageID(host string) string {
 	b := make([]byte, 12)
