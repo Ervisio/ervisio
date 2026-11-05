@@ -90,30 +90,43 @@ func checkOptions(opts []string, ip net.IP, now time.Time) string {
 			}
 			val = v
 		}
-		switch {
-		case name == "cert-authority" && !hasVal:
-			return "cert-authority lines are not supported"
-		case name == "principals" && hasVal:
-			return "principals= (certificates) is not supported"
-		case name == "command" && hasVal:
-			return "the key has a forced command (command=)"
-		case name == "from" && hasVal:
-			if !MatchFrom(val, ip) {
-				return fmt.Sprintf("client address %s does not match from=%q", ip, val)
-			}
-		case name == "expiry-time" && hasVal:
-			t, err := parseExpiry(val, now.Location())
-			if err != nil {
-				return fmt.Sprintf("invalid expiry-time %q", val)
-			}
-			if !now.Before(t) {
-				return fmt.Sprintf("the key expired on %s", t.Format(time.RFC3339))
-			}
-		case !hasVal && noArgOptions[name]:
-		case hasVal && valueOptions[name]:
-		default:
-			return fmt.Sprintf("unsupported option %q", name)
+		if reason := checkOption(name, val, hasVal, ip, now); reason != "" {
+			return reason
 		}
+	}
+	return ""
+}
+
+// checkOption returns "" when one authorized_keys option is acceptable.
+func checkOption(name, val string, hasVal bool, ip net.IP, now time.Time) string {
+	switch {
+	case name == "cert-authority" && !hasVal:
+		return "cert-authority lines are not supported"
+	case name == "principals" && hasVal:
+		return "principals= (certificates) is not supported"
+	case name == "command" && hasVal:
+		return "the key has a forced command (command=)"
+	case name == "from" && hasVal:
+		if !MatchFrom(val, ip) {
+			return fmt.Sprintf("client address %s does not match from=%q", ip, val)
+		}
+	case name == "expiry-time" && hasVal:
+		return checkExpiry(val, now)
+	case !hasVal && noArgOptions[name]:
+	case hasVal && valueOptions[name]:
+	default:
+		return fmt.Sprintf("unsupported option %q", name)
+	}
+	return ""
+}
+
+func checkExpiry(val string, now time.Time) string {
+	t, err := parseExpiry(val, now.Location())
+	if err != nil {
+		return fmt.Sprintf("invalid expiry-time %q", val)
+	}
+	if !now.Before(t) {
+		return fmt.Sprintf("the key expired on %s", t.Format(time.RFC3339))
 	}
 	return ""
 }
@@ -166,21 +179,9 @@ func MatchFrom(list string, ip net.IP) bool {
 		if p == "" {
 			continue
 		}
-		var m bool
-		if strings.Contains(p, "/") {
-			_, n, err := net.ParseCIDR(p)
-			if err != nil {
-				return false
-			}
-			m = n.Contains(ip)
-		} else {
-			m = wildcardMatch(strings.ToLower(p), strings.ToLower(addr))
-			if !m && strings.Contains(p, ":") {
-				// IPv6 written differently ("::1" vs "0:0::1").
-				if pip := net.ParseIP(p); pip != nil {
-					m = pip.Equal(ip)
-				}
-			}
+		m, valid := matchFromPattern(p, ip, addr)
+		if !valid {
+			return false
 		}
 		if m && neg {
 			return false
@@ -190,6 +191,28 @@ func MatchFrom(list string, ip net.IP) bool {
 		}
 	}
 	return ok
+}
+
+// matchFromPattern reports whether one from= pattern matches ip; valid is
+// false for a malformed CIDR block.
+func matchFromPattern(p string, ip net.IP, addr string) (match, valid bool) {
+	if strings.Contains(p, "/") {
+		_, n, err := net.ParseCIDR(p)
+		if err != nil {
+			return false, false
+		}
+		return n.Contains(ip), true
+	}
+	if wildcardMatch(strings.ToLower(p), strings.ToLower(addr)) {
+		return true, true
+	}
+	if strings.Contains(p, ":") {
+		// IPv6 written differently ("::1" vs "0:0::1").
+		if pip := net.ParseIP(p); pip != nil {
+			return pip.Equal(ip), true
+		}
+	}
+	return false, true
 }
 
 // wildcardMatch is sshd's match_pattern: '*' matches any run of bytes,

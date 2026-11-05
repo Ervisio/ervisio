@@ -110,32 +110,46 @@ func (s *Server) handlePlugin(w http.ResponseWriter, r *http.Request, sess *Sess
 		return
 	}
 	for _, dir := range s.opts.PluginDirs {
-		root, err := os.OpenRoot(path.Join(dir, id))
-		if err != nil {
-			continue
-		}
-		f, err := root.Open(file)
-		if err != nil {
-			root.Close()
-			if errors.Is(err, fs.ErrNotExist) {
-				continue
-			}
-			writeError(w, errNotFound)
+		switch servePluginFile(w, r, path.Join(dir, id), file) {
+		case pluginFileServed, pluginFileDenied:
 			return
 		}
-		fi, err := f.Stat()
-		if err != nil || !fi.Mode().IsRegular() {
-			f.Close()
-			root.Close()
-			continue
-		}
-		setPluginAssetHeaders(w.Header())
-		http.ServeContent(w, r, fi.Name(), fi.ModTime(), f)
-		f.Close()
-		root.Close()
-		return
 	}
 	s.serveDevPlugin(w, r, sess, id, file)
+}
+
+type pluginFileResult int
+
+const (
+	pluginFileMissing pluginFileResult = iota
+	pluginFileServed
+	pluginFileDenied
+)
+
+// servePluginFile serves file from one plugin folder. Missing means the next
+// folder should be tried; denied means the 404 is already written.
+func servePluginFile(w http.ResponseWriter, r *http.Request, pluginDir, file string) pluginFileResult {
+	root, err := os.OpenRoot(pluginDir)
+	if err != nil {
+		return pluginFileMissing
+	}
+	defer root.Close()
+	f, err := root.Open(file)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return pluginFileMissing
+		}
+		writeError(w, errNotFound)
+		return pluginFileDenied
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil || !fi.Mode().IsRegular() {
+		return pluginFileMissing
+	}
+	setPluginAssetHeaders(w.Header())
+	http.ServeContent(w, r, fi.Name(), fi.ModTime(), f)
+	return pluginFileServed
 }
 
 // maxDevAsset matches plugins.MaxDevAsset (the bridge refuses bigger files).
@@ -163,32 +177,8 @@ func (s *Server) serveDevPlugin(w http.ResponseWriter, r *http.Request, sess *Se
 		return
 	}
 	defer st.Close()
-	var meta fileMeta
-	var buf bytes.Buffer
-	first := true
-	for ev := range st.Events() {
-		if first {
-			first = false
-			if ev.B64 || json.Unmarshal(ev.Data, &meta) != nil || meta.Size < 0 || meta.Size > maxDevAsset {
-				writeError(w, errNotFound)
-				return
-			}
-			buf.Grow(int(meta.Size))
-			continue
-		}
-		var b64 string
-		if !ev.B64 || json.Unmarshal(ev.Data, &b64) != nil {
-			writeError(w, errNotFound)
-			return
-		}
-		chunk, err := base64.StdEncoding.DecodeString(b64)
-		if err != nil || int64(buf.Len()+len(chunk)) > meta.Size {
-			writeError(w, errNotFound)
-			return
-		}
-		buf.Write(chunk)
-	}
-	if first || st.Err() != nil || int64(buf.Len()) != meta.Size {
+	meta, body, ok := readDevAsset(st)
+	if !ok {
 		writeError(w, errNotFound)
 		return
 	}
@@ -196,7 +186,42 @@ func (s *Server) serveDevPlugin(w http.ResponseWriter, r *http.Request, sess *Se
 		w.Header().Set("Content-Type", meta.Mime)
 	}
 	setPluginAssetHeaders(w.Header())
-	http.ServeContent(w, r, path.Base(file), time.Time{}, bytes.NewReader(buf.Bytes()))
+	http.ServeContent(w, r, path.Base(file), time.Time{}, bytes.NewReader(body))
+}
+
+// readDevAsset collects a plugins.devAsset stream: a metadata event, then
+// base64 chunks that must add up to exactly meta.Size bytes.
+func readDevAsset(st *rpc.ClientStream) (meta fileMeta, body []byte, ok bool) {
+	var buf bytes.Buffer
+	first := true
+	for ev := range st.Events() {
+		if first {
+			first = false
+			if ev.B64 || json.Unmarshal(ev.Data, &meta) != nil || meta.Size < 0 || meta.Size > maxDevAsset {
+				return meta, nil, false
+			}
+			buf.Grow(int(meta.Size))
+			continue
+		}
+		chunk, valid := decodeDevChunk(ev)
+		if !valid || int64(buf.Len()+len(chunk)) > meta.Size {
+			return meta, nil, false
+		}
+		buf.Write(chunk)
+	}
+	if first || st.Err() != nil || int64(buf.Len()) != meta.Size {
+		return meta, nil, false
+	}
+	return meta, buf.Bytes(), true
+}
+
+func decodeDevChunk(ev rpc.Event) ([]byte, bool) {
+	var b64 string
+	if !ev.B64 || json.Unmarshal(ev.Data, &b64) != nil {
+		return nil, false
+	}
+	chunk, err := base64.StdEncoding.DecodeString(b64)
+	return chunk, err == nil
 }
 
 // redirectHandler answers plain-HTTP requests on the HTTPS port.

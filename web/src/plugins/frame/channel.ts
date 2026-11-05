@@ -149,73 +149,87 @@ export function unwatchDownload(did: number): void {
   downloads.delete(did);
 }
 
-/** Handles responses and stream events; returns false for other messages. */
-export function handleReply(m: HostToFrame): boolean {
-  if (m.t === 'download-done') {
-    const cb = downloads.get(m.did);
-    downloads.delete(m.did);
+function handleDownloadDone(m: Extract<HostToFrame, { t: 'download-done' }>): void {
+  const cb = downloads.get(m.did);
+  downloads.delete(m.did);
+  try {
+    cb?.({ ok: m.ok, bytes: m.bytes, ...(m.error ? { error: m.error } : {}) });
+  } catch (e) {
+    console.warn(e);
+  }
+}
+
+function handleResponse(m: Extract<HostToFrame, { t: 'res' }>): void {
+  const p = pending.get(m.id);
+  pending.delete(m.id);
+  if (!p) return;
+  if (m.ok) p.resolve(m.value);
+  else p.reject(new PluginError(m.error));
+}
+
+function handleUploadEvent(m: Extract<HostToFrame, { t: 'upload' }>): void {
+  const u = uploads.get(m.uid);
+  if (!u) return;
+  if (m.ev === 'progress' || m.ev === 'start' || m.ev === 'data') {
     try {
-      cb?.({ ok: m.ok, bytes: m.bytes, ...(m.error ? { error: m.error } : {}) });
+      if (m.ev === 'progress') u.onProgress?.(m.loaded, m.total);
+      else if (m.ev === 'start') u.onResponseStart?.(m.status, m.headers);
+      else u.onResponseData?.(m.chunk);
     } catch (e) {
       console.warn(e);
     }
-    return true;
+    return;
   }
-  if (m.t === 'res') {
-    const p = pending.get(m.id);
-    pending.delete(m.id);
-    if (p) {
-      if (m.ok) p.resolve(m.value);
-      else p.reject(new PluginError(m.error));
-    }
-    return true;
+  uploads.delete(m.uid);
+  if (m.ev === 'done') u.resolve(m.result);
+  else u.reject(new PluginError(m.error));
+}
+
+function handleStreamEvent(m: Extract<HostToFrame, { t: 'stream' }>): void {
+  const h = streams.get(m.sid);
+  if (!h) return;
+  switch (m.ev) {
+    case 'line':
+      h.onLine?.(m.stream, m.line);
+      break;
+    case 'exit':
+      h.onExit?.(m.code);
+      break;
+    case 'start':
+      h.onStart?.(m.status, m.headers);
+      break;
+    case 'data':
+      h.onData?.(m.chunk);
+      break;
+    case 'end':
+      streams.delete(m.sid);
+      h.onEnd?.();
+      break;
+    case 'error':
+      streams.delete(m.sid);
+      h.onError?.(new PluginError(m.error));
+      break;
   }
-  if (m.t === 'upload') {
-    const u = uploads.get(m.uid);
-    if (!u) return true;
-    if (m.ev === 'progress' || m.ev === 'start' || m.ev === 'data') {
-      try {
-        if (m.ev === 'progress') u.onProgress?.(m.loaded, m.total);
-        else if (m.ev === 'start') u.onResponseStart?.(m.status, m.headers);
-        else u.onResponseData?.(m.chunk);
-      } catch (e) {
-        console.warn(e);
-      }
-    } else {
-      uploads.delete(m.uid);
-      if (m.ev === 'done') u.resolve(m.result);
-      else u.reject(new PluginError(m.error));
-    }
-    return true;
+}
+
+/** Handles responses and stream events; returns false for other messages. */
+export function handleReply(m: HostToFrame): boolean {
+  switch (m.t) {
+    case 'download-done':
+      handleDownloadDone(m);
+      return true;
+    case 'res':
+      handleResponse(m);
+      return true;
+    case 'upload':
+      handleUploadEvent(m);
+      return true;
+    case 'stream':
+      handleStreamEvent(m);
+      return true;
+    default:
+      return false;
   }
-  if (m.t === 'stream') {
-    const h = streams.get(m.sid);
-    if (!h) return true;
-    switch (m.ev) {
-      case 'line':
-        h.onLine?.(m.stream, m.line);
-        break;
-      case 'exit':
-        h.onExit?.(m.code);
-        break;
-      case 'start':
-        h.onStart?.(m.status, m.headers);
-        break;
-      case 'data':
-        h.onData?.(m.chunk);
-        break;
-      case 'end':
-        streams.delete(m.sid);
-        h.onEnd?.();
-        break;
-      case 'error':
-        streams.delete(m.sid);
-        h.onError?.(new PluginError(m.error));
-        break;
-    }
-    return true;
-  }
-  return false;
 }
 
 /** Toasts appear in the app (prefixed with the plugin name), not inside the frame. */
