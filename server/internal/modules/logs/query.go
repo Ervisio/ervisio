@@ -106,30 +106,7 @@ func resolveSpecs(ids []string, watchers []Watcher, admin bool) ([]spec, error) 
 	}
 	for _, id := range ids {
 		if id == "all" {
-			var logFiles []LogFile
-			if onWindows {
-				for _, ch := range eventChannels {
-					s, _ := parseSourceID("evt:"+ch, nil)
-					add(s)
-				}
-			} else {
-				s, _ := parseSourceID("journal", nil)
-				add(s)
-				logFiles = listLogFiles("/var/log", 150)
-			}
-			for _, lf := range logFiles {
-				if lf.NeedsAdmin && !admin {
-					continue
-				}
-				if s, err := parseSourceID("file:"+lf.Path, watchers); err == nil {
-					add(s)
-				}
-			}
-			for _, w := range watchers {
-				if s, err := parseSourceID("file:"+w.Path, watchers); err == nil {
-					add(s)
-				}
-			}
+			addAllSources(watchers, admin, add)
 			continue
 		}
 		s, err := parseSourceID(id, watchers)
@@ -139,6 +116,34 @@ func resolveSpecs(ids []string, watchers []Watcher, admin bool) ([]spec, error) 
 		add(s)
 	}
 	return out, nil
+}
+
+// addAllSources feeds add with the sources "all" stands for.
+func addAllSources(watchers []Watcher, admin bool, add func(spec)) {
+	var logFiles []LogFile
+	if onWindows {
+		for _, ch := range eventChannels {
+			s, _ := parseSourceID("evt:"+ch, nil)
+			add(s)
+		}
+	} else {
+		s, _ := parseSourceID("journal", nil)
+		add(s)
+		logFiles = listLogFiles("/var/log", 150)
+	}
+	for _, lf := range logFiles {
+		if lf.NeedsAdmin && !admin {
+			continue
+		}
+		if s, err := parseSourceID("file:"+lf.Path, watchers); err == nil {
+			add(s)
+		}
+	}
+	for _, w := range watchers {
+		if s, err := parseSourceID("file:"+w.Path, watchers); err == nil {
+			add(s)
+		}
+	}
 }
 
 var cursorRe = regexp.MustCompile(`^(\d+)\.(\d+)$`)
@@ -627,6 +632,22 @@ func (p contextParams) run(ctx context.Context, admin bool) (*ContextResult, err
 	return res, nil
 }
 
+// inheritLineState gives a line without a timestamp the time and level of
+// the line before it, and remembers a line that has one.
+func inheritLineState(e *Entry, hasTs bool, last *lineState) {
+	if hasTs {
+		*last = lineState{e.TsUs, e.Level}
+	} else {
+		e.TsUs, e.Ts = last.ts, last.ts/1000
+		if e.Level == "" {
+			e.Level = last.lvl
+		}
+	}
+	if e.Level == "" {
+		e.Level = LvInfo
+	}
+}
+
 // fileContext reads lines [line-before, line+after] of a file.
 func fileContext(ctx context.Context, path string, line, before, after int, watchers []Watcher) (*ContextResult, error) {
 	s, err := parseSourceID("file:"+path, validWatchers(watchers))
@@ -663,17 +684,7 @@ func fileContext(ctx context.Context, path string, line, before, after int, watc
 		}
 		text = strings.TrimRight(text, "\r")
 		e, hasTs := lineEntry(text, s.Label, path, no, s.Format, now, loc)
-		if hasTs {
-			last = lineState{e.TsUs, e.Level}
-		} else {
-			e.TsUs, e.Ts = last.ts, last.ts/1000
-			if e.Level == "" {
-				e.Level = last.lvl
-			}
-		}
-		if e.Level == "" {
-			e.Level = LvInfo
-		}
+		inheritLineState(e, hasTs, &last)
 		if no == line {
 			res.Index = len(res.Entries)
 		}

@@ -90,44 +90,36 @@ func (s *Server) auditBegin(sess *Session, ip, method string, params json.RawMes
 	return r
 }
 
-// auditBeginFor is auditBegin for a user name: the pairing relay has no session.
-func (s *Server) auditBeginFor(user, ip, method string, params json.RawMessage, admin bool) *auditRec {
-	if !s.audit.Enabled() {
-		return nil
-	}
-	kind := auditKind(method)
-	if kind == "" {
-		return nil
-	}
-	var p struct {
-		Plugin  string   `json:"plugin"`
-		Name    string   `json:"name"`
-		Command string   `json:"command"`
-		Args    []string `json:"args"`
-		Method  string   `json:"method"`
-		Path    string   `json:"path"`
-		Query   string   `json:"query"`
-		Data    string   `json:"data"`
-		B64     bool     `json:"b64"`
-		ID      string   `json:"id"`
-		Enabled bool     `json:"enabled"`
-		Source  string   `json:"source"`
-		Key     string   `json:"key"`
-		Value   any      `json:"value"`
-		// Env is the environment a call is for, Via says that a paired
-		// Ervisio server proxied it ("via <server> by <user>").
-		Env string `json:"env"`
-		Via string `json:"via"`
-	}
-	_ = json.Unmarshal(params, &p)
-	r := &auditRec{s: s, kind: kind}
-	r.e = audit.Entry{Time: time.Now(), User: user, IP: ip, Source: audit.SourcePlugin, Plugin: auditName(p.Plugin), Action: kind, Admin: admin, Env: auditName(p.Env), Origin: p.Via}
+// auditCallParams are the request params an audit record reads.
+type auditCallParams struct {
+	Plugin  string   `json:"plugin"`
+	Name    string   `json:"name"`
+	Command string   `json:"command"`
+	Args    []string `json:"args"`
+	Method  string   `json:"method"`
+	Path    string   `json:"path"`
+	Query   string   `json:"query"`
+	Data    string   `json:"data"`
+	B64     bool     `json:"b64"`
+	ID      string   `json:"id"`
+	Enabled bool     `json:"enabled"`
+	Source  string   `json:"source"`
+	Key     string   `json:"key"`
+	Value   any      `json:"value"`
+	// Env is the environment a call is for, Via says that a paired
+	// Ervisio server proxied it ("via <server> by <user>").
+	Env string `json:"env"`
+	Via string `json:"via"`
+}
+
+// fillTarget sets the entry fields a kind of call adds; false when the call is not logged.
+func (r *auditRec) fillTarget(kind string, p *auditCallParams) bool {
 	switch kind {
 	case "command", "pty":
 		r.e.Target = audit.CommandTarget(p.Command, p.Args)
 	case "http":
 		if p.Method == http.MethodGet || p.Method == http.MethodHead {
-			return nil
+			return false
 		}
 		r.e.Via = auditName(p.Name)
 		r.e.Target = audit.HTTPTarget(p.Method, p.Path, p.Query)
@@ -161,6 +153,25 @@ func (s *Server) auditBeginFor(user, ip, method string, params json.RawMessage, 
 				r.e.Target = p.Key + " = " + audit.RedactText(string(b))
 			}
 		}
+	}
+	return true
+}
+
+// auditBeginFor is auditBegin for a user name: the pairing relay has no session.
+func (s *Server) auditBeginFor(user, ip, method string, params json.RawMessage, admin bool) *auditRec {
+	if !s.audit.Enabled() {
+		return nil
+	}
+	kind := auditKind(method)
+	if kind == "" {
+		return nil
+	}
+	var p auditCallParams
+	_ = json.Unmarshal(params, &p)
+	r := &auditRec{s: s, kind: kind}
+	r.e = audit.Entry{Time: time.Now(), User: user, IP: ip, Source: audit.SourcePlugin, Plugin: auditName(p.Plugin), Action: kind, Admin: admin, Env: auditName(p.Env), Origin: p.Via}
+	if !r.fillTarget(kind, &p) {
+		return nil
 	}
 	return r
 }
@@ -249,22 +260,30 @@ func (r *auditRec) observe(ev rpc.Event) {
 	}
 	switch r.kind {
 	case "command":
-		if !bytes.Contains(ev.Data, []byte(`"exit"`)) {
-			return
-		}
-		var v struct {
-			Exit *int `json:"exit"`
-		}
-		if json.Unmarshal(ev.Data, &v) == nil && v.Exit != nil {
-			r.setCode(*v.Exit)
-		}
+		r.observeExit(ev)
 	case "http", "download":
-		var v struct {
-			Status int `json:"status"`
-		}
-		if json.Unmarshal(ev.Data, &v) == nil && v.Status != 0 {
-			r.setCode(v.Status)
-		}
+		r.observeStatus(ev)
+	}
+}
+
+func (r *auditRec) observeExit(ev rpc.Event) {
+	if !bytes.Contains(ev.Data, []byte(`"exit"`)) {
+		return
+	}
+	var v struct {
+		Exit *int `json:"exit"`
+	}
+	if json.Unmarshal(ev.Data, &v) == nil && v.Exit != nil {
+		r.setCode(*v.Exit)
+	}
+}
+
+func (r *auditRec) observeStatus(ev rpc.Event) {
+	var v struct {
+		Status int `json:"status"`
+	}
+	if json.Unmarshal(ev.Data, &v) == nil && v.Status != 0 {
+		r.setCode(v.Status)
 	}
 }
 

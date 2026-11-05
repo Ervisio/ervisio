@@ -57,25 +57,7 @@ func Serve(ctx context.Context, reg *Registry, in io.Reader, out io.Writer, opts
 
 	lines := make(chan []byte)
 	readErr := make(chan error, 1)
-	go func() {
-		lr := newLineReader(in, MaxLine)
-		for {
-			line, err := lr.next()
-			if errors.Is(err, errLineTooLong) {
-				s.log.Printf("rpc: dropped line longer than %d bytes", MaxLine)
-				continue
-			}
-			if err != nil {
-				readErr <- err
-				return
-			}
-			select {
-			case lines <- line:
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
+	go s.readLines(ctx, in, lines, readErr)
 
 	for {
 		select {
@@ -97,6 +79,54 @@ func Serve(ctx context.Context, reg *Registry, in io.Reader, out io.Writer, opts
 	}
 }
 
+// readLines sends every input line to lines until the input ends or fails
+// (the error goes to readErr) or ctx is cancelled.
+func (s *server) readLines(ctx context.Context, in io.Reader, lines chan<- []byte, readErr chan<- error) {
+	lr := newLineReader(in, MaxLine)
+	for {
+		line, err := lr.next()
+		if errors.Is(err, errLineTooLong) {
+			s.log.Printf("rpc: dropped line longer than %d bytes", MaxLine)
+			continue
+		}
+		if err != nil {
+			readErr <- err
+			return
+		}
+		select {
+		case lines <- line:
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// checkRequest returns why a request for meth cannot run, or nil.
+func (s *server) checkRequest(m *Message, meth *method, ok bool) *Error {
+	switch {
+	case !ok:
+		return Errorf(NotFound, "unknown method %s", m.Method)
+	case meth.level == Admin && !s.opts.Admin:
+		return Errorf(NeedsAdmin, "%s needs administrator rights", m.Method)
+	case m.Stream && meth.stream == nil:
+		return Errorf(Invalid, "%s is not a stream", m.Method)
+	case !m.Stream && meth.stream != nil:
+		return Errorf(Invalid, "%s is a stream", m.Method)
+	}
+	return nil
+}
+
+// track registers a as the active request id; false when id is taken.
+func (s *server) track(id uint64, a *active) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, dup := s.active[id]; dup {
+		return false
+	}
+	s.active[id] = a
+	return true
+}
+
 func (s *server) dispatch(ctx context.Context, m *Message) {
 	if m.ID == 0 {
 		s.log.Printf("rpc: message without id ignored")
@@ -109,18 +139,8 @@ func (s *server) dispatch(ctx context.Context, m *Message) {
 	reply := func(e *Error) { _ = s.out.write(&Message{ID: m.ID, Error: e}) }
 
 	meth, ok := s.reg.methods[m.Method]
-	switch {
-	case !ok:
-		reply(Errorf(NotFound, "unknown method %s", m.Method))
-		return
-	case meth.level == Admin && !s.opts.Admin:
-		reply(Errorf(NeedsAdmin, "%s needs administrator rights", m.Method))
-		return
-	case m.Stream && meth.stream == nil:
-		reply(Errorf(Invalid, "%s is not a stream", m.Method))
-		return
-	case !m.Stream && meth.stream != nil:
-		reply(Errorf(Invalid, "%s is a stream", m.Method))
+	if e := s.checkRequest(m, meth, ok); e != nil {
+		reply(e)
 		return
 	}
 
@@ -129,15 +149,11 @@ func (s *server) dispatch(ctx context.Context, m *Message) {
 	if m.Stream {
 		a.stream = newServerStream(cctx, m.ID, s.out)
 	}
-	s.mu.Lock()
-	if _, dup := s.active[m.ID]; dup {
-		s.mu.Unlock()
+	if !s.track(m.ID, a) {
 		cancel()
 		reply(Errorf(Invalid, "request id %d already in use", m.ID))
 		return
 	}
-	s.active[m.ID] = a
-	s.mu.Unlock()
 
 	call := &Call{ID: m.ID, Method: m.Method, Params: m.Params, Admin: s.opts.Admin}
 	s.wg.Add(1)
