@@ -1,0 +1,36 @@
+{
+  "title": "Formatta {name}",
+  "filesystem": "File system",
+  "label": "Etichetta del volume",
+  "quick": "Formattazione veloce",
+  "quickHint": "Crea un nuovo file system senza sovrascrivere ogni settore.",
+  "fullHint": "Sovrascrive l’intero volume prima di creare il file system. Può richiedere molto tempo.",
+  "forceWindows": "Forza lo smontaggio del volume",
+  "unmount": "Smonta prima il volume dati",
+  "forceHint": "Le unità di sistema restano protette. Linux rifiuta di smontare un volume occupato.",
+  "warning": "La formattazione cancella definitivamente tutti i file del volume. Questa operazione non può essere annullata.",
+  "confirm": "Digita {text} per confermare",
+  "start": "Formatta volume",
+  "cancel": "Annulla",
+  "close": "Chiudi",
+  "unmounted": "Non montato",
+  "running": "La formattazione è in corso. Attendi il completamento prima di chiudere la finestra.",
+  "blocked": {
+    "system_volume": "Il sistema operativo o una cartella essenziale usa questo volume. La formattazione è bloccata.",
+    "system_or_busy_volume": "Volume di sistema, riservato, di ripristino, di paging o non supportato. La formattazione è bloccata.",
+    "active_swap": "Questa unità è usata come swap attiva. La formattazione è bloccata.",
+    "read_only": "L’unità è in sola lettura.",
+    "no_media": "L’unità non contiene un supporto utilizzabile.",
+    "partitioned_disk": "Seleziona una partizione dati. Qui non è possibile formattare come volume unico un disco che contiene partizioni.",
+    "managed_volume": "Questo tipo di volume gestito non può essere formattato qui.",
+    "in_use": "L’unità è usata da altri dispositivi oppure non è possibile verificarne lo stato.",
+    "tools_missing": "Sul server non è installato un programma di formattazione supportato."
+  },
+  "phase": {
+    "check": "Controllo identità e sicurezza del volume…",
+    "unmount": "Smontaggio del volume dati…",
+    "erase": "Sovrascrittura del volume…",
+    "format": "Creazione del file system…",
+    "done": "Formattazione completata."
+  }
+}

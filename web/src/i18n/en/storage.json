@@ -1,0 +1,36 @@
+{
+  "title": "Format {name}",
+  "filesystem": "File system",
+  "label": "Volume label",
+  "quick": "Quick format",
+  "quickHint": "Create a fresh filesystem without overwriting every sector.",
+  "fullHint": "Overwrite the entire volume before creating the filesystem. This can take a long time.",
+  "forceWindows": "Force volume dismount",
+  "unmount": "Unmount the data volume first",
+  "forceHint": "System volumes remain protected. Linux refuses to unmount a volume that is busy.",
+  "warning": "Formatting permanently erases all files on this volume. This operation cannot be undone.",
+  "confirm": "Type {text} to confirm",
+  "start": "Format volume",
+  "cancel": "Cancel",
+  "close": "Close",
+  "unmounted": "Not mounted",
+  "running": "Formatting is running. Wait for it to finish before closing this window.",
+  "blocked": {
+    "system_volume": "The operating system or an essential system folder uses this volume. Formatting is blocked.",
+    "system_or_busy_volume": "This is a system, reserved, recovery, paging or unsupported volume. Formatting is blocked.",
+    "active_swap": "This device is active swap. Formatting is blocked.",
+    "read_only": "This device is read-only.",
+    "no_media": "There is no usable media in this device.",
+    "partitioned_disk": "Choose a data partition. A disk containing partitions cannot be formatted as a single volume here.",
+    "managed_volume": "This managed volume type cannot be formatted here.",
+    "in_use": "This device has active holders or its state cannot be verified.",
+    "tools_missing": "No supported filesystem formatter is installed on this host."
+  },
+  "phase": {
+    "check": "Checking volume identity and safety…",
+    "unmount": "Unmounting the data volume…",
+    "erase": "Overwriting the volume…",
+    "format": "Creating the filesystem…",
+    "done": "Format completed."
+  }
+}

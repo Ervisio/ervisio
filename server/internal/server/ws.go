@@ -275,6 +275,10 @@ func opensStream(head []byte) bool {
 }
 
 func (wc *wsConn) open(f *wsFrame) {
+	if wc.s.resetInProgress() {
+		wc.sendError(f.Ch, rpc.Errorf(rpc.Unavailable, "Ervisio is preparing a factory reset. Wait until it finishes."))
+		return
+	}
 	wc.mu.Lock()
 	_, dup := wc.channels[f.Ch]
 	n := len(wc.channels)
@@ -361,6 +365,11 @@ func (wc *wsConn) pumpEvents(id int64, st *rpc.ClientStream, ch *wsChannel, rec 
 }
 
 func (wc *wsConn) input(f *wsFrame) {
+	if wc.s.resetInProgress() {
+		wc.closeChannel(f.Ch)
+		wc.sendError(f.Ch, rpc.Errorf(rpc.Unavailable, "Ervisio is preparing a factory reset. Wait until it finishes."))
+		return
+	}
 	wc.mu.Lock()
 	ch := wc.channels[f.Ch]
 	if ch == nil {

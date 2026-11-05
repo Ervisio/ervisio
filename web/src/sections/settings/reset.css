@@ -1,0 +1,106 @@
+.set-reset {
+  display: grid;
+  gap: 18px;
+}
+.set-reset-scope {
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+  border-radius: 16px;
+  background: var(--sunk);
+}
+.set-reset-scope h3,
+.set-reset-job h3 {
+  font-size: 16px;
+  margin: 0 0 6px;
+}
+.set-reset-scope p,
+.set-reset-preview p,
+.set-reset-job p {
+  color: var(--ink2);
+  margin: 0;
+  line-height: 1.5;
+}
+.set-reset-scope ul,
+.set-reset-preview ul {
+  margin: 0;
+  padding-inline-start: 20px;
+  color: var(--ink2);
+  line-height: 1.6;
+}
+.set-reset-scope > .ui-btn {
+  justify-self: start;
+}
+.set-reset-preview {
+  display: grid;
+  gap: 12px;
+}
+.set-reset-preview h4 {
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+.set-reset-preview code,
+.set-reset-job code {
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.set-reset-paths {
+  max-height: 230px;
+  overflow-y: auto;
+}
+.set-reset-paths li {
+  padding: 4px 0;
+}
+.set-reset-paths span {
+  padding-inline-start: 10px;
+  font-size: 11px;
+}
+.set-reset-error {
+  color: var(--err);
+  overflow-wrap: anywhere;
+}
+.set-reset-job {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 18px;
+  border-radius: 16px;
+  background: var(--surface);
+}
+.set-reset-job > div {
+  flex: 1;
+  min-width: 0;
+}
+.set-reset-progress {
+  max-width: 760px;
+  margin: 72px auto;
+  padding: 24px;
+  display: grid;
+  gap: 18px;
+  color: var(--ink);
+}
+.set-reset-progress h1 {
+  font-size: 25px;
+  margin: 0;
+}
+.set-reset-progress h2 {
+  font-size: 17px;
+  margin: 0 0 5px;
+}
+.set-reset-progress p {
+  line-height: 1.5;
+  color: var(--ink2);
+  margin: 0;
+}
+.set-reset-progress code {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.set-reset-console-link {
+  justify-self: start;
+  padding: 10px 16px;
+  border-radius: 10px;
+  color: var(--ink);
+  background: var(--sunk);
+}

@@ -1,0 +1,53 @@
+.eos-titlebar.notepad-window-titlebar {
+  height: 43px;
+  padding-left: 0;
+  gap: 0;
+  background: color-mix(in srgb, var(--sunk) 88%, transparent);
+}
+.notepad-titlebar-slot {
+  flex: 1;
+  min-width: 0;
+  align-self: stretch;
+  display: flex;
+}
+.notepad-window-tabs {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: stretch;
+}
+.notepad-window-tabs .editor-tabs {
+  min-width: 0;
+  flex: 0 1 auto;
+  align-items: stretch;
+  padding: 6px 8px 0;
+  background: transparent;
+  font-size: 12px;
+  scrollbar-width: thin;
+}
+.notepad-window-tabs::after {
+  content: '';
+  flex: 1;
+  min-width: 28px;
+}
+.notepad-window-tabs .editor-tab {
+  min-width: 125px;
+  max-width: 230px;
+}
+.notepad-window-tabs .editor-tab > button:first-child {
+  padding: 7px 8px 7px 12px;
+}
+.notepad-window-tabs .editor-tab button {
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.notepad-window-tabs button:focus-visible {
+  outline: 2px solid var(--h-file);
+  outline-offset: -2px;
+}
+.notepad-window-tabs .editor-tab-close:hover {
+  background: color-mix(in srgb, var(--ink) 9%, transparent);
+}

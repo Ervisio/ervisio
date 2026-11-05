@@ -1,4 +1,4 @@
-import { ApiError, errorMessage } from '../../api';
+import { ApiError, call, errorMessage } from '../../api';
 import type { TFn } from '../../i18n';
 import { copyToClipboard } from '../../lib/clipboard';
 import { toast } from '../../ui';
@@ -8,7 +8,11 @@ import { enqueueUpload, ensureDir } from './transfers';
 import { isDirLike, type FEntry } from './types';
 import { join } from './util';
 
-type TrashItem = { id: string; originalPath: string; deletedAt: number };
+export interface TrashReceipt {
+  ids: string[];
+  admin: boolean;
+  toastId?: number;
+}
 
 const DOWNLOAD_STAGGER_MS = 350;
 
@@ -45,26 +49,22 @@ export function downloadEntries(es: FEntry[], admin: boolean, t: TFn) {
   if (es.length !== files.length) toast.info(t('err.foldersSkipped'));
 }
 
-/** The newest trash item of each path. */
-function latestTrashIds(items: TrashItem[], paths: string[]): string[] {
-  const ids: string[] = [];
-  for (const p of paths) {
-    const m = items
-      .filter((i) => i.originalPath === p)
-      .sort((a, b) => b.deletedAt - a.deletedAt)[0];
-    if (m) ids.push(m.id);
-  }
-  return ids;
-}
-
-export async function undoTrash(paths: string[], t: TFn) {
+export async function undoTrash(receipt: TrashReceipt, t: TFn): Promise<boolean> {
   try {
-    const r = await fcall<{ items: TrashItem[] }>('files.trashList', {});
-    const ids = latestTrashIds(r.items, paths);
-    if (ids.length) await fcall('files.restore', { ids });
+    const result = await call<{ restored: string[]; failed: BatchFailure[] }>(
+      'files.restore',
+      { ids: receipt.ids },
+      { admin: receipt.admin },
+    );
+    toastFailed(result.failed, (count) => t('err.someNotRestored', { count }));
+    if (result.failed?.length) receipt.ids = result.failed.map((failure) => failure.path);
     emitChanged();
+    if (result.restored.length) toast.ok(t('restored', { count: result.restored.length }));
+    if (receipt.toastId !== undefined) toast.dismiss(receipt.toastId);
+    return !result.failed?.length;
   } catch (x) {
     fail(t('err.restore'), x);
+    return false;
   }
 }
 

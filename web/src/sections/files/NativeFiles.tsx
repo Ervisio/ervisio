@@ -1,18 +1,7 @@
 import { useT } from '../../i18n';
-import { formatBytes } from '../../lib/format';
-import {
-  Button,
-  DropdownMenu,
-  Icon,
-  IconButton,
-  Progress,
-  registerIcon,
-  Skeleton,
-  type MenuItem,
-} from '../../ui';
+import { Button, DropdownMenu, IconButton, registerIcon, type MenuItem } from '../../ui';
 import type { Shortcut } from './Pane';
-import type { FEntry, Places } from './types';
-import { basename } from './util';
+import type { FEntry } from './types';
 
 registerIcon(
   'files-cut',
@@ -109,73 +98,4 @@ export function NativeFilesCommandBar(p: CommandBarProps) {
   );
 }
 
-/** Actual bridge-reported folders and disks; never invents Windows drives or user directories. */
-export function NativeComputer({
-  places,
-  home,
-  bookmarks,
-  onGo,
-}: {
-  places: Places | null;
-  home: string;
-  bookmarks: string[];
-  onGo(path: string): void;
-}) {
-  const t = useT('files');
-  const folders = [...new Set([home, ...bookmarks])];
-  return (
-    <section className="files-native-computer" aria-label={t('native.thisPC')}>
-      <header>
-        <Icon name="server" />
-        <div>
-          <h2>{t('native.thisPC')}</h2>
-          <p>{t('native.hostFiles')}</p>
-        </div>
-      </header>
-      <h3>{t('folders')}</h3>
-      <div className="files-native-quickfolders">
-        {folders.map((path) => (
-          <button key={path} type="button" onClick={() => onGo(path)} title={path}>
-            <span className="files-native-folder" aria-hidden="true" />
-            <span>
-              <b>{path === home ? t('place.home') : basename(path)}</b>
-              <small>{path}</small>
-            </span>
-          </button>
-        ))}
-      </div>
-      <h3>{t('native.devices')}</h3>
-      {!places ? (
-        <Skeleton lines={3} />
-      ) : (
-        <div className="files-native-drives">
-          {places.disks.map((disk) => (
-            <button
-              key={`${disk.device}:${disk.mount}`}
-              type="button"
-              onClick={() => onGo(disk.mount)}
-            >
-              <span className="files-native-drive">
-                <Icon name="server" />
-              </span>
-              <span>
-                <b>{t('disk', { mount: disk.mount })}</b>
-                <Progress value={disk.total ? (disk.used / disk.total) * 100 : 0} hue="file" />
-                <small>
-                  {t('native.freeSpace', {
-                    free: formatBytes(disk.avail),
-                    total: formatBytes(disk.total),
-                  })}
-                </small>
-                <small className="mono">
-                  {disk.device} · {disk.fstype}
-                </small>
-              </span>
-            </button>
-          ))}
-          {places.disks.length === 0 && <p className="files-muted">{t('native.noDisks')}</p>}
-        </div>
-      )}
-    </section>
-  );
-}
+export { ComputerView as NativeComputer } from './ComputerView';

@@ -18,6 +18,7 @@ import (
 	"github.com/ervisio/ervisio/server/internal/bridge"
 	"github.com/ervisio/ervisio/server/internal/config"
 	"github.com/ervisio/ervisio/server/internal/legacy"
+	"github.com/ervisio/ervisio/server/internal/maintenance"
 	configmod "github.com/ervisio/ervisio/server/internal/modules/config"
 	"github.com/ervisio/ervisio/server/internal/modules/plugins"
 	"github.com/ervisio/ervisio/server/internal/notify"
@@ -142,6 +143,9 @@ func runInternalMode() {
 		return
 	}
 	mode := os.Args[1]
+	if mode == maintenance.HelperFlag {
+		os.Exit(maintenance.RunHelper(os.Args[2:]))
+	}
 	// Internal mode: the root helper that opens a PAM session around a user
 	// bridge (started by the daemon itself, never by hand).
 	if mode == bridge.HelperFlag {

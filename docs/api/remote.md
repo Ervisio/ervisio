@@ -81,3 +81,25 @@ only an id and path. Its adapter converts this to the API params above and never
 passes remote paths to local operations or automatically requests local root.
 Remote chmod/chown and local-terminal actions are unavailable because the remote
 file protocol does not grant those operations.
+
+## Capacity and project search
+
+`remote.statfs {conn,path}` returns `{supported,path,total?,used?,free?,avail?}` with
+bytes reported by SFTP `statvfs@openssh.com` or SMB2/3 filesystem information.
+`avail` is available to the remote account; `free` may include reserved blocks.
+It is filesystem capacity reported by the server, rather than a fabricated share
+quota. Unsupported servers return `supported:false` without made-up zeros.
+Files displays saved connections as network drives in This PC in both shells.
+
+`remote.searchText` is a read-only stream accepting `{conn,root,query,
+caseSensitive?,includeGenerated?,maxResults?}`. Its batches and resource limits
+match `files.searchText` in `files.md`; paths are POSIX paths inside the saved
+connection. Search never follows directory symlinks or requests local root.
+FTP project-text search is explicitly unavailable because its legacy adapter
+cannot guarantee interruption of a stalled login/data read. Existing FTP file
+browsing and transfers are unchanged.
+
+Capacity checks and project search use dedicated read-only connections, bounded
+to four at once per user bridge and a 15-second deadline including connection
+setup. Cancellation closes that owned connection to interrupt stalled reads;
+it never closes another app's pooled file transfer connection.

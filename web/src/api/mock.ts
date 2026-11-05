@@ -1,6 +1,8 @@
 // Tiny in-browser fake daemon for `VITE_MOCK=1 npm run dev`.
 import { ApiError, type PublicHost, type Session } from './types';
 import { mockRemoteCall } from '../sections/files/remoteMock';
+import { mockFilesOp } from '../sections/files/fileOpsMock';
+import { mockResetCall } from '../sections/settings/resetMock';
 
 const LS = 'ervisio.mock.';
 const rd = <T>(k: string, d: T): T => {
@@ -34,8 +36,9 @@ export function mockSession(): Session {
   return {
     user,
     home: rd<string | undefined>('home', undefined),
-    uid: 1000,
-    isAdmin: unlockedUntil > Date.now(),
+    uid: user === 'root' ? 0 : 1000,
+    isRoot: user === 'root',
+    isAdmin: user === 'root' || unlockedUntil > Date.now(),
     canSudo: true,
     unlockedUntil: unlockedUntil > Date.now() ? unlockedUntil : undefined,
   };
@@ -174,8 +177,47 @@ const mockState = () => ({
 });
 
 export async function mockCall(method: string, params: any, _admin?: boolean): Promise<any> {
+  if (method.startsWith('maintenance.reset.'))
+    return mockResetCall(
+      method,
+      params,
+      !!_admin || unlockedUntil > Date.now() || rd<string>('user', '') === 'root',
+    );
   if (method.startsWith('remote.')) return mockRemoteCall(method, params);
+  const fileOperation = mockFilesOp(method, params, !!_admin);
+  if (fileOperation !== undefined) return fileOperation;
   switch (method) {
+    case 'prefs.setAll': {
+      const values: Record<string, unknown> = params.replace
+        ? {}
+        : rd<Record<string, unknown>>('prefs', {});
+      for (const [key, value] of Object.entries(params.values ?? {})) {
+        if (value === null) delete values[key];
+        else values[key] = value;
+      }
+      wr('prefs', values);
+      return values;
+    }
+    case 'storage.inspect': {
+      const stored = rd<any[]>('storage.volumes', []).find(
+        (volume) => volume.device === params.device,
+      );
+      return (
+        stored ?? {
+          device: params.device,
+          name: params.device,
+          size: 128000000000,
+          fstype: 'ext4',
+          label: '',
+          mounts: ['/'],
+          blocked: 'system_volume',
+          identity: 'fixture-system-volume',
+          confirmation: 'FORMAT ' + params.device,
+          filesystems: ['ext4'],
+          platform: 'linux',
+        }
+      );
+    }
     case 'terminal.list':
       return delay(
         { sessions: rd<any[]>('terminals', []).filter((s) => !!s.admin === !!_admin) },
@@ -219,11 +261,40 @@ export async function mockCall(method: string, params: any, _admin?: boolean): P
       return delay({ path: params.path, entries }, 15);
     }
     case 'files.places':
-      return delay({ home: rd('home', '/'), recent: [], disks: [], trashCount: 0 }, 15);
+      return delay(
+        {
+          home: rd('home', '/'),
+          recent: [],
+          disks: rd('disks', []),
+          trashCount: rd<any[]>(_admin ? 'trash.admin' : 'trash.user', []).length,
+        },
+        15,
+      );
     case 'files.stat': {
       const folders = rd<Record<string, any[]>>('files', {});
+      if (folders[params.path])
+        return delay(
+          {
+            name: params.path.split('/').at(-1) || '/',
+            path: params.path,
+            type: 'dir',
+            size: 0,
+            mtime: 1,
+            mode: '0755',
+            perm: 'drwxr-xr-x',
+            owner: 'alice',
+            group: 'alice',
+            uid: 1000,
+            gid: 1000,
+          },
+          15,
+        );
       for (const [folder, entries] of Object.entries(folders)) {
-        const entry = entries.find((item) => `${folder}/${item.name}` === params.path);
+        const entry = entries.find(
+          (item) =>
+            (item.path ?? (folder === '/' ? '/' + item.name : `${folder}/${item.name}`)) ===
+            params.path,
+        );
         if (entry) return delay({ ...entry, path: params.path }, 15);
       }
       throw new ApiError('not_found', 'Fixture file not found');

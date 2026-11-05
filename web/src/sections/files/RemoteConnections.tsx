@@ -23,14 +23,14 @@ export function useRemoteConnections(onOpen: (location: string) => void, activeL
   useEffect(() => {
     if (active) refresh();
   }, [active, refresh]);
-  const open = async (remote: Remote) => {
+  const open = async (remote: Remote, openIn = onOpen) => {
     try {
       const r = await call<{ path: string }>(
         'remote.start',
         { conn: remote.id },
         { noUnlock: true },
       );
-      onOpen(remoteLocation(remote.id, r.path));
+      openIn(remoteLocation(remote.id, r.path));
     } catch (error) {
       if (
         error instanceof ApiError &&
@@ -45,6 +45,7 @@ export function useRemoteConnections(onOpen: (location: string) => void, activeL
   };
   return {
     connections,
+    refresh,
     open,
     add: () => setEditing('new'),
     edit: setEditing,

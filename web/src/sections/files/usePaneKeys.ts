@@ -2,6 +2,7 @@ import type { KeyboardEvent } from 'react';
 import type { Shortcut } from './Pane';
 import type { FEntry } from './types';
 import type { PickKeys } from './usePaneSelection';
+import { fileKeysEditable, fileShortcut } from './fileShortcuts';
 
 const ARROW_STEP: Record<string, number> = {
   ArrowDown: 1,
@@ -9,25 +10,6 @@ const ARROW_STEP: Record<string, number> = {
   ArrowUp: -1,
   ArrowLeft: -1,
 };
-const PLAIN_KEY_SHORTCUTS: Record<string, Shortcut> = {
-  F2: 'rename',
-  F5: 'refresh',
-  Backspace: 'up',
-};
-const MOD_KEY_SHORTCUTS: Record<string, Shortcut> = { c: 'copy', x: 'cut', v: 'paste' };
-
-function keyShortcut(ev: KeyboardEvent, mod: boolean): Shortcut | null {
-  const k = ev.key;
-  if (k === 'Delete') return ev.shiftKey ? 'permDelete' : 'delete';
-  if (k === 'Enter') return mod ? null : 'open';
-  if (ev.altKey && k === 'ArrowUp') return 'up';
-  if (PLAIN_KEY_SHORTCUTS[k]) return PLAIN_KEY_SHORTCUTS[k];
-  if (!mod) return null;
-  const lower = k.toLowerCase();
-  if (ev.shiftKey && lower === 'n') return 'newFolder';
-  return MOD_KEY_SHORTCUTS[lower] ?? null;
-}
-
 interface KeysArgs {
   rows: FEntry[];
   selected: ReadonlySet<string>;
@@ -40,17 +22,15 @@ interface KeysArgs {
 
 export function usePaneKeys(a: KeysArgs) {
   return (ev: KeyboardEvent<HTMLDivElement>) => {
-    const tag = (ev.target as HTMLElement).tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-    const mod = ev.ctrlKey || ev.metaKey;
+    if (ev.defaultPrevented || fileKeysEditable(ev.target)) return;
     const k = ev.key;
-    const shortcut = keyShortcut(ev, mod);
-    if (shortcut) {
-      ev.preventDefault();
-      a.onShortcut(shortcut);
-    } else if (mod && k.toLowerCase() === 'a') {
+    const shortcut = fileShortcut(ev);
+    if (shortcut === 'selectAll') {
       ev.preventDefault();
       a.onSelected(new Set(a.rows.map((r) => r.path)));
+    } else if (shortcut) {
+      ev.preventDefault();
+      a.onShortcut(shortcut);
     } else if (k === 'Escape') {
       if (a.selected.size) a.onSelected(new Set());
       else if (a.query) a.onQuery('');

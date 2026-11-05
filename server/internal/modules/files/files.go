@@ -32,6 +32,7 @@ func Register(r *rpc.Registry) {
 	r.Handle("files.readText", rpc.User, hReadText)
 	r.Handle("files.writeText", rpc.User, hWriteText)
 	r.Stream("files.search", rpc.User, hSearch)
+	r.Stream("files.searchText", rpc.User, hSearchText)
 	r.Handle("files.places", rpc.User, hPlaces)
 	r.Handle("files.thumbnail", rpc.User, hThumbnail)
 	r.Stream("files.readStream", rpc.User, hReadStream)

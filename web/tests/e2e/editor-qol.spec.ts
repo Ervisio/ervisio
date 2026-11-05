@@ -46,7 +46,7 @@ for (const shell of ['classic', 'ervisios']) {
     }) => {
       const errors: string[] = [];
       page.on('pageerror', (e) => errors.push(e.message));
-      await page.goto('/files');
+      await page.goto('/files?path=%2Fsrv%2Fdemo');
       await page.locator('[data-path="/srv/demo/app.js"]').first().click({ button: 'right' });
       await page.getByRole('menuitem', { name: 'Open in Code editor', exact: true }).click();
       const editor = page.locator('.editor-workspace--code');
@@ -68,7 +68,7 @@ for (const shell of ['classic', 'ervisios']) {
       expect(errors).toEqual([]);
     });
     test('Notepad is a real editor and protects unsaved documents', async ({ page }) => {
-      await page.goto('/files');
+      await page.goto('/files?path=%2Fsrv%2Fdemo');
       await page.locator('[data-path="/srv/demo/notes.txt"]').first().dblclick();
       const editor = page.locator('.editor-workspace--text');
       const text = editor.getByRole('textbox', { name: 'Notepad text' });
@@ -94,7 +94,11 @@ for (const shell of ['classic', 'ervisios']) {
           ),
         )
         .toBe('updated notes\n');
-      await editor.getByRole('button', { name: 'New tab', exact: true }).click();
+      await (
+        shell === 'ervisios' ? page.getByRole('region', { name: 'Notepad', exact: true }) : editor
+      )
+        .getByRole('button', { name: 'New tab', exact: true })
+        .click();
       await text.fill('new file\n');
       await text.press('Control+s');
       const dialog = page.getByRole('dialog', { name: 'Save to the server' });
@@ -112,7 +116,7 @@ for (const shell of ['classic', 'ervisios']) {
     test('Explorer opens terminal in the selected directory, preserving spaces', async ({
       page,
     }) => {
-      await page.goto('/files');
+      await page.goto('/files?path=%2Fsrv%2Fdemo');
       await page
         .locator('[data-path="/srv/demo/project folder"]')
         .first()
@@ -130,7 +134,7 @@ for (const shell of ['classic', 'ervisios']) {
         .toBe(1);
     });
     test('a truncated preview cannot be saved through keyboard shortcuts', async ({ page }) => {
-      await page.goto('/files');
+      await page.goto('/files?path=%2Fsrv%2Fdemo');
       await page.evaluate(() =>
         localStorage.setItem(
           'ervisio.mock.texts',
@@ -161,7 +165,7 @@ for (const shell of ['classic', 'ervisios']) {
     test('network files use the same code editor and stay on their remote connection', async ({
       page,
     }) => {
-      await page.goto('/files');
+      await page.goto('/files?path=%2Fsrv%2Fdemo');
       await page.evaluate(() => {
         localStorage.setItem(
           'ervisio.mock.remotes',

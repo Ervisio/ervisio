@@ -1,4 +1,6 @@
 # Decisions (date · decision · why)
+2026-11-06 · Full factory reset is a session-bound preview, explicit typed confirmation and detached Linux helper with private backup and health-checked rollback · User authorized complete Ervisio configuration, connections, keys and plugin data reset while host accounts/files stay outside its scope; custom unmanaged layouts fail closed.
+2026-11-06 · Format only re-inspected local data volumes with typed device confirmation · Keep system/swap/managed volumes protected; Linux quick/full paths are verified using an owned disposable loop image rather than user disks.
 2026-11-05 · Share Notepad, lazy CodeMirror and remote file connections between Classic and ErvisiOS · User explicitly requires both interfaces to retain feature parity; desktop-only chrome/grid remain shell features.
 2026-11-05 · SFTP/SMB connections use the existing per-account remote bridge store, not host OS mounts · User wants simple saved network locations; keep remote credentials sealed server-side and preserve the account's permissions.
 2026-11-05 · Editor drafts stay in signed-in session memory across navigation/shell changes · Prevent accidental loss without persisting file contents or secrets in browser storage or user preferences.

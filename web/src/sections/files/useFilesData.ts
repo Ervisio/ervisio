@@ -1,19 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useWindowActivity } from '../../lib/windowActivity';
+import { call } from '../../api';
 import { usePaneData, type PaneData } from './data';
-import { fcall, onFilesChanged } from './fapi';
+import { onFilesChanged } from './fapi';
 import type { Side } from './filesPageTypes';
 import type { FEntry, Places } from './types';
 import type { FilesTabs } from './useFilesTabs';
 
 const PLACES_REFRESH_MS = 60_000;
 
-export function usePlaces(): Places | null {
+export function usePlaces(admin = false): Places | null {
   const active = useWindowActivity();
   const [places, setPlaces] = useState<Places | null>(null);
   const loadPlaces = useCallback(() => {
-    fcall<Places>('files.places', {}).then(setPlaces, () => undefined);
-  }, []);
+    // Reading the active Trash scope never prompts for administrator rights.
+    call<Places>('files.places', {}, { admin, noUnlock: true }).then(setPlaces, () => undefined);
+  }, [admin]);
   useEffect(() => {
     if (!active) return;
     loadPlaces();
@@ -41,7 +43,7 @@ export function useFilesPaneData(tabs: FilesTabs, showHidden: boolean, starredLi
     starred: starredList,
     query: query.L,
     onElevate: onElevateL,
-    enabled: true,
+    enabled: tab.left.loc !== 'computer:',
   });
   const dR = usePaneData({
     loc: tab.right.loc,
@@ -50,7 +52,7 @@ export function useFilesPaneData(tabs: FilesTabs, showHidden: boolean, starredLi
     starred: starredList,
     query: query.R,
     onElevate: onElevateR,
-    enabled: split,
+    enabled: split && tab.right.loc !== 'computer:',
   });
   const data = (s: Side): PaneData => (s === 'L' ? dL : dR);
   const selectedEntries = (s: Side): FEntry[] => data(s).entries.filter((e) => sel[s].has(e.path));

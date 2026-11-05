@@ -32,6 +32,7 @@ import { usePrefSave, useServerConfig, type CfgState } from './save';
 import { UpdatesBlock } from './Updates';
 import { updateStatus } from './updatesApi';
 import { NativeSettings } from './NativeSettings';
+import { ResetControls } from './ResetControls';
 import './settings.css';
 
 export interface RowDef {
@@ -168,7 +169,24 @@ export default function SettingsPage() {
       hostsGroup(srv),
     );
   }
-  groups.push(aboutGroup(srv, isAdmin, managedBy, session, host));
+  groups.push(
+    {
+      id: 'reset',
+      part: 'about',
+      icon: 'undo',
+      hue: 'usr',
+      title: t('reset.title'),
+      rows: [
+        {
+          id: 'reset-controls',
+          title: t('reset.controlsTitle'),
+          words: 'reset restore factory default clear clean ripristina azzera fabbrica',
+          block: <ResetControls administrative={isAdmin} />,
+        },
+      ],
+    },
+    aboutGroup(srv, isAdmin, managedBy, session, host),
+  );
 
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   const visible = filterGroups(groups, words);

@@ -153,6 +153,13 @@ func (s *Server) handleRPC(w http.ResponseWriter, r *http.Request, sess *Session
 		writeError(w, e)
 		return
 	}
+	if s.handleResetRPC(w, r, sess, req) {
+		return
+	}
+	if s.resetInProgress() {
+		writeError(w, rpc.Errorf(rpc.Unavailable, "Ervisio maintenance is in progress. Wait for it to finish."))
+		return
+	}
 	// The activity log is read by the daemon itself (it is root's).
 	if req.Method == "audit.list" || req.Method == "plugins.audit.list" {
 		s.handleAuditList(w, sess, req.Method, req.Params)

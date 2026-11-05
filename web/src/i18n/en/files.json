@@ -61,11 +61,28 @@
   "folderCreated": "Folder {name} created",
   "fileCreated": "File {name} created",
   "place": {
+    "computer": "This PC",
+    "adminTrash": "Administrator Trash",
     "home": "Home",
     "root": "Root",
     "recent": "Recent",
     "starred": "Starred",
     "trash": "Trash"
+  },
+  "computer": {
+    "networkFolders": "Network locations",
+    "noNetworkFolders": "Add an SFTP server or a shared network folder to find it here.",
+    "capacityLoading": "Checking available space…",
+    "capacityUnknown": "The server does not report available space",
+    "connectionUnavailable": "Server unavailable",
+    "format": "Format…",
+    "device": "Device",
+    "mount": "Mount point",
+    "filesystem": "File system",
+    "share": "Share",
+    "total": "Capacity",
+    "used": "Used space",
+    "available": "Available space"
   },
   "remote": {
     "title": "Remote",
@@ -177,6 +194,7 @@
     "emptyFile": "(empty file)"
   },
   "act": {
+    "openFolderCode": "Open folder in Code editor",
     "terminalHere": "Open in Terminal",
     "openNotepad": "Open in Notepad",
     "openCodeEditor": "Open in Code editor",

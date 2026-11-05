@@ -93,7 +93,13 @@ func dialSFTP(ctx context.Context, spec *Conn) (*sftpFS, error) {
 	if err != nil {
 		return nil, err
 	}
-	_ = conn.SetDeadline(time.Now().Add(dialTimeout))
+	stopDial := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stopDial()
+	deadline := time.Now().Add(dialTimeout)
+	if limit, ok := ctx.Deadline(); ok && limit.Before(deadline) {
+		deadline = limit
+	}
+	_ = conn.SetDeadline(deadline)
 	cc, chans, reqs, err := ssh.NewClientConn(conn, addr, cfg)
 	if err != nil {
 		_ = conn.Close()

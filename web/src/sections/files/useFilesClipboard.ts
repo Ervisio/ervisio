@@ -13,12 +13,20 @@ export function useFilesClipboard(t: TFn, tabs: FilesTabs) {
   const [clip, setClip] = useState<Clip | null>(null);
 
   const enqueueClip = (c: Clip, dest: string, s: Side) =>
-    enqueueCopy({ from: c.paths, to: dest, move: c.cut, admin: adminOf(s), onElevate: elevate(s) });
+    enqueueCopy({
+      from: c.paths,
+      to: dest,
+      move: c.cut,
+      admin: adminOf(s),
+      onElevate: elevate(s),
+      onDone: () => {
+        if (c.cut) setClip((current) => (current === c ? null : current));
+      },
+    });
   const paste = (s: Side) => {
     const dest = writableLoc(s);
     if (!clip || !dest) return;
     enqueueClip(clip, dest, s);
-    if (clip.cut) setClip(null);
   };
   const pasteInto = (dest: string, s: Side) => {
     if (clip) enqueueClip(clip, dest, s);

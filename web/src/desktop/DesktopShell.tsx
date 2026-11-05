@@ -109,96 +109,6 @@ function AppContent({ app, url }: { app: AppEntry; url: string }) {
   );
 }
 
-/** A real host overview. Folder buttons use the existing file manager and its privilege checks. */
-function ThisPC({ apps, open }: { apps: AppEntry[]; open(app: AppEntry, url?: string): void }) {
-  const t = useT('shell');
-  const { session, host, isUnlocked } = useSession();
-  const files = apps.find((a) => a.key === 'files');
-  return (
-    <div className="eos-pc">
-      <div className="eos-pc-heading">
-        <span>
-          <Icon name="server" size={40} />
-        </span>
-        <div>
-          <h1>{host?.hostname ?? t('desktop.thisPC')}</h1>
-          <p>{host?.distro.name}</p>
-        </div>
-      </div>
-      <h2>{t('desktop.locations')}</h2>
-      <div className="eos-pc-locations">
-        <button
-          onClick={() =>
-            files && open(files, `/files?path=${encodeURIComponent(session?.home ?? '/')}`)
-          }
-        >
-          <span className="eos-location-icon">
-            <Icon name="home" size={30} />
-          </span>
-          <span>
-            <b>{t('desktop.home')}</b>
-            <small>{session?.home ?? session?.user}</small>
-          </span>
-          <Icon name="right" />
-        </button>
-        <button
-          onClick={() =>
-            files &&
-            open(
-              files,
-              `/files?path=${encodeURIComponent(session?.os === 'windows' ? 'C:\\' : '/')}`,
-            )
-          }
-        >
-          <span className="eos-location-icon">
-            <Icon name="disk" size={30} />
-          </span>
-          <span>
-            <b>{t('desktop.systemFiles')}</b>
-            <small>{host?.distro.name}</small>
-          </span>
-          <Icon name="right" />
-        </button>
-      </div>
-      <h2>{t('desktop.device')}</h2>
-      <dl className="eos-pc-info">
-        <div>
-          <dt>{t('desktop.host')}</dt>
-          <dd>{host?.hostname}</dd>
-        </div>
-        <div>
-          <dt>{t('desktop.account')}</dt>
-          <dd>{session?.name || session?.user}</dd>
-        </div>
-        <div>
-          <dt>{t('desktop.address')}</dt>
-          <dd>{host?.ip ?? '—'}</dd>
-        </div>
-        <div>
-          <dt>{t('desktop.permissions')}</dt>
-          <dd>{t(isUnlocked ? 'desktop.admin' : 'desktop.user')}</dd>
-        </div>
-      </dl>
-      <h2>{t('desktop.management')}</h2>
-      <div className="eos-pc-apps">
-        {apps
-          .filter((a) => ['overview', 'services', 'software', 'users', 'logs'].includes(a.key))
-          .map((app) => (
-            <button key={app.key} onClick={() => open(app)} className={app.hueClass}>
-              <AppIcon app={app} />
-              <span>{app.label}</span>
-              <Icon name="right" />
-            </button>
-          ))}
-      </div>
-      <p className="eos-pc-note">
-        <Icon name="info" />
-        {t('desktop.virtualHint')}
-      </p>
-    </div>
-  );
-}
-
 export function DesktopShell() {
   const t = useT('shell');
   const filesT = useT('files');
@@ -1066,7 +976,7 @@ export function DesktopShell() {
                           )}
                       </div>
                     ) : app!.key === 'this-pc' ? (
-                      <ThisPC apps={apps} open={open} />
+                      <AppContent app={app!} url="/files?view=computer" />
                     ) : (
                       <AppContent app={app!} url={win.url} />
                     )}

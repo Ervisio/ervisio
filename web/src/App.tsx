@@ -5,6 +5,7 @@ import { SECTIONS } from './sections';
 import LoginPage from './pages/Login';
 import { RequireAuth } from './pages/RequireAuth';
 import { lazy } from 'react';
+import ResetProgressPage from './sections/settings/ResetProgressPage';
 
 const KitPage = import.meta.env.DEV ? lazy(() => import('./pages/Kit')) : null;
 
@@ -12,6 +13,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/maintenance/reset" element={<ResetProgressPage />} />
       <Route
         element={
           <RequireAuth>

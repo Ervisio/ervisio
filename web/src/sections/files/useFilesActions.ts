@@ -85,6 +85,12 @@ export function useFilesActions({ t, isRoot, tabs, selectedEntries, panel }: Act
       `/terminal?cwd=${encodeURIComponent(path)}${adminOf(s) ? '&admin=1' : ''}&launch=${crypto.randomUUID()}`,
     );
   };
+  const openFolderEditor = (path: string, s: Side) => {
+    if (isVirtual(path)) return;
+    launch(
+      `/editor?folder=${encodeURIComponent(path)}${adminOf(s) && !isRemoteLocation(path) ? '&admin=1' : ''}`,
+    );
+  };
   const openEntry = (e: FEntry, s: Side) => {
     if (pane(s).loc === 'trash:') return;
     if (isDirLike(e)) return navigate(s, e.path);
@@ -99,6 +105,8 @@ export function useFilesActions({ t, isRoot, tabs, selectedEntries, panel }: Act
     const es = selectedEntries(s);
     const loc = pane(s).loc;
     switch (k) {
+      case 'undo':
+        return removal.undo();
       case 'delete':
         return removal.requestDelete(es, s);
       case 'permDelete':
@@ -142,6 +150,7 @@ export function useFilesActions({ t, isRoot, tabs, selectedEntries, panel }: Act
     openEntry,
     openEditor,
     openTerminal,
+    openFolderEditor,
     shortcut,
   };
 }

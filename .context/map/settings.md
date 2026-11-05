@@ -2,6 +2,7 @@
 Purpose: Settings page (preferences, server config, channels, plugin jobs, environments, activity log) and the backend that stores each piece.
 
 ## Entry points and public contracts
+- `ResetControls.tsx`, `ResetProgressPage.tsx`: personal preference reset and admin complete Ervisio reset. Daemon `server/reset.go`, detached `maintenance/helper_linux.go`, safe staged engine `maintenance/reset_linux.go`; contract `docs/api/maintenance.md`. Full reset requires installed Linux/default managed paths; public progress uses a redacted read-only token across restart, outside RequireAuth.
 - `web/src/sections/settings/index.tsx`: `SettingsPage`; `GroupDef[]` (part you/server/about, `admin`) of `RowDef` (`control` or full-width `block`, `cfgKey`, `restart`, `words` for search); `#hash` scrolls to a group.
 - `save.ts`: `usePrefSave` (`prefs.set` + Undo toast), `useServerConfig(enabled)` (`config.get` noUnlock, `config.set` optimistic + Undo), `pick` (flat or nested key).
 - `useAdminLoad.tsx`: `useAdminLoad(fn, pollMs)` -> `loading|ready|locked|failed`; `LockedPanel`. `NameList.tsx`: chip editor, `NAME_RE`.

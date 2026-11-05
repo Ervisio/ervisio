@@ -1,35 +1,61 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { TFn } from '../../i18n';
 import { toast } from '../../ui';
 import { emitChanged, fcall } from './fapi';
 import type { BatchFailure, DeleteRequest, Side } from './filesPageTypes';
-import { fail, toastFailed, undoTrash } from './filesOps';
+import { fail, toastFailed, undoTrash, type TrashReceipt } from './filesOps';
 import type { FEntry } from './types';
 import type { FilesTabs } from './useFilesTabs';
 import { isRemoteLocation } from './remoteLocation';
 
 /** Trash, permanent delete (behind a confirmation), restore and empty trash. */
-export function useFilesDelete(t: TFn, isRoot: boolean, tabs: FilesTabs) {
-  const { pane, adminOf, clearSel, side } = tabs;
+export function useFilesDelete(t: TFn, _isRoot: boolean, tabs: FilesTabs) {
+  const { pane, adminOf, clearSel, side, elevate } = tabs;
+  const undoStack = useRef<TrashReceipt[]>([]);
+  const undoBusy = useRef(false);
+  const undo = async (receipt = undoStack.current.at(-1)) => {
+    if (!receipt || undoBusy.current || !undoStack.current.includes(receipt)) return;
+    undoBusy.current = true;
+    try {
+      if (await undoTrash(receipt, t))
+        undoStack.current = undoStack.current.filter((item) => item !== receipt);
+    } finally {
+      undoBusy.current = false;
+    }
+  };
   const [del, setDel] = useState<DeleteRequest | null>(null);
   const [emptyTrash, setEmptyTrash] = useState(false);
 
   const doTrash = async (es: FEntry[], s: Side) => {
     const paths = es.map((e) => e.path);
+    let admin = adminOf(s);
     try {
-      const r = await fcall<{ deleted: string[]; failed: BatchFailure[] }>(
+      const r = await fcall<{
+        deleted: string[];
+        failed: BatchFailure[];
+        trashed: { id: string; path: string }[];
+      }>(
         'files.delete',
         { paths, trash: true },
-        { admin: adminOf(s) },
+        {
+          admin,
+          onElevate: () => {
+            admin = true;
+            elevate(s)();
+          },
+        },
       );
       clearSel(s);
       emitChanged();
-      if ((r.deleted ?? []).length)
-        toast.undo(
+      if ((r.trashed ?? []).length) {
+        const receipt: TrashReceipt = { ids: r.trashed.map((item) => item.id), admin };
+        undoStack.current = [...undoStack.current.slice(-19), receipt];
+        receipt.toastId = toast.undo(
           t('trashed', { count: (r.deleted ?? []).length }),
           t('undo'),
-          () => void undoTrash(r.deleted, t),
+          () => void undo(receipt),
         );
+      }
       toastFailed(r.failed, (count) => t('err.someNotDeleted', { count }));
     } catch (x) {
       fail(t('err.trash'), x);
@@ -71,7 +97,7 @@ export function useFilesDelete(t: TFn, isRoot: boolean, tabs: FilesTabs) {
   const requestDelete = (es: FEntry[], s: Side, permanent = false) => {
     if (es.length === 0) return;
     const inTrash = pane(s).loc === 'trash:';
-    if (inTrash || permanent || isRemoteLocation(pane(s).loc) || pane(s).admin || isRoot)
+    if (inTrash || permanent || isRemoteLocation(pane(s).loc))
       setDel({ entries: es, side: s, trash: inTrash });
     else void doTrash(es, s);
   };
@@ -107,7 +133,8 @@ export function useFilesDelete(t: TFn, isRoot: boolean, tabs: FilesTabs) {
     del,
     closeDelete: () => setDel(null),
     confirmDelete: () => doPermanent(del!.entries, del!.side, del!.trash),
-    isDeleteStrict: !!del && (pane(del.side).admin || isRoot),
+    isDeleteStrict: false,
+    undo,
     emptyTrash,
     askEmptyTrash: () => setEmptyTrash(true),
     closeEmptyTrash: () => setEmptyTrash(false),

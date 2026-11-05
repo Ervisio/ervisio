@@ -23,6 +23,7 @@ interface MenuOps {
   open(e: FEntry): void;
   openEditor(e: FEntry, mode: EditorMode): void;
   terminal(path: string): void;
+  folderEditor(path: string): void;
   navigate(s: Side, loc: string): void;
   openTab(loc: string): void;
   download(es: FEntry[]): void;
@@ -158,6 +159,13 @@ function entryOpenItems(ctx: MenuContext, one: FEntry): MenuItem[] {
       label: t('act.terminalHere'),
       icon: 'terminal',
       onSelect: () => ops.terminal(dirLike ? one.path : dirname(one.path)),
+    });
+  if (dirLike)
+    items.push({
+      id: 'folder-code',
+      label: t('act.openFolderCode'),
+      icon: 'code',
+      onSelect: () => ops.folderEditor(one.path),
     });
   if (!dirLike && looksTextual(one))
     items.push(
@@ -301,6 +309,13 @@ function backgroundMenu({
       icon: 'terminal',
       onSelect: () => ops.terminal(loc),
     });
+  if (!isVirtual(loc))
+    items.push({
+      id: 'folder-code',
+      label: t('act.openFolderCode'),
+      icon: 'code',
+      onSelect: () => ops.folderEditor(loc),
+    });
   if (can && loc !== '/')
     items.push({
       id: 'bm',
@@ -372,6 +387,7 @@ export function useFilesMenu(args: FilesMenuArgs) {
     open: (e) => actions.openEntry(e, s),
     openEditor: (e, mode) => actions.openEditor(e, s, mode),
     terminal: (path) => actions.openTerminal(path, s),
+    folderEditor: (path) => actions.openFolderEditor(path, s),
     navigate: tabs.navigate,
     openTab: tabs.openTab,
     download: (list) => actions.download(list, s),

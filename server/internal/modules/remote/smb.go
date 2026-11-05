@@ -25,6 +25,8 @@ func dialSMB(ctx context.Context, spec *Conn) (*smbFS, error) {
 	if err != nil {
 		return nil, err
 	}
+	stopDial := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stopDial()
 	user := spec.User
 	if user == "" {
 		user = "guest"
