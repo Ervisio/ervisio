@@ -1,6 +1,6 @@
 # Packaging and distribution
 
-ErvisiOS currently requires the `feat/ervisios` source build; stable release downloads do not yet include it. See [branch setup](ERVISIOS.md) before using the new UI installer option below.
+Ervisio 0.7.0 and later include the optional ErvisiOS desktop in stable release downloads. See [interface setup and compatibility](ERVISIOS.md); unattended installations keep the classic console unless explicitly changed.
 
 How Ervisio reaches machines, what each way installs, and how to publish it in more places. Building and
 signing a release is in [RELEASING.md](RELEASING.md).

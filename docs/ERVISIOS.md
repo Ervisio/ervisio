@@ -4,10 +4,12 @@ ErvisiOS is an optional windowed interface for the same Ervisio server console. 
 
 ## Choose the interface
 
-These changes currently live on feature branches. The public installer still downloads the latest stable release, which does not contain ErvisiOS. To try this implementation, build this branch from source:
+ErvisiOS is included in stable Ervisio releases starting with **0.7.0**. Install or upgrade normally, then choose the interface during installation or in Settings. Classic remains the default for unattended fresh installations.
+
+To build from source instead:
 
 ```sh
-git clone --branch feat/ervisios https://github.com/Ervisio/ervisio.git
+git clone https://github.com/Ervisio/ervisio.git
 cd ervisio
 npm --prefix web ci
 npm --prefix web run build
@@ -15,18 +17,16 @@ make build-server
 ./server/bin/ervisiod --dev --web web/dist
 ```
 
-Use the existing [server prerequisites](../server/README.md) for your platform. Sign in normally, then select ErvisiOS in Appearance. For a native plugin, clone its matching feature branch alongside this repository, run its `npm ci` and `npm run build`, and copy `dist/<plugin-id>/` into this checkout's ignored `plugins/<plugin-id>/` developer folder. The daemon's `--dev` mode loads these local unsigned development builds; production installations continue using the signed marketplace. AI uses `feat/ervisios-ai`; SDK, Docker, Minecraft and Caddy use `feat/ervisios`.
+Use the existing [server prerequisites](../server/README.md) for your platform. Sign in normally, then select ErvisiOS in Appearance. Plugin development builds can be copied from `dist/<plugin-id>/` into this checkout's ignored `plugins/<plugin-id>/` folder. The daemon's `--dev` mode loads these local unsigned builds; production installations use the signed marketplace.
 
-The installer flags below apply when packaging this core branch or after an ErvisiOS-capable core release is published.
-
-The Linux installer accepts `--ui ervisios` or `ERVISIO_UI=ervisios`; the Windows installer accepts `-UI ervisios`. Interactive Linux installations offer the choice. This sets `ui.default_shell` in the server configuration. Unattended installs retain the classic default unless explicitly changed; upgrades preserve the existing choice.
+The Linux installer accepts `--ui ervisios` or `ERVISIO_UI=ervisios`; the Windows installer accepts `-UI ervisios` or the `ERVISIO_UI` environment variable. Use `classic` instead to select the classic console. Interactive Linux installations offer the choice. This sets `ui.default_shell` in the server configuration. Upgrades preserve the existing choice unless explicitly changed.
 
 After sign-in, **Settings → Appearance → Interface** changes your own interface immediately. The per-user `shell.mode` overrides the installation default. The login page uses the installation default or that username's previously selected interface. Password and SSH-key sign-in keep their normal security behavior.
 
 ## Desktop and applications
 
 - Every authorized core section and installed plugin page appears in Start automatically. Native plugin layouts are used when declared; other plugins retain their current page inside a window.
-- Open several applications, minimize, maximize, resize, or snap a window to the left. The taskbar restores running windows. Alt+Tab cycles apps, Alt+F4 closes the active window, Ctrl+Alt+D shows the desktop and Ctrl+K opens the existing command palette.
+- Open several applications, minimize, maximize, resize, or snap a window to either side. Dragging to the top maximizes; dragging a maximized or snapped titlebar restores its previous normal size under the pointer. Start search selects its first result; arrows change selection and Enter opens it. The taskbar restores running windows. Alt+Tab cycles apps, Alt+F4 closes the active window, Ctrl+Alt+D shows the desktop and Ctrl+K opens the existing command palette.
 - Use an app's menu to add a desktop shortcut or pin it to the taskbar. Drag shortcuts into virtual folders, including nested folders. The keyboard-accessible Move to folder action offers the same organization.
 - Desktop folders only store app shortcuts. Removing a folder promotes its contents; it never deletes server files or uninstalls applications.
 - Wallpaper, folders, shortcuts, taskbar pins and window bounds persist through the existing per-user preferences API. They follow the account between browsers. Failed preference loads block editing and offer Retry, preventing defaults from replacing an unreadable saved desktop.
@@ -44,9 +44,9 @@ Radio changes call the operating system through `system.connectivity.set`, requi
 
 ## AI and native plugins
 
-The assistant is [plugin-ai](https://github.com/Ervisio/plugin-ai/tree/feat/ervisios-ai). Exact local navigation/theme/window commands run immediately without a provider or engine; other requests use its existing provider and tool flow. API keys, provider support, permissions, tool policies and administrator unlock retain their plugin behavior. Conversations are discovered from each user's server transcript files, restored on reopening and checkpointed before requests and after completed exchanges. Closing a browser during a streaming reply can still interrupt unfinished output; previously saved exchanges remain.
+The assistant uses [plugin-ai](https://github.com/Ervisio/plugin-ai). Its ErvisiOS-aware release handles exact local navigation/theme/window commands immediately without a provider or engine; other requests use its existing provider and tool flow. API keys, provider support, permissions, tool policies and administrator unlock retain their plugin behavior. Conversations are discovered from each user's server transcript files, restored on reopening and checkpointed before requests and after completed exchanges. Closing a browser during a streaming reply can still interrupt unfinished output; previously saved exchanges remain.
 
-Native layouts are implemented on the coordinated `feat/ervisios` branches of plugin-docker, plugin-minecraft and plugin-caddy, and `feat/ervisios-ai` for AI. Plugin authors should follow [the native page contract](dev/ervisios-plugins.md) and [the SDK tutorial](https://github.com/Ervisio/plugin-sdk/blob/feat/ervisios/docs/ervisios.md). Native metadata requires this core branch; older releases reject unknown manifest fields. Publish the core and coordinated plugin releases before updating the signed marketplace's pinned core reference.
+Native layouts are supported for AI, Docker, Minecraft and Caddy through their corresponding plugin releases. Existing plugin releases keep working inside desktop windows. Plugin authors should follow [the native page contract](dev/ervisios-plugins.md) and [the SDK tutorial](https://github.com/Ervisio/plugin-sdk/blob/main/docs/ervisios.md). A manifest declaring `contributes.pages[].ervisios` must set **`minCore: "0.7.0"` or later**; older cores reject the new manifest field. Publish and validate each native plugin release against Ervisio 0.7.0 or later before advertising it in the signed marketplace.
 
 ## Verification
 

@@ -1,10 +1,10 @@
 # Changelog
 
-## Unreleased · ErvisiOS branch
+## [0.7.0] - 2026-11-05
 
 ### Added
 - Optional ErvisiOS desktop, native app navigation, per-user virtual folders, native Terminal appearance settings and secure additional plugin signing keys.
-- Native AI, Docker, Minecraft and Caddy views, with legacy plugin pages remaining available in windows.
+- Native layout support for the updated AI, Docker, Minecraft and Caddy plugins, with legacy plugin pages remaining available in windows.
 - Minimized windows suspend presentation timers and UI polling while retaining their state and active server jobs.
 - ErvisiOS Task Manager with all visible host processes, sampled CPU/RAM use, performance graphs and available GPU sensors.
 - Native File Explorer, user management and focused Settings categories, plus application navigation for Software, Services and Plugins.

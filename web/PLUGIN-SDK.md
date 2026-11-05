@@ -1,12 +1,13 @@
 # Plugin SDK
 
-The plugin SDK (contract version 3) lives in its own repository: **https://github.com/Ervisio/plugin-sdk**.
+The plugin SDK (contract version 4) lives in its own repository: **https://github.com/Ervisio/plugin-sdk**.
 
 * `docs/sdk.md` there: the SDK object (`sdk.api.exec`, `http`, `pty`, `files`, `asset`, `registerPage`, ...), styling,
   developing, migrating from v1/v2 and the security notes (what used to be this file).
 * `@ervisio/plugin-sdk`: TypeScript types, the `react` shim and the Vite preset that builds one self-contained ES
   module; `template/` is a minimal plugin to start from.
 * `docs/publishing.md`: how to publish a plugin to the marketplace (registry https://github.com/Ervisio/plugins).
+* `docs/ervisios.md`: optional native desktop views and visibility lifecycle. Native manifest metadata requires `minCore: "0.7.0"` or later; existing plugin pages work unchanged.
 
 What stays here, in this repository:
 
