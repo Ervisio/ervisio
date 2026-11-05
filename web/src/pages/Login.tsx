@@ -64,18 +64,28 @@ function keyWaitVars(t: TFn, seconds?: number) {
   return { wait: t('key.waitLater') };
 }
 
+function keyMessage(problem: NonNullable<Problem>, t: TFn): Message {
+  const code = problem.code ?? 'server_error';
+  const k = KEY_MSG[code];
+  return { icon: k.icon, hue: k.hue, body: t(`err.key.${code}`, keyWaitVars(t, problem.seconds)) };
+}
+
+function rateBody(problem: NonNullable<Problem>, t: TFn) {
+  return problem.minutes ? t('err.rateMinutes', { minutes: problem.minutes }) : t('err.rate');
+}
+
+function rootBody(t: TFn) {
+  return <>{t('err.root.before')} <code>allow_root = true</code> {t('err.root.after')}</>;
+}
+
 function problemMessage(problem: Problem, t: TFn): Message | null {
   if (!problem) return null;
   switch (problem.kind) {
-    case 'key': {
-      const code = problem.code ?? 'server_error';
-      const k = KEY_MSG[code];
-      return { icon: k.icon, hue: k.hue, body: t(`err.key.${code}`, keyWaitVars(t, problem.seconds)) };
-    }
+    case 'key': return keyMessage(problem, t);
     case 'wrong': return { icon: 'alert', hue: 'hue-svc', body: t('err.wrong') };
-    case 'root': return { icon: 'shield', hue: 'hue-log', body: <>{t('err.root.before')} <code>allow_root = true</code> {t('err.root.after')}</> };
+    case 'root': return { icon: 'shield', hue: 'hue-log', body: rootBody(t) };
     case 'busy': return { icon: 'clock', hue: 'hue-log', body: t('err.busy') };
-    case 'rate': return { icon: 'clock', hue: 'hue-log', body: problem.minutes ? t('err.rateMinutes', { minutes: problem.minutes }) : t('err.rate') };
+    case 'rate': return { icon: 'clock', hue: 'hue-log', body: rateBody(problem, t) };
     case 'forbidden': return { icon: 'lock', hue: 'hue-svc', body: problem.text || t('err.forbidden') };
     case 'network': return { icon: 'alert', hue: 'hue-svc', body: t('err.network') };
     default: return { icon: 'alert', hue: 'hue-svc', body: problem.text || t('err.other') };

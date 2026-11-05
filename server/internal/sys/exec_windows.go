@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	"github.com/ervisio/ervisio/server/internal/brand"
 )
 
 // setProcessGroup starts the command in a new process group and kills it
@@ -24,13 +26,7 @@ func setProcessGroup(cmd *exec.Cmd) {
 }
 
 func systemRoot() string {
-	if r := os.Getenv("SYSTEMROOT"); r != "" {
-		return r
-	}
-	if r := os.Getenv("WINDIR"); r != "" {
-		return r
-	}
-	return `C:\Windows`
+	return brand.FirstEnv(`C:\Windows`, "SYSTEMROOT", "WINDIR")
 }
 
 // safePath is the fixed command search path on Windows: the system folders

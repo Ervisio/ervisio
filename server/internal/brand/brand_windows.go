@@ -38,14 +38,19 @@ var (
 	InstalledPluginsDir = filepath.Join(StateDir, "plugins")
 )
 
+// FirstEnv returns the first non-empty environment variable among names, or
+// fallback when none is set.
+func FirstEnv(fallback string, names ...string) string {
+	for _, n := range names {
+		if v := os.Getenv(n); v != "" {
+			return v
+		}
+	}
+	return fallback
+}
+
 func programData() string {
-	if d := os.Getenv("ProgramData"); d != "" {
-		return d
-	}
-	if d := os.Getenv("ALLUSERSPROFILE"); d != "" {
-		return d
-	}
-	return `C:\ProgramData`
+	return FirstEnv(`C:\ProgramData`, "ProgramData", "ALLUSERSPROFILE")
 }
 
 func installDir() string {
