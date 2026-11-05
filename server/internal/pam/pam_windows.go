@@ -66,15 +66,6 @@ func splitUser(user string) (name, domain string, ok bool) {
 	return user, ".", user != ""
 }
 
-func validInput(ss ...string) bool {
-	for _, s := range ss {
-		if strings.ContainsRune(s, 0) {
-			return false
-		}
-	}
-	return true
-}
-
 func mapLogonError(err error) error {
 	var en syscall.Errno
 	if !errors.As(err, &en) {

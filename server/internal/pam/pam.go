@@ -218,15 +218,6 @@ func Authenticate(service, user, password, rhost string) error {
 	return fmt.Errorf("pam: %s", msg)
 }
 
-func validInput(ss ...string) bool {
-	for _, s := range ss {
-		if strings.ContainsRune(s, 0) {
-			return false
-		}
-	}
-	return true
-}
-
 // CheckAccount runs PAM account management (pam_acct_mgmt) for user without
 // authenticating: expired or locked accounts, password change required,
 // pam_access/pam_time rules. It returns an error wrapping ErrAccount when

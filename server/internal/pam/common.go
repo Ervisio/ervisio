@@ -3,6 +3,7 @@ package pam
 import (
 	"errors"
 	"os"
+	"strings"
 
 	"github.com/ervisio/ervisio/server/internal/brand"
 )
@@ -32,4 +33,14 @@ func Service() string {
 		return brand.PAMService
 	}
 	return brand.PAMFallbackService
+}
+
+// validInput reports whether none of the strings holds a NUL byte.
+func validInput(ss ...string) bool {
+	for _, s := range ss {
+		if strings.ContainsRune(s, 0) {
+			return false
+		}
+	}
+	return true
 }

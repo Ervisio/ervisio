@@ -33,8 +33,7 @@ const groupNote = (groups: (string | undefined)[], t: T) => {
   return g.length ? ' ' + t('cap.rootGroup', { groups: g.join(', ') }) : '';
 };
 
-/** Human description of what a capability set allows, used by the side panel and the install dialog. */
-export function describeCaps(caps: Capabilities, contributes: Contributes, t: T): CapItem[] {
+const commandItems = (caps: Capabilities, t: T): CapItem[] => {
   const out: CapItem[] = [];
   const pty = caps.commands.filter((c) => c.pty);
   const root = caps.commands.filter((c) => c.admin && !c.pty);
@@ -63,21 +62,21 @@ export function describeCaps(caps: Capabilities, contributes: Contributes, t: T)
       codes: uniq(pty.map((c) => c.argv.map((a) => a.split('/').pop() ?? a).slice(0, 3).join(' '))),
     });
   }
-  for (const h of httpApis(caps)) {
-    const rules = h.rules?.length ?? 0;
-    out.push({
-      key: `http-${h.name}`,
-      hue: h.admin ? 'svc' : 'log',
-      icon: 'link',
-      title: t(h.admin ? 'cap.httpRoot' : 'cap.http'),
-      text:
-        t('cap.httpText', { count: rules }) +
-        groupNote([h.adminUnlessGroup], t) +
-        (h.admin ? ' ' + t('cap.httpRootWarn') : ''),
-      codes: [h.socket],
-    });
-  }
-  if (caps.sockets.length) out.push({ key: 'sockets', hue: 'log', icon: 'link', title: t('cap.sockets'), text: t('cap.socketsText'), codes: caps.sockets });
+  return out;
+};
+
+const httpItems = (caps: Capabilities, t: T): CapItem[] =>
+  httpApis(caps).map((h) => ({
+    key: `http-${h.name}`,
+    hue: h.admin ? 'svc' : 'log',
+    icon: 'link',
+    title: t(h.admin ? 'cap.httpRoot' : 'cap.http'),
+    text: t('cap.httpText', { count: h.rules?.length ?? 0 }) + groupNote([h.adminUnlessGroup], t) + (h.admin ? ' ' + t('cap.httpRootWarn') : ''),
+    codes: [h.socket],
+  }));
+
+const fileItems = (caps: Capabilities, t: T): CapItem[] => {
+  const out: CapItem[] = [];
   const plain = (l: Folder[]) => l.map(folderOf).filter((f) => !f.admin).map((f) => f.path);
   const admin = (l: Folder[]) => l.map(folderOf).filter((f) => f.admin);
   const rd = plain(caps.files.read);
@@ -88,22 +87,35 @@ export function describeCaps(caps: Capabilities, contributes: Contributes, t: T)
   const awr = admin(caps.files.write);
   if (ard.length) out.push({ key: 'adminRead', hue: 'svc', icon: 'eye', title: t('cap.readRoot'), text: groupNote(ard.map((f) => f.adminUnlessGroup), t).trim() || undefined, codes: ard.map((f) => f.path) });
   if (awr.length) out.push({ key: 'adminWrite', hue: 'svc', icon: 'edit', title: t('cap.writeRoot'), text: groupNote(awr.map((f) => f.adminUnlessGroup), t).trim() || undefined, codes: awr.map((f) => f.path) });
-  if (caps.network.length) out.push({ key: 'network', hue: 'sw', icon: 'globe', title: t('cap.network'), text: t('cap.networkText'), codes: caps.network });
+  return out;
+};
+
+const jobItems = (caps: Capabilities, t: T): CapItem[] => {
   const jobs = caps.jobs ?? [];
-  if (jobs.length) {
-    // A job whose steps use an admin command or API can run as root without a password prompt, once an administrator approved it.
-    const rootJob = jobs.some((j) =>
-      (j.steps ?? []).some((s) => (s.command && caps.commands.find((c) => c.name === s.command)?.admin) || (s.http && httpApis(caps).find((h) => h.name === s.http?.api)?.admin)),
-    );
-    out.push({
+  if (!jobs.length) return [];
+  // A job whose steps use an admin command or API can run as root without a password prompt, once an administrator approved it.
+  const rootJob = jobs.some((j) =>
+    (j.steps ?? []).some((s) => (s.command && caps.commands.find((c) => c.name === s.command)?.admin) || (s.http && httpApis(caps).find((h) => h.name === s.http?.api)?.admin)),
+  );
+  return [
+    {
       key: 'jobs',
       hue: rootJob ? 'svc' : 'log',
       icon: 'clock',
       title: t('cap.jobs'),
       text: t('cap.jobsText', { count: jobs.length }) + (rootJob ? ' ' + t('cap.jobsRoot') : ''),
       codes: jobs.map((j) => j.name),
-    });
-  }
+    },
+  ];
+};
+
+/** Human description of what a capability set allows, used by the side panel and the install dialog. */
+export function describeCaps(caps: Capabilities, contributes: Contributes, t: T): CapItem[] {
+  const out: CapItem[] = [...commandItems(caps, t), ...httpItems(caps, t)];
+  if (caps.sockets.length) out.push({ key: 'sockets', hue: 'log', icon: 'link', title: t('cap.sockets'), text: t('cap.socketsText'), codes: caps.sockets });
+  out.push(...fileItems(caps, t));
+  if (caps.network.length) out.push({ key: 'network', hue: 'sw', icon: 'globe', title: t('cap.network'), text: t('cap.networkText'), codes: caps.network });
+  out.push(...jobItems(caps, t));
   if (caps.notify) out.push({ key: 'notify', hue: 'sw', icon: 'bell', title: t('cap.notify'), text: t('cap.notifyText') });
   const ui = uiSummary(contributes, t);
   if (ui) out.push({ key: 'ui', hue: 'term', icon: 'grid', title: t('cap.ui'), text: ui });
