@@ -51,25 +51,9 @@ func moveToTrash(p string) error {
 	if isInside(p, filepath.Dir(filesDir)) {
 		return rpc.Errorf(rpc.Invalid, "This item is already in the Trash.")
 	}
-	base := filepath.Base(p)
-	name := base
-	var infoFile *os.File
-	for i := 1; ; i++ {
-		if i > 1 {
-			name = base + "." + time.Now().Format("150405") + "." + strconv.Itoa(i)
-		}
-		if _, err := os.Lstat(filepath.Join(filesDir, name)); err == nil {
-			continue
-		}
-		f, err := os.OpenFile(filepath.Join(infoDir, name+".trashinfo"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-		if err != nil {
-			if os.IsExist(err) && i < 1000 {
-				continue
-			}
-			return err
-		}
-		infoFile = f
-		break
+	name, infoFile, err := createTrashInfo(filesDir, infoDir, filepath.Base(p))
+	if err != nil {
+		return err
 	}
 	content := "[Trash Info]\nPath=" + encodeTrashPath(p) + "\nDeletionDate=" + time.Now().Format(trashDateLayout) + "\n"
 	_, werr := infoFile.WriteString(content)
@@ -84,6 +68,27 @@ func moveToTrash(p string) error {
 		return err
 	}
 	return nil
+}
+
+// createTrashInfo picks a free name in the Trash and creates its .trashinfo.
+func createTrashInfo(filesDir, infoDir, base string) (string, *os.File, error) {
+	name := base
+	for i := 1; ; i++ {
+		if i > 1 {
+			name = base + "." + time.Now().Format("150405") + "." + strconv.Itoa(i)
+		}
+		if _, err := os.Lstat(filepath.Join(filesDir, name)); err == nil {
+			continue
+		}
+		f, err := os.OpenFile(filepath.Join(infoDir, name+".trashinfo"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if err == nil {
+			return name, f, nil
+		}
+		if os.IsExist(err) && i < 1000 {
+			continue
+		}
+		return "", nil, err
+	}
 }
 
 type trashInfo struct {
@@ -179,35 +184,10 @@ func hRestore(ctx context.Context, c *rpc.Call) (any, error) {
 	failed := []failure{}
 	var first error
 	for _, id := range p.IDs {
-		err := func() error {
-			if err := trashID(id); err != nil {
-				return err
-			}
-			data, err := os.ReadFile(filepath.Join(infoDir, id+".trashinfo"))
-			if err != nil {
-				return rpc.Errorf(rpc.NotFound, "The original location of %q is unknown, so it cannot be restored automatically.", id)
-			}
-			ti, ok := parseTrashInfo(string(data))
-			if !ok {
-				return rpc.Errorf(rpc.Invalid, "The Trash record for %q is damaged.", id)
-			}
-			dest, err := cleanPath(ti.Path)
-			if err != nil {
-				return err
-			}
-			if _, err := os.Lstat(dest); err == nil {
-				return rpc.Errorf(rpc.Conflict, "%s already exists. Move or rename it, then restore again.", dest)
-			}
-			if err := mkdirAll(filepath.Dir(dest), 0o755); err != nil {
-				return err
-			}
-			if err := movePath(filepath.Join(filesDir, id), dest); err != nil {
-				return err
-			}
-			os.Remove(filepath.Join(infoDir, id+".trashinfo"))
+		dest, err := restoreOne(filesDir, infoDir, id)
+		if err == nil {
 			restored = append(restored, dest)
-			return nil
-		}()
+		}
 		if err != nil {
 			if first == nil {
 				first = err
@@ -220,6 +200,35 @@ func hRestore(ctx context.Context, c *rpc.Call) (any, error) {
 		return nil, first
 	}
 	return map[string]any{"restored": restored, "failed": failed}, nil
+}
+
+func restoreOne(filesDir, infoDir, id string) (string, error) {
+	if err := trashID(id); err != nil {
+		return "", err
+	}
+	data, err := os.ReadFile(filepath.Join(infoDir, id+".trashinfo"))
+	if err != nil {
+		return "", rpc.Errorf(rpc.NotFound, "The original location of %q is unknown, so it cannot be restored automatically.", id)
+	}
+	ti, ok := parseTrashInfo(string(data))
+	if !ok {
+		return "", rpc.Errorf(rpc.Invalid, "The Trash record for %q is damaged.", id)
+	}
+	dest, err := cleanPath(ti.Path)
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Lstat(dest); err == nil {
+		return "", rpc.Errorf(rpc.Conflict, "%s already exists. Move or rename it, then restore again.", dest)
+	}
+	if err := mkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		return "", err
+	}
+	if err := movePath(filepath.Join(filesDir, id), dest); err != nil {
+		return "", err
+	}
+	os.Remove(filepath.Join(infoDir, id+".trashinfo"))
+	return dest, nil
 }
 
 func hTrashDelete(ctx context.Context, c *rpc.Call) (any, error) {

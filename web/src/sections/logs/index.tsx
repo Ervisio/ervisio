@@ -79,7 +79,11 @@ function useLogSources(lcall: LogsCall, watchers: Watcher[], watchersKey: string
   return { sources, srcError, loadSources };
 }
 
-function useLogQuery(lcall: LogsCall, filter: Filter, b: ReturnType<typeof bounds>, watchers: Watcher[], qkey: string) {
+const needsAdminCount = (r: QueryResult) => (r.skipped ?? []).filter((s) => s.code === 'needs_admin').length;
+
+type LogQueryOptions = { lcall: LogsCall; filter: Filter; b: ReturnType<typeof bounds>; watchers: Watcher[]; qkey: string };
+
+function useLogQuery({ lcall, filter, b, watchers, qkey }: LogQueryOptions) {
   const [rows, setRows] = useState<Entry[]>([]);
   const rowsRef = useRef<Entry[]>([]);
   rowsRef.current = rows;
@@ -117,7 +121,7 @@ function useLogQuery(lcall: LogsCall, filter: Filter, b: ReturnType<typeof bound
         setRows(r.entries.map(toEntry));
         setNext(r.next);
         setHasMore(r.hasMore);
-        setSkipped((r.skipped ?? []).filter((s) => s.code === 'needs_admin').length);
+        setSkipped(needsAdminCount(r));
         setLoading(false);
         setLoadedKey(qkey);
       })
@@ -154,15 +158,22 @@ function useLogQuery(lcall: LogsCall, filter: Filter, b: ReturnType<typeof bound
   return { rows, setRows, rowsRef, hasMore, loading, moreLoading, error, skipped, loadedKey, sel, setSel, loadMore };
 }
 
-function useLogHistogram(lcall: LogsCall, filter: Filter, anchor: number, tick: number, watchers: Watcher[], watchersKey: string) {
-  const [hist, setHist] = useState<HistogramResult | null>(null);
-  const [histLoading, setHistLoading] = useState(false);
+function useHistogramTick(live: boolean | undefined) {
   const [hTick, setHTick] = useState(0);
   useEffect(() => {
-    if (!filter.live) return;
+    if (!live) return;
     const id = window.setInterval(() => setHTick((n) => n + 1), 20_000);
     return () => window.clearInterval(id);
-  }, [filter.live]);
+  }, [live]);
+  return hTick;
+}
+
+type LogHistogramOptions = { lcall: LogsCall; filter: Filter; anchor: number; tick: number; watchers: Watcher[]; watchersKey: string };
+
+function useLogHistogram({ lcall, filter, anchor, tick, watchers, watchersKey }: LogHistogramOptions) {
+  const [hist, setHist] = useState<HistogramResult | null>(null);
+  const [histLoading, setHistLoading] = useState(false);
+  const hTick = useHistogramTick(filter.live);
   useEffect(() => {
     const ac = new AbortController();
     const now = filter.live ? Date.now() : anchor;
@@ -303,9 +314,9 @@ export default function LogsPage() {
   const anchor = useMemo(() => Date.now(), [filter.range, filter.from, filter.to, tick]); // eslint-disable-line react-hooks/exhaustive-deps
   const b = useMemo(() => bounds(filter, anchor), [filter, anchor]);
   const qkey = JSON.stringify([filter.sources, filter.levels, filter.q, filter.range, filter.from, filter.to, tick, watchersKey]);
-  const { rows, setRows, rowsRef, hasMore, loading, moreLoading, error, skipped, loadedKey, sel, setSel, loadMore } = useLogQuery(lcall, filter, b, watchers, qkey);
+  const { rows, setRows, rowsRef, hasMore, loading, moreLoading, error, skipped, loadedKey, sel, setSel, loadMore } = useLogQuery({ lcall, filter, b, watchers, qkey });
 
-  const { hist, histLoading } = useLogHistogram(lcall, filter, anchor, tick, watchers, watchersKey);
+  const { hist, histLoading } = useLogHistogram({ lcall, filter, anchor, tick, watchers, watchersKey });
   const counts = useMemo(() => levelCounts(hist), [hist]);
 
   useLiveFollow({ filter, setFilter, watchers, qkey, isLoaded: loadedKey === qkey, adminRef, markAdmin, rowsRef, setRows, t });
