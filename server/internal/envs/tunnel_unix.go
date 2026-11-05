@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"path/filepath"
 )
 
 func prepareTunnelDirFor(base, dir, _ string) error { return prepareTunnelDir(base, dir) }
@@ -33,6 +32,13 @@ func ownedByUs(fi os.FileInfo) bool {
 // again. base is made by the daemon only, so nobody else can create or
 // rename entries in it.
 func prepareTunnelDir(base, dir string) error {
+	if err := prepareBase(base); err != nil {
+		return err
+	}
+	return prepareDir(dir)
+}
+
+func prepareBase(base string) error {
 	if err := os.MkdirAll(base, tunnelDirMode); err != nil {
 		return err
 	}
@@ -43,32 +49,43 @@ func prepareTunnelDir(base, dir string) error {
 	if !bi.IsDir() || !ownedByUs(bi) {
 		return fmt.Errorf("%s is not a folder of this service", base)
 	}
-	if err := os.Chmod(base, tunnelDirMode); err != nil {
-		return err
-	}
+	return os.Chmod(base, tunnelDirMode)
+}
+
+// validTunnelDir reports whether fi is a folder of this service with the
+// expected mode.
+func validTunnelDir(fi os.FileInfo) bool {
+	return fi.IsDir() && ownedByUs(fi) && fi.Mode().Perm() == tunnelDirMode
+}
+
+func prepareDir(dir string) error {
 	fi, err := os.Lstat(dir)
-	if err == nil && (!fi.IsDir() || !ownedByUs(fi) || fi.Mode().Perm() != tunnelDirMode) {
+	if err == nil && !validTunnelDir(fi) {
 		if err := os.RemoveAll(dir); err != nil {
 			return err
 		}
 		fi, err = nil, os.ErrNotExist
 	}
 	if errors.Is(err, os.ErrNotExist) {
-		if err := os.Mkdir(dir, tunnelDirMode); err != nil {
-			return err
-		}
-		if err := os.Chmod(dir, tunnelDirMode); err != nil { // umask
-			return err
-		}
-		fi, err = os.Lstat(dir)
+		fi, err = makeTunnelDir(dir)
 	}
 	if err != nil {
 		return err
 	}
-	if !fi.IsDir() || !ownedByUs(fi) || fi.Mode().Perm() != tunnelDirMode {
+	if !validTunnelDir(fi) {
 		return fmt.Errorf("%s is not a folder of this service", dir)
 	}
 	return nil
+}
+
+func makeTunnelDir(dir string) (os.FileInfo, error) {
+	if err := os.Mkdir(dir, tunnelDirMode); err != nil {
+		return nil, err
+	}
+	if err := os.Chmod(dir, tunnelDirMode); err != nil { // umask
+		return nil, err
+	}
+	return os.Lstat(dir)
 }
 
 // listenOwned listens on a unix socket at path that belongs to uid:gid with
@@ -85,41 +102,38 @@ func listenOwned(base, path string, uid, gid int) (net.Listener, error) {
 	if err := os.Chmod(tmp, 0o700); err != nil {
 		return nil, err
 	}
-	staged := filepath.Join(tmp, "s")
-	ln, err := net.Listen("unix", staged)
+	s, err := listenStaged(tmp)
 	if err != nil {
 		return nil, err
 	}
-	// The socket file moves; tunnel.close removes it at its final path.
-	ln.(*net.UnixListener).SetUnlinkOnClose(false)
-	fail := func(err error) (net.Listener, error) {
-		ln.Close()
-		return nil, err
+	if err := chownStaged(s.path, uid, gid); err != nil {
+		return s.fail(err)
 	}
+	fi, err := s.publish(path)
+	if err != nil {
+		return s.fail(err)
+	}
+	if !socketOwnedAs(fi, uid, gid) {
+		_ = os.Remove(path)
+		return s.fail(fmt.Errorf("the socket %s did not get the expected owner and mode", path))
+	}
+	return s.ln, nil
+}
+
+func chownStaged(staged string, uid, gid int) error {
 	if err := os.Chmod(staged, 0o600); err != nil {
-		return fail(err)
+		return err
 	}
 	if os.Geteuid() == 0 {
-		if err := os.Lchown(staged, uid, gid); err != nil {
-			return fail(err)
-		}
+		return os.Lchown(staged, uid, gid)
 	}
-	// A socket left by an earlier run (the daemon's folder: no one else's).
-	if fi, err := os.Lstat(path); err == nil && !fi.IsDir() {
-		_ = os.Remove(path)
-	}
-	if err := os.Rename(staged, path); err != nil {
-		return fail(err)
-	}
-	fi, err := os.Lstat(path)
-	if err != nil {
-		return fail(err)
-	}
+	return nil
+}
+
+func socketOwnedAs(fi os.FileInfo, uid, gid int) bool {
 	fuid, fgid, ok := fileOwner(fi)
-	if fi.Mode()&os.ModeSocket == 0 || fi.Mode().Perm() != 0o600 || !ok ||
-		(os.Geteuid() == 0 && (fuid != uid || fgid != gid)) {
-		_ = os.Remove(path)
-		return fail(fmt.Errorf("the socket %s did not get the expected owner and mode", path))
+	if fi.Mode()&os.ModeSocket == 0 || fi.Mode().Perm() != 0o600 || !ok {
+		return false
 	}
-	return ln, nil
+	return os.Geteuid() != 0 || (fuid == uid && fgid == gid)
 }

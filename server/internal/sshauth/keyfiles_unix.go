@@ -5,7 +5,6 @@ package sshauth
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -41,14 +40,7 @@ func readSecure(p string, u User) ([]byte, error) {
 	if err := checkDirs(filepath.Dir(real), u); err != nil {
 		return nil, err
 	}
-	b, err := io.ReadAll(io.LimitReader(f, maxKeysFile+1))
-	if err != nil {
-		return nil, err
-	}
-	if len(b) > maxKeysFile {
-		return nil, errors.New("larger than 1 MiB")
-	}
-	return b, nil
+	return readLimited(f)
 }
 
 // checkDirs walks from dir up to the home directory (included) or /, as

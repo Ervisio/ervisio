@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"path/filepath"
 
 	"golang.org/x/sys/windows"
 
@@ -78,6 +77,16 @@ func checkObject(path string, wantDir, strict bool, allow []*windows.SID) error 
 	if !wantDir && in.Dir {
 		return errors.New("is a folder")
 	}
+	if err := checkOwner(in); err != nil {
+		return err
+	}
+	if in.NoDACL {
+		return errors.New("no DACL")
+	}
+	return checkACEs(in, strict, allow)
+}
+
+func checkOwner(in *winsec.Info) error {
 	owners, err := trustedOwners()
 	if err != nil {
 		return err
@@ -85,9 +94,10 @@ func checkObject(path string, wantDir, strict bool, allow []*windows.SID) error 
 	if !winsec.SIDIn(in.Owner, owners...) {
 		return fmt.Errorf("owned by %s", in.Owner)
 	}
-	if in.NoDACL {
-		return errors.New("no DACL")
-	}
+	return nil
+}
+
+func checkACEs(in *winsec.Info, strict bool, allow []*windows.SID) error {
 	aces, err := winsec.Aces(in.DACL)
 	if err != nil {
 		return err
@@ -123,6 +133,17 @@ func prepareTunnelDirFor(base, dir, sid string) error {
 	if err != nil {
 		return err
 	}
+	if err := prepareBase(base, owners); err != nil {
+		return err
+	}
+	allow, entries, err := accountACL(me, sid, fileRead)
+	if err != nil {
+		return err
+	}
+	return prepareDir(dir, me, allow, entries)
+}
+
+func prepareBase(base string, owners []*windows.SID) error {
 	if err := os.MkdirAll(base, 0o700); err != nil {
 		return err
 	}
@@ -142,16 +163,25 @@ func prepareTunnelDirFor(base, dir, sid string) error {
 	if err := checkObject(base, true, false, owners); err != nil {
 		return fmt.Errorf("%s is not a folder of this service: %v", base, err)
 	}
+	return nil
+}
 
-	allow, entries := me, fullFor(me)
-	if sid != "" {
-		us, err := windows.StringToSid(sid)
-		if err != nil {
-			return fmt.Errorf("account SID %q: %w", sid, err)
-		}
-		allow = append(append([]*windows.SID{}, me...), us)
-		entries = append(entries, winsec.Entry{SID: us, Mask: fileRead})
+// accountACL returns the SIDs allowed on an object and its entries: this
+// service in full, plus sid (when set) with mask.
+func accountACL(me []*windows.SID, sid string, mask uint32) (allow []*windows.SID, entries []winsec.Entry, err error) {
+	allow, entries = me, fullFor(me)
+	if sid == "" {
+		return allow, entries, nil
 	}
+	us, err := windows.StringToSid(sid)
+	if err != nil {
+		return nil, nil, fmt.Errorf("account SID %q: %w", sid, err)
+	}
+	allow = append(append([]*windows.SID{}, me...), us)
+	return allow, append(entries, winsec.Entry{SID: us, Mask: mask}), nil
+}
+
+func prepareDir(dir string, me, allow []*windows.SID, entries []winsec.Entry) error {
 	if _, err := os.Lstat(dir); err == nil {
 		if checkObject(dir, true, true, allow) != nil {
 			if err := removeTree(dir, me); err != nil {
@@ -219,14 +249,9 @@ func listenOwnedFor(base, path string, _, _ int, sid string) (net.Listener, erro
 	if err != nil {
 		return nil, err
 	}
-	allow, entries := me, fullFor(me)
-	if sid != "" {
-		us, err := windows.StringToSid(sid)
-		if err != nil {
-			return nil, fmt.Errorf("account SID %q: %w", sid, err)
-		}
-		allow = append(append([]*windows.SID{}, me...), us)
-		entries = append(entries, winsec.Entry{SID: us, Mask: fileReadWrite})
+	allow, entries, err := accountACL(me, sid, fileReadWrite)
+	if err != nil {
+		return nil, err
 	}
 	tmp, err := os.MkdirTemp(base, ".new-")
 	if err != nil {
@@ -236,38 +261,24 @@ func listenOwnedFor(base, path string, _, _ int, sid string) (net.Listener, erro
 	if err := winsec.SetProtectedDACL(tmp, fullFor(me)); err != nil {
 		return nil, err
 	}
-	staged := filepath.Join(tmp, "s")
-	ln, err := net.Listen("unix", staged)
+	s, err := listenStaged(tmp)
 	if err != nil {
 		return nil, err
 	}
-	// The socket file moves; tunnel.close removes it at its final path.
-	ln.(*net.UnixListener).SetUnlinkOnClose(false)
-	fail := func(err error) (net.Listener, error) {
-		ln.Close()
-		return nil, err
+	if err := winsec.SetProtectedDACL(s.path, entries); err != nil {
+		return s.fail(err)
 	}
-	if err := winsec.SetProtectedDACL(staged, entries); err != nil {
-		return fail(err)
-	}
-	// A socket left by an earlier run (the daemon's folder: no one else's).
-	if fi, err := os.Lstat(path); err == nil && !fi.IsDir() {
-		_ = os.Remove(path)
-	}
-	if err := os.Rename(staged, path); err != nil {
-		return fail(err)
-	}
-	fi, err := os.Lstat(path)
+	fi, err := s.publish(path)
 	if err != nil {
-		return fail(err)
+		return s.fail(err)
 	}
 	if fi.Mode()&os.ModeSocket == 0 {
 		_ = os.Remove(path)
-		return fail(fmt.Errorf("%s is not a socket", path))
+		return s.fail(fmt.Errorf("%s is not a socket", path))
 	}
 	if err := checkObject(path, false, true, allow); err != nil {
 		_ = os.Remove(path)
-		return fail(fmt.Errorf("the socket %s did not get the expected owner and ACL: %v", path, err))
+		return s.fail(fmt.Errorf("the socket %s did not get the expected owner and ACL: %v", path, err))
 	}
-	return ln, nil
+	return s.ln, nil
 }
