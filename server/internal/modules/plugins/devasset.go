@@ -50,33 +50,50 @@ func devAsset(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
 	if err := c.Bind(&p); err != nil {
 		return err
 	}
-	if !assetIDRe.MatchString(p.ID) || p.File == "" || !fs.ValidPath(p.File) || strings.Contains(p.File, "\\") {
-		return rpc.Errorf(rpc.NotFound, "not found")
-	}
-	if !devEnabled(readPolicy()) {
-		return rpc.Errorf(rpc.NotFound, "not found")
-	}
-	dir := devFolderFor(p.ID)
-	if dir == "" {
-		return rpc.Errorf(rpc.NotFound, "not found")
-	}
-	root, err := os.OpenRoot(dir)
+	f, fi, err := openDevAsset(p.ID, p.File)
 	if err != nil {
-		return rpc.Errorf(rpc.NotFound, "not found")
-	}
-	defer root.Close()
-	f, err := root.Open(p.File)
-	if err != nil {
-		return rpc.Errorf(rpc.NotFound, "not found")
+		return err
 	}
 	defer f.Close()
-	fi, err := f.Stat()
-	if err != nil || !fi.Mode().IsRegular() || fi.Size() > MaxDevAsset {
-		return rpc.Errorf(rpc.NotFound, "not found")
-	}
 	if err := s.Send(DevAssetMeta{Name: fi.Name(), Size: fi.Size(), Mime: mime.TypeByExtension(filepath.Ext(fi.Name()))}); err != nil {
 		return err
 	}
+	return streamFile(ctx, f, s)
+}
+
+// openDevAsset opens a regular file of the dev folder for id, through os.Root.
+// Every failure is reported as not found.
+func openDevAsset(id, file string) (*os.File, os.FileInfo, error) {
+	notFound := rpc.Errorf(rpc.NotFound, "not found")
+	if !assetIDRe.MatchString(id) || file == "" || !fs.ValidPath(file) || strings.Contains(file, "\\") {
+		return nil, nil, notFound
+	}
+	if !devEnabled(readPolicy()) {
+		return nil, nil, notFound
+	}
+	dir := devFolderFor(id)
+	if dir == "" {
+		return nil, nil, notFound
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, nil, notFound
+	}
+	defer root.Close()
+	f, err := root.Open(file)
+	if err != nil {
+		return nil, nil, notFound
+	}
+	fi, err := f.Stat()
+	if err != nil || !fi.Mode().IsRegular() || fi.Size() > MaxDevAsset {
+		f.Close()
+		return nil, nil, notFound
+	}
+	return f, fi, nil
+}
+
+// streamFile sends the file to s in 64 KiB chunks.
+func streamFile(ctx context.Context, f *os.File, s rpc.Stream) error {
 	buf := make([]byte, 64<<10)
 	for {
 		if ctx.Err() != nil {

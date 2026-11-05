@@ -152,13 +152,10 @@ func processes(ctx context.Context, c *rpc.Call) (any, error) {
 	if p.Limit <= 0 {
 		p.Limit = 5
 	}
-	if p.Limit > 100 {
-		p.Limit = 100
-	}
+	p.Limit = min(p.Limit, 100)
 	if runtime.GOOS == "windows" {
 		return windowsProcesses(ctx, p.Sort, p.Limit)
 	}
-	const tick = 100.0 // USER_HZ is 100 on every Linux platform we run on
 	t0 := time.Now()
 	a := readStats()
 	select {
@@ -167,7 +164,16 @@ func processes(ctx context.Context, c *rpc.Call) (any, error) {
 	case <-time.After(400 * time.Millisecond):
 	}
 	b := readStats()
-	secs := time.Since(t0).Seconds()
+	list := rankProcesses(buildProcesses(a, b, time.Since(t0).Seconds()), p.Sort, p.Limit)
+	for i := range list {
+		list[i].Command, list[i].User = describePID(list[i].PID, list[i].Name)
+	}
+	return list, nil
+}
+
+// buildProcesses turns two stat samples taken secs apart into process rows.
+func buildProcesses(a, b map[int]procStat, secs float64) []Process {
+	const tick = 100.0 // USER_HZ is 100 on every Linux platform we run on
 	total := memTotal()
 	page := uint64(os.Getpagesize())
 	list := make([]Process, 0, len(b))
@@ -183,11 +189,7 @@ func processes(ctx context.Context, c *rpc.Call) (any, error) {
 		}
 		list = append(list, pr)
 	}
-	list = rankProcesses(list, p.Sort, p.Limit)
-	for i := range list {
-		list[i].Command, list[i].User = describePID(list[i].PID, list[i].Name)
-	}
-	return list, nil
+	return list
 }
 
 func round1(v float64) float64 { return float64(int64(v*10+0.5)) / 10 }

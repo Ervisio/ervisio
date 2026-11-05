@@ -161,16 +161,31 @@ func (s *Server) handleRPC(w http.ResponseWriter, r *http.Request, sess *Session
 	if s.handleLocalRPC(w, r, sess, req) {
 		return
 	}
-	if res, e, ok := s.envsCall(r.Context(), sess, req.Method, req.Params); ok {
-		if e != nil {
-			writeError(w, e)
-			return
-		}
-		writeJSON(w, http.StatusOK, struct {
-			Result any `json:"result"`
-		}{res})
+	if s.handleEnvsRPC(w, r, sess, req) {
 		return
 	}
+	s.forwardRPC(w, r, sess, req)
+}
+
+// handleEnvsRPC answers methods served by the environments layer; it reports
+// whether the request was handled.
+func (s *Server) handleEnvsRPC(w http.ResponseWriter, r *http.Request, sess *Session, req rpcRequest) bool {
+	res, e, ok := s.envsCall(r.Context(), sess, req.Method, req.Params)
+	if !ok {
+		return false
+	}
+	if e != nil {
+		writeError(w, e)
+		return true
+	}
+	writeJSON(w, http.StatusOK, struct {
+		Result any `json:"result"`
+	}{res})
+	return true
+}
+
+// forwardRPC routes the call to the bridge and relays its result.
+func (s *Server) forwardRPC(w http.ResponseWriter, r *http.Request, sess *Session, req rpcRequest) {
 	p, isAdmin, params, relEnv, e := s.routeWithEnv(r.Context(), sess, req.Method, req.Params, req.Admin)
 	if e != nil {
 		writeError(w, e)
