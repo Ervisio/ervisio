@@ -2,6 +2,7 @@
   "title": "Overview",
   "greeting": "Hi, {name}",
   "summary": {
+    "thisMachine": "This machine",
     "checking": "Checking {host}…",
     "ok": "{host} is running fine.",
     "issues_one": "{host} is up. One thing needs attention.",

@@ -603,7 +603,7 @@ export default function OverviewPage() {
   };
 
   const name = session?.name?.trim().split(/\s+/)[0] || session?.user || '';
-  const summary = dashboardSummary(t, alerts, host?.hostname || 'this machine');
+  const summary = dashboardSummary(t, alerts, host?.hostname || t('summary.thisMachine'));
 
   const library = (
     <Library

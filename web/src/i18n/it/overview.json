@@ -2,6 +2,7 @@
   "title": "Panoramica",
   "greeting": "Ciao, {name}",
   "summary": {
+    "thisMachine": "Questa macchina",
     "checking": "Controllo {host}…",
     "ok": "{host} funziona bene.",
     "issues_one": "{host} è acceso. Una cosa ha bisogno di attenzione.",
