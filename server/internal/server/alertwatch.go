@@ -99,23 +99,35 @@ func (s *Server) runAlertWatch(ctx context.Context) {
 		case <-next.C:
 		}
 		next.Reset(alertEvery)
-		if s.notifier == nil || !s.notifier.Subscribed(notify.EventAlerts) || (s.devUser == nil && !bridge.Privileged()) {
+		if !s.alertsWanted() {
 			w.first = true // start from the state at the next scan
 			continue
 		}
-		sctx, cancel := context.WithTimeout(ctx, time.Minute)
-		list, err := s.readAlerts(sctx)
-		cancel()
-		if err != nil {
-			s.log.Printf("alert watch: %v", err)
-			continue
+		s.scanAlerts(ctx, w)
+	}
+}
+
+func (s *Server) alertsWanted() bool {
+	if s.notifier == nil || !s.notifier.Subscribed(notify.EventAlerts) {
+		return false
+	}
+	return s.devUser != nil || bridge.Privileged()
+}
+
+// scanAlerts reads the current alerts and notifies about the fresh ones.
+func (s *Server) scanAlerts(ctx context.Context, w *alertWatch) {
+	sctx, cancel := context.WithTimeout(ctx, time.Minute)
+	list, err := s.readAlerts(sctx)
+	cancel()
+	if err != nil {
+		s.log.Printf("alert watch: %v", err)
+		return
+	}
+	for _, a := range w.fresh(list) {
+		level := "warn"
+		if a.Severity == "err" {
+			level = "error"
 		}
-		for _, a := range w.fresh(list) {
-			level := "warn"
-			if a.Severity == "err" {
-				level = "error"
-			}
-			s.notifier.Send(ctx, notify.Message{Title: a.Title, Body: a.Detail, Level: level, Source: "Ervisio", Link: "/overview"}, notify.EventAlerts)
-		}
+		s.notifier.Send(ctx, notify.Message{Title: a.Title, Body: a.Detail, Level: level, Source: "Ervisio", Link: "/overview"}, notify.EventAlerts)
 	}
 }

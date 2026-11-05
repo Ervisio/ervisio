@@ -29,21 +29,30 @@ func failedUnits(ctx context.Context) []Alert {
 		if ctx.Err() != nil {
 			return nil
 		}
-		s, err := openServiceRO(m, name)
-		if err != nil {
-			continue
-		}
-		cfg, cerr := s.Config()
-		st, qerr := s.Query()
-		s.Close()
-		if cerr != nil || qerr != nil {
-			continue
-		}
-		if cfg.StartType == mgr.StartAutomatic && st.State == svc.Stopped && serviceFailed(st.Win32ExitCode, st.ServiceSpecificExitCode) {
-			units = append(units, unitState{Unit: name, Load: "loaded", Active: "failed", Sub: "failed", Description: cfg.DisplayName})
+		if u, ok := failedService(m, name); ok {
+			units = append(units, u)
 		}
 	}
 	return failedAlertsFromUnits(units, nil)
+}
+
+// failedService returns the unit state when the named service is Automatic
+// and stopped with a failure exit code.
+func failedService(m *mgr.Mgr, name string) (unitState, bool) {
+	s, err := openServiceRO(m, name)
+	if err != nil {
+		return unitState{}, false
+	}
+	cfg, cerr := s.Config()
+	st, qerr := s.Query()
+	s.Close()
+	if cerr != nil || qerr != nil {
+		return unitState{}, false
+	}
+	if cfg.StartType != mgr.StartAutomatic || st.State != svc.Stopped || !serviceFailed(st.Win32ExitCode, st.ServiceSpecificExitCode) {
+		return unitState{}, false
+	}
+	return unitState{Unit: name, Load: "loaded", Active: "failed", Sub: "failed", Description: cfg.DisplayName}, true
 }
 
 func openServiceRO(m *mgr.Mgr, name string) (*mgr.Service, error) {

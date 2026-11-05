@@ -35,6 +35,29 @@ var allowedFormats = map[string][]string{
 // ParsePublicKey parses one public key in authorized_keys form ("type
 // base64 [comment]", no options) and checks that its type is accepted.
 func ParsePublicKey(line string) (ssh.PublicKey, error) {
+	f, err := splitKeyLine(line)
+	if err != nil {
+		return nil, err
+	}
+	blob, err := base64.StdEncoding.DecodeString(f[1])
+	if err != nil {
+		return nil, ErrUnsupportedKey
+	}
+	pub, err := ssh.ParsePublicKey(blob)
+	if err != nil || pub.Type() != f[0] {
+		return nil, ErrUnsupportedKey
+	}
+	if pub.Type() == ssh.KeyAlgoRSA {
+		if err := checkRSASize(pub); err != nil {
+			return nil, err
+		}
+	}
+	return pub, nil
+}
+
+// splitKeyLine validates the shape of an authorized_keys line and returns
+// its fields (type, base64, ...).
+func splitKeyLine(line string) ([]string, error) {
 	line = strings.TrimSpace(line)
 	if line == "" || len(line) > 16<<10 || strings.ContainsAny(line, "\n\r") {
 		return nil, ErrUnsupportedKey
@@ -46,25 +69,19 @@ func ParsePublicKey(line string) (ssh.PublicKey, error) {
 	if _, ok := allowedFormats[f[0]]; !ok {
 		return nil, fmt.Errorf("%w: %q", ErrUnsupportedKey, f[0])
 	}
-	blob, err := base64.StdEncoding.DecodeString(f[1])
-	if err != nil {
-		return nil, ErrUnsupportedKey
+	return f, nil
+}
+
+func checkRSASize(pub ssh.PublicKey) error {
+	ck, ok := pub.(ssh.CryptoPublicKey)
+	if !ok {
+		return ErrUnsupportedKey
 	}
-	pub, err := ssh.ParsePublicKey(blob)
-	if err != nil || pub.Type() != f[0] {
-		return nil, ErrUnsupportedKey
+	rk, ok := ck.CryptoPublicKey().(*rsa.PublicKey)
+	if !ok || rk.N.BitLen() < MinRSABits {
+		return fmt.Errorf("%w: RSA keys need at least %d bits", ErrUnsupportedKey, MinRSABits)
 	}
-	if pub.Type() == ssh.KeyAlgoRSA {
-		ck, ok := pub.(ssh.CryptoPublicKey)
-		if !ok {
-			return nil, ErrUnsupportedKey
-		}
-		rk, ok := ck.CryptoPublicKey().(*rsa.PublicKey)
-		if !ok || rk.N.BitLen() < MinRSABits {
-			return nil, fmt.Errorf("%w: RSA keys need at least %d bits", ErrUnsupportedKey, MinRSABits)
-		}
-	}
-	return pub, nil
+	return nil
 }
 
 // ParseSignature decodes an SSH signature blob (string format, string
