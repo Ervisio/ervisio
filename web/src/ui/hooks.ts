@@ -18,6 +18,29 @@ export const useIsMobile = () => useMediaQuery('(max-width: 859px)');
 
 const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
+function focusableIn(el: HTMLElement): HTMLElement[] {
+  return Array.from(el.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((x) => x.offsetParent !== null || x === document.activeElement);
+}
+
+/** Wraps Tab / Shift+Tab around the first and last control of el. */
+function wrapTab(e: KeyboardEvent, el: HTMLElement) {
+  const list = focusableIn(el);
+  if (list.length === 0) {
+    e.preventDefault();
+    return;
+  }
+  const first = list[0];
+  const last = list[list.length - 1];
+  const outside = !el.contains(document.activeElement);
+  if (e.shiftKey && (document.activeElement === first || outside)) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && (document.activeElement === last || outside)) {
+    e.preventDefault();
+    first.focus();
+  }
+}
+
 /** Traps Tab inside the element, focuses the first control on open and restores focus on close. */
 export function useFocusTrap(ref: RefObject<HTMLElement>, active: boolean, onEscape?: () => void) {
   const esc = useRef(onEscape);
@@ -26,28 +49,14 @@ export function useFocusTrap(ref: RefObject<HTMLElement>, active: boolean, onEsc
     if (!active || !ref.current) return;
     const el = ref.current;
     const prev = document.activeElement as HTMLElement | null;
-    const items = () => Array.from(el.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((x) => x.offsetParent !== null || x === document.activeElement);
     const auto = el.querySelector<HTMLElement>('[data-autofocus]');
-    (auto ?? items()[0] ?? el).focus();
+    (auto ?? focusableIn(el)[0] ?? el).focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && esc.current) {
         e.stopPropagation();
         esc.current();
       } else if (e.key === 'Tab') {
-        const list = items();
-        if (list.length === 0) {
-          e.preventDefault();
-          return;
-        }
-        const first = list[0];
-        const last = list[list.length - 1];
-        if (e.shiftKey && (document.activeElement === first || !el.contains(document.activeElement))) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && (document.activeElement === last || !el.contains(document.activeElement))) {
-          e.preventDefault();
-          first.focus();
-        }
+        wrapTab(e, el);
       }
     };
     el.addEventListener('keydown', onKey);

@@ -108,40 +108,53 @@ var unitRe = regexp.MustCompile(`^[A-Za-z0-9:_.@][A-Za-z0-9:_.@\\-]{0,199}$`)
 func parseSourceID(id string, watchers []Watcher) (spec, error) {
 	switch {
 	case strings.HasPrefix(id, "evt:"):
-		ch := strings.TrimPrefix(id, "evt:")
-		if !onWindows || !channelRe.MatchString(ch) {
-			return spec{}, rpc.Errorf(rpc.Invalid, "unknown log source %q", id)
-		}
-		return spec{ID: id, Kind: "evt", Channel: ch, Label: ch}, nil
+		return parseEvtSource(id)
 	case onWindows && (id == "journal" || id == "kernel" || id == "boot" || strings.HasPrefix(id, "unit:")):
 		return spec{}, rpc.Errorf(rpc.Invalid, "unknown log source %q", id)
 	case id == "journal" || id == "kernel" || id == "boot":
 		return spec{ID: id, Kind: id, Label: id}, nil
 	case strings.HasPrefix(id, "unit:"):
-		u := strings.TrimPrefix(id, "unit:")
-		if !unitRe.MatchString(u) {
-			return spec{}, rpc.Errorf(rpc.Invalid, "invalid unit name %q", u)
-		}
-		return spec{ID: id, Kind: "unit", Unit: u, Label: strings.TrimSuffix(u, ".service")}, nil
+		return parseUnitSource(id)
 	case strings.HasPrefix(id, "file:"):
-		p := strings.TrimPrefix(id, "file:")
-		if err := checkPath(p); err != nil {
-			return spec{}, err
-		}
-		s := spec{ID: id, Kind: "file", Path: p, Label: labelForPath(p), Format: "auto"}
-		for _, w := range watchers {
-			if w.Path == p {
-				if w.Name != "" {
-					s.Label = w.Name
-				}
-				if w.Format != "" {
-					s.Format = w.Format
-				}
-			}
-		}
-		return s, nil
+		return parseFileSource(id, watchers)
 	}
 	return spec{}, rpc.Errorf(rpc.Invalid, "unknown log source %q", id)
+}
+
+func parseEvtSource(id string) (spec, error) {
+	ch := strings.TrimPrefix(id, "evt:")
+	if !onWindows || !channelRe.MatchString(ch) {
+		return spec{}, rpc.Errorf(rpc.Invalid, "unknown log source %q", id)
+	}
+	return spec{ID: id, Kind: "evt", Channel: ch, Label: ch}, nil
+}
+
+func parseUnitSource(id string) (spec, error) {
+	u := strings.TrimPrefix(id, "unit:")
+	if !unitRe.MatchString(u) {
+		return spec{}, rpc.Errorf(rpc.Invalid, "invalid unit name %q", u)
+	}
+	return spec{ID: id, Kind: "unit", Unit: u, Label: strings.TrimSuffix(u, ".service")}, nil
+}
+
+func parseFileSource(id string, watchers []Watcher) (spec, error) {
+	p := strings.TrimPrefix(id, "file:")
+	if err := checkPath(p); err != nil {
+		return spec{}, err
+	}
+	s := spec{ID: id, Kind: "file", Path: p, Label: labelForPath(p), Format: "auto"}
+	for _, w := range watchers {
+		if w.Path != p {
+			continue
+		}
+		if w.Name != "" {
+			s.Label = w.Name
+		}
+		if w.Format != "" {
+			s.Format = w.Format
+		}
+	}
+	return s, nil
 }
 
 func checkPath(p string) error {

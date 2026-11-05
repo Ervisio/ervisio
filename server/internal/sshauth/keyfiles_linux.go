@@ -16,28 +16,8 @@ func switchFS(u User) (restore func() error, err error) {
 	if err != nil {
 		return func() error { return nil }, err
 	}
-	restore = func() error {
-		e1 := unix.Setfsuid(0)
-		e2 := unix.Setfsgid(0)
-		e3 := unix.Setgroups(oldGroups)
-		uid, _ := unix.SetfsuidRetUid(-1)
-		gid, _ := unix.SetfsgidRetGid(-1)
-		if e := errors.Join(e1, e2, e3); e != nil {
-			return e
-		}
-		if uid != 0 || gid != 0 {
-			return errors.New("file-system identity not restored")
-		}
-		return nil
-	}
-	groups := make([]int, 0, len(u.Groups)+1)
-	groups = append(groups, int(u.GID))
-	for _, g := range u.Groups {
-		if g != u.GID {
-			groups = append(groups, int(g))
-		}
-	}
-	if err := unix.Setgroups(groups); err != nil {
+	restore = func() error { return restoreFS(oldGroups) }
+	if err := unix.Setgroups(fsGroups(u)); err != nil {
 		return restore, fmt.Errorf("setgroups: %w", err)
 	}
 	if err := unix.Setfsgid(int(u.GID)); err != nil {
@@ -52,4 +32,32 @@ func switchFS(u User) (restore func() error, err error) {
 		return restore, fmt.Errorf("cannot take the file-system identity of uid %d (now fsuid %d, fsgid %d)", u.UID, uid, gid)
 	}
 	return restore, nil
+}
+
+// restoreFS puts root's file-system identity and groups back.
+func restoreFS(oldGroups []int) error {
+	e1 := unix.Setfsuid(0)
+	e2 := unix.Setfsgid(0)
+	e3 := unix.Setgroups(oldGroups)
+	uid, _ := unix.SetfsuidRetUid(-1)
+	gid, _ := unix.SetfsgidRetGid(-1)
+	if e := errors.Join(e1, e2, e3); e != nil {
+		return e
+	}
+	if uid != 0 || gid != 0 {
+		return errors.New("file-system identity not restored")
+	}
+	return nil
+}
+
+// fsGroups lists u's primary group first, then the others without duplicates.
+func fsGroups(u User) []int {
+	groups := make([]int, 0, len(u.Groups)+1)
+	groups = append(groups, int(u.GID))
+	for _, g := range u.Groups {
+		if g != u.GID {
+			groups = append(groups, int(g))
+		}
+	}
+	return groups
 }
