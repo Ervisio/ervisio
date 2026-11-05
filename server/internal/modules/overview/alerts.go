@@ -78,8 +78,6 @@ func (a *alerter) collect(ctx context.Context) []Alert {
 	return out
 }
 
-/* ---------- failed units ---------- */
-
 type unitState struct {
 	Unit        string `json:"unit"`
 	Load        string `json:"load"`
@@ -177,8 +175,6 @@ func serviceFailed(win32, specific uint32) bool {
 	}
 	return win32 != 0
 }
-
-/* ---------- pending updates ---------- */
 
 func updatesAlert(ctx context.Context) []Alert {
 	pkgs, ok := pendingUpdates(ctx)
@@ -299,8 +295,6 @@ func parseDnfUpdates(out []byte) []string {
 	return pkgs
 }
 
-/* ---------- SSH failed logins ---------- */
-
 func sshAlert(ctx context.Context) []Alert {
 	if _, err := sys.LookPath("sshd"); err != nil {
 		return nil // no SSH server on this machine
@@ -331,8 +325,6 @@ func countSSHFailures(out []byte) int {
 	}
 	return n
 }
-
-/* ---------- disks and swap ---------- */
 
 type mount struct{ dev, point, fstype string }
 

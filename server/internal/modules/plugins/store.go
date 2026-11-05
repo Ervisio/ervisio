@@ -37,8 +37,7 @@ var (
 	// DaemonPluginsDir is the daemon's ./plugins folder in --dev (bridge
 	// flag --dev-plugins), scanned as a dev location.
 	DaemonPluginsDir string
-	// Keys are the trusted signing keys.
-	Keys = func() []ed25519.PublicKey { return TrustedKeys }
+	Keys             = func() []ed25519.PublicKey { return TrustedKeys }
 )
 
 // Found is a plugin folder discovered on disk.
@@ -175,8 +174,6 @@ func find(p policy, id string) *Found {
 	return nil
 }
 
-// ---- enabled state ----
-
 type state struct {
 	Enabled map[string]bool `json:"enabled"`
 }
@@ -216,8 +213,6 @@ func writeFileAtomic(p string, data []byte, mode os.FileMode) error {
 	return cfg.WriteAtomic(p, data, mode)
 }
 
-// ---- who is calling ----
-
 type caller struct {
 	Name   string
 	Groups map[string]bool
@@ -241,8 +236,6 @@ func (c caller) canSee(m *Manifest) bool {
 	}
 	return false
 }
-
-// ---- list ----
 
 // Info is one entry of plugins.list.
 type Info struct {

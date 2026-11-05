@@ -24,8 +24,6 @@ func clip(s string) string {
 	return s[:cut] + "…"
 }
 
-// ---------- levels ----------
-
 const kwEnd = `(?:[^\w.]|\.(?:\s|$)|$)`
 const kwStart = `(?:^|[^\w./-])`
 
@@ -99,8 +97,6 @@ func levelFromPriority(p int) string {
 	return LvDebug
 }
 
-// ---------- timestamps ----------
-
 var (
 	reISO    = regexp.MustCompile(`^\s*\[?(\d{4})[-/](\d{2})[-/](\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:[.,](\d{1,9}))?\s*(Z|[+-]\d{2}:?\d{2})?\]?[:\s]*`)
 	reSyslog = regexp.MustCompile(`^\s*([A-Z][a-z]{2})\s+(\d{1,2})\s+(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?\s*`)
@@ -112,7 +108,7 @@ var months = map[string]time.Month{
 	"jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
 }
 
-func atoi(s string) int { n, _ := strconv.Atoi(s); return n }
+func atoiOrZero(s string) int { n, _ := strconv.Atoi(s); return n }
 
 func zoneOf(z string, loc *time.Location) *time.Location {
 	if z == "" {
@@ -125,7 +121,7 @@ func zoneOf(z string, loc *time.Location) *time.Location {
 	if len(z) != 5 {
 		return loc
 	}
-	off := (atoi(z[1:3])*60 + atoi(z[3:5])) * 60
+	off := (atoiOrZero(z[1:3])*60 + atoiOrZero(z[3:5])) * 60
 	if z[0] == '-' {
 		off = -off
 	}
@@ -167,13 +163,13 @@ func parseISOTime(head, line string, loc *time.Location) (time.Time, string, boo
 		for len(f) < 9 {
 			f += "0"
 		}
-		ns = atoi(f)
+		ns = atoiOrZero(f)
 	}
 	var z string
 	if m[2*8] >= 0 {
 		z = g(8)
 	}
-	t := time.Date(atoi(g(1)), time.Month(atoi(g(2))), atoi(g(3)), atoi(g(4)), atoi(g(5)), atoi(g(6)), ns, zoneOf(z, loc))
+	t := time.Date(atoiOrZero(g(1)), time.Month(atoiOrZero(g(2))), atoiOrZero(g(3)), atoiOrZero(g(4)), atoiOrZero(g(5)), atoiOrZero(g(6)), ns, zoneOf(z, loc))
 	return t, line[m[1]:], true
 }
 
@@ -187,7 +183,7 @@ func parseSyslogTime(head, line string, now time.Time, loc *time.Location) (time
 	if !found {
 		return time.Time{}, "", false
 	}
-	t := time.Date(now.Year(), mon, atoi(g(2)), atoi(g(3)), atoi(g(4)), atoi(g(5)), 0, loc)
+	t := time.Date(now.Year(), mon, atoiOrZero(g(2)), atoiOrZero(g(3)), atoiOrZero(g(4)), atoiOrZero(g(5)), 0, loc)
 	if t.After(now.Add(24 * time.Hour)) {
 		t = t.AddDate(-1, 0, 0)
 	}
@@ -203,10 +199,8 @@ func parseApacheTime(head string, loc *time.Location) (time.Time, bool) {
 	if !found {
 		return time.Time{}, false
 	}
-	return time.Date(atoi(m[3]), mon, atoi(m[1]), atoi(m[4]), atoi(m[5]), atoi(m[6]), 0, zoneOf(m[7], loc)), true
+	return time.Date(atoiOrZero(m[3]), mon, atoiOrZero(m[1]), atoiOrZero(m[4]), atoiOrZero(m[5]), atoiOrZero(m[6]), 0, zoneOf(m[7], loc)), true
 }
-
-// ---------- JSON lines ----------
 
 var (
 	jsonTimeKeys  = []string{"time", "ts", "timestamp", "@timestamp", "t", "datetime", "asctime"}
