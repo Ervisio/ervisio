@@ -380,6 +380,12 @@ func (in *Input) applyTCPTLS(e *Env, pin string) error {
 		delete(e.secrets, SecretClientKey)
 		return nil
 	}
+	return in.applyClientTLS(e, pin)
+}
+
+// applyClientTLS validates the CA, client certificate and key, and the
+// fingerprint choice of a secure TCP/TLS environment.
+func (in *Input) applyClientTLS(e *Env, pin string) error {
 	if err := validOptionalPEM("CA certificate", e.CA); err != nil {
 		return err
 	}
@@ -414,6 +420,16 @@ func (in *Input) applySSH(e *Env) error {
 		return errf("Give the SSH user name, for example docker.")
 	}
 	e.User = in.User
+	if err := in.applySSHSocket(e); err != nil {
+		return err
+	}
+	if err := in.applySSHKey(e); err != nil {
+		return err
+	}
+	return in.applySSHHostKey(e)
+}
+
+func (in *Input) applySSHSocket(e *Env) error {
 	e.SocketPath = in.SocketPath
 	if e.SocketPath == "" {
 		e.SocketPath = DefaultSSHSock
@@ -421,6 +437,10 @@ func (in *Input) applySSH(e *Env) error {
 	if !sockPathRe.MatchString(e.SocketPath) || strings.Contains(e.SocketPath, "..") {
 		return errf("The remote Docker socket must be an absolute path such as /var/run/docker.sock.")
 	}
+	return nil
+}
+
+func (in *Input) applySSHKey(e *Env) error {
 	if err := validOptionalPEM("private key", in.SSHKey); err != nil {
 		return err
 	}
@@ -429,9 +449,11 @@ func (in *Input) applySSH(e *Env) error {
 	if e.secrets[SecretSSHKey] == "" {
 		return errf("Add the private key used to sign in over SSH.")
 	}
-	if _, err := ParseSSHKey(e.secrets[SecretSSHKey], e.secrets[SecretPassphrase]); err != nil {
-		return err
-	}
+	_, err := ParseSSHKey(e.secrets[SecretSSHKey], e.secrets[SecretPassphrase])
+	return err
+}
+
+func (in *Input) applySSHHostKey(e *Env) error {
 	if hk := strings.TrimSpace(in.HostKey); hk != "" {
 		k, err := ParseHostKey(hk)
 		if err != nil {
@@ -484,19 +506,9 @@ func (in *Input) applyErvisio(e *Env, pin string, isNew bool) error {
 // http only for a loopback address or when insecure is set. Returns
 // scheme://host[:port] without a trailing slash.
 func ParseServerURL(raw string, insecure bool) (string, error) {
-	raw = strings.TrimSpace(raw)
-	var scheme, rest string
-	switch {
-	case strings.HasPrefix(raw, "https://"):
-		scheme, rest = "https", raw[8:]
-	case strings.HasPrefix(raw, "http://"):
-		scheme, rest = "http", raw[7:]
-	default:
-		return "", errf("Start the address with https:// (for example https://server.lan:9090).")
-	}
-	rest = strings.TrimSuffix(rest, "/")
-	if rest == "" || strings.ContainsAny(rest, "/?#@ ") {
-		return "", errf("Give only the server's address, without a path.")
+	scheme, rest, err := splitServerURL(strings.TrimSpace(raw))
+	if err != nil {
+		return "", err
 	}
 	host := rest
 	if h, _, err := net.SplitHostPort(rest); err == nil {
@@ -506,12 +518,32 @@ func ParseServerURL(raw string, insecure bool) (string, error) {
 	if ip := net.ParseIP(host); ip == nil && !hostRe.MatchString(host) {
 		return "", errf("%q is not a valid host name or address.", host)
 	}
-	if scheme == "http" && !insecure {
-		if ip := net.ParseIP(host); !(ip != nil && ip.IsLoopback()) && host != "localhost" {
-			return "", errf("Plain http sends the pairing credential unencrypted. Use https, or tick \"Allow plain http\" if you accept that risk.")
-		}
+	if scheme == "http" && !insecure && !isLoopbackHost(host) {
+		return "", errf("Plain http sends the pairing credential unencrypted. Use https, or tick \"Allow plain http\" if you accept that risk.")
 	}
 	return scheme + "://" + rest, nil
+}
+
+// splitServerURL separates the scheme from host[:port] and rejects paths.
+func splitServerURL(raw string) (scheme, rest string, err error) {
+	switch {
+	case strings.HasPrefix(raw, "https://"):
+		scheme, rest = "https", raw[8:]
+	case strings.HasPrefix(raw, "http://"):
+		scheme, rest = "http", raw[7:]
+	default:
+		return "", "", errf("Start the address with https:// (for example https://server.lan:9090).")
+	}
+	rest = strings.TrimSuffix(rest, "/")
+	if rest == "" || strings.ContainsAny(rest, "/?#@ ") {
+		return "", "", errf("Give only the server's address, without a path.")
+	}
+	return scheme, rest, nil
+}
+
+func isLoopbackHost(host string) bool {
+	ip := net.ParseIP(host)
+	return (ip != nil && ip.IsLoopback()) || host == "localhost"
 }
 
 // Allowed reports whether a user may use the environment.

@@ -97,47 +97,9 @@ func (m *module) copyRun(ctx context.Context, s rpc.Stream, src, dst *endpoint, 
 	if !isDirLike(te) {
 		return rpc.Errorf(rpc.Invalid, "%s is not a folder.", to)
 	}
-	type job struct {
-		src, dst string
-		e        Entry
-	}
-	var jobs []job
-	var total int64
-	items := 0
-	for _, raw := range from {
-		sp, err := src.clean(raw)
-		if err != nil {
-			return err
-		}
-		if src.ops.dir(sp) == sp {
-			return rpc.Errorf(rpc.Invalid, "The top folder cannot be copied or moved.")
-		}
-		if move && src.local {
-			if err := files.CheckNotProtected(sp); err != nil {
-				return err
-			}
-		}
-		e, err := src.fs.Stat(ctx, sp)
-		if err != nil {
-			return err
-		}
-		if same && (to == sp || isInsidePath(to, sp, src.ops)) && isDirLike(e) {
-			return rpc.Errorf(rpc.Invalid, "A folder cannot be copied or moved into itself.")
-		}
-		if move && same && src.ops.dir(sp) == to {
-			continue // already there
-		}
-		dp, err := uniqueName(ctx, dst.fs, dst.ops, dst.ops.join(to, src.ops.base(sp)))
-		if err != nil {
-			return err
-		}
-		jobs = append(jobs, job{sp, dp, e})
-		sz, n, err := treeSize(ctx, src, sp, e, &items)
-		if err != nil {
-			return err
-		}
-		total += sz
-		items += n
+	jobs, total, err := planCopy(ctx, src, dst, same, from, to, move)
+	if err != nil {
+		return err
 	}
 	if err := s.Send(map[string]any{"type": "start", "total": total, "items": len(jobs)}); err != nil {
 		return err
@@ -171,23 +133,15 @@ func (m *module) copyRun(ctx context.Context, s rpc.Stream, src, dst *endpoint, 
 			results = append(results, j.dst)
 			continue
 		}
-		cp.madeTop = false
-		skipped := len(cp.skipped)
-		if err := cp.copy(j.src, j.e, j.dst, 0); err != nil {
-			// Leave nothing half-copied at the top level.
-			if cp.madeTop {
-				_ = removeAll(context.WithoutCancel(ctx), dst.fs, j.dst)
-			}
+		skipped, err := cp.copyTop(j)
+		if err != nil {
 			return err
 		}
 		if sendErr != nil {
 			return sendErr
 		}
 		if move {
-			if len(cp.skipped) > skipped {
-				return rpc.Errorf(rpc.Invalid, "%s was copied but not removed: it holds links or special files that cannot be moved.", j.src)
-			}
-			if err := removeAll(ctx, src.fs, j.src); err != nil {
+			if err := cp.removeMoved(j, skipped); err != nil {
 				return err
 			}
 		}
@@ -199,6 +153,77 @@ func (m *module) copyRun(ctx context.Context, s rpc.Stream, src, dst *endpoint, 
 		out["skipped"] = cp.skipped
 	}
 	return s.Send(out)
+}
+
+type copyItem struct {
+	src, dst string
+	e        Entry
+}
+
+// planCopy validates every selected path and returns the items to copy with
+// their unique destination names and the total size.
+func planCopy(ctx context.Context, src, dst *endpoint, same bool, from []string, to string, move bool) ([]copyItem, int64, error) {
+	var jobs []copyItem
+	var total int64
+	items := 0
+	for _, raw := range from {
+		sp, err := src.clean(raw)
+		if err != nil {
+			return nil, 0, err
+		}
+		if src.ops.dir(sp) == sp {
+			return nil, 0, rpc.Errorf(rpc.Invalid, "The top folder cannot be copied or moved.")
+		}
+		if move && src.local {
+			if err := files.CheckNotProtected(sp); err != nil {
+				return nil, 0, err
+			}
+		}
+		e, err := src.fs.Stat(ctx, sp)
+		if err != nil {
+			return nil, 0, err
+		}
+		if same && (to == sp || isInsidePath(to, sp, src.ops)) && isDirLike(e) {
+			return nil, 0, rpc.Errorf(rpc.Invalid, "A folder cannot be copied or moved into itself.")
+		}
+		if move && same && src.ops.dir(sp) == to {
+			continue // already there
+		}
+		dp, err := uniqueName(ctx, dst.fs, dst.ops, dst.ops.join(to, src.ops.base(sp)))
+		if err != nil {
+			return nil, 0, err
+		}
+		jobs = append(jobs, copyItem{sp, dp, e})
+		sz, n, err := treeSize(ctx, src, sp, e, &items)
+		if err != nil {
+			return nil, 0, err
+		}
+		total += sz
+		items += n
+	}
+	return jobs, total, nil
+}
+
+// copyTop copies one item and reports whether anything below it was skipped.
+func (c *copier) copyTop(j copyItem) (bool, error) {
+	c.madeTop = false
+	before := len(c.skipped)
+	if err := c.copy(j.src, j.e, j.dst, 0); err != nil {
+		// Leave nothing half-copied at the top level.
+		if c.madeTop {
+			_ = removeAll(context.WithoutCancel(c.ctx), c.dst.fs, j.dst)
+		}
+		return false, err
+	}
+	return len(c.skipped) > before, nil
+}
+
+// removeMoved deletes the source of a finished move copy.
+func (c *copier) removeMoved(j copyItem, skipped bool) error {
+	if skipped {
+		return rpc.Errorf(rpc.Invalid, "%s was copied but not removed: it holds links or special files that cannot be moved.", j.src)
+	}
+	return removeAll(c.ctx, c.src.fs, j.src)
 }
 
 func isInsidePath(child, parent string, ops pathOps) bool {
@@ -259,46 +284,54 @@ func (c *copier) copy(sp string, e Entry, dp string, depth int) error {
 	}
 	switch {
 	case isFileLike(e):
-		if e.Type == "symlink" && c.src.local {
-			// Like files.copy: links on this computer are not followed.
-			c.skipped = append(c.skipped, sp)
-			return nil
-		}
-		r, err := c.src.fs.Open(c.ctx, sp)
-		if err != nil {
-			return err
-		}
-		size := e.Size
-		if e.Type == "symlink" {
-			size = -1
-		}
-		_, err = writeFile(c.ctx, c.dst.fs, c.dst.ops, dp, r, size, false, c.progress)
-		r.Close()
-		if err == nil && depth == 0 {
-			c.madeTop = true
-		}
-		return err
+		return c.copyFile(sp, e, dp, depth)
 	case e.Type == "dir":
-		if depth > 256 {
-			return rpc.Errorf(rpc.Invalid, "%s is nested too deeply.", sp)
-		}
-		if err := c.dst.fs.Mkdir(c.ctx, dp); err != nil {
-			return err
-		}
-		if depth == 0 {
-			c.madeTop = true
-		}
-		kids, err := c.src.fs.List(c.ctx, sp)
-		if err != nil {
-			return err
-		}
-		for _, k := range kids {
-			if err := c.copy(c.src.ops.join(sp, k.Name), k, c.dst.ops.join(dp, k.Name), depth+1); err != nil {
-				return err
-			}
-		}
-		return nil
+		return c.copyDir(sp, dp, depth)
 	}
 	c.skipped = append(c.skipped, sp)
+	return nil
+}
+
+func (c *copier) copyFile(sp string, e Entry, dp string, depth int) error {
+	if e.Type == "symlink" && c.src.local {
+		// Like files.copy: links on this computer are not followed.
+		c.skipped = append(c.skipped, sp)
+		return nil
+	}
+	r, err := c.src.fs.Open(c.ctx, sp)
+	if err != nil {
+		return err
+	}
+	size := e.Size
+	if e.Type == "symlink" {
+		size = -1
+	}
+	_, err = writeFile(c.ctx, c.dst.fs, c.dst.ops, dp, r, size, false, c.progress)
+	r.Close()
+	if err == nil && depth == 0 {
+		c.madeTop = true
+	}
+	return err
+}
+
+func (c *copier) copyDir(sp, dp string, depth int) error {
+	if depth > 256 {
+		return rpc.Errorf(rpc.Invalid, "%s is nested too deeply.", sp)
+	}
+	if err := c.dst.fs.Mkdir(c.ctx, dp); err != nil {
+		return err
+	}
+	if depth == 0 {
+		c.madeTop = true
+	}
+	kids, err := c.src.fs.List(c.ctx, sp)
+	if err != nil {
+		return err
+	}
+	for _, k := range kids {
+		if err := c.copy(c.src.ops.join(sp, k.Name), k, c.dst.ops.join(dp, k.Name), depth+1); err != nil {
+			return err
+		}
+	}
 	return nil
 }

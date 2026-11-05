@@ -258,13 +258,9 @@ func fetchEventLog(ctx context.Context, channel string, f filter, until int64, w
 
 // followEventLog polls the channel for records newer than the current newest.
 func followEventLog(ctx context.Context, channel string, f filter, out chan<- Entry) error {
-	var last int64
-	o, err := runWevtutil(ctx, evtArgs(channel, "*", 1, true))
+	last, err := newestEventID(ctx, channel)
 	if err != nil {
 		return err
-	}
-	if _, ids := parseEventStream(o, channel); len(ids) > 0 {
-		last = ids[0]
 	}
 	t := time.NewTicker(evtPollInterval)
 	defer t.Stop()
@@ -298,6 +294,18 @@ func followEventLog(ctx context.Context, channel string, f filter, out chan<- En
 	}
 }
 
+// newestEventID is the record id of the channel's latest event, or 0.
+func newestEventID(ctx context.Context, channel string) (int64, error) {
+	o, err := runWevtutil(ctx, evtArgs(channel, "*", 1, true))
+	if err != nil {
+		return 0, err
+	}
+	if _, ids := parseEventStream(o, channel); len(ids) > 0 {
+		return ids[0], nil
+	}
+	return 0, nil
+}
+
 // listSourcesWindows is logs.sources on Windows: the event channels and the
 // watched files.
 func listSourcesWindows(ctx context.Context, watchers []Watcher, admin bool) (*SourcesResult, error) {
@@ -309,31 +317,12 @@ func listSourcesWindows(ctx context.Context, watchers []Watcher, admin bool) (*S
 	var wg sync.WaitGroup
 	var capped atomic.Bool
 	for i, ch := range eventChannels {
-		label := ch
-		if j := strings.LastIndexByte(label, '/'); j >= 0 {
-			label = label[:j]
-		}
-		label = strings.TrimPrefix(label, "Microsoft-Windows-")
-		s := Source{ID: "evt:" + ch, Kind: "evt", Group: "system", Label: label, Hint: "Windows Event Log: " + ch}
-		system.Sources[i] = s
+		system.Sources[i] = Source{ID: "evt:" + ch, Kind: "evt", Group: "system", Label: channelLabel(ch), Hint: "Windows Event Log: " + ch}
 		wg.Add(1)
-		go func(i int, ch string) {
+		go func(s *Source, ch string) {
 			defer wg.Done()
-			ents, err := fetchEventLog(ctx, ch, filter{sinceUs: since, untilUs: noLimit}, noLimit, sampleCap/10)
-			if err != nil {
-				system.Sources[i].NeedsAdmin = rpc.ToError(err, admin).Code == rpc.NeedsAdmin
-				return
-			}
-			if len(ents) >= sampleCap/10 {
-				capped.Store(true)
-			}
-			for _, e := range ents {
-				system.Sources[i].Count24h++
-				if e.Level == LvErr {
-					system.Sources[i].Errors24h++
-				}
-			}
-		}(i, ch)
+			countChannel(ctx, s, ch, since, admin, &capped)
+		}(&system.Sources[i], ch)
 	}
 	budget := int64(countBudget)
 	var mu sync.Mutex
@@ -342,12 +331,7 @@ func listSourcesWindows(ctx context.Context, watchers []Watcher, admin bool) (*S
 		wg.Add(1)
 		go func(w Watcher, s Source) {
 			defer wg.Done()
-			if st, err := os.Stat(w.Path); err != nil {
-				s.NeedsAdmin = os.IsPermission(err)
-			} else {
-				s.Size = st.Size()
-				s.Count24h, s.Errors24h = countFile(ctx, w.Path, w.Format, &budget)
-			}
+			statWatcher(ctx, &s, w, &budget)
 			mu.Lock()
 			watchG.Sources = append(watchG.Sources, s)
 			mu.Unlock()
@@ -365,4 +349,41 @@ func listSourcesWindows(ctx context.Context, watchers []Watcher, admin bool) (*S
 	sort.Slice(watchG.Sources, func(i, j int) bool { return watchG.Sources[i].Label < watchG.Sources[j].Label })
 	res.Groups = []SourceGroup{system, {ID: "services", Sources: []Source{}}, {ID: "files", Sources: []Source{}}, watchG}
 	return res, nil
+}
+
+// channelLabel is the short display name of an event channel.
+func channelLabel(ch string) string {
+	if j := strings.LastIndexByte(ch, '/'); j >= 0 {
+		ch = ch[:j]
+	}
+	return strings.TrimPrefix(ch, "Microsoft-Windows-")
+}
+
+// countChannel fills s with the last 24 hours of events of one channel.
+func countChannel(ctx context.Context, s *Source, ch string, since int64, admin bool, capped *atomic.Bool) {
+	ents, err := fetchEventLog(ctx, ch, filter{sinceUs: since, untilUs: noLimit}, noLimit, sampleCap/10)
+	if err != nil {
+		s.NeedsAdmin = rpc.ToError(err, admin).Code == rpc.NeedsAdmin
+		return
+	}
+	if len(ents) >= sampleCap/10 {
+		capped.Store(true)
+	}
+	for _, e := range ents {
+		s.Count24h++
+		if e.Level == LvErr {
+			s.Errors24h++
+		}
+	}
+}
+
+// statWatcher fills s with the size and counts of a watched file.
+func statWatcher(ctx context.Context, s *Source, w Watcher, budget *int64) {
+	st, err := os.Stat(w.Path)
+	if err != nil {
+		s.NeedsAdmin = os.IsPermission(err)
+		return
+	}
+	s.Size = st.Size()
+	s.Count24h, s.Errors24h = countFile(ctx, w.Path, w.Format, budget)
 }
