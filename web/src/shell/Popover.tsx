@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useOutsideClick } from '../ui/hooks';
+import { measure } from '../ui/Menu';
 
 /** Anchored panel for rich popups (avatar, notifications, host switcher). */
 export function Popover({ anchor, onClose, children, placement = 'below', label }: { anchor: DOMRect; onClose(): void; children: ReactNode; placement?: 'below' | 'right-up'; label?: string }) {
@@ -8,10 +9,9 @@ export function Popover({ anchor, onClose, children, placement = 'below', label 
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   useOutsideClick(ref, onClose);
   useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const w = el.offsetWidth;
-    const h = el.offsetHeight;
+    const box = measure(ref);
+    if (!box) return;
+    const { el, w, h } = box;
     let left: number;
     let top: number;
     if (placement === 'right-up') {

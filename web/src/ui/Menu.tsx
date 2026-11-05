@@ -1,4 +1,4 @@
-import { cloneElement, isValidElement, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactElement, type ReactNode } from 'react';
+import { cloneElement, isValidElement, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactElement, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon, type IconName } from './Icon';
 import { useOutsideClick } from './hooks';
@@ -37,6 +37,12 @@ export type MenuItem =
 
 export type MenuAnchor = { x: number; y: number } | { rect: DOMRect };
 
+/** The element behind a ref with its rendered size, or null before it mounts. */
+export function measure(ref: RefObject<HTMLElement>) {
+  const el = ref.current;
+  return el ? { el, w: el.offsetWidth, h: el.offsetHeight } : null;
+}
+
 export function Menu({ items, anchor, onClose, 'aria-label': aria }: { items: MenuItem[]; anchor: MenuAnchor; onClose(): void; 'aria-label'?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
@@ -45,10 +51,9 @@ export function Menu({ items, anchor, onClose, 'aria-label': aria }: { items: Me
 
   useOutsideClick(ref, onClose);
   useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const w = el.offsetWidth;
-    const h = el.offsetHeight;
+    const box = measure(ref);
+    if (!box) return;
+    const { el, w, h } = box;
     let left: number;
     let top: number;
     if ('rect' in anchor) {
