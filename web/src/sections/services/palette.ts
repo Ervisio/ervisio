@@ -23,7 +23,11 @@ export default function usePalette(): PaletteAction[] {
           const short = name.replace(/\.service$/, '');
           call('services.action', { name, action: 'restart' }).then(
             () => toast.ok(t('toast.restarted', { name: short })),
-            (e) => toast.err(t('toast.failed', { name: short }), e instanceof ApiError ? e.message : String(e)),
+            (e) =>
+              toast.err(
+                t('toast.failed', { name: short }),
+                e instanceof ApiError ? e.message : String(e),
+              ),
           );
         },
       })),

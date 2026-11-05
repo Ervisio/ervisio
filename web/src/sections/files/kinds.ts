@@ -9,13 +9,119 @@ const ext = (n: string) => {
   return i > 0 ? n.slice(i + 1).toLowerCase() : '';
 };
 
-const IMG = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'avif', 'bmp', 'ico', 'tif', 'tiff']);
-const CODE = new Set(['sh', 'bash', 'zsh', 'py', 'js', 'ts', 'tsx', 'jsx', 'go', 'rs', 'c', 'h', 'cpp', 'hpp', 'java', 'php', 'rb', 'lua', 'css', 'html', 'xml', 'json', 'yaml', 'yml', 'toml', 'sql', 'service', 'timer', 'conf', 'ini', 'cfg', 'env', 'nix', 'mk', 'dockerfile']);
-const ARC = new Set(['zip', 'tar', 'gz', 'tgz', 'bz2', 'xz', 'zst', '7z', 'rar', 'iso', 'deb', 'rpm', 'pkg', 'appimage']);
-const DOC = new Set(['doc', 'docx', 'odt', 'xls', 'xlsx', 'ods', 'ppt', 'pptx', 'odp', 'csv', 'rtf', 'epub']);
+const IMG = new Set([
+  'png',
+  'jpg',
+  'jpeg',
+  'gif',
+  'webp',
+  'svg',
+  'avif',
+  'bmp',
+  'ico',
+  'tif',
+  'tiff',
+]);
+const CODE = new Set([
+  'sh',
+  'bash',
+  'zsh',
+  'py',
+  'js',
+  'ts',
+  'tsx',
+  'jsx',
+  'go',
+  'rs',
+  'c',
+  'h',
+  'cpp',
+  'hpp',
+  'java',
+  'php',
+  'rb',
+  'lua',
+  'css',
+  'html',
+  'xml',
+  'json',
+  'yaml',
+  'yml',
+  'toml',
+  'sql',
+  'service',
+  'timer',
+  'conf',
+  'ini',
+  'cfg',
+  'env',
+  'nix',
+  'mk',
+  'dockerfile',
+]);
+const ARC = new Set([
+  'zip',
+  'tar',
+  'gz',
+  'tgz',
+  'bz2',
+  'xz',
+  'zst',
+  '7z',
+  'rar',
+  'iso',
+  'deb',
+  'rpm',
+  'pkg',
+  'appimage',
+]);
+const DOC = new Set([
+  'doc',
+  'docx',
+  'odt',
+  'xls',
+  'xlsx',
+  'ods',
+  'ppt',
+  'pptx',
+  'odp',
+  'csv',
+  'rtf',
+  'epub',
+]);
 const TXT = new Set(['txt', 'md', 'log', 'rst', 'readme', 'license', 'text']);
-const MEDIA = new Set(['mp3', 'flac', 'ogg', 'opus', 'wav', 'm4a', 'mp4', 'mkv', 'webm', 'avi', 'mov']);
-const TEXT_NAMES = new Set(['makefile', 'dockerfile', 'readme', 'license', 'authors', 'changelog', 'fstab', 'hosts', 'passwd', 'group', 'shadow', 'crontab', 'sudoers', 'profile', 'bashrc', 'zshrc', 'gitignore']);
+const MEDIA = new Set([
+  'mp3',
+  'flac',
+  'ogg',
+  'opus',
+  'wav',
+  'm4a',
+  'mp4',
+  'mkv',
+  'webm',
+  'avi',
+  'mov',
+]);
+const TEXT_NAMES = new Set([
+  'makefile',
+  'dockerfile',
+  'readme',
+  'license',
+  'authors',
+  'changelog',
+  'fstab',
+  'hosts',
+  'passwd',
+  'group',
+  'shadow',
+  'crontab',
+  'sudoers',
+  'profile',
+  'bashrc',
+  'zshrc',
+  'gitignore',
+]);
 
 export function kindOf(e: Pick<RawEntry, 'name' | 'type' | 'targetType' | 'mime'>): Kind {
   if (isDirLike(e)) return 'dir';
@@ -46,10 +152,13 @@ export const KIND_ICON: Record<Kind, IconName> = {
 /** Image types the daemon can decode for thumbnails. */
 export const canThumb = (name: string) => ['png', 'jpg', 'jpeg', 'gif'].includes(ext(name));
 /** Image types a browser shows directly. */
-export const canInlineImage = (name: string) => ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'avif', 'bmp', 'ico'].includes(ext(name));
+export const canInlineImage = (name: string) =>
+  ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'avif', 'bmp', 'ico'].includes(ext(name));
 
 /** Might be editable text (the server still refuses binary content). */
-export function looksTextual(e: Pick<RawEntry, 'name' | 'type' | 'targetType' | 'mime' | 'size'>): boolean {
+export function looksTextual(
+  e: Pick<RawEntry, 'name' | 'type' | 'targetType' | 'mime' | 'size'>,
+): boolean {
   if (e.type === 'dir' || e.type === 'other') return false;
   if (e.size > 8 << 20) return false;
   const k = kindOf(e);
@@ -57,5 +166,7 @@ export function looksTextual(e: Pick<RawEntry, 'name' | 'type' | 'targetType' | 
   if (k !== 'other') return false;
   const x = ext(e.name);
   const base = e.name.replace(/^\./, '').toLowerCase();
-  return !x || TEXT_NAMES.has(base) || e.mime === 'application/json' || e.mime === 'application/xml';
+  return (
+    !x || TEXT_NAMES.has(base) || e.mime === 'application/json' || e.mime === 'application/xml'
+  );
 }

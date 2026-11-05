@@ -26,7 +26,15 @@ export interface HttpApi {
   platforms?: string[];
 }
 /** A capabilities.files entry: a path, or an object with admin / create (SDK v3). */
-export type Folder = string | { path: string; admin?: boolean; adminUnlessGroup?: string; create?: boolean; platforms?: string[] };
+export type Folder =
+  | string
+  | {
+      path: string;
+      admin?: boolean;
+      adminUnlessGroup?: string;
+      create?: boolean;
+      platforms?: string[];
+    };
 export interface Capabilities {
   commands: Command[];
   /** Missing from older daemons and catalogs. */

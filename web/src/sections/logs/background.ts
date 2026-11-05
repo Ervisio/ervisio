@@ -20,9 +20,19 @@ function raiseError(e: Omit<Entry, 'key'>, names: Map<string, Watcher>, seen: Se
   const s = seen.get(w.path) ?? { count: 0, toastAt: 0 };
   s.count++;
   seen.set(w.path, s);
-  const title = s.count === 1 ? tr('notice.error', { name: w.name }) : tr('notice.errors', { name: w.name, count: s.count });
+  const title =
+    s.count === 1
+      ? tr('notice.error', { name: w.name })
+      : tr('notice.errors', { name: w.name, count: s.count });
   const msg = e.message.length > 300 ? `${e.message.slice(0, 300)}…` : e.message;
-  notify({ title, detail: msg, tone: 'err', icon: 'logs', to: `/logs?file=${encodeURIComponent(w.path)}&level=err`, key: `logs:${w.path}` });
+  notify({
+    title,
+    detail: msg,
+    tone: 'err',
+    icon: 'logs',
+    to: `/logs?file=${encodeURIComponent(w.path)}&level=err`,
+    key: `logs:${w.path}`,
+  });
   const now = Date.now();
   if (now - s.toastAt > TOAST_EVERY) {
     s.toastAt = now;

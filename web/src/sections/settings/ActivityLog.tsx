@@ -3,7 +3,17 @@ import { apiUrl, call, errorMessage } from '../../api';
 import { useT } from '../../i18n';
 import { formatBytes, formatDateTime } from '../../lib/format';
 import type { AuditEntry } from '../../plugins/types';
-import { Badge, Button, EmptyState, Input, Select, Table, useIsMobile, type Column, type Tone } from '../../ui';
+import {
+  Badge,
+  Button,
+  EmptyState,
+  Input,
+  Select,
+  Table,
+  useIsMobile,
+  type Column,
+  type Tone,
+} from '../../ui';
 
 interface Filters {
   plugin: string;
@@ -14,7 +24,15 @@ interface Filters {
   since: string;
   until: string;
 }
-const EMPTY: Filters = { plugin: '', user: '', source: '', result: '', text: '', since: '', until: '' };
+const EMPTY: Filters = {
+  plugin: '',
+  user: '',
+  source: '',
+  result: '',
+  text: '',
+  since: '',
+  until: '',
+};
 const PAGE = 100;
 
 const dayStart = (d: string) => (d ? new Date(`${d}T00:00:00`).toISOString() : '');
@@ -32,7 +50,12 @@ function params(f: Filters): Record<string, string> {
   return p;
 }
 
-const TONE: Record<AuditEntry['result'], Tone> = { ok: 'ok', failed: 'warn', denied: 'err', error: 'err' };
+const TONE: Record<AuditEntry['result'], Tone> = {
+  ok: 'ok',
+  failed: 'warn',
+  denied: 'err',
+  error: 'err',
+};
 
 /**
  * Settings › Activity log: who did what through the console and its plugins. Administrators (root, or with
@@ -55,7 +78,11 @@ export function ActivityLog({ canSeeAll, canUnlock }: { canSeeAll: boolean; canU
     setLoading(true);
     setError('');
     try {
-      const r = await call<{ entries: AuditEntry[]; next: string; enabled: boolean }>('audit.list', { ...params(flt), limit: PAGE, ...(cursor ? { cursor } : {}) }, { noUnlock: true });
+      const r = await call<{ entries: AuditEntry[]; next: string; enabled: boolean }>(
+        'audit.list',
+        { ...params(flt), limit: PAGE, ...(cursor ? { cursor } : {}) },
+        { noUnlock: true },
+      );
       if (my !== seq.current) return;
       setRows((old) => (cursor ? [...old, ...r.entries] : r.entries));
       setNext(r.next ?? '');
@@ -83,7 +110,8 @@ export function ActivityLog({ canSeeAll, canUnlock }: { canSeeAll: boolean; canU
   const shown = f.result ? rows.filter((r) => r.result === f.result) : rows;
   const dirty = JSON.stringify(f) !== JSON.stringify(EMPTY);
 
-  const exportUrl = (format: 'csv' | 'json') => apiUrl(`/api/audit/export?${new URLSearchParams({ ...params(applied), format }).toString()}`);
+  const exportUrl = (format: 'csv' | 'json') =>
+    apiUrl(`/api/audit/export?${new URLSearchParams({ ...params(applied), format }).toString()}`);
 
   const actionLabel = (e: AuditEntry) => {
     const key = `activity.actions.${e.action.replace(/\./g, '_')}`;
@@ -107,7 +135,18 @@ export function ActivityLog({ canSeeAll, canUnlock }: { canSeeAll: boolean; canU
             {e.detail && <small>{e.detail}</small>}
           </span>
           <span className="meta">
-            {[formatDateTime(e.time), e.user, e.ip, e.source === 'plugin' ? e.plugin : t('activity.core'), e.env, e.origin, e.code !== undefined ? String(e.code) : '', e.bytes !== undefined ? formatBytes(e.bytes) : ''].filter(Boolean).join(' · ')}
+            {[
+              formatDateTime(e.time),
+              e.user,
+              e.ip,
+              e.source === 'plugin' ? e.plugin : t('activity.core'),
+              e.env,
+              e.origin,
+              e.code !== undefined ? String(e.code) : '',
+              e.bytes !== undefined ? formatBytes(e.bytes) : '',
+            ]
+              .filter(Boolean)
+              .join(' · ')}
           </span>
         </span>
       ),
@@ -115,7 +154,12 @@ export function ActivityLog({ canSeeAll, canUnlock }: { canSeeAll: boolean; canU
   ];
 
   const cols: Column<AuditEntry>[] = [
-    { key: 'time', header: t('activity.col.time'), render: (e) => <span title={e.time}>{formatDateTime(e.time)}</span>, width: 128 },
+    {
+      key: 'time',
+      header: t('activity.col.time'),
+      render: (e) => <span title={e.time}>{formatDateTime(e.time)}</span>,
+      width: 128,
+    },
     {
       key: 'who',
       header: t('activity.col.who'),
@@ -133,7 +177,16 @@ export function ActivityLog({ canSeeAll, canUnlock }: { canSeeAll: boolean; canU
       render: (e) => (
         <span className="st-act-what">
           <b>{actionLabel(e)}</b>
-          <small>{[e.source === 'plugin' ? e.plugin : t('activity.core'), e.env, e.admin ? t('activity.admin') : '', e.origin].filter(Boolean).join(' · ')}</small>
+          <small>
+            {[
+              e.source === 'plugin' ? e.plugin : t('activity.core'),
+              e.env,
+              e.admin ? t('activity.admin') : '',
+              e.origin,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </small>
         </span>
       ),
       width: 150,
@@ -155,7 +208,14 @@ export function ActivityLog({ canSeeAll, canUnlock }: { canSeeAll: boolean; canU
         <span className="st-act-result">
           <Badge tone={TONE[e.result] ?? 'neutral'}>{t(`activity.result.${e.result}`)}</Badge>
           {(e.code !== undefined || e.bytes !== undefined) && (
-            <small>{[e.code !== undefined ? String(e.code) : '', e.bytes !== undefined ? formatBytes(e.bytes) : ''].filter(Boolean).join(' · ')}</small>
+            <small>
+              {[
+                e.code !== undefined ? String(e.code) : '',
+                e.bytes !== undefined ? formatBytes(e.bytes) : '',
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </small>
           )}
         </span>
       ),
@@ -165,57 +225,140 @@ export function ActivityLog({ canSeeAll, canUnlock }: { canSeeAll: boolean; canU
 
   return (
     <div className="st-act">
-      {!enabled && <div className="st-warn"><span>{t('activity.off')}</span></div>}
-      {!canSeeAll && <p className="st-act-note">{canUnlock ? t('activity.ownOnlyUnlock') : t('activity.ownOnly')}</p>}
+      {!enabled && (
+        <div className="st-warn">
+          <span>{t('activity.off')}</span>
+        </div>
+      )}
+      {!canSeeAll && (
+        <p className="st-act-note">
+          {canUnlock ? t('activity.ownOnlyUnlock') : t('activity.ownOnly')}
+        </p>
+      )}
       <div className="st-act-filters">
-        <Input compact aria-label={t('activity.f.text')} icon="search" placeholder={t('activity.f.text')} value={f.text} onChange={(e) => set({ text: e.target.value })} />
-        <Input compact mono aria-label={t('activity.f.plugin')} placeholder={t('activity.f.plugin')} value={f.plugin} onChange={(e) => set({ plugin: e.target.value })} />
-        {canSeeAll && <Input compact aria-label={t('activity.f.user')} placeholder={t('activity.f.user')} value={f.user} onChange={(e) => set({ user: e.target.value })} />}
+        <Input
+          compact
+          aria-label={t('activity.f.text')}
+          icon="search"
+          placeholder={t('activity.f.text')}
+          value={f.text}
+          onChange={(e) => set({ text: e.target.value })}
+        />
+        <Input
+          compact
+          mono
+          aria-label={t('activity.f.plugin')}
+          placeholder={t('activity.f.plugin')}
+          value={f.plugin}
+          onChange={(e) => set({ plugin: e.target.value })}
+        />
+        {canSeeAll && (
+          <Input
+            compact
+            aria-label={t('activity.f.user')}
+            placeholder={t('activity.f.user')}
+            value={f.user}
+            onChange={(e) => set({ user: e.target.value })}
+          />
+        )}
         <Select
           compact
           aria-label={t('activity.f.source')}
           value={f.source}
           onChange={(v) => set({ source: v })}
-          options={[{ value: '', label: t('activity.f.anySource') }, { value: 'plugin', label: t('activity.f.plugins') }, { value: 'core', label: t('activity.f.console') }]}
+          options={[
+            { value: '', label: t('activity.f.anySource') },
+            { value: 'plugin', label: t('activity.f.plugins') },
+            { value: 'core', label: t('activity.f.console') },
+          ]}
         />
         <Select
           compact
           aria-label={t('activity.f.result')}
           value={f.result}
           onChange={(v) => set({ result: v })}
-          options={[{ value: '', label: t('activity.f.anyResult') }, ...(['ok', 'failed', 'denied', 'error'] as const).map((r) => ({ value: r, label: t(`activity.result.${r}`) }))]}
+          options={[
+            { value: '', label: t('activity.f.anyResult') },
+            ...(['ok', 'failed', 'denied', 'error'] as const).map((r) => ({
+              value: r,
+              label: t(`activity.result.${r}`),
+            })),
+          ]}
         />
         <label className="st-act-date">
           <span>{t('activity.f.since')}</span>
-          <Input compact type="date" aria-label={t('activity.f.since')} value={f.since} max={f.until || undefined} onChange={(e) => set({ since: e.target.value })} />
+          <Input
+            compact
+            type="date"
+            aria-label={t('activity.f.since')}
+            value={f.since}
+            max={f.until || undefined}
+            onChange={(e) => set({ since: e.target.value })}
+          />
         </label>
         <label className="st-act-date">
           <span>{t('activity.f.until')}</span>
-          <Input compact type="date" aria-label={t('activity.f.until')} value={f.until} min={f.since || undefined} onChange={(e) => set({ until: e.target.value })} />
+          <Input
+            compact
+            type="date"
+            aria-label={t('activity.f.until')}
+            value={f.until}
+            min={f.since || undefined}
+            onChange={(e) => set({ until: e.target.value })}
+          />
         </label>
-        {dirty && <Button variant="ghost" icon="x" onClick={() => setF(EMPTY)}>{t('activity.f.clear')}</Button>}
+        {dirty && (
+          <Button variant="ghost" icon="x" onClick={() => setF(EMPTY)}>
+            {t('activity.f.clear')}
+          </Button>
+        )}
       </div>
       <div className="st-act-bar">
-        <span className="st-act-count" aria-live="polite">{loading && rows.length === 0 ? t('activity.loading') : t('activity.count', { count: shown.length })}{next ? '+' : ''}</span>
+        <span className="st-act-count" aria-live="polite">
+          {loading && rows.length === 0
+            ? t('activity.loading')
+            : t('activity.count', { count: shown.length })}
+          {next ? '+' : ''}
+        </span>
         <span className="st-act-export">
-          <Button icon="download" onClick={() => window.location.assign(exportUrl('csv'))}>{t('activity.exportCsv')}</Button>
-          <Button icon="download" onClick={() => window.location.assign(exportUrl('json'))}>{t('activity.exportJson')}</Button>
+          <Button icon="download" onClick={() => window.location.assign(exportUrl('csv'))}>
+            {t('activity.exportCsv')}
+          </Button>
+          <Button icon="download" onClick={() => window.location.assign(exportUrl('json'))}>
+            {t('activity.exportJson')}
+          </Button>
         </span>
       </div>
       {error ? (
-        <div className="st-warn" role="alert"><span>{t('activity.failed', { error })}</span><Button icon="refresh" onClick={() => void load(applied, '')}>{t('server.failed.action')}</Button></div>
+        <div className="st-warn" role="alert">
+          <span>{t('activity.failed', { error })}</span>
+          <Button icon="refresh" onClick={() => void load(applied, '')}>
+            {t('server.failed.action')}
+          </Button>
+        </div>
       ) : (
         <Table<AuditEntry>
           columns={mobile ? cardCols : cols}
           rows={shown}
-          rowKey={(e) => `${e.time}|${e.user}|${e.action}|${e.target ?? ''}|${e.result}|${e.plugin ?? ''}`}
+          rowKey={(e) =>
+            `${e.time}|${e.user}|${e.action}|${e.target ?? ''}|${e.result}|${e.plugin ?? ''}`
+          }
           caption={t('activity.title')}
-          empty={<EmptyState icon={dirty ? 'search' : 'clock'} hue="log" title={dirty ? t('activity.noMatch') : t('activity.empty')} text={dirty ? undefined : t('activity.emptyText')} />}
+          empty={
+            <EmptyState
+              icon={dirty ? 'search' : 'clock'}
+              hue="log"
+              title={dirty ? t('activity.noMatch') : t('activity.empty')}
+              text={dirty ? undefined : t('activity.emptyText')}
+            />
+          }
         />
       )}
       {next && (
         <div className="st-act-more">
-          <Button loading={loading} onClick={() => void load(applied, next)}>{t('activity.more')}</Button>
+          <Button loading={loading} onClick={() => void load(applied, next)}>
+            {t('activity.more')}
+          </Button>
         </div>
       )}
     </div>

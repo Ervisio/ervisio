@@ -5,7 +5,15 @@ import { Button, Dialog, Input, toast } from '../../ui';
 import { loadSummary } from './store';
 
 /** Schedule the nightly update: a systemd timer (ervisio-update.timer) that runs the same upgrade as "Update all". */
-export function ScheduleDialog({ open, onClose, current }: { open: boolean; onClose(): void; current: string | null }) {
+export function ScheduleDialog({
+  open,
+  onClose,
+  current,
+}: {
+  open: boolean;
+  onClose(): void;
+  current: string | null;
+}) {
   const t = useT('software');
   const win = useSession().session?.os === 'windows';
   const [at, setAt] = useState('03:00');
@@ -47,14 +55,26 @@ export function ScheduleDialog({ open, onClose, current }: { open: boolean; onCl
       footer={
         <>
           {current && (
-            <Button variant="ghost" disabled={busy} onClick={() => void save(null)}>{t('schedule.remove')}</Button>
+            <Button variant="ghost" disabled={busy} onClick={() => void save(null)}>
+              {t('schedule.remove')}
+            </Button>
           )}
           <Button onClick={onClose}>{t('cancel')}</Button>
-          <Button variant="primary" type="submit" loading={busy}>{t('schedule.save')}</Button>
+          <Button variant="primary" type="submit" loading={busy}>
+            {t('schedule.save')}
+          </Button>
         </>
       }
     >
-      <Input label={t('schedule.time')} type="time" value={at} onChange={(e) => setAt(e.target.value)} required error={err || undefined} hint={t('schedule.hint')} />
+      <Input
+        label={t('schedule.time')}
+        type="time"
+        value={at}
+        onChange={(e) => setAt(e.target.value)}
+        required
+        error={err || undefined}
+        hint={t('schedule.hint')}
+      />
     </Dialog>
   );
 }

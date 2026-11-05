@@ -11,10 +11,16 @@
  */
 import type { BrokerManifest, Plan } from './broker';
 
-const deny = (message: string, code: 'forbidden' | 'invalid' = 'invalid'): Plan => ({ kind: 'deny', code, message });
+const deny = (message: string, code: 'forbidden' | 'invalid' = 'invalid'): Plan => ({
+  kind: 'deny',
+  code,
+  message,
+});
 
-const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
-const str = (v: unknown, max: number): string | null => (typeof v === 'string' && v.length <= max ? v : null);
+const isObj = (v: unknown): v is Record<string, unknown> =>
+  !!v && typeof v === 'object' && !Array.isArray(v);
+const str = (v: unknown, max: number): string | null =>
+  typeof v === 'string' && v.length <= max ? v : null;
 
 /** An object whose values are all short strings (job params). */
 function strMap(v: unknown): Record<string, string> | null {
@@ -38,11 +44,17 @@ function schedule(v: unknown): Record<string, unknown> | null {
     out.every = v.every;
   }
   if (v.at !== undefined) {
-    if (!Array.isArray(v.at) || v.at.length > 24 || !v.at.every((x) => typeof x === 'string' && x.length <= 5)) return null;
+    if (
+      !Array.isArray(v.at) ||
+      v.at.length > 24 ||
+      !v.at.every((x) => typeof x === 'string' && x.length <= 5)
+    )
+      return null;
     out.at = v.at;
   }
   if (v.days !== undefined) {
-    if (!Array.isArray(v.days) || v.days.length > 7 || !v.days.every((x) => typeof x === 'number')) return null;
+    if (!Array.isArray(v.days) || v.days.length > 7 || !v.days.every((x) => typeof x === 'number'))
+      return null;
     out.days = v.days;
   }
   return out;
@@ -67,18 +79,24 @@ export function authorizeJobsOp(m: BrokerManifest, op: string, a: Record<string,
   if (op === 'notify') return authorizeNotify(m, a);
 
   const action = typeof a.action === 'string' ? a.action : '';
-  const method = Object.prototype.hasOwnProperty.call(ACTIONS, action) ? ACTIONS[action] : undefined;
+  const method = Object.prototype.hasOwnProperty.call(ACTIONS, action)
+    ? ACTIONS[action]
+    : undefined;
   if (!method) return deny(`Plugins cannot use jobs.${JSON.stringify(action)}.`);
   const jobs = m.capabilities?.jobs ?? [];
   if (!jobs.length) return deny(`${m.id} declares no jobs (capabilities.jobs).`, 'forbidden');
   const params: Record<string, unknown> = { plugin: m.id };
-  const denied = addTarget(m, jobs, action, a, params) ?? addInstanceFields(action, a, params) ?? addActionFields(action, a, params);
+  const denied =
+    addTarget(m, jobs, action, a, params) ??
+    addInstanceFields(action, a, params) ??
+    addActionFields(action, a, params);
   if (denied) return denied;
   return { kind: 'call', method, params, admin: false };
 }
 
 function authorizeNotify(m: BrokerManifest, a: Record<string, unknown>): Plan {
-  if (!m.capabilities?.notify) return deny(`${m.id} does not declare capabilities.notify.`, 'forbidden');
+  if (!m.capabilities?.notify)
+    return deny(`${m.id} does not declare capabilities.notify.`, 'forbidden');
   const title = str(a.title, 1000);
   if (!title) return deny('A notification needs a title.');
   const params: Record<string, unknown> = { plugin: m.id, title };
@@ -105,17 +123,25 @@ function addNotifyLink(a: Record<string, unknown>, params: Record<string, unknow
 
 function addNotifyLevel(a: Record<string, unknown>, params: Record<string, unknown>): Plan | null {
   if (a.level === undefined) return null;
-  if (a.level !== 'info' && a.level !== 'success' && a.level !== 'warn' && a.level !== 'error') return deny('The level must be info, success, warn or error.');
+  if (a.level !== 'info' && a.level !== 'success' && a.level !== 'warn' && a.level !== 'error')
+    return deny('The level must be info, success, warn or error.');
   params.level = a.level;
   return null;
 }
 
 /** The job (list, create) or the instance id (every other action) the call is about. */
-function addTarget(m: BrokerManifest, jobs: { name: string }[], action: string, a: Record<string, unknown>, params: Record<string, unknown>): Plan | null {
+function addTarget(
+  m: BrokerManifest,
+  jobs: { name: string }[],
+  action: string,
+  a: Record<string, unknown>,
+  params: Record<string, unknown>,
+): Plan | null {
   if (action === 'list' || action === 'create') {
     if (action === 'create' || a.job !== undefined) {
       const job = typeof a.job === 'string' ? jobs.find((j) => j.name === a.job) : undefined;
-      if (!job) return deny(`${m.id} does not declare the job ${JSON.stringify(a.job)}.`, 'forbidden');
+      if (!job)
+        return deny(`${m.id} does not declare the job ${JSON.stringify(a.job)}.`, 'forbidden');
       params.job = job.name;
     }
     return null;
@@ -127,12 +153,23 @@ function addTarget(m: BrokerManifest, jobs: { name: string }[], action: string, 
 }
 
 /** The editable fields of an instance (create, update). */
-function addInstanceFields(action: string, a: Record<string, unknown>, params: Record<string, unknown>): Plan | null {
+function addInstanceFields(
+  action: string,
+  a: Record<string, unknown>,
+  params: Record<string, unknown>,
+): Plan | null {
   if (action !== 'create' && action !== 'update') return null;
-  return addNameAndParams(a, params) ?? addScheduleAndEnabled(action, a, params) ?? addRunAs(action, a, params);
+  return (
+    addNameAndParams(a, params) ??
+    addScheduleAndEnabled(action, a, params) ??
+    addRunAs(action, a, params)
+  );
 }
 
-function addNameAndParams(a: Record<string, unknown>, params: Record<string, unknown>): Plan | null {
+function addNameAndParams(
+  a: Record<string, unknown>,
+  params: Record<string, unknown>,
+): Plan | null {
   if (a.name !== undefined) {
     const name = str(a.name, 60);
     if (name === null) return deny('The name must be text of at most 60 characters.');
@@ -146,7 +183,11 @@ function addNameAndParams(a: Record<string, unknown>, params: Record<string, unk
   return null;
 }
 
-function addScheduleAndEnabled(action: string, a: Record<string, unknown>, params: Record<string, unknown>): Plan | null {
+function addScheduleAndEnabled(
+  action: string,
+  a: Record<string, unknown>,
+  params: Record<string, unknown>,
+): Plan | null {
   if (a.schedule !== undefined) {
     if (a.schedule === null && action === 'update') params.schedule = null;
     else {
@@ -164,7 +205,11 @@ function addScheduleAndEnabled(action: string, a: Record<string, unknown>, param
 
 // confirmAdmin is never passed on: a plugin cannot approve a job that runs steps as root. Such an instance
 // waits for an administrator, who approves it in Settings > Plugin jobs (jobs.approve, admin level).
-function addRunAs(action: string, a: Record<string, unknown>, params: Record<string, unknown>): Plan | null {
+function addRunAs(
+  action: string,
+  a: Record<string, unknown>,
+  params: Record<string, unknown>,
+): Plan | null {
   if (action !== 'create' || a.runAs === undefined) return null;
   const runAs = str(a.runAs, 64);
   if (runAs === null) return deny('runAs must be a user name.');
@@ -173,7 +218,11 @@ function addRunAs(action: string, a: Record<string, unknown>, params: Record<str
 }
 
 /** The arguments specific to history and the webhook actions. */
-function addActionFields(action: string, a: Record<string, unknown>, params: Record<string, unknown>): Plan | null {
+function addActionFields(
+  action: string,
+  a: Record<string, unknown>,
+  params: Record<string, unknown>,
+): Plan | null {
   if (action === 'history') return addLimit(a, params);
   if (action === 'webhookCreate') return addLabel(a, params);
   if (action === 'webhookRegenerate' || action === 'webhookRevoke') {
@@ -186,7 +235,8 @@ function addActionFields(action: string, a: Record<string, unknown>, params: Rec
 
 function addLimit(a: Record<string, unknown>, params: Record<string, unknown>): Plan | null {
   if (a.limit === undefined) return null;
-  if (!Number.isInteger(a.limit) || (a.limit as number) < 1 || (a.limit as number) > 100) return deny('limit is a number from 1 to 100.');
+  if (!Number.isInteger(a.limit) || (a.limit as number) < 1 || (a.limit as number) > 100)
+    return deny('limit is a number from 1 to 100.');
   params.limit = a.limit;
   return null;
 }

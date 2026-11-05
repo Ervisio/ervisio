@@ -3,7 +3,9 @@
  * ervisiod, or the Vite dev proxy). Set VITE_API_BASE=https://host:9090 for a wrapper that is not served by
  * the daemon (e.g. a desktop shell). Never build API URLs anywhere else.
  */
-export const API_BASE: string = ((import.meta.env.VITE_API_BASE as string | undefined) ?? '').replace(/\/$/, '');
+export const API_BASE: string = (
+  (import.meta.env.VITE_API_BASE as string | undefined) ?? ''
+).replace(/\/$/, '');
 
 /** Absolute-or-relative URL for an HTTP path such as "/api/rpc" or "/plugins/docker/index.js". */
 export const apiUrl = (path: string): string => API_BASE + path;

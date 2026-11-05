@@ -4,7 +4,19 @@ import { useOutsideClick } from '../ui/hooks';
 import { measure } from '../ui/Menu';
 
 /** Anchored panel for rich popups (avatar, notifications, host switcher). */
-export function Popover({ anchor, onClose, children, placement = 'below', label }: { anchor: DOMRect; onClose(): void; children: ReactNode; placement?: 'below' | 'right-up'; label?: string }) {
+export function Popover({
+  anchor,
+  onClose,
+  children,
+  placement = 'below',
+  label,
+}: {
+  anchor: DOMRect;
+  onClose(): void;
+  children: ReactNode;
+  placement?: 'below' | 'right-up';
+  label?: string;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   useOutsideClick(ref, onClose);

@@ -1,6 +1,23 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type MutableRefObject,
+  type SetStateAction,
+} from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ApiError, call, stream, usePrefs, useSession, type StreamHandle, errorMessage } from '../../api';
+import {
+  ApiError,
+  call,
+  stream,
+  usePrefs,
+  useSession,
+  type StreamHandle,
+  errorMessage,
+} from '../../api';
 import { useT, type TFn } from '../../i18n';
 import { usePaletteActions } from '../index';
 import { Badge, Button, Page, Sheet, toast, useIsMobile, useMediaQuery } from '../../ui';
@@ -9,8 +26,23 @@ import { FilterBar } from './FilterBar';
 import { Histogram } from './Histogram';
 import { Sources } from './Sources';
 import { Stream } from './Stream';
-import { bounds, normalizeWatchers, parseFilter, spanMs, writeFilter, type Filter } from './helpers';
-import { LEVELS, type Entry, type HistogramResult, type Level, type QueryResult, type SourcesResult, type Watcher } from './types';
+import {
+  bounds,
+  normalizeWatchers,
+  parseFilter,
+  spanMs,
+  writeFilter,
+  type Filter,
+} from './helpers';
+import {
+  LEVELS,
+  type Entry,
+  type HistogramResult,
+  type Level,
+  type QueryResult,
+  type SourcesResult,
+  type Watcher,
+} from './types';
 import './logs.css';
 
 const PAGE = 400;
@@ -20,7 +52,6 @@ let seq = 0;
 function toEntry(e: Omit<Entry, 'key'>): Entry {
   return { ...e, key: e.file && !e.line ? `${e.cursor}#${++seq}` : e.cursor };
 }
-
 
 type LogsCall = <T>(method: string, params: unknown, signal?: AbortSignal) => Promise<T>;
 
@@ -39,17 +70,20 @@ function useAdminEscalation(isUnlocked: boolean, isRoot: boolean | undefined) {
     adminRef.current = true;
     setAdmin(true);
   }, []);
-  const lcall = useCallback(async <T,>(method: string, p: unknown, signal?: AbortSignal): Promise<T> => {
-    if (adminRef.current) return call<T>(method, p, { admin: true, signal });
-    try {
-      return await call<T>(method, p, { signal, noUnlock: true });
-    } catch (e) {
-      if (!(e instanceof ApiError) || e.code !== 'needs_admin') throw e;
-      const r = await call<T>(method, p, { admin: true, signal });
-      markAdmin();
-      return r;
-    }
-  }, [markAdmin]);
+  const lcall = useCallback(
+    async <T,>(method: string, p: unknown, signal?: AbortSignal): Promise<T> => {
+      if (adminRef.current) return call<T>(method, p, { admin: true, signal });
+      try {
+        return await call<T>(method, p, { signal, noUnlock: true });
+      } catch (e) {
+        if (!(e instanceof ApiError) || e.code !== 'needs_admin') throw e;
+        const r = await call<T>(method, p, { admin: true, signal });
+        markAdmin();
+        return r;
+      }
+    },
+    [markAdmin],
+  );
   return { adminRef, admin, markAdmin, lcall };
 }
 
@@ -78,9 +112,16 @@ function useLogSources(lcall: LogsCall, watchers: Watcher[], watchersKey: string
   return { sources, srcError, loadSources };
 }
 
-const needsAdminCount = (r: QueryResult) => (r.skipped ?? []).filter((s) => s.code === 'needs_admin').length;
+const needsAdminCount = (r: QueryResult) =>
+  (r.skipped ?? []).filter((s) => s.code === 'needs_admin').length;
 
-type LogQueryOptions = { lcall: LogsCall; filter: Filter; b: ReturnType<typeof bounds>; watchers: Watcher[]; qkey: string };
+type LogQueryOptions = {
+  lcall: LogsCall;
+  filter: Filter;
+  b: ReturnType<typeof bounds>;
+  watchers: Watcher[];
+  qkey: string;
+};
 
 function useLogQuery({ lcall, filter, b, watchers, qkey }: LogQueryOptions) {
   const [rows, setRows] = useState<Entry[]>([]);
@@ -98,7 +139,14 @@ function useLogQuery({ lcall, filter, b, watchers, qkey }: LogQueryOptions) {
   const moreAc = useRef<AbortController | null>(null);
 
   const baseParams = useCallback(
-    () => ({ sources: filter.sources, since: b.since, until: b.until, levels: filter.levels, text: filter.q, watchers }),
+    () => ({
+      sources: filter.sources,
+      since: b.since,
+      until: b.until,
+      levels: filter.levels,
+      text: filter.q,
+      watchers,
+    }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [qkey],
   );
@@ -154,7 +202,20 @@ function useLogQuery({ lcall, filter, b, watchers, qkey }: LogQueryOptions) {
       .finally(() => id === gen.current && setMoreLoading(false));
   }, [next, moreLoading, lcall, baseParams]);
 
-  return { rows, setRows, rowsRef, hasMore, loading, moreLoading, error, skipped, loadedKey, sel, setSel, loadMore };
+  return {
+    rows,
+    setRows,
+    rowsRef,
+    hasMore,
+    loading,
+    moreLoading,
+    error,
+    skipped,
+    loadedKey,
+    sel,
+    setSel,
+    loadMore,
+  };
 }
 
 function useHistogramTick(live: boolean | undefined) {
@@ -167,9 +228,23 @@ function useHistogramTick(live: boolean | undefined) {
   return hTick;
 }
 
-type LogHistogramOptions = { lcall: LogsCall; filter: Filter; anchor: number; tick: number; watchers: Watcher[]; watchersKey: string };
+type LogHistogramOptions = {
+  lcall: LogsCall;
+  filter: Filter;
+  anchor: number;
+  tick: number;
+  watchers: Watcher[];
+  watchersKey: string;
+};
 
-function useLogHistogram({ lcall, filter, anchor, tick, watchers, watchersKey }: LogHistogramOptions) {
+function useLogHistogram({
+  lcall,
+  filter,
+  anchor,
+  tick,
+  watchers,
+  watchersKey,
+}: LogHistogramOptions) {
   const [hist, setHist] = useState<HistogramResult | null>(null);
   const [histLoading, setHistLoading] = useState(false);
   const hTick = useHistogramTick(filter.live);
@@ -178,7 +253,18 @@ function useLogHistogram({ lcall, filter, anchor, tick, watchers, watchersKey }:
     const now = filter.live ? Date.now() : anchor;
     const hb = bounds(filter, now);
     setHistLoading(true);
-    lcall<HistogramResult>('logs.histogram', { sources: filter.sources, since: hb.since, until: hb.until ?? now, text: filter.q, buckets: 60, watchers }, ac.signal)
+    lcall<HistogramResult>(
+      'logs.histogram',
+      {
+        sources: filter.sources,
+        since: hb.since,
+        until: hb.until ?? now,
+        text: filter.q,
+        buckets: 60,
+        watchers,
+      },
+      ac.signal,
+    )
       .then((r) => {
         if (ac.signal.aborted) return;
         setHist(r);
@@ -187,7 +273,17 @@ function useLogHistogram({ lcall, filter, anchor, tick, watchers, watchersKey }:
       .catch(() => !ac.signal.aborted && setHistLoading(false));
     return () => ac.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter.sources, filter.q, filter.range, filter.from, filter.to, filter.live, tick, hTick, watchersKey]);
+  }, [
+    filter.sources,
+    filter.q,
+    filter.range,
+    filter.from,
+    filter.to,
+    filter.live,
+    tick,
+    hTick,
+    watchersKey,
+  ]);
   return { hist, histLoading };
 }
 
@@ -217,7 +313,18 @@ type LiveFollowOptions = {
 };
 
 // Live mode prepends followed entries once the current query has loaded.
-function useLiveFollow({ filter, setFilter, watchers, qkey, isLoaded, adminRef, markAdmin, rowsRef, setRows, t }: LiveFollowOptions) {
+function useLiveFollow({
+  filter,
+  setFilter,
+  watchers,
+  qkey,
+  isLoaded,
+  adminRef,
+  markAdmin,
+  rowsRef,
+  setRows,
+  t,
+}: LiveFollowOptions) {
   useEffect(() => {
     if (!filter.live || !isLoaded) return;
     let h: StreamHandle | undefined;
@@ -225,7 +332,10 @@ function useLiveFollow({ filter, setFilter, watchers, qkey, isLoaded, adminRef, 
     const ingest = (batch: Omit<Entry, 'key'>[]) => {
       if (!Array.isArray(batch) || !batch.length) return;
       const recent = new Set(rowsRef.current.slice(0, 600).map((r) => r.cursor));
-      const fresh = batch.filter((e) => e.file || !recent.has(e.cursor)).map(toEntry).reverse();
+      const fresh = batch
+        .filter((e) => e.file || !recent.has(e.cursor))
+        .map(toEntry)
+        .reverse();
       if (!fresh.length) return;
       setRows((prev) => {
         const nx = fresh.concat(prev);
@@ -271,7 +381,10 @@ function sourcesLabelOf(ids: string[], sources: SourcesResult | null, t: TFn): s
     const s = g.sources.find((x) => x.id === id);
     if (s) return s.label;
   }
-  return id.replace(/^(unit|file):/, '').replace(/\.service$/, '').replace(/^.*\//, '');
+  return id
+    .replace(/^(unit|file):/, '')
+    .replace(/\.service$/, '')
+    .replace(/^.*\//, '');
 }
 
 function contextSourceFor(selected: Entry | null, sourceIds: string[], win: boolean): string {
@@ -292,7 +405,11 @@ export default function LogsPage() {
   const win = session?.os === 'windows';
 
   const filter = useMemo(() => parseFilter(params, win), [params, win]);
-  const setFilter = useCallback((patch: Partial<Filter>) => setParams((prev) => writeFilter(prev, patch, win), { replace: true }), [setParams, win]);
+  const setFilter = useCallback(
+    (patch: Partial<Filter>) =>
+      setParams((prev) => writeFilter(prev, patch, win), { replace: true }),
+    [setParams, win],
+  );
 
   const watchers = useMemo(() => normalizeWatchers(prefs['logs.watchers']), [prefs]);
   const watchersKey = JSON.stringify(watchers);
@@ -312,16 +429,59 @@ export default function LogsPage() {
 
   const anchor = useMemo(() => Date.now(), [filter.range, filter.from, filter.to, tick]); // eslint-disable-line react-hooks/exhaustive-deps
   const b = useMemo(() => bounds(filter, anchor), [filter, anchor]);
-  const qkey = JSON.stringify([filter.sources, filter.levels, filter.q, filter.range, filter.from, filter.to, tick, watchersKey]);
-  const { rows, setRows, rowsRef, hasMore, loading, moreLoading, error, skipped, loadedKey, sel, setSel, loadMore } = useLogQuery({ lcall, filter, b, watchers, qkey });
+  const qkey = JSON.stringify([
+    filter.sources,
+    filter.levels,
+    filter.q,
+    filter.range,
+    filter.from,
+    filter.to,
+    tick,
+    watchersKey,
+  ]);
+  const {
+    rows,
+    setRows,
+    rowsRef,
+    hasMore,
+    loading,
+    moreLoading,
+    error,
+    skipped,
+    loadedKey,
+    sel,
+    setSel,
+    loadMore,
+  } = useLogQuery({ lcall, filter, b, watchers, qkey });
 
-  const { hist, histLoading } = useLogHistogram({ lcall, filter, anchor, tick, watchers, watchersKey });
+  const { hist, histLoading } = useLogHistogram({
+    lcall,
+    filter,
+    anchor,
+    tick,
+    watchers,
+    watchersKey,
+  });
   const counts = useMemo(() => levelCounts(hist), [hist]);
 
-  useLiveFollow({ filter, setFilter, watchers, qkey, isLoaded: loadedKey === qkey, adminRef, markAdmin, rowsRef, setRows, t });
+  useLiveFollow({
+    filter,
+    setFilter,
+    watchers,
+    qkey,
+    isLoaded: loadedKey === qkey,
+    adminRef,
+    markAdmin,
+    rowsRef,
+    setRows,
+    t,
+  });
 
   // ---- selection and navigation ----
-  const selected = useMemo(() => (sel ? rows.find((r) => r.key === sel) ?? null : null), [rows, sel]);
+  const selected = useMemo(
+    () => (sel ? (rows.find((r) => r.key === sel) ?? null) : null),
+    [rows, sel],
+  );
   const contextSource = contextSourceFor(selected, filter.sources, win);
 
   const addWatcher = (w: Watcher) => {
@@ -332,9 +492,16 @@ export default function LogsPage() {
   const removeWatcher = (path: string) => {
     const w = watchers.find((x) => x.path === path);
     if (!w) return;
-    void set('logs.watchers', watchers.filter((x) => x.path !== path));
+    void set(
+      'logs.watchers',
+      watchers.filter((x) => x.path !== path),
+    );
     if (filter.sources.includes(`file:${path}`)) setFilter({ sources: ['all'] });
-    toast.undo(t('sources.removed', { name: w.name }), t('sources.undo'), () => void set('logs.watchers', watchers));
+    toast.undo(
+      t('sources.removed', { name: w.name }),
+      t('sources.undo'),
+      () => void set('logs.watchers', watchers),
+    );
   };
 
   const [sheet, setSheet] = useState(false);
@@ -342,7 +509,10 @@ export default function LogsPage() {
     setFilter({ sources: ids });
     if (!wide) setSheet(false);
   };
-  const sourcesLabel = useMemo(() => sourcesLabelOf(filter.sources, sources, t), [filter.sources, sources, t]);
+  const sourcesLabel = useMemo(
+    () => sourcesLabelOf(filter.sources, sources, t),
+    [filter.sources, sources, t],
+  );
 
   const sourcesEl = (
     <Sources
@@ -360,9 +530,35 @@ export default function LogsPage() {
   );
 
   usePaletteActions('logs', [
-    { id: 'logs.errors', title: t('palette.errors'), hint: t('title'), icon: 'alert', hue: 'log', keywords: ['error', 'errori'], run: () => { nav('/logs'); setFilter({ levels: ['err'] }); } },
-    { id: 'logs.all', title: t('palette.all'), hint: t('title'), icon: 'logs', hue: 'log', run: () => setFilter({ levels: [...LEVELS] }) },
-    { id: 'logs.live', title: t('palette.live'), hint: t('title'), icon: 'play', hue: 'log', keywords: ['follow', 'tail'], run: () => setFilter({ live: !filter.live }) },
+    {
+      id: 'logs.errors',
+      title: t('palette.errors'),
+      hint: t('title'),
+      icon: 'alert',
+      hue: 'log',
+      keywords: ['error', 'errori'],
+      run: () => {
+        nav('/logs');
+        setFilter({ levels: ['err'] });
+      },
+    },
+    {
+      id: 'logs.all',
+      title: t('palette.all'),
+      hint: t('title'),
+      icon: 'logs',
+      hue: 'log',
+      run: () => setFilter({ levels: [...LEVELS] }),
+    },
+    {
+      id: 'logs.live',
+      title: t('palette.live'),
+      hint: t('title'),
+      icon: 'play',
+      hue: 'log',
+      keywords: ['follow', 'tail'],
+      run: () => setFilter({ live: !filter.live }),
+    },
   ]);
 
   const clearFilters = () => setParams(new URLSearchParams(), { replace: true });
@@ -390,13 +586,21 @@ export default function LogsPage() {
           {filter.range === 'custom' && (
             <div className="logs-zoomed">
               <Badge tone="info">{t('range.zoomed')}</Badge>
-              <Button size="sm" variant="ghost" onClick={() => setFilter({ range: '1h', from: undefined, to: undefined })}>{t('range.reset')}</Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setFilter({ range: '1h', from: undefined, to: undefined })}
+              >
+                {t('range.reset')}
+              </Button>
             </div>
           )}
           {skipped > 0 && !admin && (
             <div className="logs-skipped" role="status">
               <span>{t('stream.skipped', { count: skipped })}</span>
-              <Button size="sm" onClick={unlockAndReload}>{t('stream.unlock')}</Button>
+              <Button size="sm" onClick={unlockAndReload}>
+                {t('stream.unlock')}
+              </Button>
             </div>
           )}
           <div className="logs-body">
@@ -439,4 +643,3 @@ export default function LogsPage() {
     </Page>
   );
 }
-

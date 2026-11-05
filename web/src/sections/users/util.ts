@@ -9,7 +9,8 @@ export function hueOf(name: string): string {
   return `hue-${HUES[Math.abs(h) % HUES.length]}`;
 }
 
-export const initial = (name: string) => (name.replace(/^[^a-zA-Z0-9]+/, '')[0] ?? '?').toUpperCase();
+export const initial = (name: string) =>
+  (name.replace(/^[^a-zA-Z0-9]+/, '')[0] ?? '?').toUpperCase();
 
 export const NAME_RE = /^[a-z_][a-z0-9_-]{0,31}$/;
 
@@ -25,7 +26,8 @@ export function strength(pw: string): number {
   return Math.max(1, Math.min(4, s));
 }
 
-export const loginDisabled = (u: UserInfo) => u.locked === true || u.passwordState === 'disabled' || u.noLoginShell;
+export const loginDisabled = (u: UserInfo) =>
+  u.locked === true || u.passwordState === 'disabled' || u.noLoginShell;
 
 export type Role = 'disabled' | 'admin' | 'new' | 'user';
 export function roleOf(u: UserInfo): Role {
@@ -39,14 +41,71 @@ export const ADMIN_GROUPS = ['wheel', 'sudo', 'admin'];
 
 /** Groups with an Italian description in the dictionary (users.json groupDesc). */
 export const KNOWN_GROUPS = new Set([
-  'wheel', 'sudo', 'admin', 'docker', 'podman', 'libvirt', 'kvm', 'audio', 'video', 'input', 'storage', 'network', 'networkmanager',
-  'lp', 'scanner', 'render', 'optical', 'disk', 'adm', 'systemd-journal', 'uucp', 'dialout', 'tty', 'users', 'power', 'bluetooth',
-  'plugdev', 'cdrom', 'wireshark', 'sambashare', 'vboxusers', 'root', 'nobody', 'nogroup', 'floppy', 'games', 'http', 'ftp',
+  'wheel',
+  'sudo',
+  'admin',
+  'docker',
+  'podman',
+  'libvirt',
+  'kvm',
+  'audio',
+  'video',
+  'input',
+  'storage',
+  'network',
+  'networkmanager',
+  'lp',
+  'scanner',
+  'render',
+  'optical',
+  'disk',
+  'adm',
+  'systemd-journal',
+  'uucp',
+  'dialout',
+  'tty',
+  'users',
+  'power',
+  'bluetooth',
+  'plugdev',
+  'cdrom',
+  'wireshark',
+  'sambashare',
+  'vboxusers',
+  'root',
+  'nobody',
+  'nogroup',
+  'floppy',
+  'games',
+  'http',
+  'ftp',
 ]);
 
 /** Groups worth showing in the per-user Groups tab without "Show all". */
 export const COMMON_GROUPS = new Set([
-  'docker', 'podman', 'libvirt', 'kvm', 'audio', 'video', 'input', 'storage', 'network', 'networkmanager', 'lp', 'scanner',
-  'render', 'optical', 'uucp', 'dialout', 'plugdev', 'bluetooth', 'wireshark', 'systemd-journal', 'sambashare', 'vboxusers',
-  'users', 'power', 'adm',
+  'docker',
+  'podman',
+  'libvirt',
+  'kvm',
+  'audio',
+  'video',
+  'input',
+  'storage',
+  'network',
+  'networkmanager',
+  'lp',
+  'scanner',
+  'render',
+  'optical',
+  'uucp',
+  'dialout',
+  'plugdev',
+  'bluetooth',
+  'wireshark',
+  'systemd-journal',
+  'sambashare',
+  'vboxusers',
+  'users',
+  'power',
+  'adm',
 ]);

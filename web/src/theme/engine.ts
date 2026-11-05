@@ -17,18 +17,30 @@ function luminance(hex: string): number {
 /** Black on bright accents, white on dark accents. */
 export const onColour = (hex: string) => (luminance(hex) > 0.28 ? '#000000' : '#FFFFFF');
 
-export function effectiveHues(t: ThemeDef, mode: ColourMode, distro: string): Record<string, string> {
+export function effectiveHues(
+  t: ThemeDef,
+  mode: ColourMode,
+  distro: string,
+): Record<string, string> {
   if (t.own || mode === 'sections') return { ...t.hues };
   const c =
     mode === 'mono'
-      ? t.kind === 'dark' ? '#D4D4D8' : '#3F3F46'
-      : t.kind === 'dark' ? `color-mix(in srgb, ${distro} 85%, #fff)` : distro;
+      ? t.kind === 'dark'
+        ? '#D4D4D8'
+        : '#3F3F46'
+      : t.kind === 'dark'
+        ? `color-mix(in srgb, ${distro} 85%, #fff)`
+        : distro;
   return Object.fromEntries(HUE_KEYS.map((k) => [k, c]));
 }
 
-export function themeVars(t: ThemeDef, mode: ColourMode, distroColour?: string): Record<string, string> {
+export function themeVars(
+  t: ThemeDef,
+  mode: ColourMode,
+  distroColour?: string,
+): Record<string, string> {
   const H = effectiveHues(t, mode, distroColour ?? t.distro);
-  const dc = t.own ? t.distro : mode === 'mono' ? H.ov : distroColour ?? t.distro;
+  const dc = t.own ? t.distro : mode === 'mono' ? H.ov : (distroColour ?? t.distro);
   const mix = t.kind === 'dark' ? t.bg : '#ffffff';
   const p = t.kind === 'dark' ? 16 : 14;
   const st = t.kind === 'dark' ? STATUS_DARK : STATUS_LIGHT;
@@ -57,7 +69,8 @@ export function themeVars(t: ThemeDef, mode: ColourMode, distroColour?: string):
     v[`--${k}-s`] = `color-mix(in srgb, ${c} ${p}%, ${mix})`;
   }
   v['--scrim'] = t.kind === 'dark' ? 'rgba(0,0,0,.62)' : 'rgba(20,24,40,.38)';
-  v['--shadow'] = t.kind === 'dark' ? '0 24px 60px -20px rgba(0,0,0,.9)' : '0 24px 60px -24px rgba(29,32,48,.35)';
+  v['--shadow'] =
+    t.kind === 'dark' ? '0 24px 60px -20px rgba(0,0,0,.9)' : '0 24px 60px -24px rgba(29,32,48,.35)';
   return v;
 }
 
@@ -89,14 +102,21 @@ export function parseTheme(raw: unknown): ThemeDef | null {
   for (const k of keys) if (typeof o[k] !== 'string' || !HEX.test(o[k])) return null;
   if (!o.hues || typeof o.hues !== 'object') return null;
   for (const k of HUE_KEYS) if (typeof o.hues[k] !== 'string' || !HEX.test(o.hues[k])) return null;
-  const kind = o.kind === 'light' || o.kind === 'dark' ? o.kind : luminance(o.bg) > 0.4 ? 'light' : 'dark';
+  const kind =
+    o.kind === 'light' || o.kind === 'dark' ? o.kind : luminance(o.bg) > 0.4 ? 'light' : 'dark';
   return {
     id: typeof o.id === 'string' && o.id ? o.id : `custom-${Date.now().toString(36)}`,
     name: typeof o.name === 'string' && o.name.trim() ? o.name.trim().slice(0, 40) : 'My theme',
     kind,
     own: !!o.own,
     custom: true,
-    bg: o.bg, surface: o.surface, sunk: o.sunk, line: o.line, ink: o.ink, ink2: o.ink2, ink3: o.ink3,
+    bg: o.bg,
+    surface: o.surface,
+    sunk: o.sunk,
+    line: o.line,
+    ink: o.ink,
+    ink2: o.ink2,
+    ink3: o.ink3,
     hues: Object.fromEntries(HUE_KEYS.map((k) => [k, o.hues[k]])) as ThemeDef['hues'],
     distro: typeof o.distro === 'string' && HEX.test(o.distro) ? o.distro : o.hues.ov,
   };

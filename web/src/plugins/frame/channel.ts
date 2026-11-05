@@ -2,7 +2,14 @@
  * Frame side of the plugin protocol (web/src/plugins/protocol.ts): requests to the host broker and streams.
  * Runs inside the sandboxed plugin frame, never in the app.
  */
-import type { FrameError, FrameHttpRequest, FrameOp, FrameToHost, FrameUploadResult, HostToFrame } from '../protocol';
+import type {
+  FrameError,
+  FrameHttpRequest,
+  FrameOp,
+  FrameToHost,
+  FrameUploadResult,
+  HostToFrame,
+} from '../protocol';
 
 export class PluginError extends Error {
   code: string;
@@ -13,7 +20,8 @@ export class PluginError extends Error {
   }
 }
 
-export const send = (m: FrameToHost, transfer?: Transferable[]) => window.parent.postMessage(m, '*', transfer ?? []);
+export const send = (m: FrameToHost, transfer?: Transferable[]) =>
+  window.parent.postMessage(m, '*', transfer ?? []);
 
 let nextId = 1;
 const pending = new Map<number, { resolve(v: unknown): void; reject(e: unknown): void }>();
@@ -40,7 +48,9 @@ interface AnyCallbacks extends StreamCallbacks {
 let nextSid = 1;
 const streams = new Map<number, AnyCallbacks>();
 
-type OpenSpec<T = Extract<FrameToHost, { t: 'stream-open' }>> = T extends unknown ? Omit<T, 'la' | 't' | 'sid'> : never;
+type OpenSpec<T = Extract<FrameToHost, { t: 'stream-open' }>> = T extends unknown
+  ? Omit<T, 'la' | 't' | 'sid'>
+  : never;
 
 function open(m: OpenSpec, h: AnyCallbacks) {
   const sid = nextSid++;
@@ -54,7 +64,12 @@ function open(m: OpenSpec, h: AnyCallbacks) {
   };
 }
 
-export function openStream(command: string, args: string[], h: StreamCallbacks, env?: string): { close(): void } {
+export function openStream(
+  command: string,
+  args: string[],
+  h: StreamCallbacks,
+  env?: string,
+): { close(): void } {
   const { close } = open({ command, args, ...(env ? { env } : {}) }, h);
   return { close };
 }
@@ -77,13 +92,21 @@ export interface PtyCallbacks {
   onError?(e: PluginError): void;
 }
 
-export function openPty(command: string, args: string[], cols: number, rows: number, h: PtyCallbacks, env?: string) {
+export function openPty(
+  command: string,
+  args: string[],
+  cols: number,
+  rows: number,
+  h: PtyCallbacks,
+  env?: string,
+) {
   const s = open({ kind: 'pty', command, args, cols, rows, ...(env ? { env } : {}) }, h);
   const enc = new TextEncoder();
   return {
     write(data: string | Uint8Array) {
       if (!streams.has(s.sid)) return;
-      const bytes = typeof data === 'string' ? enc.encode(data) : data instanceof Uint8Array ? data : null;
+      const bytes =
+        typeof data === 'string' ? enc.encode(data) : data instanceof Uint8Array ? data : null;
       if (!bytes) return;
       // Copies in 64 KiB pieces (a paste can be large); each copy is handed over, the caller's buffer stays usable.
       for (let i = 0; i < bytes.length; i += 64 << 10) {
@@ -92,7 +115,13 @@ export function openPty(command: string, args: string[], cols: number, rows: num
       }
     },
     resize(cols: number, rows: number) {
-      if (streams.has(s.sid)) send({ la: 'plugin', t: 'stream-input', sid: s.sid, resize: { cols: Math.floor(cols), rows: Math.floor(rows) } });
+      if (streams.has(s.sid))
+        send({
+          la: 'plugin',
+          t: 'stream-input',
+          sid: s.sid,
+          resize: { cols: Math.floor(cols), rows: Math.floor(rows) },
+        });
     },
     close: s.close,
   };
@@ -112,15 +141,29 @@ export interface UploadCallbacks {
   /** ...and with each piece of its body as it arrives. */
   onResponseData?(chunk: Uint8Array): void;
 }
-const uploads = new Map<number, UploadCallbacks & { resolve(r: FrameUploadResult): void; reject(e: unknown): void }>();
+const uploads = new Map<
+  number,
+  UploadCallbacks & { resolve(r: FrameUploadResult): void; reject(e: unknown): void }
+>();
 
 /** plugins.upload: hands the file to the host, which streams it; progress and the result come back as messages. */
-export function openUpload(req: FrameHttpRequest, file: Blob, o: UploadCallbacks = {}): UploadHandle {
+export function openUpload(
+  req: FrameHttpRequest,
+  file: Blob,
+  o: UploadCallbacks = {},
+): UploadHandle {
   const uid = nextUid++;
   const result = new Promise<FrameUploadResult>((resolve, reject) => {
     uploads.set(uid, { resolve, reject, ...o });
   });
-  send({ la: 'plugin', t: 'upload-open', uid, req, file, ...(o.onResponseData || o.onResponseStart ? { stream: true } : {}) });
+  send({
+    la: 'plugin',
+    t: 'upload-open',
+    uid,
+    req,
+    file,
+    ...(o.onResponseData || o.onResponseStart ? { stream: true } : {}),
+  });
   return {
     result,
     cancel() {
@@ -235,7 +278,9 @@ export function handleReply(m: HostToFrame): boolean {
 /** Toasts appear in the app (prefixed with the plugin name), not inside the frame. */
 export const toast = {
   show(t: { title: string; detail?: string; tone?: 'ok' | 'err' | 'info' | string }): number {
-    void request('toast', { tone: t.tone, title: t.title, detail: t.detail }).catch(() => undefined);
+    void request('toast', { tone: t.tone, title: t.title, detail: t.detail }).catch(
+      () => undefined,
+    );
     return 0;
   },
   ok: (title: string, detail?: string) => toast.show({ title, detail, tone: 'ok' }),

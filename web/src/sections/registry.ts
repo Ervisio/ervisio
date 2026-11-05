@@ -41,7 +41,10 @@ export function usePaletteActions(owner: string, list: PaletteAction[]) {
   ref.current = list;
   const sig = list.map((a) => a.id + a.title).join('|');
   useEffect(() => {
-    const proxy: PaletteAction[] = ref.current.map((a, i) => ({ ...a, run: () => ref.current[i]?.run() }));
+    const proxy: PaletteAction[] = ref.current.map((a, i) => ({
+      ...a,
+      run: () => ref.current[i]?.run(),
+    }));
     return registerPaletteActions(owner, proxy);
   }, [owner, sig]);
 }
@@ -68,7 +71,11 @@ export function setRailBadge(sectionId: string, badge: RailBadge | null) {
 }
 
 /** Show a count on the rail item while the calling component is mounted. 0 / undefined hides it. */
-export function useRailBadge(sectionId: string, count: number | undefined, tone: RailBadge['tone'] = 'err') {
+export function useRailBadge(
+  sectionId: string,
+  count: number | undefined,
+  tone: RailBadge['tone'] = 'err',
+) {
   useEffect(() => {
     setRailBadge(sectionId, count ? { count, tone } : null);
   }, [sectionId, count, tone]);
@@ -86,23 +93,28 @@ export function useRailBadges(): Record<string, RailBadge | undefined> {
  */
 type BadgeHook = () => number | RailBadge | undefined;
 type PaletteHook = () => PaletteAction[];
-const badgeHooks = Object.entries(import.meta.glob<{ default: BadgeHook }>('./*/badge.ts', { eager: true })).map(
-  ([p, m]) => [p.split('/')[1], m.default] as const,
-);
+const badgeHooks = Object.entries(
+  import.meta.glob<{ default: BadgeHook }>('./*/badge.ts', { eager: true }),
+).map(([p, m]) => [p.split('/')[1], m.default] as const);
 /** Optional `sections/<id>/background.ts`: a default-exported hook with no return value, for work that must run
  * while the app is open on any page (e.g. watchers that push notifications). Keep it light. */
-const backgroundHooks = Object.values(import.meta.glob<{ default: () => void }>('./*/background.ts', { eager: true })).map((m) => m.default);
+const backgroundHooks = Object.values(
+  import.meta.glob<{ default: () => void }>('./*/background.ts', { eager: true }),
+).map((m) => m.default);
 export function useSectionBackgroundHooks() {
   for (const h of backgroundHooks) h();
 }
-const paletteHooks = Object.values(import.meta.glob<{ default: PaletteHook }>('./*/palette.ts', { eager: true })).map((m) => m.default);
+const paletteHooks = Object.values(
+  import.meta.glob<{ default: PaletteHook }>('./*/palette.ts', { eager: true }),
+).map((m) => m.default);
 
 /** Called once by the shell. */
 export function useSectionBadgeHooks(): Record<string, RailBadge | undefined> {
   const out: Record<string, RailBadge | undefined> = {};
   for (const [id, hook] of badgeHooks) {
     const v = hook();
-    out[id] = typeof v === 'number' ? (v > 0 ? { count: v } : undefined) : v && v.count > 0 ? v : undefined;
+    out[id] =
+      typeof v === 'number' ? (v > 0 ? { count: v } : undefined) : v && v.count > 0 ? v : undefined;
   }
   return out;
 }

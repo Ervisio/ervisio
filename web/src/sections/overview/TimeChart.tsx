@@ -13,7 +13,19 @@ export interface TimeSeries {
  * Line chart on a real time axis: the newest sample is at the right edge and the left part stays
  * empty until enough history has been collected.
  */
-export function TimeChart({ points, windowMs, series, height = 150, label }: { points: Point[]; windowMs: number; series: TimeSeries[]; height?: number; label: string }) {
+export function TimeChart({
+  points,
+  windowMs,
+  series,
+  height = 150,
+  label,
+}: {
+  points: Point[];
+  windowMs: number;
+  series: TimeSeries[];
+  height?: number;
+  label: string;
+}) {
   const W = 100;
   const paths = useMemo(() => {
     const now = points.length ? points[points.length - 1].t : Date.now();
@@ -27,18 +39,35 @@ export function TimeChart({ points, windowMs, series, height = 150, label }: { p
       });
       if (pts.length < 2) return { d: '', area: '', color: s.color };
       const d = pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(2)},${y.toFixed(2)}`).join(' ');
-      const area = s.fill ? `${d} L${pts[pts.length - 1][0].toFixed(2)},${height} L${pts[0][0].toFixed(2)},${height} Z` : '';
+      const area = s.fill
+        ? `${d} L${pts[pts.length - 1][0].toFixed(2)},${height} L${pts[0][0].toFixed(2)},${height} Z`
+        : '';
       return { d, area, color: s.color };
     });
   }, [points, windowMs, series, height]);
   return (
-    <svg className="ov-chart" style={{ height }} viewBox={`0 0 ${W} ${height}`} preserveAspectRatio="none" role="img" aria-label={label}>
-      {paths.map((p, i) => p.d && (
-        <g key={i}>
-          {p.area && <path d={p.area} fill={p.color} opacity={0.15} />}
-          <path d={p.d} className="ov-chart-line" stroke={p.color} vectorEffect="non-scaling-stroke" />
-        </g>
-      ))}
+    <svg
+      className="ov-chart"
+      style={{ height }}
+      viewBox={`0 0 ${W} ${height}`}
+      preserveAspectRatio="none"
+      role="img"
+      aria-label={label}
+    >
+      {paths.map(
+        (p, i) =>
+          p.d && (
+            <g key={i}>
+              {p.area && <path d={p.area} fill={p.color} opacity={0.15} />}
+              <path
+                d={p.d}
+                className="ov-chart-line"
+                stroke={p.color}
+                vectorEffect="non-scaling-stroke"
+              />
+            </g>
+          ),
+      )}
     </svg>
   );
 }

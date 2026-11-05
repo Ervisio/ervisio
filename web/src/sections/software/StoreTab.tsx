@@ -71,7 +71,11 @@ export function StoreTab({ actions, onOpen, goInstalled }: Props) {
     setError('');
     call<SearchResult[]>('software.search', { query: debounced })
       .then((r) => n === seq.current && setResults(r))
-      .catch((e) => n === seq.current && (setError(e instanceof ApiError ? e.message : String(e)), setResults([])));
+      .catch(
+        (e) =>
+          n === seq.current &&
+          (setError(e instanceof ApiError ? e.message : String(e)), setResults([])),
+      );
   }, [debounced]);
 
   // Suggestions per category
@@ -90,13 +94,14 @@ export function StoreTab({ actions, onOpen, goInstalled }: Props) {
 
   const appByPkg = useMemo(() => {
     const m = new Map<string, App>();
-    for (const a of apps ?? []) if (a.package) m.set(`${a.kind === 'aur' ? 'repo' : a.kind}:${a.package}`, a);
+    for (const a of apps ?? [])
+      if (a.package) m.set(`${a.kind === 'aur' ? 'repo' : a.kind}:${a.package}`, a);
     return m;
   }, [apps]);
 
   const yourApps = useMemo(() => {
     const list = (apps ?? []).filter((a) => a.package && a.explicit);
-    const upd = (a: App) => updateByName.has(`${a.kind}:${a.package}`) ? 0 : 1;
+    const upd = (a: App) => (updateByName.has(`${a.kind}:${a.package}`) ? 0 : 1);
     return [...list].sort((a, b) => upd(a) - upd(b) || a.name.localeCompare(b.name));
   }, [apps, updateByName]);
   const withUpdates = yourApps.filter((a) => updateByName.has(`${a.kind}:${a.package}`));
@@ -120,7 +125,20 @@ export function StoreTab({ actions, onOpen, goInstalled }: Props) {
     const upd = updateByName.get(`${r.kind}:${r.name}`);
     return (
       <div key={`${r.kind}:${r.name}`} className="sw-ap">
-        <button type="button" className="sw-ap-main" onClick={() => onOpen({ name: r.name, title: r.title, kind: r.kind, source: r.source, installed: r.installed, icon: app?.icon })}>
+        <button
+          type="button"
+          className="sw-ap-main"
+          onClick={() =>
+            onOpen({
+              name: r.name,
+              title: r.title,
+              kind: r.kind,
+              source: r.source,
+              installed: r.installed,
+              icon: app?.icon,
+            })
+          }
+        >
           <AppIcon icon={app?.icon} label={displayName(r)} size={48} />
           <span className="sw-ap-tx">
             <b>{displayName(r)}</b>
@@ -132,13 +150,29 @@ export function StoreTab({ actions, onOpen, goInstalled }: Props) {
           </span>
         </button>
         {upd ? (
-          <Button size="sm" variant="primary" disabled={actions.busy} onClick={() => actions.updateSome([upd])}>{t('update')}</Button>
+          <Button
+            size="sm"
+            variant="primary"
+            disabled={actions.busy}
+            onClick={() => actions.updateSome([upd])}
+          >
+            {t('update')}
+          </Button>
         ) : r.installed ? (
           <Badge tone="ok">{t('installedBadge')}</Badge>
         ) : r.kind === 'aur' ? (
-          <Button size="sm" icon="terminal" onClick={actions.openTerminal}>{t('terminal')}</Button>
+          <Button size="sm" icon="terminal" onClick={actions.openTerminal}>
+            {t('terminal')}
+          </Button>
         ) : (
-          <Button size="sm" variant="primary" disabled={actions.busy} onClick={() => actions.askInstall(r)}>{t('install.button')}</Button>
+          <Button
+            size="sm"
+            variant="primary"
+            disabled={actions.busy}
+            onClick={() => actions.askInstall(r)}
+          >
+            {t('install.button')}
+          </Button>
         )}
       </div>
     );
@@ -148,7 +182,20 @@ export function StoreTab({ actions, onOpen, goInstalled }: Props) {
     const upd = updateByName.get(`${a.kind}:${a.package}`);
     return (
       <div key={a.id} className="sw-ap">
-        <button type="button" className="sw-ap-main" onClick={() => onOpen({ name: a.package, title: a.name, kind: a.kind, source: a.source, installed: true, icon: a.icon })}>
+        <button
+          type="button"
+          className="sw-ap-main"
+          onClick={() =>
+            onOpen({
+              name: a.package,
+              title: a.name,
+              kind: a.kind,
+              source: a.source,
+              installed: true,
+              icon: a.icon,
+            })
+          }
+        >
           <AppIcon icon={a.icon} label={a.name} size={48} />
           <span className="sw-ap-tx">
             <b>{a.name}</b>
@@ -161,9 +208,18 @@ export function StoreTab({ actions, onOpen, goInstalled }: Props) {
         </button>
         {upd ? (
           upd.kind === 'aur' ? (
-            <Button size="sm" icon="terminal" onClick={actions.openTerminal}>{t('terminal')}</Button>
+            <Button size="sm" icon="terminal" onClick={actions.openTerminal}>
+              {t('terminal')}
+            </Button>
           ) : (
-            <Button size="sm" variant="primary" disabled={actions.busy} onClick={() => actions.updateSome([upd])}>{t('update')}</Button>
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={actions.busy}
+              onClick={() => actions.updateSome([upd])}
+            >
+              {t('update')}
+            </Button>
           )
         ) : null}
       </div>
@@ -208,7 +264,9 @@ export function StoreTab({ actions, onOpen, goInstalled }: Props) {
               setQ('');
             }}
           >
-            <span className="sw-cat-ic"><Icon name={c.icon} /></span>
+            <span className="sw-cat-ic">
+              <Icon name={c.icon} />
+            </span>
             {t(`store.cat.${c.id}`)}
           </button>
         ))}
@@ -216,11 +274,23 @@ export function StoreTab({ actions, onOpen, goInstalled }: Props) {
 
       {searching ? (
         <>
-          <div className="sw-sec"><h3>{t('store.results')}</h3>{results && <span className="sw-muted">{visibleResults.length}</span>}</div>
+          <div className="sw-sec">
+            <h3>{t('store.results')}</h3>
+            {results && <span className="sw-muted">{visibleResults.length}</span>}
+          </div>
           {results === null ? (
-            <div className="sw-apps">{Array.from({ length: 6 }, (_, i) => <Skeleton key={i} height={92} style={{ borderRadius: 18 }} />)}</div>
+            <div className="sw-apps">
+              {Array.from({ length: 6 }, (_, i) => (
+                <Skeleton key={i} height={92} style={{ borderRadius: 18 }} />
+              ))}
+            </div>
           ) : visibleResults.length === 0 ? (
-            <EmptyState icon="search" hue="sw" title={error ? t('error.search') : t('store.none', { query: debounced })} text={error || t('store.noneText')} />
+            <EmptyState
+              icon="search"
+              hue="sw"
+              title={error ? t('error.search') : t('store.none', { query: debounced })}
+              text={error || t('store.noneText')}
+            />
           ) : (
             <div className="sw-apps">{visibleResults.map(resultCard)}</div>
           )}
@@ -231,9 +301,20 @@ export function StoreTab({ actions, onOpen, goInstalled }: Props) {
             <>
               <div className="sw-sec">
                 <h3>{t('store.yourApps')}</h3>
-                {withUpdates.length > 0 && <span className="sw-muted">{t('store.withUpdates', { count: withUpdates.length })}</span>}
                 {withUpdates.length > 0 && (
-                  <button type="button" className="sw-link" disabled={actions.busy} onClick={actions.updateAll}>{t('updateAll')}</button>
+                  <span className="sw-muted">
+                    {t('store.withUpdates', { count: withUpdates.length })}
+                  </span>
+                )}
+                {withUpdates.length > 0 && (
+                  <button
+                    type="button"
+                    className="sw-link"
+                    disabled={actions.busy}
+                    onClick={actions.updateAll}
+                  >
+                    {t('updateAll')}
+                  </button>
                 )}
               </div>
               <div className="sw-apps">{appsShown.map(appCard)}</div>
@@ -244,25 +325,37 @@ export function StoreTab({ actions, onOpen, goInstalled }: Props) {
               )}
             </>
           )}
-          <div className="sw-sec"><h3>{category ? t(`store.cat.${category}`) : t('store.popular', { distro })}</h3></div>
+          <div className="sw-sec">
+            <h3>{category ? t(`store.cat.${category}`) : t('store.popular', { distro })}</h3>
+          </div>
           {popular === null ? (
-            <div className="sw-apps">{Array.from({ length: 4 }, (_, i) => <Skeleton key={i} height={92} style={{ borderRadius: 18 }} />)}</div>
+            <div className="sw-apps">
+              {Array.from({ length: 4 }, (_, i) => (
+                <Skeleton key={i} height={92} style={{ borderRadius: 18 }} />
+              ))}
+            </div>
           ) : popular.length === 0 ? (
             <EmptyState icon="info" hue="sw" title={t('store.noSuggest')} />
           ) : (
-            <div className="sw-apps">{popular.filter((r) => filters.size === 0 || filters.has(r.kind)).map(resultCard)}</div>
+            <div className="sw-apps">
+              {popular.filter((r) => filters.size === 0 || filters.has(r.kind)).map(resultCard)}
+            </div>
           )}
         </>
       )}
 
       {installed && (
         <div className="sw-pk">
-          <span className="sw-pk-ic"><Icon name="software" /></span>
+          <span className="sw-pk-ic">
+            <Icon name="software" />
+          </span>
           <div>
             <b>{t('store.installedCount', { count: installed.length })}</b>
             <small>{t('store.installedText', { count: explicitCount })}</small>
           </div>
-          <Button icon="list" onClick={goInstalled}>{t('store.allPackages')}</Button>
+          <Button icon="list" onClick={goInstalled}>
+            {t('store.allPackages')}
+          </Button>
         </div>
       )}
     </div>

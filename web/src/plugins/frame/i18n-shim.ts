@@ -32,8 +32,12 @@ export function useT(_ns: string): TFn {
   const l = useSyncExternalStore(subscribeLang, getLang);
   return useCallback<TFn>(
     (key, vars) => {
-      const keys = vars && typeof vars.count === 'number' ? [`${key}_${vars.count === 1 ? 'one' : 'other'}`, key] : [key];
-      for (const d of [DICTS[l], DICTS.en]) for (const k of keys) if (d && k in d) return interpolate(d[k], vars);
+      const keys =
+        vars && typeof vars.count === 'number'
+          ? [`${key}_${vars.count === 1 ? 'one' : 'other'}`, key]
+          : [key];
+      for (const d of [DICTS[l], DICTS.en])
+        for (const k of keys) if (d && k in d) return interpolate(d[k], vars);
       return key;
     },
     [l],

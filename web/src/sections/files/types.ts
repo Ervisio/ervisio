@@ -70,4 +70,5 @@ export interface Remote {
   host?: string;
 }
 
-export const isDirLike = (e: Pick<RawEntry, 'type' | 'targetType'>) => e.type === 'dir' || (e.type === 'symlink' && e.targetType === 'dir');
+export const isDirLike = (e: Pick<RawEntry, 'type' | 'targetType'>) =>
+  e.type === 'dir' || (e.type === 'symlink' && e.targetType === 'dir');

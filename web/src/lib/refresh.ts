@@ -7,7 +7,9 @@ export const REFRESH_MIN = 1000;
 export const REFRESH_MAX = 600_000;
 export const REFRESH_DEFAULT = 2000;
 /** Preset choices in ms; anything else in the range is a custom value. */
-export const REFRESH_OPTIONS = [1000, 2000, 5000, 10_000, 30_000, 60_000, 300_000, 600_000] as const;
+export const REFRESH_OPTIONS = [
+  1000, 2000, 5000, 10_000, 30_000, 60_000, 300_000, 600_000,
+] as const;
 
 export function clampRefresh(v: unknown): number {
   const n = typeof v === 'number' ? v : Number(v);

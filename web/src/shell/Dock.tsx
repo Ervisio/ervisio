@@ -18,14 +18,23 @@ export function Dock() {
     <>
       <nav className="dock" aria-label={t('nav.main')}>
         {items.map((e) => (
-          <NavLink key={e.key} to={e.to} end={e.end} className={({ isActive }) => `${e.hueClass}${isActive ? ' active' : ''}`}>
-            <span className={`pi${e.logo ? ' has-logo' : ''}`}><NavIcon e={e} /></span>
+          <NavLink
+            key={e.key}
+            to={e.to}
+            end={e.end}
+            className={({ isActive }) => `${e.hueClass}${isActive ? ' active' : ''}`}
+          >
+            <span className={`pi${e.logo ? ' has-logo' : ''}`}>
+              <NavIcon e={e} />
+            </span>
             {e.label}
             {e.badge && <span className="n">{e.badge.count}</span>}
           </NavLink>
         ))}
         <button type="button" onClick={() => setMore(true)} aria-haspopup="dialog">
-          <span className="pi"><Icon name="more" /></span>
+          <span className="pi">
+            <Icon name="more" />
+          </span>
           {t('nav.more')}
         </button>
       </nav>
@@ -54,14 +63,25 @@ export function MoreSheet({ open, onClose }: { open: boolean; onClose(): void })
         <i />
         <span style={{ flex: 1 }}>
           <b>{host?.hostname ?? t('host.thisMachine')}</b>
-          <small>{t('host.thisMachine')}{host?.ip ? `, ${host.ip}` : ''}</small>
+          <small>
+            {t('host.thisMachine')}
+            {host?.ip ? `, ${host.ip}` : ''}
+          </small>
         </span>
         <Icon name="chevron" />
       </button>
       <div className="more-grid">
         {tiles.map((e) => (
-          <NavLink key={e.key} to={e.to} end={e.end} onClick={onClose} className={({ isActive }) => `more-tile ${e.hueClass}${isActive ? ' active' : ''}`}>
-            <span className={`t${e.logo ? ' has-logo' : ''}`}><NavIcon e={e} /></span>
+          <NavLink
+            key={e.key}
+            to={e.to}
+            end={e.end}
+            onClick={onClose}
+            className={({ isActive }) => `more-tile ${e.hueClass}${isActive ? ' active' : ''}`}
+          >
+            <span className={`t${e.logo ? ' has-logo' : ''}`}>
+              <NavIcon e={e} />
+            </span>
             <span>{e.label}</span>
             {e.badge && <span className="n">{e.badge.count}</span>}
           </NavLink>
@@ -69,8 +89,12 @@ export function MoreSheet({ open, onClose }: { open: boolean; onClose(): void })
       </div>
       <div className="more-row">
         <span className="grow">{session?.user}</span>
-        <Button icon={isDark ? 'moon' : 'sun'} onClick={toggleDark}>{isDark ? t('theme.toLight') : t('theme.toDark')}</Button>
-        <Button variant="danger" icon="logout" onClick={() => void signOut()}>{t('user.signOut')}</Button>
+        <Button icon={isDark ? 'moon' : 'sun'} onClick={toggleDark}>
+          {isDark ? t('theme.toLight') : t('theme.toDark')}
+        </Button>
+        <Button variant="danger" icon="logout" onClick={() => void signOut()}>
+          {t('user.signOut')}
+        </Button>
       </div>
     </Sheet>
   );

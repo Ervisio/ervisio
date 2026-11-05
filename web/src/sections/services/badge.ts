@@ -18,7 +18,14 @@ export default function useBadge(): number | undefined {
       for (const u of failedUnits) {
         if (known.current.has(u.name)) continue;
         const title = t('notice.failed', { name: u.name });
-        notify({ title, detail: u.hint || u.description, tone: 'err', icon: 'services', to: `/services?unit=${encodeURIComponent(u.name)}`, key: `svc:${u.name}` });
+        notify({
+          title,
+          detail: u.hint || u.description,
+          tone: 'err',
+          icon: 'services',
+          to: `/services?unit=${encodeURIComponent(u.name)}`,
+          key: `svc:${u.name}`,
+        });
         toast.err(title, u.hint || u.description);
       }
     }

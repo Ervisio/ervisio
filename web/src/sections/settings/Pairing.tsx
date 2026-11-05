@@ -6,38 +6,69 @@ import { Button, ConfirmDialog, Dialog, IconButton, Input, toast } from '../../u
 import { pairTokenCreate, pairingRevoke, type PairToken, type Pairing } from './envs';
 import './envs.css';
 
-
 const when = (iso: string) => {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) || d.getFullYear() < 2000 ? '' : formatDateTime(d);
 };
 
 /** Pairing, server side: lets another Ervisio server use the Docker of this one (its Environments > Ervisio server). */
-export function PairingBlock({ pairings, onChange, disabled }: { pairings: Pairing[]; onChange(): void; disabled?: boolean }) {
+export function PairingBlock({
+  pairings,
+  onChange,
+  disabled,
+}: {
+  pairings: Pairing[];
+  onChange(): void;
+  disabled?: boolean;
+}) {
   const t = useT('envs');
   const { session } = useSession();
   const [open, setOpen] = useState(false);
   const [revoking, setRevoking] = useState<Pairing | null>(null);
   return (
     <>
-      {pairings.length === 0 && <div className="env-empty"><small>{t('pair.none')}</small></div>}
+      {pairings.length === 0 && (
+        <div className="env-empty">
+          <small>{t('pair.none')}</small>
+        </div>
+      )}
       {pairings.map((p) => (
         <div className="st-host" key={p.id}>
-          <span className="dot" style={{ background: p.lastUsed && when(p.lastUsed) ? 'var(--ok)' : 'var(--ink3)' }} />
+          <span
+            className="dot"
+            style={{ background: p.lastUsed && when(p.lastUsed) ? 'var(--ok)' : 'var(--ink3)' }}
+          />
           <div className="grow">
             <b>{p.name}</b>
             <small>
               {t('pair.runsAs', { user: p.user })} · {t('pair.created', { date: when(p.created) })}
-              {when(p.lastUsed) ? ` · ${t('pair.lastUsed', { date: when(p.lastUsed) })}${p.lastVia ? ` · ${t('pair.lastVia', { via: p.lastVia })}` : ''}` : ` · ${t('pair.neverUsed')}`}
+              {when(p.lastUsed)
+                ? ` · ${t('pair.lastUsed', { date: when(p.lastUsed) })}${p.lastVia ? ` · ${t('pair.lastVia', { via: p.lastVia })}` : ''}`
+                : ` · ${t('pair.neverUsed')}`}
             </small>
           </div>
-          <IconButton icon="trash" label={t('pair.revoke', { name: p.name })} disabled={disabled} onClick={() => setRevoking(p)} />
+          <IconButton
+            icon="trash"
+            label={t('pair.revoke', { name: p.name })}
+            disabled={disabled}
+            onClick={() => setRevoking(p)}
+          />
         </div>
       ))}
       <div style={{ padding: '10px 0' }}>
-        <Button icon="link" disabled={disabled} onClick={() => setOpen(true)}>{t('pair.create')}</Button>
+        <Button icon="link" disabled={disabled} onClick={() => setOpen(true)}>
+          {t('pair.create')}
+        </Button>
       </div>
-      {open && <TokenDialog defaultUser={session?.user ?? ''} onClose={() => { setOpen(false); onChange(); }} />}
+      {open && (
+        <TokenDialog
+          defaultUser={session?.user ?? ''}
+          onClose={() => {
+            setOpen(false);
+            onChange();
+          }}
+        />
+      )}
       <ConfirmDialog
         open={!!revoking}
         onClose={() => setRevoking(null)}
@@ -86,7 +117,10 @@ function TokenDialog({ defaultUser, onClose }: { defaultUser: string; onClose():
   };
   const copy = () => {
     if (!tok) return;
-    void navigator.clipboard?.writeText(tok.token).then(() => toast.ok(t('pair.copied')), () => toast.err(t('pair.copyFailed')));
+    void navigator.clipboard?.writeText(tok.token).then(
+      () => toast.ok(t('pair.copied')),
+      () => toast.err(t('pair.copyFailed')),
+    );
   };
   const mm = String(Math.floor(left / 60)).padStart(2, '0');
   const ss = String(left % 60).padStart(2, '0');
@@ -101,13 +135,23 @@ function TokenDialog({ defaultUser, onClose }: { defaultUser: string; onClose():
       onSubmit={(e) => void create(e)}
       footer={
         <>
-          {err && <span className="env-foot-err" role="alert">{err}</span>}
+          {err && (
+            <span className="env-foot-err" role="alert">
+              {err}
+            </span>
+          )}
           {tok ? (
-            <Button type="button" variant="primary" onClick={onClose}>{t('pair.done')}</Button>
+            <Button type="button" variant="primary" onClick={onClose}>
+              {t('pair.done')}
+            </Button>
           ) : (
             <>
-              <Button variant="ghost" onClick={onClose}>{t('cancel')}</Button>
-              <Button type="submit" variant="primary" disabled={busy}>{t('pair.createToken')}</Button>
+              <Button variant="ghost" onClick={onClose}>
+                {t('cancel')}
+              </Button>
+              <Button type="submit" variant="primary" disabled={busy}>
+                {t('pair.createToken')}
+              </Button>
             </>
           )}
         </>
@@ -116,20 +160,35 @@ function TokenDialog({ defaultUser, onClose }: { defaultUser: string; onClose():
       <div className="env-form">
         {!tok ? (
           <>
-            <Input data-autofocus label={t('pair.user')} icon="user" value={user} onChange={(e) => setUser(e.target.value)} hint={t('pair.userHint')} />
-            <div className="env-warn" role="note">{t('pair.securityNote', { user: user || defaultUser })}</div>
+            <Input
+              data-autofocus
+              label={t('pair.user')}
+              icon="user"
+              value={user}
+              onChange={(e) => setUser(e.target.value)}
+              hint={t('pair.userHint')}
+            />
+            <div className="env-warn" role="note">
+              {t('pair.securityNote', { user: user || defaultUser })}
+            </div>
           </>
         ) : (
           <>
             <div className="env-token" aria-live="polite">
               <code>{tok.token}</code>
-              <Button icon="copy" onClick={copy}>{t('pair.copy')}</Button>
+              <Button icon="copy" onClick={copy}>
+                {t('pair.copy')}
+              </Button>
             </div>
-            <small className="env-hint">{left > 0 ? t('pair.expiresIn', { time: `${mm}:${ss}` }) : t('pair.expired')}</small>
+            <small className="env-hint">
+              {left > 0 ? t('pair.expiresIn', { time: `${mm}:${ss}` }) : t('pair.expired')}
+            </small>
             <div className="env-fp">
               <small>{t('pair.fingerprint', { server: tok.server })}</small>
               <code>{tok.fingerprint || t('pair.noTls')}</code>
-              <small className="env-hint">{tok.fingerprint ? t('pair.fingerprintHint') : t('pair.noTlsHint')}</small>
+              <small className="env-hint">
+                {tok.fingerprint ? t('pair.fingerprintHint') : t('pair.noTlsHint')}
+              </small>
             </div>
             <small className="env-hint">{t('pair.runsAsNote', { user: tok.user })}</small>
           </>

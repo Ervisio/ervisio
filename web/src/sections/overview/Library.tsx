@@ -55,19 +55,40 @@ export function useLibraryItems(): LibItem[] {
   }, [t, widgets, plugins, win]);
 }
 
-export function Library({ onAdd, onPointerDown, onReset, className }: { onAdd(i: LibItem): void; onPointerDown(i: LibItem, e: PointerEvent<HTMLElement>): void; onReset(): void; className?: string }) {
+export function Library({
+  onAdd,
+  onPointerDown,
+  onReset,
+  className,
+}: {
+  onAdd(i: LibItem): void;
+  onPointerDown(i: LibItem, e: PointerEvent<HTMLElement>): void;
+  onReset(): void;
+  className?: string;
+}) {
   const t = useT('overview');
   const items = useLibraryItems();
   const [q, setQ] = useState('');
   const ptype = useRef('mouse');
   const needle = q.trim().toLowerCase();
-  const shown = items.filter((i) => !needle || `${i.title} ${i.desc}`.toLowerCase().includes(needle));
-  const cats = (['basics', 'system', 'personal', 'plugins'] as const).map((c) => ({ id: c, list: shown.filter((i) => i.category === c) })).filter((c) => c.list.length);
+  const shown = items.filter(
+    (i) => !needle || `${i.title} ${i.desc}`.toLowerCase().includes(needle),
+  );
+  const cats = (['basics', 'system', 'personal', 'plugins'] as const)
+    .map((c) => ({ id: c, list: shown.filter((i) => i.category === c) }))
+    .filter((c) => c.list.length);
   return (
     <aside className={`ov-lib${className ? ' ' + className : ''}`} aria-label={t('library.title')}>
       <h2>{t('library.title')}</h2>
       <p>{t('library.hint')}</p>
-      <Input icon="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('library.search')} aria-label={t('library.search')} compact />
+      <Input
+        icon="search"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder={t('library.search')}
+        aria-label={t('library.search')}
+        compact
+      />
       {cats.map((c) => (
         <div key={c.id}>
           <div className="ov-cat">{t(`library.cat.${c.id}`)}</div>
@@ -84,8 +105,13 @@ export function Library({ onAdd, onPointerDown, onReset, className }: { onAdd(i:
                 if (e.detail === 0 || ptype.current === 'touch') onAdd(i); // keyboard and touch; a mouse click is handled by the pointer logic
               }}
             >
-              <span className="ov-ic"><Icon name={i.icon} /></span>
-              <span className="ov-item-tx"><b>{i.title}</b><small>{i.desc}</small></span>
+              <span className="ov-ic">
+                <Icon name={i.icon} />
+              </span>
+              <span className="ov-item-tx">
+                <b>{i.title}</b>
+                <small>{i.desc}</small>
+              </span>
               {i.tag && <span className="ov-tag">{i.tag}</span>}
             </button>
           ))}
@@ -93,7 +119,9 @@ export function Library({ onAdd, onPointerDown, onReset, className }: { onAdd(i:
       ))}
       {!cats.length && <p className="ov-lib-none">{t('library.noMatch')}</p>}
       <div className="ov-lib-foot">
-        <Button variant="ghost" icon="undo" onClick={onReset}>{t('library.reset')}</Button>
+        <Button variant="ghost" icon="undo" onClick={onReset}>
+          {t('library.reset')}
+        </Button>
       </div>
     </aside>
   );

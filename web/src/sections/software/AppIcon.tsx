@@ -43,7 +43,15 @@ export const hueFor = (s: string) => {
 };
 
 /** Real icon when one exists, otherwise a coloured letter tile. */
-export function AppIcon({ icon, label, size = 48 }: { icon?: string; label: string; size?: number }) {
+export function AppIcon({
+  icon,
+  label,
+  size = 48,
+}: {
+  icon?: string;
+  label: string;
+  size?: number;
+}) {
   const [src, setSrc] = useState<string | null | undefined>(undefined);
   useEffect(() => {
     let live = true;
@@ -60,7 +68,11 @@ export function AppIcon({ icon, label, size = 48 }: { icon?: string; label: stri
   const hue = hueFor(label);
   const letter = (label.replace(/^[^A-Za-z0-9]+/, '')[0] ?? '?').toUpperCase();
   return (
-    <span className={`sw-ic hue-${hue}`} style={{ width: size, height: size, fontSize: Math.round(size * 0.42) }} aria-hidden="true">
+    <span
+      className={`sw-ic hue-${hue}`}
+      style={{ width: size, height: size, fontSize: Math.round(size * 0.42) }}
+      aria-hidden="true"
+    >
       {src ? <img src={src} alt="" draggable={false} /> : letter}
     </span>
   );

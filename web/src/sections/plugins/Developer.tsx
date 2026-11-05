@@ -16,7 +16,13 @@ interface DevInfo {
 
 export const DOCS_URL = 'https://github.com/Ervisio/plugin-sdk/blob/main/docs/sdk.md';
 
-export function Developer({ plugins, refresh }: { plugins: PluginInfo[]; refresh(reloadLoader?: boolean): Promise<void> }) {
+export function Developer({
+  plugins,
+  refresh,
+}: {
+  plugins: PluginInfo[];
+  refresh(reloadLoader?: boolean): Promise<void>;
+}) {
   const t = useT('plugins');
   const [path, setPath] = useState('');
   const [busy, setBusy] = useState(false);
@@ -44,10 +50,15 @@ export function Developer({ plugins, refresh }: { plugins: PluginInfo[]; refresh
         <Tile icon="code" color="term" />
         <div className="plugins-dev-tx">
           <b>{t('dev.title')}</b>
-          <small>{t('dev.text')} <code>~/projects/ervisio-plugin-zfs</code></small>
+          <small>
+            {t('dev.text')} <code>~/projects/ervisio-plugin-zfs</code>
+          </small>
         </div>
         <div className="plugins-dev-act">
-          <a className="ui-btn" href={DOCS_URL} target="_blank" rel="noreferrer"><Icon name="externallink" />{t('dev.docs')}</a>
+          <a className="ui-btn" href={DOCS_URL} target="_blank" rel="noreferrer">
+            <Icon name="externallink" />
+            {t('dev.docs')}
+          </a>
         </div>
       </div>
       <form
@@ -57,8 +68,24 @@ export function Developer({ plugins, refresh }: { plugins: PluginInfo[]; refresh
           if (path.trim()) void load();
         }}
       >
-        <Input label={t('dev.path')} mono placeholder="~/projects/my-plugin" value={path} onChange={(e) => setPath(e.target.value)} error={error || undefined} hint={error ? undefined : t('dev.pathHint')} />
-        <Button type="submit" variant="primary" icon="download" loading={busy} disabled={!path.trim()}>{t('dev.load')}</Button>
+        <Input
+          label={t('dev.path')}
+          mono
+          placeholder="~/projects/my-plugin"
+          value={path}
+          onChange={(e) => setPath(e.target.value)}
+          error={error || undefined}
+          hint={error ? undefined : t('dev.pathHint')}
+        />
+        <Button
+          type="submit"
+          variant="primary"
+          icon="download"
+          loading={busy}
+          disabled={!path.trim()}
+        >
+          {t('dev.load')}
+        </Button>
       </form>
       {dev.length > 0 && (
         <>
@@ -67,8 +94,19 @@ export function Developer({ plugins, refresh }: { plugins: PluginInfo[]; refresh
             {dev.map((p) => (
               <div key={p.id} className="plugins-devrow">
                 <Tile icon={p.icon} logo={pluginLogoUrl(p)} color={p.color} size="sm" />
-                <div className="plugins-dev-tx"><b>{p.name}</b><small className="mono">{p.dir}</small></div>
-                <Button size="sm" icon="refresh" onClick={() => void refresh(true).then(() => toast.ok(t('dev.reloaded', { name: p.name })))}>{t('dev.reload')}</Button>
+                <div className="plugins-dev-tx">
+                  <b>{p.name}</b>
+                  <small className="mono">{p.dir}</small>
+                </div>
+                <Button
+                  size="sm"
+                  icon="refresh"
+                  onClick={() =>
+                    void refresh(true).then(() => toast.ok(t('dev.reloaded', { name: p.name })))
+                  }
+                >
+                  {t('dev.reload')}
+                </Button>
               </div>
             ))}
           </div>

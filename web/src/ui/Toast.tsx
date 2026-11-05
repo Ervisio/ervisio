@@ -30,7 +30,11 @@ const emit = () => {
 function schedule(it: ToastItem) {
   window.clearTimeout(timers.get(it.id));
   const d = it.duration ?? (it.tone === 'err' ? 8000 : it.tone === 'run' ? 0 : 4000);
-  if (d > 0) timers.set(it.id, window.setTimeout(() => toast.dismiss(it.id), d));
+  if (d > 0)
+    timers.set(
+      it.id,
+      window.setTimeout(() => toast.dismiss(it.id), d),
+    );
 }
 
 export const toast = {
@@ -46,7 +50,12 @@ export const toast = {
   info: (title: string, detail?: string) => toast.show({ title, detail, tone: 'info' }),
   /** "Saved" toast with an Undo action. `undoLabel` comes from your own i18n. */
   undo(title: string, undoLabel: string, onUndo: () => void): number {
-    const id = toast.show({ title, tone: 'ok', duration: 7000, action: { label: undoLabel, onClick: onUndo } });
+    const id = toast.show({
+      title,
+      tone: 'ok',
+      duration: 7000,
+      action: { label: undoLabel, onClick: onUndo },
+    });
     return id;
   },
   update(id: number, patch: Partial<ToastInput>) {
@@ -67,7 +76,12 @@ export const toast = {
 /** Hook form: `const toast = useToast()` gives the same object. */
 export const useToast = () => toast;
 
-const ICONS: Record<string, IconName> = { ok: 'check', err: 'alert', info: 'info', run: 'download' };
+const ICONS: Record<string, IconName> = {
+  ok: 'check',
+  err: 'alert',
+  info: 'info',
+  run: 'download',
+};
 
 export function ToastViewport() {
   const t = useT('ui');
@@ -79,8 +93,14 @@ export function ToastViewport() {
   return (
     <div className="ui-toasts" role="region" aria-label={t('notifications')} aria-live="polite">
       {list.map((it) => (
-        <div key={it.id} className={`ui-toast ui-toast--${it.tone ?? 'ok'}`} role={it.tone === 'err' ? 'alert' : 'status'}>
-          <span className="ui-toast-ic"><Icon name={it.icon ?? ICONS[it.tone ?? 'ok']} /></span>
+        <div
+          key={it.id}
+          className={`ui-toast ui-toast--${it.tone ?? 'ok'}`}
+          role={it.tone === 'err' ? 'alert' : 'status'}
+        >
+          <span className="ui-toast-ic">
+            <Icon name={it.icon ?? ICONS[it.tone ?? 'ok']} />
+          </span>
           <div className="ui-toast-tp">
             {it.title}
             {it.detail && <small>{it.detail}</small>}
@@ -98,7 +118,12 @@ export function ToastViewport() {
               {it.action.label}
             </button>
           )}
-          <button type="button" className="ui-toast-x" aria-label={t('dismiss')} onClick={() => toast.dismiss(it.id)}>
+          <button
+            type="button"
+            className="ui-toast-x"
+            aria-label={t('dismiss')}
+            onClick={() => toast.dismiss(it.id)}
+          >
             <Icon name="close" />
           </button>
         </div>

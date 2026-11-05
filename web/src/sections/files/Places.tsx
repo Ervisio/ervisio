@@ -1,6 +1,15 @@
 import { useT } from '../../i18n';
 import { formatBytes } from '../../lib/format';
-import { Badge, DropdownMenu, Button, Icon, Progress, toast, type IconName, type MenuItem } from '../../ui';
+import {
+  Badge,
+  DropdownMenu,
+  Button,
+  Icon,
+  Progress,
+  toast,
+  type IconName,
+  type MenuItem,
+} from '../../ui';
 import type { Disk, Places as PlacesData, Remote } from './types';
 import { basename } from './util';
 
@@ -42,21 +51,32 @@ export function PlacesList(p: PlacesProps) {
   const root = (p.data?.disks ?? []).find((d) => d.mount === '/') ?? p.data?.disks[0];
   return (
     <>
-      <DropdownMenu items={p.onNew} aria-label={t('new.label')} trigger={(tp) => (
-        <Button variant="primary" icon="plus" className="files-newb" {...tp}>
-          {t('new.label')}
-        </Button>
-      )} />
+      <DropdownMenu
+        items={p.onNew}
+        aria-label={t('new.label')}
+        trigger={(tp) => (
+          <Button variant="primary" icon="plus" className="files-newb" {...tp}>
+            {t('new.label')}
+          </Button>
+        )}
+      />
       <div className="files-pg">
         {item(p.home, 'home', t('place.home'))}
         {item('/', 'server', t('place.root'), <span className="files-muted mono">/</span>)}
         {item('recent:', 'clock', t('place.recent'))}
         {item('starred:', 'star', t('place.starred'))}
-        {item('trash:', 'trash', t('place.trash'), p.data && p.data.trashCount > 0 ? <Badge>{p.data.trashCount}</Badge> : undefined)}
+        {item(
+          'trash:',
+          'trash',
+          t('place.trash'),
+          p.data && p.data.trashCount > 0 ? <Badge>{p.data.trashCount}</Badge> : undefined,
+        )}
       </div>
       <div className="files-plt">{t('bookmarks')}</div>
       <div className="files-pg">
-        {p.bookmarks.length === 0 && <p className="files-muted files-pl-empty">{t('bookmarksEmpty')}</p>}
+        {p.bookmarks.length === 0 && (
+          <p className="files-muted files-pl-empty">{t('bookmarksEmpty')}</p>
+        )}
         {p.bookmarks.map((b) => (
           <a
             key={b}
@@ -121,15 +141,31 @@ export function PlacesList(p: PlacesProps) {
   );
 }
 
-function DiskBox({ d, onGo, t }: { d: Disk; main: boolean; onGo(l: string): void; t: ReturnType<typeof useT> }) {
+function DiskBox({
+  d,
+  onGo,
+  t,
+}: {
+  d: Disk;
+  main: boolean;
+  onGo(l: string): void;
+  t: ReturnType<typeof useT>;
+}) {
   const pct = d.total ? (d.used / d.total) * 100 : 0;
   return (
     <button type="button" className="files-store" onClick={() => onGo(d.mount)} title={d.device}>
       <span className="files-store-l">
         <b>{t('disk', { mount: d.mount })}</b>
-        <span>{t('diskUsage', { used: formatBytes(d.used, 0), total: formatBytes(d.total, 0) })}</span>
+        <span>
+          {t('diskUsage', { used: formatBytes(d.used, 0), total: formatBytes(d.total, 0) })}
+        </span>
       </span>
-      <Progress value={pct} hue="file" tone={pct > 90 ? 'err' : pct > 80 ? 'warn' : undefined} label={t('disk', { mount: d.mount })} />
+      <Progress
+        value={pct}
+        hue="file"
+        tone={pct > 90 ? 'err' : pct > 80 ? 'warn' : undefined}
+        label={t('disk', { mount: d.mount })}
+      />
     </button>
   );
 }

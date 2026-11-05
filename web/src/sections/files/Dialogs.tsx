@@ -7,7 +7,21 @@ import type { FEntry } from './types';
 import { dirname, validFileName } from './util';
 
 /* ---------- name prompt: new folder, new file, rename ---------- */
-export function NameDialog({ title, label, initial, confirm, onClose, onSubmit }: { title: string; label: string; initial: string; confirm: string; onClose(): void; onSubmit(name: string): Promise<void> }) {
+export function NameDialog({
+  title,
+  label,
+  initial,
+  confirm,
+  onClose,
+  onSubmit,
+}: {
+  title: string;
+  label: string;
+  initial: string;
+  confirm: string;
+  onClose(): void;
+  onSubmit(name: string): Promise<void>;
+}) {
   const t = useT('files');
   const [val, setVal] = useState(initial);
   const [err, setErr] = useState('');
@@ -29,7 +43,13 @@ export function NameDialog({ title, label, initial, confirm, onClose, onSubmit }
       await onSubmit(name);
       onClose();
     } catch (x) {
-      setErr(x instanceof ApiError ? (x.code === 'conflict' ? t('err.exists', { name }) : x.message) : String(x));
+      setErr(
+        x instanceof ApiError
+          ? x.code === 'conflict'
+            ? t('err.exists', { name })
+            : x.message
+          : String(x),
+      );
     } finally {
       setBusy(false);
     }
@@ -55,7 +75,15 @@ export function NameDialog({ title, label, initial, confirm, onClose, onSubmit }
         </>
       }
     >
-      <Input ref={ref} label={label} value={val} onChange={(e) => setVal(e.target.value)} error={err || undefined} autoComplete="off" spellCheck={false} />
+      <Input
+        ref={ref}
+        label={label}
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        error={err || undefined}
+        autoComplete="off"
+        spellCheck={false}
+      />
     </Dialog>
   );
 }
@@ -79,7 +107,12 @@ export function ChownDialog({ entry, onClose }: { entry: FEntry; onClose(): void
         setBusy(true);
         setErr('');
         try {
-          await fcall('files.chown', { path: entry.path, owner: owner === entry.owner ? '' : owner, group: group === entry.group ? '' : group, recursive: rec });
+          await fcall('files.chown', {
+            path: entry.path,
+            owner: owner === entry.owner ? '' : owner,
+            group: group === entry.group ? '' : group,
+            recursive: rec,
+          });
           toast.ok(t('chown.done', { name: entry.name }));
           emitChanged(dirname(entry.path));
           onClose();
@@ -101,9 +134,23 @@ export function ChownDialog({ entry, onClose }: { entry: FEntry; onClose(): void
       }
     >
       <div style={{ display: 'grid', gap: 12 }}>
-        <Input label={t('col.owner')} value={owner} onChange={(e) => setOwner(e.target.value)} mono autoComplete="off" />
-        <Input label={t('chown.group')} value={group} onChange={(e) => setGroup(e.target.value)} mono autoComplete="off" />
-        {entry.type === 'dir' && <Checkbox checked={rec} onChange={setRec} label={t('chown.recursive')} />}
+        <Input
+          label={t('col.owner')}
+          value={owner}
+          onChange={(e) => setOwner(e.target.value)}
+          mono
+          autoComplete="off"
+        />
+        <Input
+          label={t('chown.group')}
+          value={group}
+          onChange={(e) => setGroup(e.target.value)}
+          mono
+          autoComplete="off"
+        />
+        {entry.type === 'dir' && (
+          <Checkbox checked={rec} onChange={setRec} label={t('chown.recursive')} />
+        )}
         {err && (
           <div className="ui-form-err" role="alert">
             <Icon name="alert" />
@@ -116,7 +163,15 @@ export function ChownDialog({ entry, onClose }: { entry: FEntry; onClose(): void
 }
 
 /* ---------- simple text editor ---------- */
-export function EditorDialog({ entry, admin, onClose }: { entry: FEntry; admin: boolean; onClose(): void }) {
+export function EditorDialog({
+  entry,
+  admin,
+  onClose,
+}: {
+  entry: FEntry;
+  admin: boolean;
+  onClose(): void;
+}) {
   const t = useT('files');
   const [orig, setOrig] = useState<string | null>(null);
   const [text, setText] = useState('');
@@ -132,14 +187,25 @@ export function EditorDialog({ entry, admin, onClose }: { entry: FEntry; admin: 
     setErr('');
     setConflict(false);
     try {
-      const r = await fcall<{ content: string; mtime: number; encoding: string; truncated: boolean }>('files.readText', { path: entry.path, maxBytes: 2 << 20 }, { admin: useAdmin, onElevate: () => setUseAdmin(true) });
+      const r = await fcall<{
+        content: string;
+        mtime: number;
+        encoding: string;
+        truncated: boolean;
+      }>(
+        'files.readText',
+        { path: entry.path, maxBytes: 2 << 20 },
+        { admin: useAdmin, onElevate: () => setUseAdmin(true) },
+      );
       setOrig(r.content);
       setText(r.content);
       setMtime(r.mtime);
       setEnc(r.encoding);
       setReadOnly(r.truncated);
     } catch (x) {
-      setErr(x instanceof ApiError ? (x.code === 'invalid' ? t('edit.binary') : x.message) : String(x));
+      setErr(
+        x instanceof ApiError ? (x.code === 'invalid' ? t('edit.binary') : x.message) : String(x),
+      );
       setOrig('');
       setReadOnly(true);
     }
@@ -153,7 +219,11 @@ export function EditorDialog({ entry, admin, onClose }: { entry: FEntry; admin: 
     setBusy(true);
     setErr('');
     try {
-      const r = await fcall<{ mtime: number }>('files.writeText', { path: entry.path, content: text, encoding: enc, expectedMtime: force ? 0 : mtime }, { admin: useAdmin, onElevate: () => setUseAdmin(true) });
+      const r = await fcall<{ mtime: number }>(
+        'files.writeText',
+        { path: entry.path, content: text, encoding: enc, expectedMtime: force ? 0 : mtime },
+        { admin: useAdmin, onElevate: () => setUseAdmin(true) },
+      );
       setOrig(text);
       setMtime(r.mtime);
       setConflict(false);

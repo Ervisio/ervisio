@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import * as client from './client';
 import { signInWithKey as keySignIn, type SignInWithKeyArgs } from '../auth/sshkey';
 import { authEvents } from './http';
@@ -17,9 +25,15 @@ export interface SessionValue {
   /** Unlocked until sign-out: show no countdown. */
   unlockForever: boolean;
   /** Root users (or sessions with no sudo) can always run admin calls. */
-  signIn(user: string, password: string, stay?: boolean): Promise<{ user: string; isAdmin: boolean; isRoot: boolean }>;
+  signIn(
+    user: string,
+    password: string,
+    stay?: boolean,
+  ): Promise<{ user: string; isAdmin: boolean; isRoot: boolean }>;
   /** Sign in with an SSH key (see auth/sshkey). Throws SshKeyError. */
-  signInWithKey(args: SignInWithKeyArgs): Promise<{ user: string; isAdmin: boolean; isRoot: boolean }>;
+  signInWithKey(
+    args: SignInWithKeyArgs,
+  ): Promise<{ user: string; isAdmin: boolean; isRoot: boolean }>;
   signOut(): Promise<void>;
   /** password "" tries sudo NOPASSWD (useful after an SSH-key sign-in); see client.unlock. */
   unlock(password: string): Promise<void>;
@@ -109,7 +123,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const unlock = useCallback(async (password: string) => {
     const u = await client.unlock(password);
-    setSession((s) => (s ? { ...s, unlockedUntil: u.until ?? Date.now() + 5 * 60_000, unlockedForever: u.forever } : s));
+    setSession((s) =>
+      s
+        ? { ...s, unlockedUntil: u.until ?? Date.now() + 5 * 60_000, unlockedForever: u.forever }
+        : s,
+    );
   }, []);
 
   const lock = useCallback(async () => {
@@ -120,8 +138,33 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const unlockLeft = until > now ? Math.ceil((until - now) / 1000) : 0;
   const unlockForever = unlockLeft > 0 && !!session?.unlockedForever;
   const value = useMemo<SessionValue>(
-    () => ({ status, session, host, unlockLeft, isUnlocked: unlockLeft > 0, unlockForever, signIn, signInWithKey, signOut, unlock, lock, refresh }),
-    [status, session, host, unlockLeft, unlockForever, signIn, signInWithKey, signOut, unlock, lock, refresh],
+    () => ({
+      status,
+      session,
+      host,
+      unlockLeft,
+      isUnlocked: unlockLeft > 0,
+      unlockForever,
+      signIn,
+      signInWithKey,
+      signOut,
+      unlock,
+      lock,
+      refresh,
+    }),
+    [
+      status,
+      session,
+      host,
+      unlockLeft,
+      unlockForever,
+      signIn,
+      signInWithKey,
+      signOut,
+      unlock,
+      lock,
+      refresh,
+    ],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

@@ -95,12 +95,14 @@ export interface EnvInput {
 }
 
 export const envsList = () => call<EnvList>('envs.list');
-export const envsProbe = (i: Pick<EnvInput, 'kind' | 'address' | 'user' | 'insecure'>) => call<ProbeResult>('envs.probe', i);
+export const envsProbe = (i: Pick<EnvInput, 'kind' | 'address' | 'user' | 'insecure'>) =>
+  call<ProbeResult>('envs.probe', i);
 export const envsCreate = (i: EnvInput) => call<EnvView>('envs.create', i);
 export const envsUpdate = (id: string, i: EnvInput) => call<EnvView>('envs.update', { id, ...i });
 export const envsDelete = (id: string) => call('envs.delete', { id });
 export const envsTest = (id: string) => call<EnvStatus>('envs.test', { id });
-export const pairTokenCreate = (user?: string) => call<PairToken>('envs.pairToken.create', user ? { user } : {});
+export const pairTokenCreate = (user?: string) =>
+  call<PairToken>('envs.pairToken.create', user ? { user } : {});
 export const pairingRevoke = (id: string) => call('envs.pairings.revoke', { id });
 
 export interface ApprovedHost {
@@ -111,4 +113,5 @@ export interface ApprovedHost {
   at: string;
 }
 export const hostsList = () => call<{ approved: ApprovedHost[] }>('plugins.network.list');
-export const hostRevoke = (plugin: string, host: string) => call('plugins.network.revoke', { plugin, host }, { admin: true });
+export const hostRevoke = (plugin: string, host: string) =>
+  call('plugins.network.revoke', { plugin, host }, { admin: true });

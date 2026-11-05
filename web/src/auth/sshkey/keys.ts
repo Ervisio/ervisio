@@ -9,13 +9,31 @@ import * as ed from '@noble/ed25519';
 import * as asn1 from './asn1.ts';
 import { bcryptPbkdf } from './bcrypt.ts';
 import {
-  b64decode, b64encode, b64url, bigIntToBytes, bytesToBigInt, concat, equal, fromHex, mpint, Reader, sshString, stripZeros, utf8, wipe,
+  b64decode,
+  b64encode,
+  b64url,
+  bigIntToBytes,
+  bytesToBigInt,
+  concat,
+  equal,
+  fromHex,
+  mpint,
+  Reader,
+  sshString,
+  stripZeros,
+  utf8,
+  wipe,
   type Bytes,
 } from './bytes.ts';
 import { SshKeyError } from './errors.ts';
 import { md5 } from './md5.ts';
 
-export type KeyType = 'ssh-ed25519' | 'ecdsa-sha2-nistp256' | 'ecdsa-sha2-nistp384' | 'ecdsa-sha2-nistp521' | 'ssh-rsa';
+export type KeyType =
+  | 'ssh-ed25519'
+  | 'ecdsa-sha2-nistp256'
+  | 'ecdsa-sha2-nistp384'
+  | 'ecdsa-sha2-nistp521'
+  | 'ssh-rsa';
 
 export interface PrivateKey {
   type: KeyType;
@@ -78,20 +96,44 @@ function findBlock(text: string): Block | null {
   return first;
 }
 
-const SUPPORTED_TYPES: KeyType[] = ['ssh-ed25519', 'ecdsa-sha2-nistp256', 'ecdsa-sha2-nistp384', 'ecdsa-sha2-nistp521', 'ssh-rsa'];
+const SUPPORTED_TYPES: KeyType[] = [
+  'ssh-ed25519',
+  'ecdsa-sha2-nistp256',
+  'ecdsa-sha2-nistp384',
+  'ecdsa-sha2-nistp521',
+  'ssh-rsa',
+];
 
 /**
  * Parses a private key. `passphrase` is needed for encrypted keys (passphrase_required otherwise).
  * Throws SshKeyError (see errors.ts).
  */
 export async function parsePrivateKey(text: string, passphrase = ''): Promise<PrivateKey> {
-  if (!globalThis.crypto?.subtle) throw new SshKeyError('crypto_unavailable', 'This browser does not offer WebCrypto here (the page must be served over https or from localhost).');
+  if (!globalThis.crypto?.subtle)
+    throw new SshKeyError(
+      'crypto_unavailable',
+      'This browser does not offer WebCrypto here (the page must be served over https or from localhost).',
+    );
   const t = (text ?? '').trim();
   if (!t) throw new SshKeyError('not_a_key', 'No key given.');
-  if (/^PuTTY-User-Key-File-/m.test(t)) throw new SshKeyError('unsupported_format', 'PuTTY .ppk keys are not supported: export the key in OpenSSH format (PuTTYgen › Conversions).');
-  if (/^---- BEGIN SSH2 ENCRYPTED PRIVATE KEY ----/m.test(t)) throw new SshKeyError('unsupported_format', 'SSH2 (RFC 4716) private keys are not supported: convert the key to OpenSSH format.');
-  if (/^(ssh-|ecdsa-|sk-)[a-z0-9@.-]+ AAAA/m.test(t) || /BEGIN SSH2 PUBLIC KEY|BEGIN (RSA )?PUBLIC KEY/.test(t)) {
-    throw new SshKeyError('public_key_given', 'This is a public key. Choose the private key (the file without .pub).');
+  if (/^PuTTY-User-Key-File-/m.test(t))
+    throw new SshKeyError(
+      'unsupported_format',
+      'PuTTY .ppk keys are not supported: export the key in OpenSSH format (PuTTYgen › Conversions).',
+    );
+  if (/^---- BEGIN SSH2 ENCRYPTED PRIVATE KEY ----/m.test(t))
+    throw new SshKeyError(
+      'unsupported_format',
+      'SSH2 (RFC 4716) private keys are not supported: convert the key to OpenSSH format.',
+    );
+  if (
+    /^(ssh-|ecdsa-|sk-)[a-z0-9@.-]+ AAAA/m.test(t) ||
+    /BEGIN SSH2 PUBLIC KEY|BEGIN (RSA )?PUBLIC KEY/.test(t)
+  ) {
+    throw new SshKeyError(
+      'public_key_given',
+      'This is a public key. Choose the private key (the file without .pub).',
+    );
   }
   const block = findBlock(t);
   if (!block) throw new SshKeyError('not_a_key', 'This is not a private key.');
@@ -137,7 +179,9 @@ const CIPHERS: Record<string, CipherSpec> = {
  * Type, size and fingerprint of an OpenSSH private key without its passphrase: that format keeps the public
  * key in clear. Null for other formats or anything unreadable.
  */
-export async function publicInfo(text: string): Promise<{ type: KeyType; bits: number; fingerprint: string } | null> {
+export async function publicInfo(
+  text: string,
+): Promise<{ type: KeyType; bits: number; fingerprint: string } | null> {
   try {
     const block = findBlock((text ?? '').trim());
     if (!block || block.label !== 'OPENSSH PRIVATE KEY' || !globalThis.crypto?.subtle) return null;
@@ -170,33 +214,48 @@ export async function publicInfo(text: string): Promise<{ type: KeyType; bits: n
 
 async function parseOpenSSH(raw: Bytes, passphrase: string): Promise<PrivateKey> {
   const r = new Reader(raw);
-  if (new TextDecoder().decode(r.bytes(AUTH_MAGIC.length)) !== AUTH_MAGIC) throw new SshKeyError('corrupt_key', 'Not an OpenSSH private key.');
+  if (new TextDecoder().decode(r.bytes(AUTH_MAGIC.length)) !== AUTH_MAGIC)
+    throw new SshKeyError('corrupt_key', 'Not an OpenSSH private key.');
   const cipher = r.text();
   const kdf = r.text();
   const kdfOpts = r.string();
   const n = r.u32();
-  if (n !== 1) throw new SshKeyError('unsupported_format', 'Files holding several keys are not supported.');
+  if (n !== 1)
+    throw new SshKeyError('unsupported_format', 'Files holding several keys are not supported.');
   const pubBlob = r.string();
   const pubType = new Reader(pubBlob).text();
   checkType(pubType);
 
-  const plain = cipher === 'none' ? readPlainSection(r, kdf) : await decryptSection(r, cipher, kdf, kdfOpts, passphrase);
+  const plain =
+    cipher === 'none'
+      ? readPlainSection(r, kdf)
+      : await decryptSection(r, cipher, kdf, kdfOpts, passphrase);
   const p = new Reader(plain);
   const check1 = p.u32();
   const check2 = p.u32();
   if (check1 !== check2) {
     wipe(plain);
-    throw new SshKeyError(cipher === 'none' ? 'corrupt_key' : 'bad_passphrase', cipher === 'none' ? 'The key data is damaged.' : 'Wrong passphrase.');
+    throw new SshKeyError(
+      cipher === 'none' ? 'corrupt_key' : 'bad_passphrase',
+      cipher === 'none' ? 'The key data is damaged.' : 'Wrong passphrase.',
+    );
   }
   const type = p.text();
-  if (type !== pubType) throw new SshKeyError('corrupt_key', 'Public and private key types differ.');
+  if (type !== pubType)
+    throw new SshKeyError('corrupt_key', 'Public and private key types differ.');
   const key = readKeyMaterial(p, type);
   const comment = p.text();
   // Padding 1, 2, 3, … up to the block size.
   const pad = p.rest();
-  for (let i = 0; i < pad.length; i++) if (pad[i] !== i + 1) throw new SshKeyError(cipher === 'none' ? 'corrupt_key' : 'bad_passphrase', 'The key data is damaged.');
+  for (let i = 0; i < pad.length; i++)
+    if (pad[i] !== i + 1)
+      throw new SshKeyError(
+        cipher === 'none' ? 'corrupt_key' : 'bad_passphrase',
+        'The key data is damaged.',
+      );
   wipe(plain);
-  if (!equal(publicBlob(key), pubBlob)) throw new SshKeyError('corrupt_key', 'The public key does not match the private key.');
+  if (!equal(publicBlob(key), pubBlob))
+    throw new SshKeyError('corrupt_key', 'The public key does not match the private key.');
   return build(key, comment);
 }
 
@@ -205,15 +264,28 @@ function readPlainSection(r: Reader, kdf: string): Bytes {
   return r.string();
 }
 
-async function decryptSection(r: Reader, cipher: string, kdf: string, kdfOpts: Bytes, passphrase: string): Promise<Bytes> {
+async function decryptSection(
+  r: Reader,
+  cipher: string,
+  kdf: string,
+  kdfOpts: Bytes,
+  passphrase: string,
+): Promise<Bytes> {
   const spec = CIPHERS[cipher];
-  if (!spec) throw new SshKeyError('unsupported_cipher', `Keys encrypted with ${cipher} are not supported. Re-encrypt it: ssh-keygen -p -Z aes256-ctr -f <key>.`);
-  if (kdf !== 'bcrypt') throw new SshKeyError('unsupported_cipher', `Key derivation ${kdf} is not supported.`);
-  if (!passphrase) throw new SshKeyError('passphrase_required', 'This key is protected by a passphrase.');
+  if (!spec)
+    throw new SshKeyError(
+      'unsupported_cipher',
+      `Keys encrypted with ${cipher} are not supported. Re-encrypt it: ssh-keygen -p -Z aes256-ctr -f <key>.`,
+    );
+  if (kdf !== 'bcrypt')
+    throw new SshKeyError('unsupported_cipher', `Key derivation ${kdf} is not supported.`);
+  if (!passphrase)
+    throw new SshKeyError('passphrase_required', 'This key is protected by a passphrase.');
   const ko = new Reader(kdfOpts);
   const salt = ko.string();
   const rounds = ko.u32();
-  if (rounds < 1 || rounds > 1 << 16) throw new SshKeyError('corrupt_key', 'Unreasonable bcrypt rounds.');
+  if (rounds < 1 || rounds > 1 << 16)
+    throw new SshKeyError('corrupt_key', 'Unreasonable bcrypt rounds.');
   const len = r.u32();
   const ct = r.bytes(len);
   const tag = r.bytes(spec.authLen);
@@ -222,7 +294,12 @@ async function decryptSection(r: Reader, cipher: string, kdf: string, kdfOpts: B
   const keyAndIv = await bcryptPbkdf(pass, salt, rounds, spec.keyLen + spec.ivLen);
   wipe(pass);
   try {
-    return await aesDecrypt(spec.mode, keyAndIv.slice(0, spec.keyLen), keyAndIv.slice(spec.keyLen), concat(ct, tag));
+    return await aesDecrypt(
+      spec.mode,
+      keyAndIv.slice(0, spec.keyLen),
+      keyAndIv.slice(spec.keyLen),
+      concat(ct, tag),
+    );
   } catch (e) {
     if (e instanceof SshKeyError) throw e;
     // GCM: authentication failed = wrong passphrase.
@@ -236,7 +313,8 @@ function readKeyMaterial(p: Reader, type: string): Material {
   if (type === 'ssh-ed25519') {
     const pub = p.string();
     const priv = p.string();
-    if (pub.length !== 32 || priv.length !== 64 || !equal(priv.subarray(32), pub)) throw new SshKeyError('corrupt_key', 'Damaged ed25519 key.');
+    if (pub.length !== 32 || priv.length !== 64 || !equal(priv.subarray(32), pub))
+      throw new SshKeyError('corrupt_key', 'Damaged ed25519 key.');
     return { kind: 'ed25519', seed: priv.slice(0, 32), pub: pub.slice() };
   }
   if (type === 'ssh-rsa') {
@@ -256,12 +334,21 @@ function readKeyMaterial(p: Reader, type: string): Material {
 
 function checkType(t: string): asserts t is KeyType {
   if (!(SUPPORTED_TYPES as string[]).includes(t)) {
-    const why = t.startsWith('sk-') ? 'Security-key (FIDO) keys need the hardware key and cannot be used in a browser.' : t === 'ssh-dss' ? 'DSA keys are not supported.' : `Key type ${t} is not supported.`;
+    const why = t.startsWith('sk-')
+      ? 'Security-key (FIDO) keys need the hardware key and cannot be used in a browser.'
+      : t === 'ssh-dss'
+        ? 'DSA keys are not supported.'
+        : `Key type ${t} is not supported.`;
     throw new SshKeyError('unsupported_key_type', why);
   }
 }
 
-async function aesDecrypt(mode: 'ctr' | 'cbc' | 'gcm', key: Bytes, iv: Bytes, data: Bytes): Promise<Bytes> {
+async function aesDecrypt(
+  mode: 'ctr' | 'cbc' | 'gcm',
+  key: Bytes,
+  iv: Bytes,
+  data: Bytes,
+): Promise<Bytes> {
   const s = crypto.subtle;
   if (mode === 'ctr') {
     const k = await s.importKey('raw', key, 'AES-CTR', false, ['decrypt']);
@@ -280,20 +367,49 @@ async function aesDecrypt(mode: 'ctr' | 'cbc' | 'gcm', key: Bytes, iv: Bytes, da
  * which is the first block of encrypting sixteen 0x10 bytes with the last ciphertext block as IV.
  */
 async function cbcNoPadding(key: Bytes, iv: Bytes, data: Bytes): Promise<Bytes> {
-  if (data.length === 0 || data.length % 16) throw new SshKeyError('corrupt_key', 'Encrypted section has a bad length.');
+  if (data.length === 0 || data.length % 16)
+    throw new SshKeyError('corrupt_key', 'Encrypted section has a bad length.');
   const k = await crypto.subtle.importKey('raw', key, 'AES-CBC', false, ['encrypt', 'decrypt']);
   const last = data.slice(data.length - 16);
-  const extra = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-CBC', iv: last }, k, new Uint8Array(16).fill(16))).slice(0, 16);
-  return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-CBC', iv }, k, concat(data, extra)));
+  const extra = new Uint8Array(
+    await crypto.subtle.encrypt({ name: 'AES-CBC', iv: last }, k, new Uint8Array(16).fill(16)),
+  ).slice(0, 16);
+  return new Uint8Array(
+    await crypto.subtle.decrypt({ name: 'AES-CBC', iv }, k, concat(data, extra)),
+  );
 }
 
 const OID_RSA = '1.2.840.113549.1.1.1';
 const OID_EC = '1.2.840.10045.2.1';
 const OID_ED25519 = '1.3.101.112';
-const CURVES: Record<string, { type: KeyType; ssh: string; jwk: string; size: number; hash: string; bits: number }> = {
-  '1.2.840.10045.3.1.7': { type: 'ecdsa-sha2-nistp256', ssh: 'nistp256', jwk: 'P-256', size: 32, hash: 'SHA-256', bits: 256 },
-  '1.3.132.0.34': { type: 'ecdsa-sha2-nistp384', ssh: 'nistp384', jwk: 'P-384', size: 48, hash: 'SHA-384', bits: 384 },
-  '1.3.132.0.35': { type: 'ecdsa-sha2-nistp521', ssh: 'nistp521', jwk: 'P-521', size: 66, hash: 'SHA-512', bits: 521 },
+const CURVES: Record<
+  string,
+  { type: KeyType; ssh: string; jwk: string; size: number; hash: string; bits: number }
+> = {
+  '1.2.840.10045.3.1.7': {
+    type: 'ecdsa-sha2-nistp256',
+    ssh: 'nistp256',
+    jwk: 'P-256',
+    size: 32,
+    hash: 'SHA-256',
+    bits: 256,
+  },
+  '1.3.132.0.34': {
+    type: 'ecdsa-sha2-nistp384',
+    ssh: 'nistp384',
+    jwk: 'P-384',
+    size: 48,
+    hash: 'SHA-384',
+    bits: 384,
+  },
+  '1.3.132.0.35': {
+    type: 'ecdsa-sha2-nistp521',
+    ssh: 'nistp521',
+    jwk: 'P-521',
+    size: 66,
+    hash: 'SHA-512',
+    bits: 521,
+  },
 };
 const curveBySsh = (name: string) => Object.values(CURVES).find((c) => c.ssh === name);
 
@@ -305,7 +421,11 @@ async function fromPkcs8(der: Bytes): Promise<PrivateKey> {
   if (id === OID_RSA) return fromPkcs1(inner);
   if (id === OID_EC) {
     const curve = CURVES[asn1.oid(alg[1])];
-    if (!curve) throw new SshKeyError('unsupported_key_type', 'This elliptic curve is not supported (P-256, P-384 and P-521 are).');
+    if (!curve)
+      throw new SshKeyError(
+        'unsupported_key_type',
+        'This elliptic curve is not supported (P-256, P-384 and P-521 are).',
+      );
     return fromSec1(inner, curve);
   }
   if (id === OID_ED25519) {
@@ -319,19 +439,27 @@ async function fromPkcs8(der: Bytes): Promise<PrivateKey> {
 
 async function fromPkcs1(der: Bytes): Promise<PrivateKey> {
   const s = asn1.seq(asn1.parse(der));
-  if (asn1.smallInt(s[0]) !== 0) throw new SshKeyError('unsupported_format', 'Multi-prime RSA keys are not supported.');
+  if (asn1.smallInt(s[0]) !== 0)
+    throw new SshKeyError('unsupported_format', 'Multi-prime RSA keys are not supported.');
   const [n, e, d, p, q] = [1, 2, 3, 4, 5].map((i) => asn1.uint(s[i]));
   const qi = asn1.uint(s[8]);
   return build(rsaMaterial({ n, e, d, p, q, qi }), '');
 }
 
-async function fromSec1(der: Bytes, curveHint: (typeof CURVES)[string] | null): Promise<PrivateKey> {
+async function fromSec1(
+  der: Bytes,
+  curveHint: (typeof CURVES)[string] | null,
+): Promise<PrivateKey> {
   const s = asn1.seq(asn1.parse(der));
   if (asn1.smallInt(s[0]) !== 1) throw new SshKeyError('corrupt_key', 'Unknown EC key version.');
   const d = stripZeros(asn1.expect(s[1], asn1.OCTET_STRING).value);
   const params = asn1.context(s, 0);
   const curve = params ? CURVES[asn1.oid(params.children![0])] : curveHint;
-  if (!curve) throw new SshKeyError('unsupported_key_type', 'This elliptic curve is not supported (P-256, P-384 and P-521 are).');
+  if (!curve)
+    throw new SshKeyError(
+      'unsupported_key_type',
+      'This elliptic curve is not supported (P-256, P-384 and P-521 are).',
+    );
   const pubNode = asn1.context(s, 1);
   let publicPoint: Bytes;
   if (pubNode) {
@@ -347,9 +475,22 @@ async function fromSec1(der: Bytes, curveHint: (typeof CURVES)[string] | null): 
 async function deriveEcPublic(crv: string, d: Bytes, size: number): Promise<JsonWebKey> {
   // PKCS#8 wrapping of a SEC1 key without the public point; WebCrypto computes it on import.
   const curveOid = Object.entries(CURVES).find(([, c]) => c.jwk === crv)![0];
-  const sec1 = derSeq(derInt(new Uint8Array([1])), derTag(0x04, bigIntToBytes(bytesToBigInt(d), size)));
-  const pkcs8 = derSeq(derInt(new Uint8Array([0])), derSeq(derOid(OID_EC), derOid(curveOid)), derTag(0x04, sec1));
-  const k = await crypto.subtle.importKey('pkcs8', pkcs8, { name: 'ECDSA', namedCurve: crv }, true, ['sign']);
+  const sec1 = derSeq(
+    derInt(new Uint8Array([1])),
+    derTag(0x04, bigIntToBytes(bytesToBigInt(d), size)),
+  );
+  const pkcs8 = derSeq(
+    derInt(new Uint8Array([0])),
+    derSeq(derOid(OID_EC), derOid(curveOid)),
+    derTag(0x04, sec1),
+  );
+  const k = await crypto.subtle.importKey(
+    'pkcs8',
+    pkcs8,
+    { name: 'ECDSA', namedCurve: crv },
+    true,
+    ['sign'],
+  );
   return crypto.subtle.exportKey('jwk', k);
 }
 
@@ -372,7 +513,8 @@ function derOid(s: string): Bytes {
   const out = [40 * p[0] + p[1]];
   for (const x of p.slice(2)) {
     const enc = [x & 0x7f];
-    for (let v = Math.floor(x / 128); v > 0; v = Math.floor(v / 128)) enc.unshift((v & 0x7f) | 0x80);
+    for (let v = Math.floor(x / 128); v > 0; v = Math.floor(v / 128))
+      enc.unshift((v & 0x7f) | 0x80);
     out.push(...enc);
   }
   return derTag(0x06, new Uint8Array(out));
@@ -383,9 +525,16 @@ async function legacyBody(block: Block, passphrase: string): Promise<Bytes> {
   const der = b64decode(block.body);
   if (!block.headers['proc-type']?.includes('ENCRYPTED')) return der;
   const [alg, ivHex] = (block.headers['dek-info'] ?? '').split(',').map((x) => x.trim());
-  const keyLen = (({ 'AES-128-CBC': 16, 'AES-192-CBC': 24, 'AES-256-CBC': 32 }) as Record<string, number>)[alg];
-  if (!keyLen || !/^[0-9A-Fa-f]{32}$/.test(ivHex ?? '')) throw new SshKeyError('unsupported_cipher', `PEM keys encrypted with ${alg || 'this cipher'} are not supported.`);
-  if (!passphrase) throw new SshKeyError('passphrase_required', 'This key is protected by a passphrase.');
+  const keyLen = (
+    { 'AES-128-CBC': 16, 'AES-192-CBC': 24, 'AES-256-CBC': 32 } as Record<string, number>
+  )[alg];
+  if (!keyLen || !/^[0-9A-Fa-f]{32}$/.test(ivHex ?? ''))
+    throw new SshKeyError(
+      'unsupported_cipher',
+      `PEM keys encrypted with ${alg || 'this cipher'} are not supported.`,
+    );
+  if (!passphrase)
+    throw new SshKeyError('passphrase_required', 'This key is protected by a passphrase.');
   const iv = fromHex(ivHex);
   // EVP_BytesToKey(MD5, salt = iv[0..8], count 1).
   const pass = utf8(passphrase);
@@ -398,7 +547,9 @@ async function legacyBody(block: Block, passphrase: string): Promise<Bytes> {
   }
   wipe(pass);
   try {
-    const k = await crypto.subtle.importKey('raw', key.slice(0, keyLen), 'AES-CBC', false, ['decrypt']);
+    const k = await crypto.subtle.importKey('raw', key.slice(0, keyLen), 'AES-CBC', false, [
+      'decrypt',
+    ]);
     const plain = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-CBC', iv }, k, der));
     asn1.parse(plain); // a wrong passphrase almost never yields valid DER
     return plain;
@@ -437,25 +588,42 @@ function readPbkdf2Prf(extras: asn1.Node[]): string {
 async function decryptPkcs8(der: Bytes, passphrase: string): Promise<Bytes> {
   const top = asn1.seq(asn1.parse(der));
   const alg = asn1.seq(top[0]);
-  if (asn1.oid(alg[0]) !== OID_PBES2) throw new SshKeyError('unsupported_cipher', 'Only PBES2 (PBKDF2 + AES) encrypted PKCS#8 keys are supported.');
+  if (asn1.oid(alg[0]) !== OID_PBES2)
+    throw new SshKeyError(
+      'unsupported_cipher',
+      'Only PBES2 (PBKDF2 + AES) encrypted PKCS#8 keys are supported.',
+    );
   const params = asn1.seq(alg[1]);
   const kdf = asn1.seq(params[0]);
   const enc = asn1.seq(params[1]);
-  if (asn1.oid(kdf[0]) !== OID_PBKDF2) throw new SshKeyError('unsupported_cipher', 'Only PBKDF2 key derivation is supported.');
+  if (asn1.oid(kdf[0]) !== OID_PBKDF2)
+    throw new SshKeyError('unsupported_cipher', 'Only PBKDF2 key derivation is supported.');
   const kp = asn1.seq(kdf[1]);
   const salt = asn1.expect(kp[0], asn1.OCTET_STRING).value.slice();
   const iterations = asn1.smallInt(kp[1]);
   const prf = readPbkdf2Prf(kp.slice(2));
   const keyLen = AES_CBC[asn1.oid(enc[0])];
-  if (!keyLen) throw new SshKeyError('unsupported_cipher', 'Only AES-CBC encrypted PKCS#8 keys are supported.');
+  if (!keyLen)
+    throw new SshKeyError(
+      'unsupported_cipher',
+      'Only AES-CBC encrypted PKCS#8 keys are supported.',
+    );
   const iv = asn1.expect(enc[1], asn1.OCTET_STRING).value.slice();
   const data = asn1.expect(top[1], asn1.OCTET_STRING).value.slice();
-  if (!passphrase) throw new SshKeyError('passphrase_required', 'This key is protected by a passphrase.');
-  if (iterations < 1 || iterations > 10_000_000) throw new SshKeyError('corrupt_key', 'Unreasonable PBKDF2 iterations.');
+  if (!passphrase)
+    throw new SshKeyError('passphrase_required', 'This key is protected by a passphrase.');
+  if (iterations < 1 || iterations > 10_000_000)
+    throw new SshKeyError('corrupt_key', 'Unreasonable PBKDF2 iterations.');
   const pass = utf8(passphrase);
   const base = await crypto.subtle.importKey('raw', pass, 'PBKDF2', false, ['deriveBits']);
   wipe(pass);
-  const bits = new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations, hash: prf }, base, keyLen * 8));
+  const bits = new Uint8Array(
+    await crypto.subtle.deriveBits(
+      { name: 'PBKDF2', salt, iterations, hash: prf },
+      base,
+      keyLen * 8,
+    ),
+  );
   try {
     const k = await crypto.subtle.importKey('raw', bits, 'AES-CBC', false, ['decrypt']);
     const plain = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-CBC', iv }, k, data));
@@ -470,25 +638,76 @@ async function decryptPkcs8(der: Bytes, passphrase: string): Promise<Bytes> {
 
 type Material =
   | { kind: 'ed25519'; seed: Bytes; pub: Bytes }
-  | { kind: 'ec'; type: KeyType; curve: string; jwk: string; size: number; hash: string; bits: number; Q: Bytes; d: Bytes }
-  | { kind: 'rsa'; n: Bytes; e: Bytes; d: Bytes; p: Bytes; q: Bytes; qi: Bytes; dp: Bytes; dq: Bytes; bits: number };
+  | {
+      kind: 'ec';
+      type: KeyType;
+      curve: string;
+      jwk: string;
+      size: number;
+      hash: string;
+      bits: number;
+      Q: Bytes;
+      d: Bytes;
+    }
+  | {
+      kind: 'rsa';
+      n: Bytes;
+      e: Bytes;
+      d: Bytes;
+      p: Bytes;
+      q: Bytes;
+      qi: Bytes;
+      dp: Bytes;
+      dq: Bytes;
+      bits: number;
+    };
 
 function ecMaterial(type: KeyType, curveName: string, Q: Bytes, d: Bytes): Material {
   const c = curveBySsh(curveName);
-  if (!c || c.type !== type) throw new SshKeyError('unsupported_key_type', `Curve ${curveName} is not supported.`);
-  if (Q.length !== 1 + 2 * c.size || Q[0] !== 4) throw new SshKeyError('corrupt_key', 'Damaged EC public point.');
+  if (!c || c.type !== type)
+    throw new SshKeyError('unsupported_key_type', `Curve ${curveName} is not supported.`);
+  if (Q.length !== 1 + 2 * c.size || Q[0] !== 4)
+    throw new SshKeyError('corrupt_key', 'Damaged EC public point.');
   if (d.length > c.size) throw new SshKeyError('corrupt_key', 'Damaged EC private key.');
-  return { kind: 'ec', type, curve: c.ssh, jwk: c.jwk, size: c.size, hash: c.hash, bits: c.bits, Q, d: bigIntToBytes(bytesToBigInt(d), c.size) };
+  return {
+    kind: 'ec',
+    type,
+    curve: c.ssh,
+    jwk: c.jwk,
+    size: c.size,
+    hash: c.hash,
+    bits: c.bits,
+    Q,
+    d: bigIntToBytes(bytesToBigInt(d), c.size),
+  };
 }
 
 type RsaParts = { n: Bytes; e: Bytes; d: Bytes; p: Bytes; q: Bytes; qi: Bytes };
 
 function rsaMaterial({ n, e, d, p, q, qi }: RsaParts): Material {
-  const N = bytesToBigInt(n), P = bytesToBigInt(p), Q = bytesToBigInt(q), D = bytesToBigInt(d);
+  const N = bytesToBigInt(n),
+    P = bytesToBigInt(p),
+    Q = bytesToBigInt(q),
+    D = bytesToBigInt(d);
   if (P * Q !== N || N === 0n) throw new SshKeyError('corrupt_key', 'Damaged RSA key.');
   const bits = N.toString(2).length;
-  if (bits < 2048) throw new SshKeyError('unsupported_key_type', `RSA keys need at least 2048 bits (this one has ${bits}).`);
-  return { kind: 'rsa', n, e, d, p, q, qi, dp: bigIntToBytes(D % (P - 1n)), dq: bigIntToBytes(D % (Q - 1n)), bits };
+  if (bits < 2048)
+    throw new SshKeyError(
+      'unsupported_key_type',
+      `RSA keys need at least 2048 bits (this one has ${bits}).`,
+    );
+  return {
+    kind: 'rsa',
+    n,
+    e,
+    d,
+    p,
+    q,
+    qi,
+    dp: bigIntToBytes(D % (P - 1n)),
+    dq: bigIntToBytes(D % (Q - 1n)),
+    bits,
+  };
 }
 
 function publicBlob(k: Material): Bytes {
@@ -546,7 +765,14 @@ async function ed25519Signer(k: Extract<Material, { kind: 'ed25519' }>): Promise
 
 async function ecSigner(k: Extract<Material, { kind: 'ec' }>): Promise<Signer> {
   const s = crypto.subtle;
-  const jwk: JsonWebKey = { kty: 'EC', crv: k.jwk, d: b64url(k.d), x: b64url(k.Q.subarray(1, 1 + k.size)), y: b64url(k.Q.subarray(1 + k.size)), ext: false };
+  const jwk: JsonWebKey = {
+    kty: 'EC',
+    crv: k.jwk,
+    d: b64url(k.d),
+    x: b64url(k.Q.subarray(1, 1 + k.size)),
+    y: b64url(k.Q.subarray(1 + k.size)),
+    ext: false,
+  };
   let key: CryptoKey;
   try {
     key = await s.importKey('jwk', jwk, { name: 'ECDSA', namedCurve: k.jwk }, false, ['sign']);
@@ -564,12 +790,22 @@ async function ecSigner(k: Extract<Material, { kind: 'ec' }>): Promise<Signer> {
 async function rsaSigner(k: Extract<Material, { kind: 'rsa' }>): Promise<Signer> {
   const s = crypto.subtle;
   const jwk: JsonWebKey = {
-    kty: 'RSA', n: b64url(k.n), e: b64url(k.e), d: b64url(k.d), p: b64url(k.p), q: b64url(k.q),
-    dp: b64url(k.dp), dq: b64url(k.dq), qi: b64url(k.qi), ext: false,
+    kty: 'RSA',
+    n: b64url(k.n),
+    e: b64url(k.e),
+    d: b64url(k.d),
+    p: b64url(k.p),
+    q: b64url(k.q),
+    dp: b64url(k.dp),
+    dq: b64url(k.dq),
+    qi: b64url(k.qi),
+    ext: false,
   };
   let key: CryptoKey;
   try {
-    key = await s.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-512' }, false, ['sign']);
+    key = await s.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-512' }, false, [
+      'sign',
+    ]);
   } catch (e) {
     throw cryptoError(e, 'This RSA key could not be loaded.');
   }
@@ -591,14 +827,31 @@ async function selfTest(k: Material, sign: (data: Uint8Array) => Promise<Bytes>)
   let ok = false;
   try {
     if (k.kind === 'ed25519') {
-      ok = equal(new Uint8Array(await ed.getPublicKeyAsync(k.seed)), k.pub) && (await ed.verifyAsync(sig, msg, k.pub));
+      ok =
+        equal(new Uint8Array(await ed.getPublicKeyAsync(k.seed)), k.pub) &&
+        (await ed.verifyAsync(sig, msg, k.pub));
     } else if (k.kind === 'ec') {
-      const pub = await crypto.subtle.importKey('raw', k.Q, { name: 'ECDSA', namedCurve: k.jwk }, false, ['verify']);
+      const pub = await crypto.subtle.importKey(
+        'raw',
+        k.Q,
+        { name: 'ECDSA', namedCurve: k.jwk },
+        false,
+        ['verify'],
+      );
       const rr = new Reader(sig);
-      const raw = concat(bigIntToBytes(bytesToBigInt(rr.string()), k.size), bigIntToBytes(bytesToBigInt(rr.string()), k.size));
+      const raw = concat(
+        bigIntToBytes(bytesToBigInt(rr.string()), k.size),
+        bigIntToBytes(bytesToBigInt(rr.string()), k.size),
+      );
       ok = await crypto.subtle.verify({ name: 'ECDSA', hash: k.hash }, pub, raw, msg);
     } else {
-      const pub = await crypto.subtle.importKey('jwk', { kty: 'RSA', n: b64url(k.n), e: b64url(k.e) }, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-512' }, false, ['verify']);
+      const pub = await crypto.subtle.importKey(
+        'jwk',
+        { kty: 'RSA', n: b64url(k.n), e: b64url(k.e) },
+        { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-512' },
+        false,
+        ['verify'],
+      );
       ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', pub, sig, msg);
     }
   } catch {

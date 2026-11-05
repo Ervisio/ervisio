@@ -27,7 +27,8 @@ export const jobsApi = {
     return (r.runs as unknown[]) ?? [];
   },
   webhooks: {
-    create: (id: string, label?: string) => jobs('webhookCreate', { id, ...(label ? { label } : {}) }),
+    create: (id: string, label?: string) =>
+      jobs('webhookCreate', { id, ...(label ? { label } : {}) }),
     regenerate: (id: string, webhook: string) => jobs('webhookRegenerate', { id, webhook }),
     async revoke(id: string, webhook: string): Promise<void> {
       await jobs('webhookRevoke', { id, webhook });
@@ -35,4 +36,5 @@ export const jobsApi = {
   },
 };
 
-export const notifyApi = (n: Json) => request<{ channels: number; delivered: number; failed: number }>('notify', n);
+export const notifyApi = (n: Json) =>
+  request<{ channels: number; delivered: number; failed: number }>('notify', n);

@@ -2,7 +2,16 @@ import { useState } from 'react';
 import { useSession } from '../../api';
 import { useT } from '../../i18n';
 import { formatDuration } from '../../lib/format';
-import { Button, DropdownMenu, Icon, IconButton, Menu, useContextMenu, type MenuAnchor, type MenuItem } from '../../ui';
+import {
+  Button,
+  DropdownMenu,
+  Icon,
+  IconButton,
+  Menu,
+  useContextMenu,
+  type MenuAnchor,
+  type MenuItem,
+} from '../../ui';
 import type { Host, SessionInfo } from './types';
 
 const KIND_ICON = { local: 'terminal', root: 'lock', ssh: 'server' } as const;
@@ -28,7 +37,23 @@ interface Props {
   connectedHosts: Set<string>;
 }
 
-function SessionRow({ s, active, st, small, detached, onClick, items }: { s: SessionInfo; active?: boolean; st?: string; small: string; detached?: boolean; onClick(): void; items: MenuItem[] }) {
+function SessionRow({
+  s,
+  active,
+  st,
+  small,
+  detached,
+  onClick,
+  items,
+}: {
+  s: SessionInfo;
+  active?: boolean;
+  st?: string;
+  small: string;
+  detached?: boolean;
+  onClick(): void;
+  items: MenuItem[];
+}) {
   const t = useT('terminal');
   const cm = useContextMenu(() => items);
   const [more, setMore] = useState<MenuAnchor | null>(null);
@@ -47,7 +72,9 @@ function SessionRow({ s, active, st, small, detached, onClick, items }: { s: Ses
         }}
         {...cm.bind}
       >
-        <span className="terminal-ic"><Icon name={detached ? 'clock' : KIND_ICON[s.kind]} /></span>
+        <span className="terminal-ic">
+          <Icon name={detached ? 'clock' : KIND_ICON[s.kind]} />
+        </span>
         <div className="terminal-ss-txt">
           <b>{s.name}</b>
           <small>{small}</small>
@@ -72,7 +99,19 @@ function SessionRow({ s, active, st, small, detached, onClick, items }: { s: Ses
   );
 }
 
-function HostRow({ h, connected, onConnect, onEdit, onDelete }: { h: Host; connected: boolean; onConnect(): void; onEdit(): void; onDelete(): void }) {
+function HostRow({
+  h,
+  connected,
+  onConnect,
+  onEdit,
+  onDelete,
+}: {
+  h: Host;
+  connected: boolean;
+  onConnect(): void;
+  onEdit(): void;
+  onDelete(): void;
+}) {
   const t = useT('terminal');
   const items: MenuItem[] = [
     { id: 'c', label: t('connect'), icon: 'play', onSelect: onConnect },
@@ -83,14 +122,39 @@ function HostRow({ h, connected, onConnect, onEdit, onDelete }: { h: Host; conne
   const addr = `${h.user ? h.user + '@' : ''}${h.host}${h.port ? ':' + h.port : ''}`;
   return (
     <>
-      <div className="terminal-ss terminal-k-ssh" role="button" tabIndex={0} onClick={onConnect} onKeyDown={(e) => (e.key === 'Enter' ? onConnect() : undefined)} {...cm.bind}>
-        <span className="terminal-ic"><Icon name="server" /></span>
+      <div
+        className="terminal-ss terminal-k-ssh"
+        role="button"
+        tabIndex={0}
+        onClick={onConnect}
+        onKeyDown={(e) => (e.key === 'Enter' ? onConnect() : undefined)}
+        {...cm.bind}
+      >
+        <span className="terminal-ic">
+          <Icon name="server" />
+        </span>
         <div className="terminal-ss-txt">
           <b>{h.name}</b>
           <small>{connected ? t('sshConnected', { addr }) : t('sshNotConnected', { addr })}</small>
         </div>
         <span className="terminal-more">
-          <DropdownMenu items={items} aria-label={t('hostMenu')} trigger={(p) => <IconButton icon="more" label={t('hostMenu')} size="sm" variant="ghost" {...p} onClick={(e) => { e.stopPropagation(); p.onClick(e); }} />} />
+          <DropdownMenu
+            items={items}
+            aria-label={t('hostMenu')}
+            trigger={(p) => (
+              <IconButton
+                icon="more"
+                label={t('hostMenu')}
+                size="sm"
+                variant="ghost"
+                {...p}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  p.onClick(e);
+                }}
+              />
+            )}
+          />
         </span>
       </div>
       {cm.menu}
@@ -108,14 +172,24 @@ export default function Sidebar(p: Props) {
     { id: 's', label: t('newSsh'), icon: 'server', onSelect: p.onNewSsh },
   ];
   const menu = (s: SessionInfo, isOpen: boolean): MenuItem[] => [
-    ...(isOpen ? [{ id: 'd', label: t('detach'), icon: 'eyeoff', onSelect: () => p.onDetach(s) } as MenuItem] : [{ id: 'o', label: t('openSession'), icon: 'eye', onSelect: () => p.onOpen(s) } as MenuItem]),
+    ...(isOpen
+      ? [{ id: 'd', label: t('detach'), icon: 'eyeoff', onSelect: () => p.onDetach(s) } as MenuItem]
+      : [
+          {
+            id: 'o',
+            label: t('openSession'),
+            icon: 'eye',
+            onSelect: () => p.onOpen(s),
+          } as MenuItem,
+        ]),
     { id: 'r', label: t('rename'), icon: 'edit', onSelect: () => p.onRename(s) },
     { type: 'separator' },
     { id: 'k', label: t('kill'), icon: 'trash', danger: true, onSelect: () => p.onKill(s) },
   ];
   const small = (s: SessionInfo) => {
     if (s.kind === 'root') return t('rootShell');
-    if (s.kind === 'ssh') return t('sshSmall', { host: s.title && s.title !== 'ssh' ? s.title : s.name });
+    if (s.kind === 'ssh')
+      return t('sshSmall', { host: s.title && s.title !== 'ssh' ? s.title : s.name });
     const raw = s.title || s.name;
     const home = session?.home;
     return home && home !== '/' ? raw.split(home).join('~') : raw;
@@ -126,20 +200,55 @@ export default function Sidebar(p: Props) {
         <Button variant="primary" icon="plus" className="terminal-newb" onClick={p.onNew}>
           {t('newSession')}
         </Button>
-        <DropdownMenu items={newItems} aria-label={t('newSessionMenu')} trigger={(tp) => <Button variant="primary" iconOnly icon="chevron" aria-label={t('newSessionMenu')} {...tp} />} />
+        <DropdownMenu
+          items={newItems}
+          aria-label={t('newSessionMenu')}
+          trigger={(tp) => (
+            <Button
+              variant="primary"
+              iconOnly
+              icon="chevron"
+              aria-label={t('newSessionMenu')}
+              {...tp}
+            />
+          )}
+        />
       </div>
       <div className="terminal-grp">{t('open')}</div>
       {p.open.length === 0 && <div className="terminal-none">{t('noneOpen')}</div>}
       {p.open.map((s) => (
-        <SessionRow key={s.id} s={s} active={s.id === p.activeId} st={p.paneOf[s.id] ? t('paneN', { n: p.paneOf[s.id] }) : undefined} small={small(s)} onClick={() => p.onOpen(s)} items={menu(s, true)} />
+        <SessionRow
+          key={s.id}
+          s={s}
+          active={s.id === p.activeId}
+          st={p.paneOf[s.id] ? t('paneN', { n: p.paneOf[s.id] }) : undefined}
+          small={small(s)}
+          onClick={() => p.onOpen(s)}
+          items={menu(s, true)}
+        />
       ))}
       {p.detached.length > 0 && <div className="terminal-grp">{t('detached')}</div>}
       {p.detached.map((s) => (
-        <SessionRow key={s.id} s={s} detached st={formatDuration((Date.now() - s.createdAt) / 1000).split(' ')[0]} small={s.attached ? t('inUse') : t('detachedSmall')} onClick={() => p.onOpen(s)} items={menu(s, false)} />
+        <SessionRow
+          key={s.id}
+          s={s}
+          detached
+          st={formatDuration((Date.now() - s.createdAt) / 1000).split(' ')[0]}
+          small={s.attached ? t('inUse') : t('detachedSmall')}
+          onClick={() => p.onOpen(s)}
+          items={menu(s, false)}
+        />
       ))}
       <div className="terminal-grp">{t('savedHosts')}</div>
       {p.hosts.map((h) => (
-        <HostRow key={h.id} h={h} connected={p.connectedHosts.has(h.name)} onConnect={() => p.onConnect(h)} onEdit={() => p.onEditHost(h)} onDelete={() => p.onDeleteHost(h)} />
+        <HostRow
+          key={h.id}
+          h={h}
+          connected={p.connectedHosts.has(h.name)}
+          onConnect={() => p.onConnect(h)}
+          onEdit={() => p.onEditHost(h)}
+          onDelete={() => p.onDeleteHost(h)}
+        />
       ))}
       <button type="button" className="terminal-addhost" onClick={() => p.onEditHost(null)}>
         <Icon name="plus" />

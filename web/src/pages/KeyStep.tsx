@@ -1,5 +1,11 @@
 import { useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
-import { describeKey, needsPassphrase, publicInfo, SshKeyError, type SshKeyErrorCode } from '../auth/sshkey';
+import {
+  describeKey,
+  needsPassphrase,
+  publicInfo,
+  SshKeyError,
+  type SshKeyErrorCode,
+} from '../auth/sshkey';
 import { useT } from '../i18n';
 import { Icon, IconButton, Input } from '../ui';
 
@@ -36,10 +42,27 @@ async function inspect(text: string, name: string): Promise<LoadedKey> {
       if (!(e instanceof SshKeyError) || e.code !== 'passphrase_required') throw e;
     }
     const p = await publicInfo(t);
-    return { text: t, name, needsPass: true, ...(p ? { type: `${TYPE_NAMES[p.type] ?? p.type}${p.type === 'ssh-rsa' ? ` ${p.bits}` : ''}`, fingerprint: p.fingerprint } : {}) };
+    return {
+      text: t,
+      name,
+      needsPass: true,
+      ...(p
+        ? {
+            type: `${TYPE_NAMES[p.type] ?? p.type}${p.type === 'ssh-rsa' ? ` ${p.bits}` : ''}`,
+            fingerprint: p.fingerprint,
+          }
+        : {}),
+    };
   }
   const d = await describeKey(t, '');
-  return { text: t, name, needsPass: false, type: `${TYPE_NAMES[d.type] ?? d.type}${d.type === 'ssh-rsa' ? ` ${d.bits}` : ''}`, fingerprint: d.fingerprint, comment: d.comment };
+  return {
+    text: t,
+    name,
+    needsPass: false,
+    type: `${TYPE_NAMES[d.type] ?? d.type}${d.type === 'ssh-rsa' ? ` ${d.bits}` : ''}`,
+    fingerprint: d.fingerprint,
+    comment: d.comment,
+  };
 }
 
 function readFile(f: File): Promise<string> {
@@ -55,7 +78,16 @@ function readFile(f: File): Promise<string> {
   });
 }
 
-export function KeyStep({ loaded, onLoaded, onClear, onError, passphrase, onPassphrase, passError, disabled }: {
+export function KeyStep({
+  loaded,
+  onLoaded,
+  onClear,
+  onError,
+  passphrase,
+  onPassphrase,
+  passError,
+  disabled,
+}: {
   loaded: LoadedKey | null;
   onLoaded(k: LoadedKey): void;
   onClear(): void;
@@ -109,12 +141,21 @@ export function KeyStep({ loaded, onLoaded, onClear, onError, passphrase, onPass
     return (
       <>
         <div className="sk-card">
-          <span className="sk-ic"><Icon name="key" /></span>
+          <span className="sk-ic">
+            <Icon name="key" />
+          </span>
           <div className="sk-meta">
             <b>{loaded.name || t('key.pasted')}</b>
-            <span className="mono">{loaded.type ? `${loaded.type} ${loaded.fingerprint}` : t('key.encrypted')}</span>
+            <span className="mono">
+              {loaded.type ? `${loaded.type} ${loaded.fingerprint}` : t('key.encrypted')}
+            </span>
             {loaded.comment && <span className="sk-cm">{loaded.comment}</span>}
-            {loaded.needsPass && <span className="sk-chip"><Icon name="lock" />{t('key.protected')}</span>}
+            {loaded.needsPass && (
+              <span className="sk-chip">
+                <Icon name="lock" />
+                {t('key.protected')}
+              </span>
+            )}
           </div>
           <IconButton icon="x" label={t('key.change')} onClick={clear} disabled={disabled} />
         </div>
@@ -134,7 +175,13 @@ export function KeyStep({ loaded, onLoaded, onClear, onError, passphrase, onPass
             onChange={(e) => onPassphrase(e.target.value)}
             error={passError ? true : undefined}
             disabled={disabled}
-            end={<IconButton icon={showPass ? 'eyeoff' : 'eye'} label={showPass ? t('key.hidePassphrase') : t('key.showPassphrase')} onClick={() => setShowPass((s) => !s)} />}
+            end={
+              <IconButton
+                icon={showPass ? 'eyeoff' : 'eye'}
+                label={showPass ? t('key.hidePassphrase') : t('key.showPassphrase')}
+                onClick={() => setShowPass((s) => !s)}
+              />
+            }
           />
         )}
       </>
@@ -145,8 +192,24 @@ export function KeyStep({ loaded, onLoaded, onClear, onError, passphrase, onPass
     <div>
       <input ref={fileRef} type="file" hidden onChange={(e) => pickFile(e.target.files?.[0])} />
       <div className="sk-tabs" role="tablist" aria-label={t('key.how')}>
-        <button type="button" role="tab" aria-selected={tab === 'file'} className={tab === 'file' ? 'on' : ''} onClick={() => setTab('file')}>{t('key.tabFile')}</button>
-        <button type="button" role="tab" aria-selected={tab === 'paste'} className={tab === 'paste' ? 'on' : ''} onClick={() => setTab('paste')}>{t('key.tabPaste')}</button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'file'}
+          className={tab === 'file' ? 'on' : ''}
+          onClick={() => setTab('file')}
+        >
+          {t('key.tabFile')}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'paste'}
+          className={tab === 'paste' ? 'on' : ''}
+          onClick={() => setTab('paste')}
+        >
+          {t('key.tabPaste')}
+        </button>
       </div>
       {tab === 'file' ? (
         <div
@@ -164,7 +227,9 @@ export function KeyStep({ loaded, onLoaded, onClear, onError, passphrase, onPass
           onDrop={onDrop}
         >
           <Icon name="upload" />
-          <span><b>{t('key.dropTitle')}</b> {t('key.dropOr')} <em>{t('key.dropHint')}</em></span>
+          <span>
+            <b>{t('key.dropTitle')}</b> {t('key.dropOr')} <em>{t('key.dropHint')}</em>
+          </span>
         </div>
       ) : (
         <textarea
@@ -179,7 +244,12 @@ export function KeyStep({ loaded, onLoaded, onClear, onError, passphrase, onPass
           onChange={(e) => {
             const v = e.target.value;
             setPaste(v);
-            if (/-----END [A-Z0-9 ]*PRIVATE KEY-----/.test(v) || /^ssh-(ed25519|rsa) /.test(v.trim()) || /^ecdsa-sha2-/.test(v.trim())) void accept(() => Promise.resolve(v), '');
+            if (
+              /-----END [A-Z0-9 ]*PRIVATE KEY-----/.test(v) ||
+              /^ssh-(ed25519|rsa) /.test(v.trim()) ||
+              /^ecdsa-sha2-/.test(v.trim())
+            )
+              void accept(() => Promise.resolve(v), '');
             else onError(null);
           }}
         />

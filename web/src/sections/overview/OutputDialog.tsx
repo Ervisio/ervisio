@@ -9,7 +9,10 @@ export function OutputDialog() {
   const r = v?.result;
   const copy = () => {
     const text = r?.output ?? v?.error ?? '';
-    navigator.clipboard?.writeText(text).then(() => toast.ok(t('output.copied')), () => toast.err(t('output.copyFailed')));
+    navigator.clipboard?.writeText(text).then(
+      () => toast.ok(t('output.copied')),
+      () => toast.err(t('output.copyFailed')),
+    );
   };
   return (
     <Dialog
@@ -18,11 +21,22 @@ export function OutputDialog() {
       size="lg"
       icon="terminal"
       title={v?.label ?? ''}
-      description={v ? <span className="ov-mono">$ {v.command}{v.admin ? ` · ${t('action.asAdmin')}` : ''}</span> : undefined}
+      description={
+        v ? (
+          <span className="ov-mono">
+            $ {v.command}
+            {v.admin ? ` · ${t('action.asAdmin')}` : ''}
+          </span>
+        ) : undefined
+      }
       footer={
         <>
-          <Button variant="ghost" icon="copy" onClick={copy}>{t('output.copy')}</Button>
-          <Button variant="primary" onClick={() => showOutput(null)}>{t('close')}</Button>
+          <Button variant="ghost" icon="copy" onClick={copy}>
+            {t('output.copy')}
+          </Button>
+          <Button variant="primary" onClick={() => showOutput(null)}>
+            {t('close')}
+          </Button>
         </>
       }
     >
@@ -30,14 +44,22 @@ export function OutputDialog() {
         <>
           <div className="ov-out-meta">
             {r ? (
-              r.ok ? <Badge tone="ok">{t('output.success')}</Badge> : r.timedOut ? <Badge tone="err">{t('action.timedOutShort')}</Badge> : <Badge tone="err">{t('action.exit', { code: r.exitCode })}</Badge>
+              r.ok ? (
+                <Badge tone="ok">{t('output.success')}</Badge>
+              ) : r.timedOut ? (
+                <Badge tone="err">{t('action.timedOutShort')}</Badge>
+              ) : (
+                <Badge tone="err">{t('action.exit', { code: r.exitCode })}</Badge>
+              )
             ) : (
               <Badge tone="err">{t('output.notRun')}</Badge>
             )}
             {r && <small>{t('action.took', { time: took(r.durationMs) })}</small>}
             {r?.truncated && <small>{t('output.truncated')}</small>}
           </div>
-          <pre className="ov-pre ov-pre--dlg" tabIndex={0}>{r ? r.output || t('output.none') : v.error}</pre>
+          <pre className="ov-pre ov-pre--dlg" tabIndex={0}>
+            {r ? r.output || t('output.none') : v.error}
+          </pre>
         </>
       )}
     </Dialog>

@@ -16,15 +16,45 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = 'secondary', icon, iconOnly, loading, size = 'md', block, className, children, disabled, type = 'button', ...rest },
+  {
+    variant = 'secondary',
+    icon,
+    iconOnly,
+    loading,
+    size = 'md',
+    block,
+    className,
+    children,
+    disabled,
+    type = 'button',
+    ...rest
+  },
   ref,
 ) {
-  const cls = ['ui-btn', variant !== 'secondary' && `ui-btn--${variant}`, iconOnly && 'ui-btn--icon', size !== 'md' && `ui-btn--${size}`, block && 'ui-btn--block', className]
+  const cls = [
+    'ui-btn',
+    variant !== 'secondary' && `ui-btn--${variant}`,
+    iconOnly && 'ui-btn--icon',
+    size !== 'md' && `ui-btn--${size}`,
+    block && 'ui-btn--block',
+    className,
+  ]
     .filter(Boolean)
     .join(' ');
   return (
-    <button ref={ref} type={type} className={cls} disabled={disabled || loading} aria-busy={loading || undefined} {...rest}>
-      {loading ? <span className="ui-spin" aria-hidden="true" /> : icon ? <Icon name={icon} /> : null}
+    <button
+      ref={ref}
+      type={type}
+      className={cls}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
+      {...rest}
+    >
+      {loading ? (
+        <span className="ui-spin" aria-hidden="true" />
+      ) : icon ? (
+        <Icon name={icon} />
+      ) : null}
       {!iconOnly && children}
     </button>
   );
@@ -41,6 +71,8 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
   { icon, label, tooltip = true, variant = 'ghost', ...rest },
   ref,
 ) {
-  const b = <Button ref={ref} iconOnly icon={icon} variant={variant} aria-label={label} {...rest} />;
+  const b = (
+    <Button ref={ref} iconOnly icon={icon} variant={variant} aria-label={label} {...rest} />
+  );
   return tooltip ? <Tooltip label={label}>{b}</Tooltip> : b;
 });

@@ -15,9 +15,22 @@ export function TransferBar() {
     <section className="files-xfer" aria-label={t('xfer.title')}>
       <div className="files-xfer-hd">
         <b>{t('xfer.title')}</b>
-        <span className="files-muted">{[running ? t('xfer.running', { count: running }) : '', done ? t('xfer.done', { count: done }) : '', failed ? t('xfer.failed', { count: failed }) : ''].filter(Boolean).join(', ')}</span>
+        <span className="files-muted">
+          {[
+            running ? t('xfer.running', { count: running }) : '',
+            done ? t('xfer.done', { count: done }) : '',
+            failed ? t('xfer.failed', { count: failed }) : '',
+          ]
+            .filter(Boolean)
+            .join(', ')}
+        </span>
         {finished > 0 && (
-          <Button size="sm" variant="ghost" className="files-xfer-clear" onClick={transferActions.clearFinished}>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="files-xfer-clear"
+            onClick={transferActions.clearFinished}
+          >
             {t('xfer.clear')}
           </Button>
         )}
@@ -33,14 +46,24 @@ export function TransferBar() {
 
 function Row({ x, t }: { x: Transfer; t: ReturnType<typeof useT> }) {
   const active = x.status === 'running' || x.status === 'queued';
-  const pct = x.total > 0 ? Math.min(100, (Math.max(0, x.done) / x.total) * 100) : x.status === 'done' ? 100 : undefined;
+  const pct =
+    x.total > 0
+      ? Math.min(100, (Math.max(0, x.done) / x.total) * 100)
+      : x.status === 'done'
+        ? 100
+        : undefined;
   let state: string;
   if (x.status === 'queued') state = t('xfer.waiting');
-  else if (x.status === 'running') state = x.total > 0 ? `${formatBytes(Math.max(0, x.done))} / ${formatBytes(x.total)}${x.speed ? ` · ${formatBytes(x.speed)}/s` : ''}` : t('xfer.working');
+  else if (x.status === 'running')
+    state =
+      x.total > 0
+        ? `${formatBytes(Math.max(0, x.done))} / ${formatBytes(x.total)}${x.speed ? ` · ${formatBytes(x.speed)}/s` : ''}`
+        : t('xfer.working');
   else if (x.status === 'done') state = t('xfer.finished');
   else if (x.status === 'cancelled') state = t('xfer.cancelled');
   else state = x.error ?? t('xfer.error');
-  const verb = x.kind === 'upload' ? t('xfer.upload') : x.kind === 'move' ? t('xfer.move') : t('xfer.copy');
+  const verb =
+    x.kind === 'upload' ? t('xfer.upload') : x.kind === 'move' ? t('xfer.move') : t('xfer.copy');
   return (
     <div className={`files-xr is-${x.status}`}>
       <span className="files-ic files-ic--sm">
@@ -53,7 +76,12 @@ function Row({ x, t }: { x: Transfer; t: ReturnType<typeof useT> }) {
         </small>
       </span>
       <span className="files-xr-bar">
-        <Progress value={pct} tone={x.status === 'error' ? 'err' : x.status === 'done' ? 'ok' : undefined} hue="file" label={x.name} />
+        <Progress
+          value={pct}
+          tone={x.status === 'error' ? 'err' : x.status === 'done' ? 'ok' : undefined}
+          hue="file"
+          label={x.name}
+        />
       </span>
       <span className={`files-xr-st${x.status === 'error' ? ' is-err' : ''}`}>{state}</span>
       {x.status === 'error' && x.errorCode === 'conflict' && (
@@ -66,7 +94,19 @@ function Row({ x, t }: { x: Transfer; t: ReturnType<typeof useT> }) {
           {t('xfer.retry')}
         </Button>
       )}
-      {active ? <IconButton icon="close" label={t('xfer.cancel')} onClick={() => transferActions.cancel(x.id)} /> : <IconButton icon="close" label={t('xfer.dismiss')} onClick={() => transferActions.remove(x.id)} />}
+      {active ? (
+        <IconButton
+          icon="close"
+          label={t('xfer.cancel')}
+          onClick={() => transferActions.cancel(x.id)}
+        />
+      ) : (
+        <IconButton
+          icon="close"
+          label={t('xfer.dismiss')}
+          onClick={() => transferActions.remove(x.id)}
+        />
+      )}
     </div>
   );
 }

@@ -26,7 +26,20 @@ export interface DialogProps {
   onSubmit?: (e: FormEvent<HTMLFormElement>) => void;
 }
 
-export function Dialog({ open, onClose, title, description, icon, tone = 'acc', children, footer, size = 'md', dismissable = true, role = 'dialog', onSubmit }: DialogProps) {
+export function Dialog({
+  open,
+  onClose,
+  title,
+  description,
+  icon,
+  tone = 'acc',
+  children,
+  footer,
+  size = 'md',
+  dismissable = true,
+  role = 'dialog',
+  onSubmit,
+}: DialogProps) {
   const ref = useRef<HTMLDivElement>(null);
   const tid = useId();
   const did = useId();
@@ -36,7 +49,11 @@ export function Dialog({ open, onClose, title, description, icon, tone = 'acc', 
   const inner = (
     <>
       <div className="ui-dlg-hd">
-        {icon && <span className={`ui-dlg-ic ui-dlg-ic--${tone}`}><Icon name={icon} /></span>}
+        {icon && (
+          <span className={`ui-dlg-ic ui-dlg-ic--${tone}`}>
+            <Icon name={icon} />
+          </span>
+        )}
         <div style={{ minWidth: 0 }}>
           <h3 id={tid}>{title}</h3>
           {description && <p id={did}>{description}</p>}
@@ -53,10 +70,21 @@ export function Dialog({ open, onClose, title, description, icon, tone = 'acc', 
         if (dismissable && e.target === e.currentTarget) onClose();
       }}
     >
-      <div ref={ref} className={`ui-dlg${size === 'lg' ? ' ui-dlg--lg' : ''}`} role={role} aria-modal="true" aria-labelledby={tid} aria-describedby={description ? did : undefined}>
+      <div
+        ref={ref}
+        className={`ui-dlg${size === 'lg' ? ' ui-dlg--lg' : ''}`}
+        role={role}
+        aria-modal="true"
+        aria-labelledby={tid}
+        aria-describedby={description ? did : undefined}
+      >
         {onSubmit ? (
-          <form onSubmit={onSubmit} style={{ display: 'contents' }}>{inner}</form>
-        ) : inner}
+          <form onSubmit={onSubmit} style={{ display: 'contents' }}>
+            {inner}
+          </form>
+        ) : (
+          inner
+        )}
       </div>
     </div>,
     document.body,
@@ -80,7 +108,19 @@ export interface ConfirmDialogProps {
   children?: ReactNode;
 }
 
-export function ConfirmDialog({ open, onClose, onConfirm, title, description, confirmLabel, cancelLabel, danger = true, confirmText, icon, children }: ConfirmDialogProps) {
+export function ConfirmDialog({
+  open,
+  onClose,
+  onConfirm,
+  title,
+  description,
+  confirmLabel,
+  cancelLabel,
+  danger = true,
+  confirmText,
+  icon,
+  children,
+}: ConfirmDialogProps) {
   const t = useT('ui');
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
@@ -119,15 +159,28 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, description, co
       onSubmit={run}
       footer={
         <>
-          <Button variant="ghost" onClick={onClose} disabled={busy}>{cancelLabel ?? t('cancel')}</Button>
-          <Button type="submit" variant={danger ? 'danger-solid' : 'primary'} disabled={!ok} loading={busy}>{confirmLabel}</Button>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>
+            {cancelLabel ?? t('cancel')}
+          </Button>
+          <Button
+            type="submit"
+            variant={danger ? 'danger-solid' : 'primary'}
+            disabled={!ok}
+            loading={busy}
+          >
+            {confirmLabel}
+          </Button>
         </>
       }
     >
       {confirmText && (
         <Input
           data-autofocus
-          label={<>{t('typeToConfirm.before')} <b>{confirmText}</b> {t('typeToConfirm.after')}</>}
+          label={
+            <>
+              {t('typeToConfirm.before')} <b>{confirmText}</b> {t('typeToConfirm.after')}
+            </>
+          }
           value={typed}
           onChange={(e) => setTyped(e.target.value)}
           autoComplete="off"
@@ -135,13 +188,25 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, description, co
         />
       )}
       {children}
-      {err && <div className="ui-form-err" role="alert"><Icon name="alert" />{err}</div>}
+      {err && (
+        <div className="ui-form-err" role="alert">
+          <Icon name="alert" />
+          {err}
+        </div>
+      )}
     </Dialog>
   );
 }
 
 /* ---------- UnlockDialog ---------- */
-export function UnlockDialog({ open, user, minutes = 5, reason, onSubmit, onCancel }: {
+export function UnlockDialog({
+  open,
+  user,
+  minutes = 5,
+  reason,
+  onSubmit,
+  onCancel,
+}: {
   open: boolean;
   user?: string;
   minutes?: number;
@@ -170,7 +235,13 @@ export function UnlockDialog({ open, user, minutes = 5, reason, onSubmit, onCanc
       await onSubmit(pw);
     } catch (x) {
       const code = x instanceof ApiError ? x.code : '';
-      setErr(code === 'forbidden' ? t('unlock.forbidden') : code === 'unauthenticated' || code === 'invalid' ? t('unlock.wrong') : errorMessage(x));
+      setErr(
+        code === 'forbidden'
+          ? t('unlock.forbidden')
+          : code === 'unauthenticated' || code === 'invalid'
+            ? t('unlock.wrong')
+            : errorMessage(x),
+      );
       setPw('');
     } finally {
       setBusy(false);
@@ -181,24 +252,56 @@ export function UnlockDialog({ open, user, minutes = 5, reason, onSubmit, onCanc
       open={open}
       onClose={onCancel}
       title={t('unlock.title')}
-      description={t(reason ? 'unlock.bodyFor' : 'unlock.body', { reason: reason ?? '', user: user ?? '', minutes })}
+      description={t(reason ? 'unlock.bodyFor' : 'unlock.body', {
+        reason: reason ?? '',
+        user: user ?? '',
+        minutes,
+      })}
       icon="lock"
       onSubmit={submit}
       footer={
         <>
-          <Button variant="ghost" onClick={onCancel}>{t('cancel')}</Button>
-          <Button type="submit" variant="primary" loading={busy} disabled={!pw}>{t('unlock.submit')}</Button>
+          <Button variant="ghost" onClick={onCancel}>
+            {t('cancel')}
+          </Button>
+          <Button type="submit" variant="primary" loading={busy} disabled={!pw}>
+            {t('unlock.submit')}
+          </Button>
         </>
       }
     >
-      <Input data-autofocus icon="shield" type="password" autoComplete="current-password" aria-label={t('unlock.password')} placeholder={t('unlock.password')} value={pw} onChange={(e) => setPw(e.target.value)} />
-      {err && <div className="ui-form-err" role="alert"><Icon name="alert" />{err}</div>}
+      <Input
+        data-autofocus
+        icon="shield"
+        type="password"
+        autoComplete="current-password"
+        aria-label={t('unlock.password')}
+        placeholder={t('unlock.password')}
+        value={pw}
+        onChange={(e) => setPw(e.target.value)}
+      />
+      {err && (
+        <div className="ui-form-err" role="alert">
+          <Icon name="alert" />
+          {err}
+        </div>
+      )}
     </Dialog>
   );
 }
 
 /* ---------- Sheet (bottom sheet) ---------- */
-export function Sheet({ open, onClose, title, children }: { open: boolean; onClose(): void; title?: ReactNode; children: ReactNode }) {
+export function Sheet({
+  open,
+  onClose,
+  title,
+  children,
+}: {
+  open: boolean;
+  onClose(): void;
+  title?: ReactNode;
+  children: ReactNode;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const tid = useId();
   useScrollLock(open);
@@ -207,7 +310,13 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
   return createPortal(
     <>
       <div className="ui-sheet-wrap" onMouseDown={onClose} />
-      <div ref={ref} className="ui-sheet" role="dialog" aria-modal="true" aria-labelledby={title ? tid : undefined}>
+      <div
+        ref={ref}
+        className="ui-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={title ? tid : undefined}
+      >
         <div className="ui-grab" aria-hidden="true" />
         {title && <h3 id={tid}>{title}</h3>}
         <div className="ui-sheet-body">{children}</div>
@@ -235,7 +344,19 @@ export interface PanelProps {
   inline?: boolean;
 }
 
-export function Panel({ open, onClose, title, subtitle, icon, hue, tabs, footer, children, wide, inline }: PanelProps) {
+export function Panel({
+  open,
+  onClose,
+  title,
+  subtitle,
+  icon,
+  hue,
+  tabs,
+  footer,
+  children,
+  wide,
+  inline,
+}: PanelProps) {
   const t = useT('ui');
   const mobile = useIsMobile();
   const ref = useRef<HTMLElement>(null);
@@ -252,12 +373,18 @@ export function Panel({ open, onClose, title, subtitle, icon, hue, tabs, footer,
 
   const header = (
     <div className="ui-panel-hd">
-      {icon && <span className="ui-panel-ic"><Icon name={icon} /></span>}
+      {icon && (
+        <span className="ui-panel-ic">
+          <Icon name={icon} />
+        </span>
+      )}
       <div style={{ minWidth: 0 }}>
         <h3 id={tid}>{title}</h3>
         {subtitle && <div className="ui-panel-sub">{subtitle}</div>}
       </div>
-      <span className="ui-panel-x"><IconButton icon="close" label={t('close')} onClick={onClose} /></span>
+      <span className="ui-panel-x">
+        <IconButton icon="close" label={t('close')} onClick={onClose} />
+      </span>
     </div>
   );
   const body = (
@@ -273,14 +400,24 @@ export function Panel({ open, onClose, title, subtitle, icon, hue, tabs, footer,
         <div className={hueClass(hue)} style={{ display: 'contents' }}>
           {header}
           {tabs && <div>{tabs}</div>}
-          <div className="ui-panel-body" style={{ padding: 0 }}>{children}</div>
-          {footer && <div className="ui-panel-ft" style={{ padding: 0 }}>{footer}</div>}
+          <div className="ui-panel-body" style={{ padding: 0 }}>
+            {children}
+          </div>
+          {footer && (
+            <div className="ui-panel-ft" style={{ padding: 0 }}>
+              {footer}
+            </div>
+          )}
         </div>
       </Sheet>
     );
   }
   return (
-    <aside ref={ref} className={`ui-panel ${inline ? '' : 'ui-panel--float'} ${wide ? 'ui-panel--lg' : ''} ${hueClass(hue)}`} aria-labelledby={tid}>
+    <aside
+      ref={ref}
+      className={`ui-panel ${inline ? '' : 'ui-panel--float'} ${wide ? 'ui-panel--lg' : ''} ${hueClass(hue)}`}
+      aria-labelledby={tid}
+    >
       {header}
       {body}
     </aside>

@@ -60,7 +60,8 @@ export interface ChannelInput {
 
 const quiet = { noUnlock: true } as const;
 
-export const listChannels = () => call<{ channels: Channel[]; file: string }>('notify.list', {}, quiet);
+export const listChannels = () =>
+  call<{ channels: Channel[]; file: string }>('notify.list', {}, quiet);
 export const saveChannel = (c: ChannelInput) => call<Channel>('notify.save', c);
 export const deleteChannel = (id: string) => call<unknown>('notify.delete', { id });
 export const testChannel = (c: ChannelInput) => call<unknown>('notify.test', c);
@@ -96,7 +97,13 @@ export interface JobInstance {
   /** needsAdmin without a valid approval: the instance does not run. */
   awaitingApproval?: boolean;
   /** What the job runs as root, with the instance's values (for the approval dialog). */
-  adminSteps?: { id: string; kind: 'command' | 'http'; command?: string; argv?: string[]; http?: string }[];
+  adminSteps?: {
+    id: string;
+    kind: 'command' | 'http';
+    command?: string;
+    argv?: string[];
+    http?: string;
+  }[];
   approval?: { by: string; at: number; valid: boolean };
   webhooks: { id: string; label?: string; created: number; lastUsed?: number }[];
   running: boolean;
@@ -125,7 +132,8 @@ export interface RunLog extends RunSummary {
 }
 
 export const listJobs = () => call<{ instances: JobInstance[] }>('jobs.list', {}, quiet);
-export const setJobEnabled = (id: string, enabled: boolean) => call<JobInstance>('jobs.setEnabled', { id, enabled });
+export const setJobEnabled = (id: string, enabled: boolean) =>
+  call<JobInstance>('jobs.setEnabled', { id, enabled });
 export const approveJob = (id: string) => call<JobInstance>('jobs.approve', { id });
 export const runJob = (id: string) => call<{ run: string }>('jobs.runNow', { id });
 export const deleteJob = (id: string) => call<unknown>('jobs.delete', { id });
@@ -137,6 +145,9 @@ export interface NewWebhook {
   /** /hooks/<plugin>/<token>, to put after the console's address. */
   path: string;
 }
-export const createWebhook = (id: string, label: string) => call<NewWebhook>('jobs.webhooks.create', { id, label });
-export const regenerateWebhook = (id: string, webhook: string) => call<NewWebhook>('jobs.webhooks.regenerate', { id, webhook });
-export const revokeWebhook = (id: string, webhook: string) => call<unknown>('jobs.webhooks.revoke', { id, webhook });
+export const createWebhook = (id: string, label: string) =>
+  call<NewWebhook>('jobs.webhooks.create', { id, label });
+export const regenerateWebhook = (id: string, webhook: string) =>
+  call<NewWebhook>('jobs.webhooks.regenerate', { id, webhook });
+export const revokeWebhook = (id: string, webhook: string) =>
+  call<unknown>('jobs.webhooks.revoke', { id, webhook });

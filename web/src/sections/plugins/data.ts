@@ -12,7 +12,6 @@ export interface PluginData {
   refresh(reloadLoader?: boolean): Promise<void>;
 }
 
-
 export function usePluginData(): PluginData {
   const loader = usePlugins();
   const [plugins, setPlugins] = useState<PluginInfo[]>([]);

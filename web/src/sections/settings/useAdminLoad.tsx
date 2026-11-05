@@ -45,20 +45,45 @@ export function useAdminLoad<T>(fn: () => Promise<T>, poll = 0) {
 }
 
 /** Shown instead of a block's content while administrator rights are locked. */
-export function LockedPanel({ title, text, onUnlocked }: { title: string; text: string; onUnlocked(): void }) {
+export function LockedPanel({
+  title,
+  text,
+  onUnlocked,
+}: {
+  title: string;
+  text: string;
+  onUnlocked(): void;
+}) {
   const t = useT('settings');
   return (
     <div className="st-lock" role="status">
       <Icon name="lock" size={22} />
-      <div className="grow"><b>{title}</b><small>{text}</small></div>
-      <Button icon="unlock" onClick={() => requestUnlock().then(onUnlocked, () => undefined)}>{t('channels.unlock')}</Button>
+      <div className="grow">
+        <b>{title}</b>
+        <small>{text}</small>
+      </div>
+      <Button icon="unlock" onClick={() => requestUnlock().then(onUnlocked, () => undefined)}>
+        {t('channels.unlock')}
+      </Button>
     </div>
   );
 }
 
 /** What an admin block shows instead of its content while locked or failed; null when it can render. */
-export function adminGate(state: LoadState, error: string, locked: { title: string; text: string }, onUnlocked: () => void) {
-  if (state === 'locked') return <LockedPanel title={locked.title} text={locked.text} onUnlocked={onUnlocked} />;
-  if (state === 'failed') return <div className="st-warn" role="alert"><Icon name="alert" /><div>{error}</div></div>;
+export function adminGate(
+  state: LoadState,
+  error: string,
+  locked: { title: string; text: string },
+  onUnlocked: () => void,
+) {
+  if (state === 'locked')
+    return <LockedPanel title={locked.title} text={locked.text} onUnlocked={onUnlocked} />;
+  if (state === 'failed')
+    return (
+      <div className="st-warn" role="alert">
+        <Icon name="alert" />
+        <div>{error}</div>
+      </div>
+    );
   return null;
 }

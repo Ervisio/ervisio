@@ -22,13 +22,37 @@ export interface PluginManifest {
   devUnsigned?: boolean;
   location?: string;
   capabilities?: {
-    commands?: { name: string; admin?: boolean; adminUnlessGroup?: string; args?: unknown[]; pty?: boolean; remote?: string; platforms?: string[] }[];
-    http?: { name: string; socket: string; admin?: boolean; adminUnlessGroup?: string; headers?: string[]; rules?: { methods: string[]; path: string }[]; maxBody?: number; timeoutSec?: number; remote?: string; platforms?: string[] }[];
+    commands?: {
+      name: string;
+      admin?: boolean;
+      adminUnlessGroup?: string;
+      args?: unknown[];
+      pty?: boolean;
+      remote?: string;
+      platforms?: string[];
+    }[];
+    http?: {
+      name: string;
+      socket: string;
+      admin?: boolean;
+      adminUnlessGroup?: string;
+      headers?: string[];
+      rules?: { methods: string[]; path: string }[];
+      maxBody?: number;
+      timeoutSec?: number;
+      remote?: string;
+      platforms?: string[];
+    }[];
     /** A path (SDK v2) or {path, admin, adminUnlessGroup, create} (SDK v3). */
     files?: { read?: PluginFolder[]; write?: PluginFolder[] };
     sockets?: string[];
     network?: string[];
-    jobs?: { name: string; description?: string; params?: { name: string; pattern: string; description?: string; default?: string }[]; steps?: unknown[] }[];
+    jobs?: {
+      name: string;
+      description?: string;
+      params?: { name: string; pattern: string; description?: string; default?: string }[];
+      steps?: unknown[];
+    }[];
     notify?: boolean;
     /** The plugin may ask an administrator to approve more hosts (sdk.network.request). */
     userHosts?: boolean;
@@ -40,7 +64,15 @@ export interface PluginManifest {
   };
 }
 
-export type PluginFolder = string | { path: string; admin?: boolean; adminUnlessGroup?: string; create?: boolean; platforms?: string[] };
+export type PluginFolder =
+  | string
+  | {
+      path: string;
+      admin?: boolean;
+      adminUnlessGroup?: string;
+      create?: boolean;
+      platforms?: string[];
+    };
 
 /** A page contributed by a plugin (from its manifest). It renders in the plugin's sandboxed frame. */
 export interface PluginPageInfo {
@@ -115,7 +147,14 @@ export interface PluginEnv {
   kind: 'tcp-tls' | 'ssh' | 'portainer-agent' | 'ervisio';
   /** Display address, no secret: host:port, user@host:port (ssh), or the other server's host (ervisio). */
   address?: string;
-  status?: { reachable: boolean; engineVersion?: string; apiVersion?: string; latencyMs: number; error?: string; checked: string };
+  status?: {
+    reachable: boolean;
+    engineVersion?: string;
+    apiVersion?: string;
+    latencyMs: number;
+    error?: string;
+    checked: string;
+  };
 }
 
 export interface HttpResponse {
@@ -196,7 +235,14 @@ export interface PluginJobInstance {
   webhooks: { id: string; label?: string; created: number; lastUsed?: number }[];
   running: boolean;
   nextRun?: number;
-  last?: { id: string; trigger: string; status: string; started: number; ended?: number; error?: string };
+  last?: {
+    id: string;
+    trigger: string;
+    status: string;
+    started: number;
+    ended?: number;
+    error?: string;
+  };
 }
 
 export interface PluginJobRun {
@@ -208,7 +254,18 @@ export interface PluginJobRun {
   ended?: number;
   status: 'queued' | 'running' | 'ok' | 'failed' | 'timeout' | 'cancelled';
   error?: string;
-  steps: { id: string; kind: string; status: 'ok' | 'failed' | 'skipped'; exitCode?: number; httpStatus?: number; stdout?: string; stderr?: string; error?: string; admin?: boolean; handled?: boolean }[];
+  steps: {
+    id: string;
+    kind: string;
+    status: 'ok' | 'failed' | 'skipped';
+    exitCode?: number;
+    httpStatus?: number;
+    stdout?: string;
+    stderr?: string;
+    error?: string;
+    admin?: boolean;
+    handled?: boolean;
+  }[];
 }
 
 export interface PluginJobsApi {
@@ -224,19 +281,36 @@ export interface PluginJobsApi {
   }): Promise<PluginJobInstance>;
   list(o?: { job?: string }): Promise<PluginJobInstance[]>;
   get(id: string): Promise<PluginJobInstance>;
-  update(id: string, patch: { name?: string; params?: Record<string, string>; schedule?: { every: number } | { at: string[]; days?: number[] } | null; enabled?: boolean; confirmAdmin?: boolean }): Promise<PluginJobInstance>;
+  update(
+    id: string,
+    patch: {
+      name?: string;
+      params?: Record<string, string>;
+      schedule?: { every: number } | { at: string[]; days?: number[] } | null;
+      enabled?: boolean;
+      confirmAdmin?: boolean;
+    },
+  ): Promise<PluginJobInstance>;
   delete(id: string): Promise<void>;
   runNow(id: string): Promise<{ run: string }>;
   history(id: string, limit?: number): Promise<PluginJobRun[]>;
   webhooks: {
     /** The result's `token` and `path` are shown once; build the URL as sdk.appOrigin + path (location.origin is opaque in a sandboxed frame). */
-    create(id: string, label?: string): Promise<{ id: string; label?: string; token: string; path: string }>;
-    regenerate(id: string, webhook: string): Promise<{ id: string; label?: string; token: string; path: string }>;
+    create(
+      id: string,
+      label?: string,
+    ): Promise<{ id: string; label?: string; token: string; path: string }>;
+    regenerate(
+      id: string,
+      webhook: string,
+    ): Promise<{ id: string; label?: string; token: string; path: string }>;
     revoke(id: string, webhook: string): Promise<void>;
   };
 }
 
-export type PluginViewDef<S = PluginSDK> = ComponentType<{ sdk: S }> | { render(container: HTMLElement, sdk: S): void | (() => void) };
+export type PluginViewDef<S = PluginSDK> =
+  | ComponentType<{ sdk: S }>
+  | { render(container: HTMLElement, sdk: S): void | (() => void) };
 
 export interface PluginSDK {
   version: 3;
@@ -257,7 +331,11 @@ export interface PluginSDK {
     execStream(
       command: string,
       args: string[],
-      h: { onLine?(stream: 'stdout' | 'stderr', line: string): void; onExit?(code: number): void; onError?(e: PluginError): void },
+      h: {
+        onLine?(stream: 'stdout' | 'stderr', line: string): void;
+        onExit?(code: number): void;
+        onError?(e: PluginError): void;
+      },
       o?: { env?: string },
     ): { close(): void };
     /** SDK v3: an HTTP request to a capabilities.http entry. A non-2xx status is a normal result. */
@@ -266,16 +344,31 @@ export interface PluginSDK {
     httpStream(
       name: string,
       req: HttpRequestOptions,
-      h: { onStart?(status: number, headers: Record<string, string>): void; onData(chunk: Uint8Array): void; onEnd(): void; onError(e: PluginError): void },
+      h: {
+        onStart?(status: number, headers: Record<string, string>): void;
+        onData(chunk: Uint8Array): void;
+        onEnd(): void;
+        onError(e: PluginError): void;
+      },
     ): { close(): void };
     /**
      * SDK 0.2: the browser saves the response of a GET to an HTTP API as a file. The bytes stream from the service to
      * the disk (no memory, no size limit); resolves when the download starts, rejects when the service refuses.
      * The file name is cleaned by the daemon.
      */
-    download(name: string, req: HttpRequestOptions, filename?: string, o?: DownloadOptions): Promise<DownloadStarted>;
+    download(
+      name: string,
+      req: HttpRequestOptions,
+      filename?: string,
+      o?: DownloadOptions,
+    ): Promise<DownloadStarted>;
     /** SDK 0.2: same for the standard output of a command declared in the manifest (not pty). */
-    downloadCommand(command: string, args: string[], filename?: string, o?: { env?: string } & DownloadOptions): Promise<DownloadStarted>;
+    downloadCommand(
+      command: string,
+      args: string[],
+      filename?: string,
+      o?: { env?: string } & DownloadOptions,
+    ): Promise<DownloadStarted>;
     /**
      * SDK 0.2: sends a File or Blob as the body of a POST or PUT to an HTTP API, streamed with progress, up to the API's
      * `maxUpload` (default 20 GiB). The result is the service's answer like `http` (a non-2xx status is a normal result;
@@ -294,20 +387,44 @@ export interface PluginSDK {
      * a sandboxed frame cannot download or open a blob: URL. At most 64 MiB; the file name is cleaned; no user gesture is
      * needed, but a frame may save at most 10 files and 256 MiB in 30 seconds. Resolves once the download starts.
      */
-    saveFile(filename: string, data: string | Uint8Array | Blob, mime?: string): Promise<{ filename: string; size: number }>;
+    saveFile(
+      filename: string,
+      data: string | Uint8Array | Blob,
+      mime?: string,
+    ): Promise<{ filename: string; size: number }>;
     /** SDK v3: runs a command declared `pty: true` in a terminal. Closing kills it. */
     pty(
       command: string,
       args: string[],
-      o: { cols: number; rows: number; env?: string; onData(chunk: Uint8Array): void; onExit(code: number): void; onError(e: PluginError): void },
-    ): { write(data: string | Uint8Array): void; resize(cols: number, rows: number): void; close(): void };
+      o: {
+        cols: number;
+        rows: number;
+        env?: string;
+        onData(chunk: Uint8Array): void;
+        onExit(code: number): void;
+        onError(e: PluginError): void;
+      },
+    ): {
+      write(data: string | Uint8Array): void;
+      resize(cols: number, rows: number): void;
+      close(): void;
+    };
     /** SDK 0.2: background jobs (capabilities.jobs). Absent on consoles older than core 0.5: check before use. */
     jobs?: PluginJobsApi;
     /** SDK 0.2: sends a notification to the channels the administrator configured (needs capabilities.notify). */
-    notify?(n: { title: string; body?: string; level?: 'info' | 'success' | 'warn' | 'error'; link?: string }): Promise<{ channels: number; delivered: number; failed: number }>;
+    notify?(n: {
+      title: string;
+      body?: string;
+      level?: 'info' | 'success' | 'warn' | 'error';
+      link?: string;
+    }): Promise<{ channels: number; delivered: number; failed: number }>;
   };
   /** Same as `api.saveFile`. */
-  saveFile(filename: string, data: string | Uint8Array | Blob, mime?: string): Promise<{ filename: string; size: number }>;
+  saveFile(
+    filename: string,
+    data: string | Uint8Array | Blob,
+    mime?: string,
+  ): Promise<{ filename: string; size: number }>;
   /** SDK 0.2: the activity log, limited to this plugin's entries. Everyone sees their own; administrators see all users. */
   audit: {
     list(q?: AuditQuery): Promise<{ entries: AuditEntry[]; next: string; enabled: boolean }>;
@@ -317,7 +434,12 @@ export interface PluginSDK {
     read(path: string, o?: FilesEnvOption): Promise<string>;
     readBytes(path: string, o?: FilesEnvOption): Promise<Uint8Array>;
     write(path: string, data: string | Uint8Array, o?: FilesEnvOption): Promise<void>;
-    list(path: string, o?: FilesEnvOption): Promise<{ name: string; type: 'file' | 'dir' | 'link' | 'other'; size: number; mtime: number }[]>;
+    list(
+      path: string,
+      o?: FilesEnvOption,
+    ): Promise<
+      { name: string; type: 'file' | 'dir' | 'link' | 'other'; size: number; mtime: number }[]
+    >;
     /** SDK v3: creates a folder (and missing parents) inside a write folder. */
     mkdir(path: string, o?: FilesEnvOption): Promise<void>;
     /** SDK v3: removes a file or an empty folder inside a write folder. */
@@ -329,7 +451,10 @@ export interface PluginSDK {
   network: {
     /** Asks an administrator once to approve `host` (exact host:port; https unless approved as http). Resolves when approved;
      * the app then reloads the plugin's frames (the new host becomes part of their policy). Rejects with code "forbidden" when refused. */
-    request(host: string, o?: { scheme?: 'https' | 'http' }): Promise<{ host: string; approved: true; reloading: boolean }>;
+    request(
+      host: string,
+      o?: { scheme?: 'https' | 'http' },
+    ): Promise<{ host: string; approved: true; reloading: boolean }>;
   };
   /** A blob: URL for a file of the plugin's own folder (images, CSS...). */
   asset(path: string): Promise<string>;
@@ -350,4 +475,6 @@ export interface PluginSDK {
   };
 }
 
-export type PluginModule = ((sdk: PluginSDK) => void | Promise<void>) | { activate(sdk: PluginSDK): void | Promise<void> };
+export type PluginModule =
+  | ((sdk: PluginSDK) => void | Promise<void>)
+  | { activate(sdk: PluginSDK): void | Promise<void> };

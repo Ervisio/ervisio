@@ -20,7 +20,11 @@ function num(n: number): string {
   return n >= 100000 ? `${Math.round(n / 1000)}k` : n.toLocaleString();
 }
 
-export function rangeLabel(t: (k: string, v?: Record<string, string | number>) => string, f: Filter, lang: string): string {
+export function rangeLabel(
+  t: (k: string, v?: Record<string, string | number>) => string,
+  f: Filter,
+  lang: string,
+): string {
   if (f.range !== 'custom') return t(`range.short${f.range}`);
   const a = f.from ?? 0;
   const b = f.to ?? Date.now();
@@ -28,11 +32,20 @@ export function rangeLabel(t: (k: string, v?: Record<string, string | number>) =
   const c = (x: number) => fmtClock(x, secs);
   const today = new Date().toDateString();
   const sameDay = new Date(a).toDateString() === new Date(b).toDateString();
-  if (sameDay) return `${new Date(a).toDateString() === today ? '' : fmtDay(a, lang) + ', '}${c(a)} – ${c(b)}`;
+  if (sameDay)
+    return `${new Date(a).toDateString() === today ? '' : fmtDay(a, lang) + ', '}${c(a)} – ${c(b)}`;
   return `${fmtDay(a, lang)} ${c(a)} – ${fmtDay(b, lang)} ${c(b)}`;
 }
 
-export function FilterBar({ filter, counts, onChange, onRefresh, onSources, sourcesLabel, showSourcesButton }: Props) {
+export function FilterBar({
+  filter,
+  counts,
+  onChange,
+  onRefresh,
+  onSources,
+  sourcesLabel,
+  showSourcesButton,
+}: Props) {
   const t = useT('logs');
   const { lang } = useI18n();
   const [text, setText] = useState(filter.q);
@@ -49,14 +62,26 @@ export function FilterBar({ filter, counts, onChange, onRefresh, onSources, sour
 
   const toggle = (l: Level) => {
     const on = filter.levels.includes(l);
-    const next = on ? filter.levels.filter((x) => x !== l) : LEVELS.filter((x) => x === l || filter.levels.includes(x));
+    const next = on
+      ? filter.levels.filter((x) => x !== l)
+      : LEVELS.filter((x) => x === l || filter.levels.includes(x));
     if (next.length) onChange({ levels: next });
   };
 
   const items: MenuItem[] = [
-    ...RANGE_IDS.map((id) => ({ id, label: t(`range.${id}`), icon: (filter.range === id ? 'check' : undefined) as 'check' | undefined, onSelect: () => onChange({ range: id, from: undefined, to: undefined }) })),
+    ...RANGE_IDS.map((id) => ({
+      id,
+      label: t(`range.${id}`),
+      icon: (filter.range === id ? 'check' : undefined) as 'check' | undefined,
+      onSelect: () => onChange({ range: id, from: undefined, to: undefined }),
+    })),
     { type: 'separator' as const },
-    { id: 'custom', label: t('range.custom'), icon: (filter.range === 'custom' ? 'check' : 'clock') as 'check' | 'clock', onSelect: () => setCustom(true) },
+    {
+      id: 'custom',
+      label: t('range.custom'),
+      icon: (filter.range === 'custom' ? 'check' : 'clock') as 'check' | 'clock',
+      onSelect: () => setCustom(true),
+    },
   ];
 
   return (
@@ -89,7 +114,10 @@ export function FilterBar({ filter, counts, onChange, onRefresh, onSources, sour
               type="button"
               className={`logs-lvl lv-${l}`}
               aria-pressed={on}
-              title={t('level.toggle', { level: t(`level.${l}`), state: t(on ? 'level.shown' : 'level.hidden') })}
+              title={t('level.toggle', {
+                level: t(`level.${l}`),
+                state: t(on ? 'level.shown' : 'level.hidden'),
+              })}
               onClick={() => toggle(l)}
             >
               {t(`level.${l}`)}
@@ -102,22 +130,49 @@ export function FilterBar({ filter, counts, onChange, onRefresh, onSources, sour
         aria-label={t('range.label')}
         items={items}
         trigger={(p) => (
-          <Button {...p} icon="clock" aria-label={`${t('range.label')}: ${rangeLabel(t, filter, lang)}`}>
+          <Button
+            {...p}
+            icon="clock"
+            aria-label={`${t('range.label')}: ${rangeLabel(t, filter, lang)}`}
+          >
             {rangeLabel(t, filter, lang)}
           </Button>
         )}
       />
-      <button type="button" className={`logs-live${filter.live ? ' on' : ''}`} aria-pressed={filter.live} title={t('live.label')} onClick={() => onChange({ live: !filter.live })}>
+      <button
+        type="button"
+        className={`logs-live${filter.live ? ' on' : ''}`}
+        aria-pressed={filter.live}
+        title={t('live.label')}
+        onClick={() => onChange({ live: !filter.live })}
+      >
         <i />
         {t('live.on')}
       </button>
       <IconButton icon="refresh" label={t('refresh')} onClick={onRefresh} />
-      {custom && <CustomRange filter={filter} onClose={() => setCustom(false)} onApply={(from, to) => { onChange({ range: 'custom', from, to, live: false }); setCustom(false); }} />}
+      {custom && (
+        <CustomRange
+          filter={filter}
+          onClose={() => setCustom(false)}
+          onApply={(from, to) => {
+            onChange({ range: 'custom', from, to, live: false });
+            setCustom(false);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function CustomRange({ filter, onClose, onApply }: { filter: Filter; onClose(): void; onApply(from: number, to: number): void }) {
+function CustomRange({
+  filter,
+  onClose,
+  onApply,
+}: {
+  filter: Filter;
+  onClose(): void;
+  onApply(from: number, to: number): void;
+}) {
   const t = useT('logs');
   const now = Date.now();
   const [from, setFrom] = useState(toLocalInput(filter.from ?? now - 3_600_000));
@@ -134,16 +189,30 @@ function CustomRange({ filter, onClose, onApply }: { filter: Filter; onClose(): 
       onSubmit={() => !bad && onApply(a, b)}
       footer={
         <>
-          <Button type="button" variant="ghost" onClick={onClose}>{t('watch.cancel')}</Button>
-          <Button type="submit" variant="primary" disabled={bad}>{t('range.apply')}</Button>
+          <Button type="button" variant="ghost" onClick={onClose}>
+            {t('watch.cancel')}
+          </Button>
+          <Button type="submit" variant="primary" disabled={bad}>
+            {t('range.apply')}
+          </Button>
         </>
       }
     >
       <div className="logs-custom">
-        <Input label={t('range.from')} type="datetime-local" value={from} onChange={(e) => setFrom(e.target.value)} />
-        <Input label={t('range.to')} type="datetime-local" value={to} onChange={(e) => setTo(e.target.value)} error={bad ? t('range.invalid') : undefined} />
+        <Input
+          label={t('range.from')}
+          type="datetime-local"
+          value={from}
+          onChange={(e) => setFrom(e.target.value)}
+        />
+        <Input
+          label={t('range.to')}
+          type="datetime-local"
+          value={to}
+          onChange={(e) => setTo(e.target.value)}
+          error={bad ? t('range.invalid') : undefined}
+        />
       </div>
     </Dialog>
   );
 }
-

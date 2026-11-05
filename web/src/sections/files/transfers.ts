@@ -35,7 +35,6 @@ let snapshot: Transfer[] = [];
 const subs = new Set<() => void>();
 const MAX_UPLOADS = 2;
 
-
 function emit() {
   snapshot = jobs.map(({ run: _r, cancel: _c, replace: _p, retry: _t, ...t }) => t);
   subs.forEach((f) => f());
@@ -106,7 +105,9 @@ interface UploadOpts {
 
 /** Picks the error code for a failed upload response. */
 function uploadErrorCode(status: number, body: any): string {
-  return body?.error?.code ?? (status === 409 ? 'conflict' : status === 403 ? 'needs_admin' : 'internal');
+  return (
+    body?.error?.code ?? (status === 409 ? 'conflict' : status === 403 ? 'needs_admin' : 'internal')
+  );
 }
 
 function parseJson(text: string): any {
@@ -242,7 +243,12 @@ export function enqueueCopy(o: CopyOpts) {
 
   const onData = (m: CopyMsg) => {
     if (m.type === 'start') patch(id, { total: m.total, items: m.items });
-    else if (m.type === 'progress') patch(id, { done: m.done, total: m.total, name: o.from.length === 1 ? label : `${label} · ${m.current}` });
+    else if (m.type === 'progress')
+      patch(id, {
+        done: m.done,
+        total: m.total,
+        name: o.from.length === 1 ? label : `${label} · ${m.current}`,
+      });
     else if (m.done) patch(id, { done: -1 });
   };
 
@@ -272,7 +278,11 @@ export function enqueueCopy(o: CopyOpts) {
 
   const begin = () => {
     patch(id, { status: 'running', done: 0, error: undefined });
-    handle = stream<CopyMsg>('files.copy', { from: o.from, to: o.to, move: o.move }, { admin, onData, onEnd, onError });
+    handle = stream<CopyMsg>(
+      'files.copy',
+      { from: o.from, to: o.to, move: o.move },
+      { admin, onData, onEnd, onError },
+    );
   };
 
   const job: Job = {

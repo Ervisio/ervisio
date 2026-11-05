@@ -11,18 +11,36 @@ interface Props {
 export default function ExtraKeys({ ctrl, onCtrl, term }: Props) {
   const t = useT('terminal');
   const key = (label: string, seq: string, aria?: string) => (
-    <button key={label} type="button" aria-label={aria ?? label} onMouseDown={(e) => e.preventDefault()} onClick={() => term()?.sendKeys(seq)}>
+    <button
+      key={label}
+      type="button"
+      aria-label={aria ?? label}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() => term()?.sendKeys(seq)}
+    >
       {label}
     </button>
   );
   const arrow = (label: string, dir: 'up' | 'down' | 'left' | 'right', aria: string) => (
-    <button key={dir} type="button" aria-label={aria} onMouseDown={(e) => e.preventDefault()} onClick={() => term()?.arrow(dir)}>
+    <button
+      key={dir}
+      type="button"
+      aria-label={aria}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() => term()?.arrow(dir)}
+    >
       {label}
     </button>
   );
   return (
     <div className="terminal-keys" role="toolbar" aria-label={t('extraKeys')}>
-      <button type="button" className={ctrl ? 'on' : ''} aria-pressed={ctrl} onMouseDown={(e) => e.preventDefault()} onClick={() => onCtrl(!ctrl)}>
+      <button
+        type="button"
+        className={ctrl ? 'on' : ''}
+        aria-pressed={ctrl}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => onCtrl(!ctrl)}
+      >
         Ctrl
       </button>
       {key('Esc', '\x1b')}

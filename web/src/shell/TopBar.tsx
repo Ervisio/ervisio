@@ -35,7 +35,12 @@ export function TopBar({ onSearch }: { onSearch(): void }) {
 
   return (
     <header className="top">
-      <button type="button" className="top-search" onClick={onSearch} aria-label={t('search.label')}>
+      <button
+        type="button"
+        className="top-search"
+        onClick={onSearch}
+        aria-label={t('search.label')}
+      >
         <Icon name="search" />
         <span>{t('search.placeholder')}</span>
         <kbd className="ui-kbd">Ctrl K</kbd>
@@ -45,11 +50,20 @@ export function TopBar({ onSearch }: { onSearch(): void }) {
         <Tooltip label={t('sudo.chipTip')}>
           <button type="button" className="sudo-chip" onClick={() => void lock()}>
             <Icon name="unlock" />
-            {unlockForever ? t('sudo.chipForever') : t('sudo.chip', { time: formatClock(unlockLeft) })}
+            {unlockForever
+              ? t('sudo.chipForever')
+              : t('sudo.chip', { time: formatClock(unlockLeft) })}
           </button>
         </Tooltip>
       )}
-      <button ref={hostRef} type="button" className="top-pill" aria-haspopup="dialog" aria-expanded={pop?.kind === 'host'} onClick={() => open('host', hostRef.current)}>
+      <button
+        ref={hostRef}
+        type="button"
+        className="top-pill"
+        aria-haspopup="dialog"
+        aria-expanded={pop?.kind === 'host'}
+        onClick={() => open('host', hostRef.current)}
+      >
         <i />
         {host?.hostname ?? t('host.thisMachine')}
         <Icon name="chevron" />
@@ -61,7 +75,17 @@ export function TopBar({ onSearch }: { onSearch(): void }) {
         variant="secondary"
         onClick={toggleDark}
       />
-      <button ref={bellRef} type="button" className="top-ib" aria-label={unread ? t('notifications.unread', { count: unread }) : t('notifications.title')} aria-haspopup="dialog" aria-expanded={pop?.kind === 'bell'} onClick={() => open('bell', bellRef.current)}>
+      <button
+        ref={bellRef}
+        type="button"
+        className="top-ib"
+        aria-label={
+          unread ? t('notifications.unread', { count: unread }) : t('notifications.title')
+        }
+        aria-haspopup="dialog"
+        aria-expanded={pop?.kind === 'bell'}
+        onClick={() => open('bell', bellRef.current)}
+      >
         <Icon name="bell" />
         {unread > 0 && <span className="dot" />}
       </button>
@@ -70,7 +94,11 @@ export function TopBar({ onSearch }: { onSearch(): void }) {
         <Popover anchor={pop.rect} onClose={close} label={t('notifications.title')}>
           <div className="pop-hd">
             <span className="grow">{t('notifications.title')}</span>
-            {notices.length > 0 && <button type="button" className="ui-toast-act" onClick={clearNotices}>{t('notifications.clear')}</button>}
+            {notices.length > 0 && (
+              <button type="button" className="ui-toast-act" onClick={clearNotices}>
+                {t('notifications.clear')}
+              </button>
+            )}
           </div>
           {notices.length === 0 ? (
             <div className="pop-note">{t('notifications.empty')}</div>
@@ -78,7 +106,13 @@ export function TopBar({ onSearch }: { onSearch(): void }) {
             notices.map((n) => {
               const body = (
                 <>
-                  <span className="ic"><Icon name={n.icon ?? (n.tone === 'err' ? 'alert' : n.tone === 'ok' ? 'check' : 'info')} /></span>
+                  <span className="ic">
+                    <Icon
+                      name={
+                        n.icon ?? (n.tone === 'err' ? 'alert' : n.tone === 'ok' ? 'check' : 'info')
+                      }
+                    />
+                  </span>
                   <div className="note-tx">
                     <b>{n.title}</b>
                     {n.detail && <small className="note-detail">{n.detail}</small>}
@@ -100,7 +134,9 @@ export function TopBar({ onSearch }: { onSearch(): void }) {
                   {body}
                 </button>
               ) : (
-                <div key={n.id} className={`note ${n.tone ?? ''}`}>{body}</div>
+                <div key={n.id} className={`note ${n.tone ?? ''}`}>
+                  {body}
+                </div>
               );
             })
           )}
@@ -108,12 +144,19 @@ export function TopBar({ onSearch }: { onSearch(): void }) {
       )}
       {pop?.kind === 'host' && (
         <Popover anchor={pop.rect} onClose={() => setPop(null)} label={t('host.title')}>
-          <div className="pop-hd"><span className="grow">{t('host.title')}</span></div>
+          <div className="pop-hd">
+            <span className="grow">{t('host.title')}</span>
+          </div>
           <div className="note">
-            <span className="ic" style={{ background: 'var(--ok-s)', color: 'var(--ok)' }}><Icon name="server" /></span>
+            <span className="ic" style={{ background: 'var(--ok-s)', color: 'var(--ok)' }}>
+              <Icon name="server" />
+            </span>
             <div>
               <b>{host?.hostname ?? t('host.thisMachine')}</b>
-              <small>{t('host.thisMachine')}{host?.ip ? `, ${host.ip}` : ''}</small>
+              <small>
+                {t('host.thisMachine')}
+                {host?.ip ? `, ${host.ip}` : ''}
+              </small>
             </div>
           </div>
           <button

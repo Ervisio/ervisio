@@ -1,6 +1,13 @@
 import {
-  forwardRef, useEffect, useId, useRef,
-  type InputHTMLAttributes, type KeyboardEvent, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes,
+  forwardRef,
+  useEffect,
+  useId,
+  useRef,
+  type InputHTMLAttributes,
+  type KeyboardEvent,
+  type ReactNode,
+  type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
 } from 'react';
 import { Icon, type IconName } from './Icon';
 
@@ -18,7 +25,11 @@ export function Field({ label, hint, error, htmlFor, children, className }: Fiel
     <div className={`ui-field${error ? ' ui-field--bad' : ''}${className ? ' ' + className : ''}`}>
       {label && <label htmlFor={htmlFor}>{label}</label>}
       {children}
-      {(error || hint) && <span className="ui-hint" id={htmlFor ? `${htmlFor}-hint` : undefined}>{error || hint}</span>}
+      {(error || hint) && (
+        <span className="ui-hint" id={htmlFor ? `${htmlFor}-hint` : undefined}>
+          {error || hint}
+        </span>
+      )}
     </div>
   );
 }
@@ -45,9 +56,17 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   const iid = id ?? uid;
   return (
     <Field label={label} hint={hint} error={error} htmlFor={iid} className={fieldClassName}>
-      <div className={`ui-in${mono ? ' ui-in--mono' : ''}${compact ? ' ui-in--compact' : ''}${className ? ' ' + className : ''}`}>
+      <div
+        className={`ui-in${mono ? ' ui-in--mono' : ''}${compact ? ' ui-in--compact' : ''}${className ? ' ' + className : ''}`}
+      >
         {icon && <Icon name={icon} />}
-        <input ref={ref} id={iid} aria-invalid={error ? true : undefined} aria-describedby={error || hint ? `${iid}-hint` : undefined} {...rest} />
+        <input
+          ref={ref}
+          id={iid}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error || hint ? `${iid}-hint` : undefined}
+          {...rest}
+        />
         {kbd && <kbd className="ui-kbd">{kbd}</kbd>}
         {end}
       </div>
@@ -61,7 +80,10 @@ export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElemen
   error?: ReactNode;
   mono?: boolean;
 }
-export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea({ label, hint, error, mono, id, ...rest }, ref) {
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea(
+  { label, hint, error, mono, id, ...rest },
+  ref,
+) {
   const uid = useId();
   const iid = id ?? uid;
   return (
@@ -79,7 +101,8 @@ export interface SelectOption {
   label: string;
   disabled?: boolean;
 }
-export interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'onChange' | 'value'> {
+export interface SelectProps
+  extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'onChange' | 'value'> {
   label?: ReactNode;
   hint?: ReactNode;
   error?: ReactNode;
@@ -89,7 +112,18 @@ export interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement
   compact?: boolean;
   fieldClassName?: string;
 }
-export function Select({ label, hint, error, options, value, onChange, compact, fieldClassName, id, ...rest }: SelectProps) {
+export function Select({
+  label,
+  hint,
+  error,
+  options,
+  value,
+  onChange,
+  compact,
+  fieldClassName,
+  id,
+  ...rest
+}: SelectProps) {
   const uid = useId();
   const iid = id ?? uid;
   return (
@@ -149,7 +183,14 @@ export interface CheckboxProps {
   indeterminate?: boolean;
   'aria-label'?: string;
 }
-export function Checkbox({ checked, onChange, label, disabled, indeterminate, ...aria }: CheckboxProps) {
+export function Checkbox({
+  checked,
+  onChange,
+  label,
+  disabled,
+  indeterminate,
+  ...aria
+}: CheckboxProps) {
   const ref = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (ref.current) ref.current.indeterminate = !!indeterminate;
@@ -157,8 +198,17 @@ export function Checkbox({ checked, onChange, label, disabled, indeterminate, ..
   return (
     <label className={`ui-choice${disabled ? ' ui-choice--disabled' : ''}`}>
       <span className="ui-check">
-        <input ref={ref} type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} {...aria} />
-        <i><Icon name={indeterminate ? 'minus' : 'check'} /></i>
+        <input
+          ref={ref}
+          type="checkbox"
+          checked={checked}
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.checked)}
+          {...aria}
+        />
+        <i>
+          <Icon name={indeterminate ? 'minus' : 'check'} />
+        </i>
       </span>
       {label}
     </label>
@@ -177,7 +227,14 @@ export function Radio({ checked, onChange, label, name, value, disabled }: Radio
   return (
     <label className={`ui-choice${disabled ? ' ui-choice--disabled' : ''}`}>
       <span className="ui-radio">
-        <input type="radio" name={name} value={value} checked={checked} disabled={disabled} onChange={onChange} />
+        <input
+          type="radio"
+          name={name}
+          value={value}
+          checked={checked}
+          disabled={disabled}
+          onChange={onChange}
+        />
         <i />
       </span>
       {label}
@@ -199,7 +256,12 @@ export interface SegmentedProps<T extends string> {
   onChange(v: T): void;
   'aria-label'?: string;
 }
-export function Segmented<T extends string>({ options, value, onChange, ...aria }: SegmentedProps<T>) {
+export function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+  ...aria
+}: SegmentedProps<T>) {
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const i = options.findIndex((o) => o.value === value);
     let n = -1;

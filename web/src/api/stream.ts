@@ -23,11 +23,18 @@ const outbox: string[] = [];
 
 /** Helpers for modules that exchange base64 payloads. */
 export const toBase64 = b64encode;
-export const fromBase64 = (s: string): Uint8Array => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+export const fromBase64 = (s: string): Uint8Array =>
+  Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 const fromB64 = fromBase64;
 
 function openFrame(c: Chan) {
-  return JSON.stringify({ ch: c.id, op: 'open', method: c.method, params: c.params ?? {}, admin: !!c.h.admin });
+  return JSON.stringify({
+    ch: c.id,
+    op: 'open',
+    method: c.method,
+    params: c.params ?? {},
+    admin: !!c.h.admin,
+  });
 }
 
 function rawSend(frame: string) {
@@ -76,7 +83,14 @@ function onSocketMessage(raw: string) {
       c.h.onEnd?.();
       break;
     case 'error':
-      onChannelError(c, new ApiError(f.error?.code ?? 'internal', f.error?.message ?? 'Stream error', f.error?.data));
+      onChannelError(
+        c,
+        new ApiError(
+          f.error?.code ?? 'internal',
+          f.error?.message ?? 'Stream error',
+          f.error?.data,
+        ),
+      );
       break;
   }
 }
@@ -102,7 +116,8 @@ function onSocketClose(code: number) {
   ws = null;
   if (code === 1008) {
     // the session ended: fail everything and let the session context send the user to /login
-    for (const c of [...chans.values()]) c.h.onError?.(new ApiError('unauthenticated', 'Session ended.'));
+    for (const c of [...chans.values()])
+      c.h.onError?.(new ApiError('unauthenticated', 'Session ended.'));
     chans.clear();
     authEvents.dispatchEvent(new Event('unauthenticated'));
     return;
@@ -125,12 +140,25 @@ function onSocketClose(code: number) {
  * Open a multiplexed stream. Returns immediately; data arrives through the handlers.
  * Remember to call close() (e.g. in a useEffect cleanup).
  */
-export function stream<T = any>(method: string, params: unknown, h: StreamHandlers<T> = {}): StreamHandle {
+export function stream<T = any>(
+  method: string,
+  params: unknown,
+  h: StreamHandlers<T> = {},
+): StreamHandle {
   if (MOCK) {
-    queueMicrotask(() => h.onError?.(new ApiError('unavailable', 'Streams are not available in mock mode.')));
+    queueMicrotask(() =>
+      h.onError?.(new ApiError('unavailable', 'Streams are not available in mock mode.')),
+    );
     return { send() {}, close() {} };
   }
-  const c: Chan = { id: nextCh++, method, params, h: h as StreamHandlers, open: false, retried: false };
+  const c: Chan = {
+    id: nextCh++,
+    method,
+    params,
+    h: h as StreamHandlers,
+    open: false,
+    retried: false,
+  };
   chans.set(c.id, c);
   connect();
   if (ws && ws.readyState === WebSocket.OPEN) {

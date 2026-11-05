@@ -54,18 +54,38 @@ export default function SoftwarePage() {
     setPkg(p);
   }, []);
 
-  const iconFor = useCallback((name: string) => apps?.find((a) => a.package === name)?.icon, [apps]);
+  const iconFor = useCallback(
+    (name: string) => apps?.find((a) => a.package === name)?.icon,
+    [apps],
+  );
 
   const openFromStore = (i: OpenItem) => openPkg({ ...i, icon: i.icon ?? iconFor(i.name) });
-  const openFromTable = (p: Pkg) => openPkg({ name: p.name, title: p.title, kind: p.kind, source: p.source, installed: true, icon: iconFor(p.name), scope: p.scope });
+  const openFromTable = (p: Pkg) =>
+    openPkg({
+      name: p.name,
+      title: p.title,
+      kind: p.kind,
+      source: p.source,
+      installed: true,
+      icon: iconFor(p.name),
+      scope: p.scope,
+    });
 
-  const pkgUpdate = pkg ? (updates ?? []).find((u) => u.name === pkg.name && u.kind === pkg.kind) : undefined;
+  const pkgUpdate = pkg
+    ? (updates ?? []).find((u) => u.name === pkg.name && u.kind === pkg.kind)
+    : undefined;
 
   const onInstallFromPanel = (target: PkgTarget, d: Detail | null) => {
     const origin = d?.fields.find((f) => f.key === 'Origin' || f.key === 'Remotes')?.value;
     const r: SearchResult = {
-      name: target.name, title: target.title, kind: target.kind, source: target.source, version: d?.version ?? '',
-      description: d?.description ?? '', installed: false, remote: target.kind === 'flatpak' ? origin : undefined,
+      name: target.name,
+      title: target.title,
+      kind: target.kind,
+      source: target.source,
+      version: d?.version ?? '',
+      description: d?.description ?? '',
+      installed: false,
+      remote: target.kind === 'flatpak' ? origin : undefined,
     };
     setPkg(null);
     acts.askInstall(r);
@@ -104,19 +124,42 @@ export default function SoftwarePage() {
     <Page flush hue="sw">
       <div className="sw-root hue-sw">
         <div className="sw-bar">
-          <Tabs variant="pill" hue="sw" items={items} value={tab} onChange={setTab} aria-label={t('title')} />
+          <Tabs
+            variant="pill"
+            hue="sw"
+            items={items}
+            value={tab}
+            onChange={setTab}
+            aria-label={t('title')}
+          />
           <span className="sw-sp" />
-          {summary && summary.lastCheck > 0 && <span className="sw-muted sw-checked">{t('checked', { when: relativeTime(summary.lastCheck, lang) })}</span>}
-          <Button icon="refresh" loading={checking} onClick={() => void doCheck()}>{t('checkNow')}</Button>
+          {summary && summary.lastCheck > 0 && (
+            <span className="sw-muted sw-checked">
+              {t('checked', { when: relativeTime(summary.lastCheck, lang) })}
+            </span>
+          )}
+          <Button icon="refresh" loading={checking} onClick={() => void doCheck()}>
+            {t('checkNow')}
+          </Button>
         </div>
         {unsupported ? (
-          <EmptyState icon="software" hue="sw" title={t('unsupported.title')} text={error?.message} />
+          <EmptyState
+            icon="software"
+            hue="sw"
+            title={t('unsupported.title')}
+            text={error?.message}
+          />
         ) : tab === 'updates' ? (
           <UpdatesTab actions={acts} />
         ) : tab === 'store' ? (
           <StoreTab actions={acts} onOpen={openFromStore} goInstalled={() => setTab('installed')} />
         ) : tab === 'installed' ? (
-          <InstalledTab activeKey={pkg ? `${pkg.kind}:${pkg.scope ?? ''}:${pkg.name}` : undefined} onOpen={openFromTable} onRemove={acts.askRemove} busy={acts.busy} />
+          <InstalledTab
+            activeKey={pkg ? `${pkg.kind}:${pkg.scope ?? ''}:${pkg.name}` : undefined}
+            onOpen={openFromTable}
+            onRemove={acts.askRemove}
+            busy={acts.busy}
+          />
         ) : (
           <HistoryTab reloadKey={tx.phase === 'done' ? tx.startedAt : 0} />
         )}

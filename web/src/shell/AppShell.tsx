@@ -31,8 +31,12 @@ function useDocumentTitle() {
   const { pathname } = useLocation();
   const { railPages } = usePlugins();
   useEffect(() => {
-    const sec = SECTIONS.find((s) => (s.path === '/' ? pathname === '/' : pathname.startsWith(s.path)));
-    const pg = pathname.startsWith('/p/') ? railPages.find((p) => pathname === `/p/${p.plugin}/${p.page}`) : undefined;
+    const sec = SECTIONS.find((s) =>
+      s.path === '/' ? pathname === '/' : pathname.startsWith(s.path),
+    );
+    const pg = pathname.startsWith('/p/')
+      ? railPages.find((p) => pathname === `/p/${p.plugin}/${p.page}`)
+      : undefined;
     const title = pg?.title ?? (sec ? t(sec.titleKey) : '');
     document.title = title ? `${title} · ${Name}` : Name;
   }, [pathname, railPages, t]);
@@ -51,7 +55,15 @@ export function AppShell() {
       <div className="app-main">
         {!focus && <TopBar onSearch={() => setPalette(true)} />}
         <main className="app-content" id="main">
-          <Suspense fallback={<div style={{ padding: 28 }}><Skeleton width="30%" height={26} /><div style={{ height: 18 }} /><Skeleton lines={5} /></div>}>
+          <Suspense
+            fallback={
+              <div style={{ padding: 28 }}>
+                <Skeleton width="30%" height={26} />
+                <div style={{ height: 18 }} />
+                <Skeleton lines={5} />
+              </div>
+            }
+          >
             <Outlet />
           </Suspense>
         </main>

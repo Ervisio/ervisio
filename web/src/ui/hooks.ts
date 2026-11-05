@@ -16,10 +16,13 @@ export function useMediaQuery(query: string): boolean {
 /** Phones: below 860px, same breakpoint as the shell. */
 export const useIsMobile = () => useMediaQuery('(max-width: 859px)');
 
-const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+const FOCUSABLE =
+  'a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
 function focusableIn(el: HTMLElement): HTMLElement[] {
-  return Array.from(el.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((x) => x.offsetParent !== null || x === document.activeElement);
+  return Array.from(el.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+    (x) => x.offsetParent !== null || x === document.activeElement,
+  );
 }
 
 /** Wraps Tab / Shift+Tab around the first and last control of el. */

@@ -67,7 +67,13 @@ export interface BrokerUser {
 export type Plan =
   | { kind: 'call'; method: string; params: Record<string, unknown>; admin: boolean }
   /** A large transfer: the host asks the daemon for a one-time URL (POST /api/plugins/transfer) with `body`. */
-  | { kind: 'transfer'; transfer: 'download' | 'upload'; body: Record<string, unknown>; admin: boolean; size?: number }
+  | {
+      kind: 'transfer';
+      transfer: 'download' | 'upload';
+      body: Record<string, unknown>;
+      admin: boolean;
+      size?: number;
+    }
   /** sdk.saveFile: the app saves data the plugin holds in memory as a browser download. */
   | { kind: 'save'; filename: string; mime: string; data: Blob | Uint8Array | string; size: number }
   | { kind: 'stream'; method: string; params: Record<string, unknown>; admin: boolean }
@@ -93,10 +99,15 @@ const TEXT_BODY_INLINE = 256 << 10;
 const TOO_BIG = 'The request body is larger than 8 MiB. Send large bodies with sdk.api.upload.';
 const DEFAULT_MAX_UPLOAD = 20 * 2 ** 30;
 const ENV_RE = /^env-[0-9a-f]{8}$/;
-const HOST_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*(:[0-9]{1,5})?$/;
+const HOST_RE =
+  /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*(:[0-9]{1,5})?$/;
 const HTTP_METHODS = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'];
 
-const deny = (message: string, code: 'forbidden' | 'invalid' = 'forbidden'): Plan => ({ kind: 'deny', code, message });
+const deny = (message: string, code: 'forbidden' | 'invalid' = 'forbidden'): Plan => ({
+  kind: 'deny',
+  code,
+  message,
+});
 
 function command(m: BrokerManifest, name: unknown): BrokerCommand | undefined {
   if (typeof name !== 'string') return undefined;
@@ -140,13 +151,18 @@ export function normPath(p: string, home?: string): string | null {
 }
 
 /** A files entry as an object. */
-export const folderOf = (f: BrokerFolder): { path: string; create?: boolean } & AdminLevel => (typeof f === 'string' ? { path: f } : f && typeof f === 'object' ? f : { path: '' });
+export const folderOf = (f: BrokerFolder): { path: string; create?: boolean } & AdminLevel =>
+  typeof f === 'string' ? { path: f } : f && typeof f === 'object' ? f : { path: '' };
 
 /**
  * The declared folder path falls in: the longest match, and on a tie the entry without admin (as the daemon).
  * Null when none.
  */
-export function matchFolder(path: string, declared: BrokerFolder[], home?: string): ({ path: string } & AdminLevel) | null {
+export function matchFolder(
+  path: string,
+  declared: BrokerFolder[],
+  home?: string,
+): ({ path: string } & AdminLevel) | null {
   const p = normPath(path, home);
   if (!p) return null;
   let best: ({ path: string } & AdminLevel) | null = null;
@@ -173,7 +189,13 @@ export function underDeclared(path: string, declared: BrokerFolder[], home?: str
  * fragment, control characters or backslashes, no encoded "/", "\" or NUL, no empty, "." or ".." segments.
  */
 export function cleanHttpPath(raw: unknown): string | null {
-  if (typeof raw !== 'string' || !raw.startsWith('/') || raw.startsWith('//') || raw.length > MAX_HTTP_PATH) return null;
+  if (
+    typeof raw !== 'string' ||
+    !raw.startsWith('/') ||
+    raw.startsWith('//') ||
+    raw.length > MAX_HTTP_PATH
+  )
+    return null;
   // eslint-disable-next-line no-control-regex
   if (/[\x00-\x20\x7f?#\\]/.test(raw) || /%(2f|5c|00|0a|0d)/i.test(raw)) return null;
   let dec: string;
@@ -191,7 +213,8 @@ export function cleanHttpPath(raw: unknown): string | null {
 }
 
 /** A raw query string: printable ASCII without spaces or "#". */
-export const validQuery = (q: unknown): q is string => typeof q === 'string' && q.length <= MAX_HTTP_QUERY && /^[\x21-\x22\x24-\x7e]*$/.test(q);
+export const validQuery = (q: unknown): q is string =>
+  typeof q === 'string' && q.length <= MAX_HTTP_QUERY && /^[\x21-\x22\x24-\x7e]*$/.test(q);
 
 const ruleCache = new Map<string, RegExp | null>();
 /** A manifest rule as a JS RegExp (anchored like the daemon). Null when Go syntax does not translate: the daemon decides. */
@@ -211,38 +234,64 @@ function ruleRe(p: string): RegExp | null {
 /** True when a rule of api allows method on the decoded path. */
 export function httpAllowed(api: BrokerHTTP, method: string, decoded: string): boolean {
   return (api.rules ?? []).some((r) => {
-    if (!Array.isArray(r.methods) || !r.methods.includes(method) || typeof r.path !== 'string') return false;
+    if (!Array.isArray(r.methods) || !r.methods.includes(method) || typeof r.path !== 'string')
+      return false;
     const re = ruleRe(r.path);
     return re ? re.test(decoded) : true;
   });
 }
 
 /** Checks an http / httpStream request; returns the daemon params or a denial. */
-function httpRequest(m: BrokerManifest, req: Record<string, unknown>, u: BrokerUser): { params: Record<string, unknown>; admin: boolean } | Plan {
-  const api = typeof req.name === 'string' ? (m.capabilities?.http ?? []).find((h) => h.name === req.name) : undefined;
+function httpRequest(
+  m: BrokerManifest,
+  req: Record<string, unknown>,
+  u: BrokerUser,
+): { params: Record<string, unknown>; admin: boolean } | Plan {
+  const api =
+    typeof req.name === 'string'
+      ? (m.capabilities?.http ?? []).find((h) => h.name === req.name)
+      : undefined;
   if (!api) return deny(`${m.id} does not declare an HTTP API ${JSON.stringify(req.name)}.`);
   const method = req.method;
-  if (typeof method !== 'string' || !HTTP_METHODS.includes(method)) return deny(`${JSON.stringify(method)} is not an allowed HTTP method.`, 'invalid');
+  if (typeof method !== 'string' || !HTTP_METHODS.includes(method))
+    return deny(`${JSON.stringify(method)} is not an allowed HTTP method.`, 'invalid');
   const dec = cleanHttpPath(req.path);
-  if (dec === null) return deny(`${JSON.stringify(req.path)} is not a valid request path.`, 'invalid');
-  if (!httpAllowed(api, method, dec)) return deny(`${m.id} does not declare ${method} ${dec} for ${api.name}.`, 'invalid');
+  if (dec === null)
+    return deny(`${JSON.stringify(req.path)} is not a valid request path.`, 'invalid');
+  if (!httpAllowed(api, method, dec))
+    return deny(`${m.id} does not declare ${method} ${dec} for ${api.name}.`, 'invalid');
   const query = req.query ?? '';
-  if (!validQuery(query)) return deny('The query string is too long or holds characters that are not allowed.', 'invalid');
+  if (!validQuery(query))
+    return deny(
+      'The query string is too long or holds characters that are not allowed.',
+      'invalid',
+    );
   const headers: Record<string, string> = {};
   const h = req.headers ?? {};
-  if (typeof h !== 'object' || Array.isArray(h)) return deny('Headers must be an object of strings.', 'invalid');
+  if (typeof h !== 'object' || Array.isArray(h))
+    return deny('Headers must be an object of strings.', 'invalid');
   const entries = Object.entries(h as Record<string, unknown>);
   if (entries.length > MAX_HTTP_HEADERS) return deny('Too many request headers.', 'invalid');
   const allowed = (api.headers ?? []).map((x) => x.toLowerCase());
   for (const [k, v] of entries) {
-    if (!allowed.includes(k.toLowerCase())) return deny(`${m.id} may not set the header ${JSON.stringify(k)} on ${api.name}.`, 'invalid');
-    if (typeof v !== 'string' || v.length > 8192 || /[\r\n\0]/.test(v)) return deny(`The value of the header ${JSON.stringify(k)} is not allowed.`, 'invalid');
+    if (!allowed.includes(k.toLowerCase()))
+      return deny(`${m.id} may not set the header ${JSON.stringify(k)} on ${api.name}.`, 'invalid');
+    if (typeof v !== 'string' || v.length > 8192 || /[\r\n\0]/.test(v))
+      return deny(`The value of the header ${JSON.stringify(k)} is not allowed.`, 'invalid');
     headers[k] = v;
   }
   const env = envId(req.env);
   if (env === null) return deny('env must be the id of an environment.', 'invalid');
-  if (env && !api.remote) return deny(`${m.id} does not allow ${api.name} to target an environment.`);
-  const params: Record<string, unknown> = { plugin: m.id, name: api.name, method, path: req.path, ...(query ? { query } : {}), ...(env ? { env } : {}) };
+  if (env && !api.remote)
+    return deny(`${m.id} does not allow ${api.name} to target an environment.`);
+  const params: Record<string, unknown> = {
+    plugin: m.id,
+    name: api.name,
+    method,
+    path: req.path,
+    ...(query ? { query } : {}),
+    ...(env ? { env } : {}),
+  };
   if (entries.length) params.headers = headers;
   const body = req.body;
   if (body instanceof Uint8Array) {
@@ -270,10 +319,20 @@ const MAX_FILENAME = 255;
 const MAX_AUDIT_LIMIT = 1000;
 
 /** A request for plugins.download / plugins.upload: an HTTP request without a body. */
-function transferHttp(m: BrokerManifest, req: unknown, u: BrokerUser, methods: string[], what: string): { params: Record<string, unknown>; admin: boolean; api: BrokerHTTP } | Plan {
+function transferHttp(
+  m: BrokerManifest,
+  req: unknown,
+  u: BrokerUser,
+  methods: string[],
+  what: string,
+): { params: Record<string, unknown>; admin: boolean; api: BrokerHTTP } | Plan {
   if (!req || typeof req !== 'object') return deny('Give an HTTP request.', 'invalid');
   const r = req as Record<string, unknown>;
-  if (typeof r.method !== 'string' || !methods.includes(r.method)) return deny(`A ${what} uses ${methods.join(' or ')}, not ${JSON.stringify(r.method)}.`, 'invalid');
+  if (typeof r.method !== 'string' || !methods.includes(r.method))
+    return deny(
+      `A ${what} uses ${methods.join(' or ')}, not ${JSON.stringify(r.method)}.`,
+      'invalid',
+    );
   if (r.body !== undefined && r.body !== null) return deny(`A ${what} takes no body.`, 'invalid');
   const x = httpRequest(m, { ...r, body: undefined, json: undefined }, u);
   if ('kind' in x) return x;
@@ -282,17 +341,49 @@ function transferHttp(m: BrokerManifest, req: unknown, u: BrokerUser, methods: s
 }
 
 /** Decision for plugins.download(name, req, filename): GET of an HTTP API, or the output of a declared command. */
-export function authorizeDownload(m: BrokerManifest, a: Record<string, unknown>, u: BrokerUser): Plan {
+export function authorizeDownload(
+  m: BrokerManifest,
+  a: Record<string, unknown>,
+  u: BrokerUser,
+): Plan {
   const filename = a.filename === undefined ? 'download' : str(a.filename, MAX_FILENAME);
   if (!filename) return deny('The file name is not valid.', 'invalid');
   if (typeof a.command === 'string') return downloadCommand(m, a, u, filename);
   const x = transferHttp(m, a.req, u, ['GET'], 'download');
   if ('kind' in x) return x;
-  const { name, method, path, query, headers, env } = x.params as { name: string; method: string; path: string; query?: string; headers?: Record<string, string>; env?: string };
-  return { kind: 'transfer', transfer: 'download', body: { kind: 'download', plugin: m.id, name, method, path, query, headers, filename, ...(env ? { env } : {}), admin: x.admin }, admin: x.admin };
+  const { name, method, path, query, headers, env } = x.params as {
+    name: string;
+    method: string;
+    path: string;
+    query?: string;
+    headers?: Record<string, string>;
+    env?: string;
+  };
+  return {
+    kind: 'transfer',
+    transfer: 'download',
+    body: {
+      kind: 'download',
+      plugin: m.id,
+      name,
+      method,
+      path,
+      query,
+      headers,
+      filename,
+      ...(env ? { env } : {}),
+      admin: x.admin,
+    },
+    admin: x.admin,
+  };
 }
 
-function downloadCommand(m: BrokerManifest, a: Record<string, unknown>, u: BrokerUser, filename: string): Plan {
+function downloadCommand(
+  m: BrokerManifest,
+  a: Record<string, unknown>,
+  u: BrokerUser,
+  filename: string,
+): Plan {
   const c = command(m, a.command);
   if (!c) return deny(`${m.id} does not declare a command ${JSON.stringify(a.command)}.`);
   if (c.pty) return deny(`${c.name} is a terminal command: it cannot be downloaded.`, 'invalid');
@@ -301,18 +392,67 @@ function downloadCommand(m: BrokerManifest, a: Record<string, unknown>, u: Broke
   const env = remoteEnv(m, c, a.env);
   if (typeof env === 'object' && env) return env;
   const admin = env ? false : needsAdmin(c, u);
-  return { kind: 'transfer', transfer: 'download', body: { kind: 'download', plugin: m.id, command: c.name, args: list, filename, ...(env ? { env } : {}), admin }, admin };
+  return {
+    kind: 'transfer',
+    transfer: 'download',
+    body: {
+      kind: 'download',
+      plugin: m.id,
+      command: c.name,
+      args: list,
+      filename,
+      ...(env ? { env } : {}),
+      admin,
+    },
+    admin,
+  };
 }
 
 /** Decision for plugins.upload(name, req, file): POST or PUT of `size` bytes, at most the API's maxUpload. */
-export function authorizeUpload(m: BrokerManifest, req: unknown, size: unknown, u: BrokerUser, stream = false): Plan {
-  if (typeof size !== 'number' || !Number.isSafeInteger(size) || size < 0) return deny('Give a file (a File or Blob).', 'invalid');
+export function authorizeUpload(
+  m: BrokerManifest,
+  req: unknown,
+  size: unknown,
+  u: BrokerUser,
+  stream = false,
+): Plan {
+  if (typeof size !== 'number' || !Number.isSafeInteger(size) || size < 0)
+    return deny('Give a file (a File or Blob).', 'invalid');
   const x = transferHttp(m, req, u, ['POST', 'PUT'], 'upload');
   if ('kind' in x) return x;
   const max = x.api.maxUpload ? x.api.maxUpload : DEFAULT_MAX_UPLOAD;
-  if (size > max) return deny(`The file is larger than the ${max} bytes ${m.id} may upload to ${x.api.name}.`, 'invalid');
-  const { name, method, path, query, headers, env } = x.params as { name: string; method: string; path: string; query?: string; headers?: Record<string, string>; env?: string };
-  return { kind: 'transfer', transfer: 'upload', body: { kind: 'upload', plugin: m.id, name, method, path, query, headers, size, ...(env ? { env } : {}), ...(stream ? { stream: true } : {}), admin: x.admin }, admin: x.admin, size };
+  if (size > max)
+    return deny(
+      `The file is larger than the ${max} bytes ${m.id} may upload to ${x.api.name}.`,
+      'invalid',
+    );
+  const { name, method, path, query, headers, env } = x.params as {
+    name: string;
+    method: string;
+    path: string;
+    query?: string;
+    headers?: Record<string, string>;
+    env?: string;
+  };
+  return {
+    kind: 'transfer',
+    transfer: 'upload',
+    body: {
+      kind: 'upload',
+      plugin: m.id,
+      name,
+      method,
+      path,
+      query,
+      headers,
+      size,
+      ...(env ? { env } : {}),
+      ...(stream ? { stream: true } : {}),
+      admin: x.admin,
+    },
+    admin: x.admin,
+    size,
+  };
 }
 
 /** Decision for plugins.audit.list: the plugin's own entries only. */
@@ -327,11 +467,17 @@ function authorizeAuditList(m: BrokerManifest, a: Record<string, unknown>): Plan
   for (const k of ['since', 'until'] as const) {
     if (isBlank(a[k])) continue;
     const v = a[k];
-    if (!validAuditTime(v)) return deny(`${k} must be a time (milliseconds or ISO 8601).`, 'invalid');
+    if (!validAuditTime(v))
+      return deny(`${k} must be a time (milliseconds or ISO 8601).`, 'invalid');
     params[k] = v;
   }
   if (a.limit !== undefined) {
-    if (!Number.isInteger(a.limit) || (a.limit as number) < 1 || (a.limit as number) > MAX_AUDIT_LIMIT) return deny(`limit must be between 1 and ${MAX_AUDIT_LIMIT}.`, 'invalid');
+    if (
+      !Number.isInteger(a.limit) ||
+      (a.limit as number) < 1 ||
+      (a.limit as number) > MAX_AUDIT_LIMIT
+    )
+      return deny(`limit must be between 1 and ${MAX_AUDIT_LIMIT}.`, 'invalid');
     params.limit = a.limit;
   }
   return { kind: 'call', method: 'plugins.audit.list', params, admin: false };
@@ -339,7 +485,8 @@ function authorizeAuditList(m: BrokerManifest, a: Record<string, unknown>): Plan
 
 const isBlank = (v: unknown): boolean => v === undefined || v === null || v === '';
 
-const validAuditTime = (v: unknown): v is number | string => (typeof v === 'number' && Number.isFinite(v)) || (typeof v === 'string' && v.length <= 40);
+const validAuditTime = (v: unknown): v is number | string =>
+  (typeof v === 'number' && Number.isFinite(v)) || (typeof v === 'string' && v.length <= 40);
 
 /** Largest file sdk.saveFile may save: it is held in memory twice (the frame's copy and the app's Blob). */
 export const MAX_SAVE = 64 << 20;
@@ -352,7 +499,11 @@ export const MAX_SAVE = 64 << 20;
 export function sanitizeFilename(name: string): string {
   let n = name.replace(/\p{Cc}|[\u2028\u2029\u202a-\u202e\u2066-\u2069]/gu, '_');
   n = n.slice(Math.max(n.lastIndexOf('/'), n.lastIndexOf('\\')) + 1);
-  n = n.replace(/[<>:"/\\|?*;%`$]/g, '_').trim().replace(/^\.+/, '').replace(/[. ]+$/, '');
+  n = n
+    .replace(/[<>:"/\\|?*;%`$]/g, '_')
+    .trim()
+    .replace(/^\.+/, '')
+    .replace(/[. ]+$/, '');
   const enc = new TextEncoder();
   while (enc.encode(n).length > 200) n = Array.from(n).slice(0, -1).join('');
   return n || 'download';
@@ -363,17 +514,23 @@ const MIME_RE = /^[a-zA-Z0-9][a-zA-Z0-9!#$&^_.+-]{0,60}\/[a-zA-Z0-9][a-zA-Z0-9!#
 
 /** Decision for sdk.saveFile(filename, data, mime?). */
 export function authorizeSave(a: Record<string, unknown>): Plan {
-  if (typeof a.filename !== 'string' || !a.filename || a.filename.length > 1024) return deny('Give a file name.', 'invalid');
+  if (typeof a.filename !== 'string' || !a.filename || a.filename.length > 1024)
+    return deny('Give a file name.', 'invalid');
   const d = a.data;
   let size: number;
   if (typeof d === 'string') size = new TextEncoder().encode(d).length;
   else if (d instanceof Uint8Array) size = d.length;
   else if (typeof Blob !== 'undefined' && d instanceof Blob) size = d.size;
   else return deny('The data must be a string, a Uint8Array or a Blob.', 'invalid');
-  if (size > MAX_SAVE) return deny(`The file is larger than ${MAX_SAVE >> 20} MiB. Use sdk.api.download to stream a large file from a service.`, 'invalid');
+  if (size > MAX_SAVE)
+    return deny(
+      `The file is larger than ${MAX_SAVE >> 20} MiB. Use sdk.api.download to stream a large file from a service.`,
+      'invalid',
+    );
   let mime = 'application/octet-stream';
   if (a.mime !== undefined && a.mime !== null && a.mime !== '') {
-    if (typeof a.mime !== 'string' || !MIME_RE.test(a.mime)) return deny('The MIME type is not valid.', 'invalid');
+    if (typeof a.mime !== 'string' || !MIME_RE.test(a.mime))
+      return deny('The MIME type is not valid.', 'invalid');
     mime = a.mime;
   }
   return { kind: 'save', filename: sanitizeFilename(a.filename), mime, data: d, size };
@@ -396,7 +553,11 @@ export class SaveLimiter {
   /** Records the file and returns true when it may be saved now. */
   allow(size: number, now = Date.now()): boolean {
     this.log = this.log.filter((e) => now - e.at < this.windowMs);
-    if (this.log.length >= this.count || this.log.reduce((n, e) => n + e.size, 0) + size > this.bytes) return false;
+    if (
+      this.log.length >= this.count ||
+      this.log.reduce((n, e) => n + e.size, 0) + size > this.bytes
+    )
+      return false;
     this.log.push({ at: now, size });
     return true;
   }
@@ -405,18 +566,37 @@ export class SaveLimiter {
 /** A relative asset path inside the plugin folder. */
 export function validAsset(p: unknown): p is string {
   if (typeof p !== 'string' || !p || p.length > 256) return false;
-  if (p.startsWith('/') || p.includes('\\') || p.includes('\0') || p.includes('?') || p.includes('#') || p.includes('%')) return false;
+  if (
+    p.startsWith('/') ||
+    p.includes('\\') ||
+    p.includes('\0') ||
+    p.includes('?') ||
+    p.includes('#') ||
+    p.includes('%')
+  )
+    return false;
   return p.split('/').every((s) => s !== '' && s !== '.' && s !== '..');
 }
 
-const str = (v: unknown, max: number): string | null => (typeof v === 'string' && v.length <= max ? v : null);
+const str = (v: unknown, max: number): string | null =>
+  typeof v === 'string' && v.length <= max ? v : null;
 
 /** The broker's decision for one request of plugin `m`. */
-export function authorize(m: BrokerManifest, op: FrameOp | string, args: Record<string, unknown>, u: BrokerUser): Plan {
+export function authorize(
+  m: BrokerManifest,
+  op: FrameOp | string,
+  args: Record<string, unknown>,
+  u: BrokerUser,
+): Plan {
   const a = args && typeof args === 'object' ? args : {};
   switch (op) {
     case 'exec':
-      return commandPlan(m, { kind: 'call', method: 'plugins.exec' }, { cmd: a.command, args: a.args, env: a.env }, u);
+      return commandPlan(
+        m,
+        { kind: 'call', method: 'plugins.exec' },
+        { cmd: a.command, args: a.args, env: a.env },
+        u,
+      );
     case 'readFile':
     case 'listDir':
     case 'writeFile':
@@ -439,7 +619,8 @@ export function authorize(m: BrokerManifest, op: FrameOp | string, args: Record<
     case 'network':
       return authorizeNetwork(m, a);
     case 'asset':
-      if (!validAsset(a.path)) return deny('Give a relative path inside the plugin folder.', 'invalid');
+      if (!validAsset(a.path))
+        return deny('Give a relative path inside the plugin folder.', 'invalid');
       return { kind: 'asset', path: a.path };
     case 'toast':
       return authorizeToast(a);
@@ -455,11 +636,17 @@ export function authorize(m: BrokerManifest, op: FrameOp | string, args: Record<
 type CommandInput = { cmd: unknown; args: unknown; env: unknown };
 
 /** A declared command (terminal or not, as `pty` says) with checked arguments and environment, or a denial. */
-function checkedCommand(m: BrokerManifest, i: CommandInput, pty: boolean): { c: BrokerCommand; list: string[]; env: string | undefined } | Plan {
+function checkedCommand(
+  m: BrokerManifest,
+  i: CommandInput,
+  pty: boolean,
+): { c: BrokerCommand; list: string[]; env: string | undefined } | Plan {
   const c = command(m, i.cmd);
   if (!c) return deny(`${m.id} does not declare a command ${JSON.stringify(i.cmd)}.`);
-  if (pty && !c.pty) return deny(`${c.name} is not declared as a terminal (pty) command.`, 'invalid');
-  if (!pty && c.pty) return deny(`${c.name} is a terminal command: open it with sdk.api.pty.`, 'invalid');
+  if (pty && !c.pty)
+    return deny(`${c.name} is not declared as a terminal (pty) command.`, 'invalid');
+  if (!pty && c.pty)
+    return deny(`${c.name} is a terminal command: open it with sdk.api.pty.`, 'invalid');
   const list = argList(i.args);
   if (!list) return deny('Command arguments must be a list of at most 16 strings.', 'invalid');
   const env = remoteEnv(m, c, i.env);
@@ -468,16 +655,31 @@ function checkedCommand(m: BrokerManifest, i: CommandInput, pty: boolean): { c: 
 }
 
 /** A declared non-terminal command with checked arguments, run as `route.method` (plugins.exec or plugins.execStream). */
-function commandPlan(m: BrokerManifest, route: { kind: 'call' | 'stream'; method: string }, i: CommandInput, u: BrokerUser): Plan {
+function commandPlan(
+  m: BrokerManifest,
+  route: { kind: 'call' | 'stream'; method: string },
+  i: CommandInput,
+  u: BrokerUser,
+): Plan {
   const x = checkedCommand(m, i, false);
   if ('kind' in x) return x;
   const { c, list, env } = x;
-  return { kind: route.kind, method: route.method, params: { plugin: m.id, command: c.name, args: list, ...(env ? { env } : {}) }, admin: env ? false : needsAdmin(c, u) };
+  return {
+    kind: route.kind,
+    method: route.method,
+    params: { plugin: m.id, command: c.name, args: list, ...(env ? { env } : {}) },
+    admin: env ? false : needsAdmin(c, u),
+  };
 }
 
 type FileOp = 'readFile' | 'listDir' | 'writeFile' | 'mkdir' | 'remove';
 
-function authorizeFileOp(m: BrokerManifest, op: FileOp, a: Record<string, unknown>, u: BrokerUser): Plan {
+function authorizeFileOp(
+  m: BrokerManifest,
+  op: FileOp,
+  a: Record<string, unknown>,
+  u: BrokerUser,
+): Plan {
   const path = str(a.path, MAX_PATH);
   if (!path) return deny('Give an absolute path.', 'invalid');
   const write = op === 'writeFile' || op === 'mkdir' || op === 'remove';
@@ -491,18 +693,26 @@ function authorizeFileOp(m: BrokerManifest, op: FileOp, a: Record<string, unknow
 }
 
 /** The declared folder that covers path, or a denial. */
-function declaredFolder(m: BrokerManifest, path: string, write: boolean, tilde: boolean, u: BrokerUser): ({ path: string } & AdminLevel) | Plan {
+function declaredFolder(
+  m: BrokerManifest,
+  path: string,
+  write: boolean,
+  tilde: boolean,
+  u: BrokerUser,
+): ({ path: string } & AdminLevel) | Plan {
   const declared = declaredFolders(m, write);
-  if (!declared.length) return deny(`${m.id} declares no files it may ${write ? 'write' : 'read'}.`);
+  if (!declared.length)
+    return deny(`${m.id} declares no files it may ${write ? 'write' : 'read'}.`);
   // Paths with ~ are checked by the daemon when the home is unknown here (admin folders are never under ~).
   const folder = tilde && !u.home ? { path } : matchFolder(path, declared, u.home);
-  if (!folder) return deny(`${m.id} did not declare that it may ${write ? 'write' : 'read'} ${path}.`);
+  if (!folder)
+    return deny(`${m.id} did not declare that it may ${write ? 'write' : 'read'} ${path}.`);
   return folder;
 }
 
 function declaredFolders(m: BrokerManifest, write: boolean): BrokerFolder[] {
   const files = m.capabilities?.files ?? {};
-  return write ? files.write ?? [] : [...(files.read ?? []), ...(files.write ?? [])];
+  return write ? (files.write ?? []) : [...(files.read ?? []), ...(files.write ?? [])];
 }
 
 /**
@@ -514,28 +724,59 @@ function fileEnv(m: BrokerManifest, v: unknown, tilde: boolean): string | Plan |
   const env = envId(v);
   if (env === null) return deny('env must be the id of an environment.', 'invalid');
   if (!env) return env;
-  if (tilde) return deny('A path on an environment must be absolute (~ is not expanded there).', 'invalid');
-  const remote = [...(m.capabilities?.http ?? []), ...(m.capabilities?.commands ?? [])].some((x) => x.remote);
+  if (tilde)
+    return deny('A path on an environment must be absolute (~ is not expanded there).', 'invalid');
+  const remote = [...(m.capabilities?.http ?? []), ...(m.capabilities?.commands ?? [])].some(
+    (x) => x.remote,
+  );
   if (!remote) return deny(`${m.id} does not allow targeting an environment.`);
   return env;
 }
 
-function filePlan(m: BrokerManifest, op: FileOp, a: Record<string, unknown>, path: string, e: { env?: string }, admin: boolean): Plan {
+function filePlan(
+  m: BrokerManifest,
+  op: FileOp,
+  a: Record<string, unknown>,
+  path: string,
+  e: { env?: string },
+  admin: boolean,
+): Plan {
   if (op === 'writeFile') {
     const data = str(a.data, Math.ceil((MAX_WRITE * 4) / 3) + 4);
     if (data === null) return deny('The data to write is missing or too large.', 'invalid');
-    return { kind: 'call', method: 'plugins.writeFile', params: { plugin: m.id, path, data, b64: a.b64 === true, ...e }, admin };
+    return {
+      kind: 'call',
+      method: 'plugins.writeFile',
+      params: { plugin: m.id, path, data, b64: a.b64 === true, ...e },
+      admin,
+    };
   }
-  if (op === 'mkdir' || op === 'remove') return { kind: 'call', method: `plugins.${op}`, params: { plugin: m.id, path, ...e }, admin };
+  if (op === 'mkdir' || op === 'remove')
+    return { kind: 'call', method: `plugins.${op}`, params: { plugin: m.id, path, ...e }, admin };
   const method = op === 'readFile' ? 'plugins.readFile' : 'plugins.listDir';
-  return { kind: 'call', method, params: { plugin: m.id, path, ...(op === 'readFile' && a.b64 === true ? { b64: true } : {}), ...e }, admin };
+  return {
+    kind: 'call',
+    method,
+    params: {
+      plugin: m.id,
+      path,
+      ...(op === 'readFile' && a.b64 === true ? { b64: true } : {}),
+      ...e,
+    },
+    admin,
+  };
 }
 
 function authorizeNetwork(m: BrokerManifest, a: Record<string, unknown>): Plan {
-  if (!m.capabilities?.userHosts) return deny(`${m.id} does not declare capabilities.network.userHosts.`);
+  if (!m.capabilities?.userHosts)
+    return deny(`${m.id} does not declare capabilities.network.userHosts.`);
   const host = typeof a.host === 'string' ? a.host.trim().toLowerCase() : '';
   const scheme = a.scheme === 'http' ? 'http' : 'https';
-  if (!host || host.length > 253 || !HOST_RE.test(host)) return deny('Give a host name with an optional port, like registry.example.org:5000.', 'invalid');
+  if (!host || host.length > 253 || !HOST_RE.test(host))
+    return deny(
+      'Give a host name with an optional port, like registry.example.org:5000.',
+      'invalid',
+    );
   return { kind: 'network', host, scheme };
 }
 
@@ -543,7 +784,7 @@ function authorizeToast(a: Record<string, unknown>): Plan {
   const tone = a.tone === 'err' || a.tone === 'info' ? a.tone : 'ok';
   const title = str(a.title, 200);
   if (!title) return deny('A toast needs a short title.', 'invalid');
-  const detail = a.detail === undefined ? undefined : str(a.detail, 1000) ?? undefined;
+  const detail = a.detail === undefined ? undefined : (str(a.detail, 1000) ?? undefined);
   return { kind: 'toast', tone, title, detail };
 }
 
@@ -555,8 +796,10 @@ function authorizeOpen(m: BrokerManifest, a: Record<string, unknown>): Plan {
 
 function authorizeOpenUrl(a: Record<string, unknown>, u: BrokerUser): Plan {
   const url = externalUrl(a.url);
-  if (!url) return deny('Only http and https addresses without credentials can be opened.', 'invalid');
-  if (u.appOrigin && new URL(url).origin === u.appOrigin) return deny('Plugins cannot open pages of this app in a new tab.', 'invalid');
+  if (!url)
+    return deny('Only http and https addresses without credentials can be opened.', 'invalid');
+  if (u.appOrigin && new URL(url).origin === u.appOrigin)
+    return deny('Plugins cannot open pages of this app in a new tab.', 'invalid');
   return { kind: 'openUrl', url };
 }
 
@@ -582,8 +825,19 @@ function remoteEnv(m: BrokerManifest, c: BrokerCommand, v: unknown): string | Pl
 }
 
 /** Decision for a streamed command (plugins.execStream). */
-export function authorizeStream(m: BrokerManifest, cmd: unknown, args: unknown, u: BrokerUser, envArg?: unknown): Plan {
-  return commandPlan(m, { kind: 'stream', method: 'plugins.execStream' }, { cmd, args, env: envArg }, u);
+export function authorizeStream(
+  m: BrokerManifest,
+  cmd: unknown,
+  args: unknown,
+  u: BrokerUser,
+  envArg?: unknown,
+): Plan {
+  return commandPlan(
+    m,
+    { kind: 'stream', method: 'plugins.execStream' },
+    { cmd, args, env: envArg },
+    u,
+  );
 }
 
 /** Decision for a streamed HTTP request (plugins.httpStream). */
@@ -595,10 +849,31 @@ export function authorizeHttpStream(m: BrokerManifest, req: unknown, u: BrokerUs
 }
 
 /** Decision for a terminal command (plugins.pty): only commands declared `pty: true`. */
-export function authorizePty(m: BrokerManifest, cmd: unknown, args: unknown, cols: unknown, rows: unknown, u: BrokerUser, envArg?: unknown): Plan {
+export function authorizePty(
+  m: BrokerManifest,
+  cmd: unknown,
+  args: unknown,
+  cols: unknown,
+  rows: unknown,
+  u: BrokerUser,
+  envArg?: unknown,
+): Plan {
   const x = checkedCommand(m, { cmd, args, env: envArg }, true);
   if ('kind' in x) return x;
   const { c, list, env } = x;
-  const size = (v: unknown, d: number) => (Number.isInteger(v) && (v as number) >= 1 && (v as number) <= 1000 ? (v as number) : d);
-  return { kind: 'stream', method: 'plugins.pty', params: { plugin: m.id, command: c.name, args: list, cols: size(cols, 80), rows: size(rows, 24), ...(env ? { env } : {}) }, admin: env ? false : needsAdmin(c, u) };
+  const size = (v: unknown, d: number) =>
+    Number.isInteger(v) && (v as number) >= 1 && (v as number) <= 1000 ? (v as number) : d;
+  return {
+    kind: 'stream',
+    method: 'plugins.pty',
+    params: {
+      plugin: m.id,
+      command: c.name,
+      args: list,
+      cols: size(cols, 80),
+      rows: size(rows, 24),
+      ...(env ? { env } : {}),
+    },
+    admin: env ? false : needsAdmin(c, u),
+  };
 }

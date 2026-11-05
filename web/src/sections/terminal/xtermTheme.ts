@@ -30,15 +30,55 @@ export function resolveColour(css: string, fallback = '#888888'): string {
 const v = (name: string) => `var(${name})`;
 const mix = (c: string, pct: number, other: string) => `color-mix(in srgb, ${c} ${pct}%, ${other})`;
 
-const FIXED_DARK = { bg: '#0F1218', fg: '#D9DEE8', dim: '#6B7385', g: '#6FDDB0', b: '#7DB6FF', y: '#F5B963', r: '#FF8A9B', m: '#C6A2FF', c: '#6FD8DE', sel: '#24304A' };
-const FIXED_LIGHT = { bg: '#FBFBFD', fg: '#1D2030', dim: '#8D92A5', g: '#16805A', b: '#2C73C9', y: '#A9620D', r: '#B5324A', m: '#7A43C2', c: '#1B7F86', sel: '#DDEBFB' };
+const FIXED_DARK = {
+  bg: '#0F1218',
+  fg: '#D9DEE8',
+  dim: '#6B7385',
+  g: '#6FDDB0',
+  b: '#7DB6FF',
+  y: '#F5B963',
+  r: '#FF8A9B',
+  m: '#C6A2FF',
+  c: '#6FD8DE',
+  sel: '#24304A',
+};
+const FIXED_LIGHT = {
+  bg: '#FBFBFD',
+  fg: '#1D2030',
+  dim: '#8D92A5',
+  g: '#16805A',
+  b: '#2C73C9',
+  y: '#A9620D',
+  r: '#B5324A',
+  m: '#7A43C2',
+  c: '#1B7F86',
+  sel: '#DDEBFB',
+};
 
 function fromFixed(f: typeof FIXED_DARK, dark: boolean): ITheme {
   const lift = (c: string) => resolveColour(mix(c, 78, dark ? '#fff' : '#000'), c);
   return {
-    background: f.bg, foreground: f.fg, cursor: f.g, cursorAccent: f.bg, selectionBackground: f.sel,
-    black: dark ? '#2A3040' : '#1D2030', red: f.r, green: f.g, yellow: f.y, blue: f.b, magenta: f.m, cyan: f.c, white: dark ? '#A7AEBF' : '#6B7385',
-    brightBlack: f.dim, brightRed: lift(f.r), brightGreen: lift(f.g), brightYellow: lift(f.y), brightBlue: lift(f.b), brightMagenta: lift(f.m), brightCyan: lift(f.c), brightWhite: f.fg,
+    background: f.bg,
+    foreground: f.fg,
+    cursor: f.g,
+    cursorAccent: f.bg,
+    selectionBackground: f.sel,
+    black: dark ? '#2A3040' : '#1D2030',
+    red: f.r,
+    green: f.g,
+    yellow: f.y,
+    blue: f.b,
+    magenta: f.m,
+    cyan: f.c,
+    white: dark ? '#A7AEBF' : '#6B7385',
+    brightBlack: f.dim,
+    brightRed: lift(f.r),
+    brightGreen: lift(f.g),
+    brightYellow: lift(f.y),
+    brightBlue: lift(f.b),
+    brightMagenta: lift(f.m),
+    brightCyan: lift(f.c),
+    brightWhite: f.fg,
   };
 }
 
@@ -55,7 +95,8 @@ export function terminalScheme(mode: string): 'dark' | 'light' {
 export function buildTheme(mode: string): ITheme {
   const appScheme = document.documentElement.dataset.scheme === 'light' ? 'light' : 'dark';
   const scheme = terminalScheme(mode);
-  if (mode !== 'app' && scheme !== appScheme) return fromFixed(scheme === 'dark' ? FIXED_DARK : FIXED_LIGHT, scheme === 'dark');
+  if (mode !== 'app' && scheme !== appScheme)
+    return fromFixed(scheme === 'dark' ? FIXED_DARK : FIXED_LIGHT, scheme === 'dark');
   const dark = scheme === 'dark';
   const R = (c: string, fb: string) => resolveColour(c, fb);
   const edge = dark ? '#fff' : '#000';

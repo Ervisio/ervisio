@@ -10,31 +10,76 @@ import { useNav, type NavEntry } from './useNav';
 
 export function RailItem({ e }: { e: NavEntry }) {
   return (
-    <NavLink to={e.to} end={e.end} className={({ isActive }) => `rail-it ${e.hueClass}${isActive ? ' active' : ''}`} aria-label={e.label}>
-      <span className={`pi${e.logo ? ' has-logo' : ''}`}><NavIcon e={e} /></span>
+    <NavLink
+      to={e.to}
+      end={e.end}
+      className={({ isActive }) => `rail-it ${e.hueClass}${isActive ? ' active' : ''}`}
+      aria-label={e.label}
+    >
+      <span className={`pi${e.logo ? ' has-logo' : ''}`}>
+        <NavIcon e={e} />
+      </span>
       <span className="rail-lb">{e.label}</span>
-      {e.badge && <span className={`n${e.badge.tone === 'info' ? ' n--info' : ''}`} aria-label={String(e.badge.count)}>{e.badge.count > 99 ? '99+' : e.badge.count}</span>}
+      {e.badge && (
+        <span
+          className={`n${e.badge.tone === 'info' ? ' n--info' : ''}`}
+          aria-label={String(e.badge.count)}
+        >
+          {e.badge.count > 99 ? '99+' : e.badge.count}
+        </span>
+      )}
     </NavLink>
   );
 }
 
 type SessionValue = ReturnType<typeof useSession>;
 type Translate = ReturnType<typeof useT>;
-type UserMenuArgs = Pick<SessionValue, 'session' | 'isUnlocked' | 'unlockLeft' | 'unlockForever' | 'lock' | 'signOut'> & {
+type UserMenuArgs = Pick<
+  SessionValue,
+  'session' | 'isUnlocked' | 'unlockLeft' | 'unlockForever' | 'lock' | 'signOut'
+> & {
   t: Translate;
   goSettings(): void;
 };
 
-function userMenuItems({ t, session, isUnlocked, unlockLeft, unlockForever, lock, signOut, goSettings }: UserMenuArgs): MenuItem[] {
+function userMenuItems({
+  t,
+  session,
+  isUnlocked,
+  unlockLeft,
+  unlockForever,
+  lock,
+  signOut,
+  goSettings,
+}: UserMenuArgs): MenuItem[] {
   const sudoItem: MenuItem = isUnlocked
-    ? { id: 'lock', label: unlockForever ? t('sudo.lockNowForever') : t('sudo.lockNow', { time: formatClock(unlockLeft) }), icon: 'lock', onSelect: () => void lock() }
-    : { id: 'unlock', label: t('sudo.unlock'), icon: 'unlock', disabled: session ? !session.canSudo && !session.isAdmin : false, onSelect: () => void requestUnlock().catch(() => undefined) };
+    ? {
+        id: 'lock',
+        label: unlockForever
+          ? t('sudo.lockNowForever')
+          : t('sudo.lockNow', { time: formatClock(unlockLeft) }),
+        icon: 'lock',
+        onSelect: () => void lock(),
+      }
+    : {
+        id: 'unlock',
+        label: t('sudo.unlock'),
+        icon: 'unlock',
+        disabled: session ? !session.canSudo && !session.isAdmin : false,
+        onSelect: () => void requestUnlock().catch(() => undefined),
+      };
   return [
     { type: 'heading', label: t('user.signedInAs', { user: session?.user ?? '' }) },
     sudoItem,
     { id: 'settings', label: t('nav.settings'), icon: 'cog', onSelect: goSettings },
     { type: 'separator' },
-    { id: 'out', label: t('user.signOut'), icon: 'logout', danger: true, onSelect: () => void signOut() },
+    {
+      id: 'out',
+      label: t('user.signOut'),
+      icon: 'logout',
+      danger: true,
+      onSelect: () => void signOut(),
+    },
   ];
 }
 
@@ -61,12 +106,23 @@ export function Rail() {
   const avRef = useRef<HTMLButtonElement>(null);
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
 
-  const items = userMenuItems({ t, session, isUnlocked, unlockLeft, unlockForever, lock, signOut, goSettings: () => nav('/settings') });
+  const items = userMenuItems({
+    t,
+    session,
+    isUnlocked,
+    unlockLeft,
+    unlockForever,
+    lock,
+    signOut,
+    goSettings: () => nav('/settings'),
+  });
 
   return (
     <nav className="rail" aria-label={t('nav.main')}>
       <Link to="/" className="rail-distro" aria-label={host?.hostname ?? t('nav.overview')}>
-        <span className="lg"><DistroLogo id={host?.distro.id} logo={host?.distro.logo} url={host?.distro.logoUrl} /></span>
+        <span className="lg">
+          <DistroLogo id={host?.distro.id} logo={host?.distro.logo} url={host?.distro.logoUrl} />
+        </span>
         <span className="dn">{host?.hostname ?? ''}</span>
       </Link>
       <RailList main={main} plugins={plugins} />
@@ -90,7 +146,15 @@ export function Rail() {
   );
 }
 
-function AvatarMenu({ items, anchor, onClose }: { items: MenuItem[]; anchor: DOMRect; onClose(): void }) {
+function AvatarMenu({
+  items,
+  anchor,
+  onClose,
+}: {
+  items: MenuItem[];
+  anchor: DOMRect;
+  onClose(): void;
+}) {
   // Opens to the right of the rail, bottom aligned with the avatar.
   const rect = new DOMRect(anchor.right + 6, anchor.top - 8, 0, 0);
   return <Menu items={items} anchor={{ x: rect.x, y: rect.y }} onClose={onClose} />;

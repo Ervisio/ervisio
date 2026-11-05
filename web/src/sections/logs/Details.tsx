@@ -20,9 +20,16 @@ interface Props {
 
 const TONE: Record<string, Tone> = { err: 'err', warn: 'warn', info: 'info', debug: 'neutral' };
 
-function Context({ entry, contextSource, watchers, call_ }: Pick<Props, 'entry' | 'contextSource' | 'watchers' | 'call_'>) {
+function Context({
+  entry,
+  contextSource,
+  watchers,
+  call_,
+}: Pick<Props, 'entry' | 'contextSource' | 'watchers' | 'call_'>) {
   const t = useT('logs');
-  const [state, setState] = useState<{ data?: ContextResult; error?: string; loading: boolean }>({ loading: true });
+  const [state, setState] = useState<{ data?: ContextResult; error?: string; loading: boolean }>({
+    loading: true,
+  });
   const key = entry?.key;
   useEffect(() => {
     if (!entry) return;
@@ -33,9 +40,15 @@ function Context({ entry, contextSource, watchers, call_ }: Pick<Props, 'entry' 
     }
     const ac = new AbortController();
     setState({ loading: true });
-    call_<ContextResult>('logs.context', { source: contextSource, cursor: entry.cursor, before: 4, after: 4, watchers }, ac.signal)
+    call_<ContextResult>(
+      'logs.context',
+      { source: contextSource, cursor: entry.cursor, before: 4, after: 4, watchers },
+      ac.signal,
+    )
       .then((data) => !ac.signal.aborted && setState({ data, loading: false }))
-      .catch((e) => !ac.signal.aborted && setState({ error: e?.message ?? String(e), loading: false }));
+      .catch(
+        (e) => !ac.signal.aborted && setState({ error: e?.message ?? String(e), loading: false }),
+      );
     return () => ac.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
@@ -55,7 +68,17 @@ function Context({ entry, contextSource, watchers, call_ }: Pick<Props, 'entry' 
   );
 }
 
-export function Details({ entry, contextSource, watchers, call_, onClose, onOpenFile, onGoService, onOnlySource, inline }: Props) {
+export function Details({
+  entry,
+  contextSource,
+  watchers,
+  call_,
+  onClose,
+  onOpenFile,
+  onGoService,
+  onOnlySource,
+  inline,
+}: Props) {
   const t = useT('logs');
   const { lang } = useI18n();
 
@@ -88,15 +111,42 @@ export function Details({ entry, contextSource, watchers, call_, onClose, onOpen
           <dl className="logs-kv">
             <dt>{t('details.time')}</dt>
             <dd>{fmtFull(entry.ts, lang)}</dd>
-            {entry.unit && (<><dt>{t('details.unit')}</dt><dd className="mono">{entry.unit}</dd></>)}
-            {!!entry.pid && (<><dt>{t('details.pid')}</dt><dd className="mono">{entry.pid}</dd></>)}
-            {entry.file && (<><dt>{t('details.file')}</dt><dd className="mono" title={entry.file}>{entry.file}</dd></>)}
-            {!!entry.line && (<><dt>{t('details.line')}</dt><dd>{entry.line.toLocaleString()}</dd></>)}
+            {entry.unit && (
+              <>
+                <dt>{t('details.unit')}</dt>
+                <dd className="mono">{entry.unit}</dd>
+              </>
+            )}
+            {!!entry.pid && (
+              <>
+                <dt>{t('details.pid')}</dt>
+                <dd className="mono">{entry.pid}</dd>
+              </>
+            )}
+            {entry.file && (
+              <>
+                <dt>{t('details.file')}</dt>
+                <dd className="mono" title={entry.file}>
+                  {entry.file}
+                </dd>
+              </>
+            )}
+            {!!entry.line && (
+              <>
+                <dt>{t('details.line')}</dt>
+                <dd>{entry.line.toLocaleString()}</dd>
+              </>
+            )}
           </dl>
           {(entry.file || !contextSource.startsWith('evt:')) && (
             <>
               <h4>{t('details.context')}</h4>
-              <Context entry={entry} contextSource={contextSource} watchers={watchers} call_={call_} />
+              <Context
+                entry={entry}
+                contextSource={contextSource}
+                watchers={watchers}
+                call_={call_}
+              />
             </>
           )}
           <div className="logs-acts">
@@ -128,4 +178,3 @@ export function Details({ entry, contextSource, watchers, call_, onClose, onOpen
     </Panel>
   );
 }
-

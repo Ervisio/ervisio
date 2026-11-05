@@ -1,7 +1,23 @@
 import { useCallback, useEffect, useState } from 'react';
 import { call, errorMessage } from '../../api';
 import { useT, useI18n } from '../../i18n';
-import { Button, Checkbox, ConfirmDialog, Dialog, EmptyState, Icon, IconButton, Input, Panel, Select, Skeleton, Switch, Tabs, Textarea, toast } from '../../ui';
+import {
+  Button,
+  Checkbox,
+  ConfirmDialog,
+  Dialog,
+  EmptyState,
+  Icon,
+  IconButton,
+  Input,
+  Panel,
+  Select,
+  Skeleton,
+  Switch,
+  Tabs,
+  Textarea,
+  toast,
+} from '../../ui';
 import { relativeTime } from '../../lib/format';
 import { Avatar, RoleBadge, useGroupDesc, useLastLogin } from './parts';
 import { StrengthHint } from './CreateDialog';
@@ -10,8 +26,14 @@ import { ADMIN_GROUPS, COMMON_GROUPS } from './util';
 
 type Tab = 'info' | 'groups' | 'keys' | 'sess';
 
-
-export function UserPanel({ user, data, groups, self, onClose, reload }: {
+export function UserPanel({
+  user,
+  data,
+  groups,
+  self,
+  onClose,
+  reload,
+}: {
   user: UserInfo | null;
   data: UserList;
   groups: GroupInfo[];
@@ -25,7 +47,9 @@ export function UserPanel({ user, data, groups, self, onClose, reload }: {
   const [delOpen, setDelOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const name = user?.name ?? '';
-  useEffect(() => { setTab('info'); }, [name]);
+  useEffect(() => {
+    setTab('info');
+  }, [name]);
 
   const run = async (fn: () => Promise<unknown>, ok: string) => {
     setBusy(true);
@@ -51,21 +75,45 @@ export function UserPanel({ user, data, groups, self, onClose, reload }: {
         open={!!user}
         onClose={onClose}
         hue="usr"
-        title={user && <span className="usr-ptitle"><Avatar name={user.name} large /><span>{user.name}</span></span>}
-        subtitle={user && t('panel.subtitle', { name: user.fullName || t('panel.noFullName'), uid: user.uid })}
+        title={
+          user && (
+            <span className="usr-ptitle">
+              <Avatar name={user.name} large />
+              <span>{user.name}</span>
+            </span>
+          )
+        }
+        subtitle={
+          user &&
+          t('panel.subtitle', { name: user.fullName || t('panel.noFullName'), uid: user.uid })
+        }
         tabs={
           user && (
             <>
               <div className="usr-acts">
-                <Button icon="key" onClick={() => setResetOpen(true)}>{t('actions.reset')}</Button>
+                <Button icon="key" onClick={() => setResetOpen(true)}>
+                  {t('actions.reset')}
+                </Button>
                 <Button
                   icon={locked ? 'unlock' : 'lock'}
                   disabled={busy || (!locked && isSelf)}
-                  onClick={() => run(() => call(locked ? 'users.unlock' : 'users.lock', { name }), t(locked ? 'actions.unlocked' : 'actions.locked', { name }))}
+                  onClick={() =>
+                    run(
+                      () => call(locked ? 'users.unlock' : 'users.lock', { name }),
+                      t(locked ? 'actions.unlocked' : 'actions.locked', { name }),
+                    )
+                  }
                 >
                   {t(locked ? 'actions.unlock' : 'actions.lock')}
                 </Button>
-                <Button variant="danger" icon="trash" disabled={isSelf || isRoot} onClick={() => setDelOpen(true)}>{t('actions.delete')}</Button>
+                <Button
+                  variant="danger"
+                  icon="trash"
+                  disabled={isSelf || isRoot}
+                  onClick={() => setDelOpen(true)}
+                >
+                  {t('actions.delete')}
+                </Button>
               </div>
               <Tabs<Tab>
                 value={tab}
@@ -89,13 +137,18 @@ export function UserPanel({ user, data, groups, self, onClose, reload }: {
         {user && tab === 'sess' && <SessionsTab user={user} />}
       </Panel>
 
-      {user && <ResetDialog open={resetOpen} onClose={() => setResetOpen(false)} name={user.name} />}
+      {user && (
+        <ResetDialog open={resetOpen} onClose={() => setResetOpen(false)} name={user.name} />
+      )}
       {user && (
         <DeleteDialog
           open={delOpen}
           onClose={() => setDelOpen(false)}
           name={user.name}
-          onDone={async () => { onClose(); await reload(); }}
+          onDone={async () => {
+            onClose();
+            await reload();
+          }}
         />
       )}
     </>
@@ -104,12 +157,25 @@ export function UserPanel({ user, data, groups, self, onClose, reload }: {
 
 type RunFn = (fn: () => Promise<unknown>, ok: string) => Promise<void>;
 
-function InfoTab({ user, data, self, run }: { user: UserInfo; data: UserList; self: string; run: RunFn }) {
+function InfoTab({
+  user,
+  data,
+  self,
+  run,
+}: {
+  user: UserInfo;
+  data: UserList;
+  self: string;
+  run: RunFn;
+}) {
   const t = useT('users');
   const lastLogin = useLastLogin();
   const [full, setFull] = useState(user.fullName);
   const [shell, setShell] = useState(user.shell);
-  useEffect(() => { setFull(user.fullName); setShell(user.shell); }, [user.name, user.fullName, user.shell]);
+  useEffect(() => {
+    setFull(user.fullName);
+    setShell(user.shell);
+  }, [user.name, user.fullName, user.shell]);
   const dirty = full.trim() !== user.fullName || shell !== user.shell;
   const shells = data.shells.includes(user.shell) ? data.shells : [user.shell, ...data.shells];
 
@@ -118,7 +184,11 @@ function InfoTab({ user, data, self, run }: { user: UserInfo; data: UserList; se
   else if (user.passwordState === 'unknown') pw = t('info.pwUnknown');
   else if (user.passwordState === 'disabled') pw = t('info.pwNone');
   else if (user.passwordState === 'empty') pw = t('info.pwEmpty');
-  else if (user.passwordChanged != null) pw = user.passwordChanged === 0 ? t('info.pwToday') : t('info.pwChanged', { count: user.passwordChanged });
+  else if (user.passwordChanged != null)
+    pw =
+      user.passwordChanged === 0
+        ? t('info.pwToday')
+        : t('info.pwChanged', { count: user.passwordChanged });
   else pw = t('info.pwUnknown');
   if (user.locked) pw = `${t('info.locked')}, ${pw}`;
 
@@ -136,15 +206,28 @@ function InfoTab({ user, data, self, run }: { user: UserInfo; data: UserList; se
         {user.expired && <span className="usr-badge disabled">{t('info.expired')}</span>}
       </div>
       <Input label={t('info.fullName')} value={full} onChange={(e) => setFull(e.target.value)} />
-      <Select label={t('info.shell')} value={shell} onChange={setShell} options={shells.map((s) => ({ value: s, label: s }))} />
+      <Select
+        label={t('info.shell')}
+        value={shell}
+        onChange={setShell}
+        options={shells.map((s) => ({ value: s, label: s }))}
+      />
       {dirty && (
-        <div><Button variant="primary" onClick={save}>{t('info.save')}</Button></div>
+        <div>
+          <Button variant="primary" onClick={save}>
+            {t('info.save')}
+          </Button>
+        </div>
       )}
       <dl className="usr-kv">
-        <dt>{t('info.home')}</dt><dd className="usr-mono">{user.home}</dd>
-        <dt>{t('info.primaryGroup')}</dt><dd className="usr-mono">{user.primaryGroup || user.gid}</dd>
-        <dt>{t('info.password')}</dt><dd>{pw}</dd>
-        <dt>{t('info.lastLogin')}</dt><dd>{lastLogin(user)}</dd>
+        <dt>{t('info.home')}</dt>
+        <dd className="usr-mono">{user.home}</dd>
+        <dt>{t('info.primaryGroup')}</dt>
+        <dd className="usr-mono">{user.primaryGroup || user.gid}</dd>
+        <dt>{t('info.password')}</dt>
+        <dd>{pw}</dd>
+        <dt>{t('info.lastLogin')}</dt>
+        <dd>{lastLogin(user)}</dd>
       </dl>
       <label className="usr-row">
         <div>
@@ -155,11 +238,19 @@ function InfoTab({ user, data, self, run }: { user: UserInfo; data: UserList; se
           checked={user.isAdmin}
           disabled={user.uid === 0}
           aria-label={t('info.admin')}
-          onChange={(v) => run(() => call('users.setAdmin', { name: user.name, admin: v }), t(v ? 'info.adminOn' : 'info.adminOff', { name: user.name }))}
+          onChange={(v) =>
+            run(
+              () => call('users.setAdmin', { name: user.name, admin: v }),
+              t(v ? 'info.adminOn' : 'info.adminOff', { name: user.name }),
+            )
+          }
         />
       </label>
       {user.name === self && (
-        <div className="usr-warn"><Icon name="alert" /><div>{t('info.selfWarning')}</div></div>
+        <div className="usr-warn">
+          <Icon name="alert" />
+          <div>{t('info.selfWarning')}</div>
+        </div>
       )}
     </div>
   );
@@ -176,7 +267,10 @@ function GroupsTab({ user, groups, run }: { user: UserInfo; groups: GroupInfo[];
 
   const member = (g: GroupInfo) => user.groups.includes(g.name) || g.name === user.primaryGroup;
   const shown = groups
-    .filter((g) => all || member(g) || !g.system || ADMIN_GROUPS.includes(g.name) || COMMON_GROUPS.has(g.name))
+    .filter(
+      (g) =>
+        all || member(g) || !g.system || ADMIN_GROUPS.includes(g.name) || COMMON_GROUPS.has(g.name),
+    )
     .sort((a, b) => {
       const rank = (g: GroupInfo) => (ADMIN_GROUPS.includes(g.name) ? 0 : member(g) ? 1 : 2);
       return rank(a) - rank(b) || a.name.localeCompare(b.name);
@@ -184,7 +278,11 @@ function GroupsTab({ user, groups, run }: { user: UserInfo; groups: GroupInfo[];
 
   const toggle = (g: GroupInfo, on: boolean) =>
     run(
-      () => call('users.modify', { name: user.name, groups: on ? { add: [g.name] } : { remove: [g.name] } }),
+      () =>
+        call('users.modify', {
+          name: user.name,
+          groups: on ? { add: [g.name] } : { remove: [g.name] },
+        }),
       t(on ? 'groups.added' : 'groups.removed', { name: user.name, group: g.name }),
     );
 
@@ -214,28 +312,56 @@ function GroupsTab({ user, groups, run }: { user: UserInfo; groups: GroupInfo[];
               <b className="m">{g.name}</b>
               <small>{primary ? t('groups.primary') : desc(g) || ' '}</small>
             </div>
-            <Switch checked={member(g)} disabled={primary} aria-label={g.name} onChange={(v) => toggle(g, v)} />
+            <Switch
+              checked={member(g)}
+              disabled={primary}
+              aria-label={g.name}
+              onChange={(v) => toggle(g, v)}
+            />
           </label>
         );
       })}
       <Checkbox checked={all} onChange={setAll} label={t('groups.showAll')} />
-      <button type="button" className="usr-addline" onClick={() => setNewOpen(true)}><Icon name="plus" />{t('groups.new')}</button>
+      <button type="button" className="usr-addline" onClick={() => setNewOpen(true)}>
+        <Icon name="plus" />
+        {t('groups.new')}
+      </button>
       <Dialog
         open={newOpen}
         onClose={() => !busy && setNewOpen(false)}
         title={t('groups.newTitle')}
         description={t('groups.newDescription', { name: user.name })}
         icon="users"
-        onSubmit={(e) => { e.preventDefault(); void createGroup(); }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          void createGroup();
+        }}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setNewOpen(false)} disabled={busy}>{t('cancel')}</Button>
-            <Button type="submit" variant="primary" loading={busy} disabled={!newName}>{t('groups.create')}</Button>
+            <Button variant="ghost" onClick={() => setNewOpen(false)} disabled={busy}>
+              {t('cancel')}
+            </Button>
+            <Button type="submit" variant="primary" loading={busy} disabled={!newName}>
+              {t('groups.create')}
+            </Button>
           </>
         }
       >
-        <Input data-autofocus label={t('groups.name')} value={newName} onChange={(e) => setNewName(e.target.value.toLowerCase())} hint={t('create.nameHint')} mono autoComplete="off" />
-        {err && <div className="ui-form-err" role="alert"><Icon name="alert" />{err}</div>}
+        <Input
+          data-autofocus
+          label={t('groups.name')}
+          value={newName}
+          onChange={(e) => setNewName(e.target.value.toLowerCase())}
+          hint={t('create.nameHint')}
+          mono
+          autoComplete="off"
+        />
+        {err && (
+          <div className="ui-form-err" role="alert">
+            <Icon name="alert" />
+            {err}
+          </div>
+        )}
       </Dialog>
     </div>
   );
@@ -261,7 +387,12 @@ function KeysTab({ user, self }: { user: UserInfo; self: string }) {
       setKeys([]);
     }
   }, [user.name, admin]);
-  useEffect(() => { setKeys(null); setAdding(false); setText(''); void load(); }, [load]);
+  useEffect(() => {
+    setKeys(null);
+    setAdding(false);
+    setText('');
+    void load();
+  }, [load]);
 
   const add = async () => {
     setBusy(true);
@@ -279,20 +410,39 @@ function KeysTab({ user, self }: { user: UserInfo; self: string }) {
     }
   };
 
-  if (keys === null) return <div className="usr-pp"><Skeleton height={64} /><Skeleton height={64} /></div>;
+  if (keys === null)
+    return (
+      <div className="usr-pp">
+        <Skeleton height={64} />
+        <Skeleton height={64} />
+      </div>
+    );
   return (
     <div className="usr-pp">
-      {error && <div className="ui-form-err" role="alert"><Icon name="alert" />{error}</div>}
-      {keys.length === 0 && !error && !adding && <EmptyState icon="key" hue="usr" title={t('keys.emptyTitle')} text={t('keys.emptyText')} />}
+      {error && (
+        <div className="ui-form-err" role="alert">
+          <Icon name="alert" />
+          {error}
+        </div>
+      )}
+      {keys.length === 0 && !error && !adding && (
+        <EmptyState icon="key" hue="usr" title={t('keys.emptyTitle')} text={t('keys.emptyText')} />
+      )}
       {keys.map((k) => (
         <div className="usr-key" key={k.fingerprint + k.line}>
           <div className="usr-key-h">
             <b>{k.comment || k.type}</b>
             <IconButton icon="trash" label={t('keys.remove')} onClick={() => setDel(k)} />
           </div>
-          <code>{k.type} {k.key.split(' ')[1]?.slice(0, 24)}…</code>
+          <code>
+            {k.type} {k.key.split(' ')[1]?.slice(0, 24)}…
+          </code>
           <small className="usr-muted">{k.fingerprint}</small>
-          {k.options && <small className="usr-muted">{t('keys.options')}: <span className="usr-mono">{k.options}</span></small>}
+          {k.options && (
+            <small className="usr-muted">
+              {t('keys.options')}: <span className="usr-mono">{k.options}</span>
+            </small>
+          )}
         </div>
       ))}
       {adding ? (
@@ -302,29 +452,52 @@ function KeysTab({ user, self }: { user: UserInfo; self: string }) {
             label={t('keys.paste')}
             value={text}
             rows={4}
-            onChange={(e) => { setText(e.target.value); setAddErr(''); }}
+            onChange={(e) => {
+              setText(e.target.value);
+              setAddErr('');
+            }}
             placeholder="ssh-ed25519 AAAA… name@host"
             error={addErr}
             mono
             spellCheck={false}
           />
           <div style={{ display: 'flex', gap: 8 }}>
-            <Button variant="primary" loading={busy} disabled={!text.trim()} onClick={add}>{t('keys.add')}</Button>
-            <Button variant="ghost" onClick={() => { setAdding(false); setText(''); setAddErr(''); }}>{t('cancel')}</Button>
+            <Button variant="primary" loading={busy} disabled={!text.trim()} onClick={add}>
+              {t('keys.add')}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setAdding(false);
+                setText('');
+                setAddErr('');
+              }}
+            >
+              {t('cancel')}
+            </Button>
           </div>
         </div>
       ) : (
-        <button type="button" className="usr-addline" onClick={() => setAdding(true)}><Icon name="plus" />{t('keys.addKey')}</button>
+        <button type="button" className="usr-addline" onClick={() => setAdding(true)}>
+          <Icon name="plus" />
+          {t('keys.addKey')}
+        </button>
       )}
       <ConfirmDialog
         open={!!del}
         onClose={() => setDel(null)}
         title={t('keys.removeTitle')}
-        description={del && t('keys.removeText', { name: del.comment || del.type, user: user.name })}
+        description={
+          del && t('keys.removeText', { name: del.comment || del.type, user: user.name })
+        }
         confirmLabel={t('keys.remove')}
         onConfirm={async () => {
           if (!del) return;
-          await call('users.removeSshKey', { name: user.name, fingerprint: del.fingerprint }, { admin });
+          await call(
+            'users.removeSshKey',
+            { name: user.name, fingerprint: del.fingerprint },
+            { admin },
+          );
           toast.ok(t('keys.removed'));
           await load();
         }}
@@ -347,7 +520,10 @@ function SessionsTab({ user }: { user: UserInfo }) {
       setList([]);
     }
   }, [user.name]);
-  useEffect(() => { setList(null); void load(); }, [load]);
+  useEffect(() => {
+    setList(null);
+    void load();
+  }, [load]);
 
   const end = async (s: SessionInfo) => {
     try {
@@ -359,21 +535,53 @@ function SessionsTab({ user }: { user: UserInfo }) {
     }
   };
 
-  if (list === null) return <div className="usr-pp"><Skeleton height={56} /><Skeleton height={56} /></div>;
+  if (list === null)
+    return (
+      <div className="usr-pp">
+        <Skeleton height={56} />
+        <Skeleton height={56} />
+      </div>
+    );
   return (
     <div className="usr-pp">
-      {error && <div className="ui-form-err" role="alert"><Icon name="alert" />{error}</div>}
-      {list.length === 0 && !error && <EmptyState icon="terminal" hue="usr" title={t('sessions.emptyTitle')} text={t('sessions.emptyText', { name: user.name })} />}
+      {error && (
+        <div className="ui-form-err" role="alert">
+          <Icon name="alert" />
+          {error}
+        </div>
+      )}
+      {list.length === 0 && !error && (
+        <EmptyState
+          icon="terminal"
+          hue="usr"
+          title={t('sessions.emptyTitle')}
+          text={t('sessions.emptyText', { name: user.name })}
+        />
+      )}
       {list.map((s) => {
-        const kind = s.remote || s.service === 'sshd' ? t('sessions.ssh') : s.type === 'tty' ? t('sessions.console') : t('sessions.desktop');
+        const kind =
+          s.remote || s.service === 'sshd'
+            ? t('sessions.ssh')
+            : s.type === 'tty'
+              ? t('sessions.console')
+              : t('sessions.desktop');
         const where = s.tty || s.type;
         return (
           <div className="usr-row" key={s.id}>
             <div>
               <b style={{ fontFamily: 'inherit' }}>{where ? `${kind}, ${where}` : kind}</b>
-              <small>{[s.remoteHost || t('sessions.local'), s.since ? relativeTime(s.since * 1000, lang) : ''].filter(Boolean).join(', ')}</small>
+              <small>
+                {[
+                  s.remoteHost || t('sessions.local'),
+                  s.since ? relativeTime(s.since * 1000, lang) : '',
+                ]
+                  .filter(Boolean)
+                  .join(', ')}
+              </small>
             </div>
-            <Button size="sm" onClick={() => end(s)}>{t('sessions.end')}</Button>
+            <Button size="sm" onClick={() => end(s)}>
+              {t('sessions.end')}
+            </Button>
           </div>
         );
       })}
@@ -388,7 +596,14 @@ function ResetDialog({ open, onClose, name }: { open: boolean; onClose(): void; 
   const [must, setMust] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  useEffect(() => { if (open) { setPw(''); setPw2(''); setMust(false); setErr(''); } }, [open]);
+  useEffect(() => {
+    if (open) {
+      setPw('');
+      setPw2('');
+      setMust(false);
+      setErr('');
+    }
+  }, [open]);
   const mismatch = pw2 !== '' && pw !== pw2;
   const submit = async () => {
     setBusy(true);
@@ -409,31 +624,69 @@ function ResetDialog({ open, onClose, name }: { open: boolean; onClose(): void; 
       onClose={() => !busy && onClose()}
       title={t('reset.title', { name })}
       icon="key"
-      onSubmit={(e) => { e.preventDefault(); if (pw && !mismatch && pw === pw2) void submit(); }}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (pw && !mismatch && pw === pw2) void submit();
+      }}
       footer={
         <>
-          <Button variant="ghost" onClick={onClose} disabled={busy}>{t('cancel')}</Button>
-          <Button type="submit" variant="primary" loading={busy} disabled={!pw || pw !== pw2}>{t('reset.submit')}</Button>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>
+            {t('cancel')}
+          </Button>
+          <Button type="submit" variant="primary" loading={busy} disabled={!pw || pw !== pw2}>
+            {t('reset.submit')}
+          </Button>
         </>
       }
     >
       <div className="usr-form">
         <div>
-          <Input data-autofocus label={t('create.password')} type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="new-password" />
+          <Input
+            data-autofocus
+            label={t('create.password')}
+            type="password"
+            value={pw}
+            onChange={(e) => setPw(e.target.value)}
+            autoComplete="new-password"
+          />
           <StrengthHint password={pw} />
         </div>
-        <Input label={t('create.passwordConfirm')} type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} error={mismatch ? t('create.passwordMismatch') : undefined} autoComplete="new-password" />
+        <Input
+          label={t('create.passwordConfirm')}
+          type="password"
+          value={pw2}
+          onChange={(e) => setPw2(e.target.value)}
+          error={mismatch ? t('create.passwordMismatch') : undefined}
+          autoComplete="new-password"
+        />
         <Checkbox checked={must} onChange={setMust} label={t('reset.mustChange')} />
-        {err && <div className="ui-form-err" role="alert"><Icon name="alert" />{err}</div>}
+        {err && (
+          <div className="ui-form-err" role="alert">
+            <Icon name="alert" />
+            {err}
+          </div>
+        )}
       </div>
     </Dialog>
   );
 }
 
-function DeleteDialog({ open, onClose, name, onDone }: { open: boolean; onClose(): void; name: string; onDone(): Promise<void> }) {
+function DeleteDialog({
+  open,
+  onClose,
+  name,
+  onDone,
+}: {
+  open: boolean;
+  onClose(): void;
+  name: string;
+  onDone(): Promise<void>;
+}) {
   const t = useT('users');
   const [keep, setKeep] = useState(true);
-  useEffect(() => { if (open) setKeep(true); }, [open]);
+  useEffect(() => {
+    if (open) setKeep(true);
+  }, [open]);
   return (
     <ConfirmDialog
       open={open}
@@ -452,4 +705,3 @@ function DeleteDialog({ open, onClose, name, onDone }: { open: boolean; onClose(
     </ConfirmDialog>
   );
 }
-

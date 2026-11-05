@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import { apiUrl, call, useSession } from '../api';
 import { NetworkApprovalHost } from './networkApproval';
 import type { PluginManifest, PluginPageInfo, PluginSnippet, PluginWidgetInfo } from './types';
@@ -66,7 +74,11 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setErrors({});
     call<PluginManifest[] | { plugins: PluginManifest[] } | null>('plugins.list', {})
-      .then((r) => (Array.isArray(r) ? r : r?.plugins ?? []).filter((p) => p.enabled !== false && !p.blocked))
+      .then((r) =>
+        (Array.isArray(r) ? r : (r?.plugins ?? [])).filter(
+          (p) => p.enabled !== false && !p.blocked,
+        ),
+      )
       .catch(() => [] as PluginManifest[]) // module not built yet or no plugins: not an error
       .then((list) => {
         if (!live) return;
@@ -80,12 +92,46 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<PluginsValue>(() => {
     const railPages = plugins.flatMap((p) =>
-      (p.contributes?.pages ?? []).map((g) => ({ plugin: p.id, page: g.id, title: g.title, icon: g.icon ?? p.icon ?? 'plugins', logo: pluginLogoUrl(p), color: p.color })),
+      (p.contributes?.pages ?? []).map((g) => ({
+        plugin: p.id,
+        page: g.id,
+        title: g.title,
+        icon: g.icon ?? p.icon ?? 'plugins',
+        logo: pluginLogoUrl(p),
+        color: p.color,
+      })),
     );
-    const pages = plugins.flatMap((p) => (p.contributes?.pages ?? []).map((g) => ({ plugin: p.id, id: g.id, title: g.title, icon: g.icon })));
-    const widgets = plugins.flatMap((p) => (p.contributes?.widgets ?? []).map((w) => ({ plugin: p.id, id: w.id, title: w.title, icon: w.icon })));
-    const snippets = plugins.flatMap((p) => (p.contributes?.snippets ?? []).map((s) => ({ ...s, plugin: p.id })));
-    return { plugins, loading, errors, railPages, pages, widgets, snippets, generation, reload, reportError };
+    const pages = plugins.flatMap((p) =>
+      (p.contributes?.pages ?? []).map((g) => ({
+        plugin: p.id,
+        id: g.id,
+        title: g.title,
+        icon: g.icon,
+      })),
+    );
+    const widgets = plugins.flatMap((p) =>
+      (p.contributes?.widgets ?? []).map((w) => ({
+        plugin: p.id,
+        id: w.id,
+        title: w.title,
+        icon: w.icon,
+      })),
+    );
+    const snippets = plugins.flatMap((p) =>
+      (p.contributes?.snippets ?? []).map((s) => ({ ...s, plugin: p.id })),
+    );
+    return {
+      plugins,
+      loading,
+      errors,
+      railPages,
+      pages,
+      widgets,
+      snippets,
+      generation,
+      reload,
+      reportError,
+    };
   }, [plugins, loading, errors, generation, reload, reportError]);
   return (
     <Ctx.Provider value={value}>
@@ -96,8 +142,14 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
 }
 
 /** URL of an installed plugin's logo (the version busts the browser cache after an update), or undefined. */
-export function pluginLogoUrl(p: { id: string; version: string; logo?: string }): string | undefined {
-  return p.logo ? apiUrl(`/plugins/${p.id}/${p.logo}?v=${encodeURIComponent(p.version)}`) : undefined;
+export function pluginLogoUrl(p: {
+  id: string;
+  version: string;
+  logo?: string;
+}): string | undefined {
+  return p.logo
+    ? apiUrl(`/plugins/${p.id}/${p.logo}?v=${encodeURIComponent(p.version)}`)
+    : undefined;
 }
 
 export function usePlugins(): PluginsValue {

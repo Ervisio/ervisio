@@ -24,10 +24,19 @@ export interface Filter {
 export const DEFAULT_LEVELS: Level[] = ['err', 'warn', 'info'];
 
 const LEVEL_ALIAS: Record<string, Level> = {
-  err: 'err', error: 'err', errors: 'err', fatal: 'err', crit: 'err', critical: 'err',
-  warn: 'warn', warning: 'warn', warnings: 'warn',
-  info: 'info', notice: 'info',
-  debug: 'debug', trace: 'debug',
+  err: 'err',
+  error: 'err',
+  errors: 'err',
+  fatal: 'err',
+  crit: 'err',
+  critical: 'err',
+  warn: 'warn',
+  warning: 'warn',
+  warnings: 'warn',
+  info: 'info',
+  notice: 'info',
+  debug: 'debug',
+  trace: 'debug',
 };
 
 const num = (s: string | null) => {
@@ -41,7 +50,8 @@ export function parseFilter(p: URLSearchParams, win = false): Filter {
   const unit = p.get('unit');
   const file = p.get('file');
   // Windows has no unit: sources; a unit link becomes a text search on the provider name.
-  if (!sources.length && unit && !win) sources = [`unit:${/\.[a-z]+$/.test(unit) ? unit : unit + '.service'}`];
+  if (!sources.length && unit && !win)
+    sources = [`unit:${/\.[a-z]+$/.test(unit) ? unit : unit + '.service'}`];
   if (!sources.length && file && file.startsWith('/')) sources = [`file:${file}`];
   if (!sources.length) sources = ['all'];
 
@@ -55,15 +65,28 @@ export function parseFilter(p: URLSearchParams, win = false): Filter {
   const from = num(p.get('from'));
   const to = num(p.get('to'));
   const range: RangeId = r && RANGES.includes(r) ? r : from ? 'custom' : '1h';
-  return { sources, levels, q: p.get('q') ?? (win && unit ? unit : ''), range, from, to, live: p.get('live') === '1' };
+  return {
+    sources,
+    levels,
+    q: p.get('q') ?? (win && unit ? unit : ''),
+    range,
+    from,
+    to,
+    live: p.get('live') === '1',
+  };
 }
 
-export function writeFilter(prev: URLSearchParams, patch: Partial<Filter>, win = false): URLSearchParams {
+export function writeFilter(
+  prev: URLSearchParams,
+  patch: Partial<Filter>,
+  win = false,
+): URLSearchParams {
   const cur = parseFilter(prev, win);
   const f: Filter = { ...cur, ...patch };
   const next = new URLSearchParams();
   const keepSrc = patch.sources !== undefined ? patch.sources : cur.sources;
-  if (!(keepSrc.length === 1 && keepSrc[0] === 'all')) keepSrc.forEach((s) => next.append('src', s));
+  if (!(keepSrc.length === 1 && keepSrc[0] === 'all'))
+    keepSrc.forEach((s) => next.append('src', s));
   if (f.levels.join() !== DEFAULT_LEVELS.join()) next.set('level', f.levels.join(','));
   if (f.q) next.set('q', f.q);
   if (f.range !== '1h') next.set('range', f.range);
@@ -106,7 +129,10 @@ export function fmtFull(ts: number, lang: string): string {
 }
 
 export function fmtAxis(ts: number, span: number, lang: string): string {
-  if (span > 36 * 3_600_000) return getRegion().hour12 ? `${fmtDay(ts, lang)} ${formatTime(ts)}` : `${fmtDay(ts, lang)} ${p2(new Date(ts).getHours())}:00`;
+  if (span > 36 * 3_600_000)
+    return getRegion().hour12
+      ? `${fmtDay(ts, lang)} ${formatTime(ts)}`
+      : `${fmtDay(ts, lang)} ${p2(new Date(ts).getHours())}:00`;
   return getRegion().hour12 ? formatTime(ts) : fmtClock(ts, false).slice(0, 5);
 }
 
@@ -131,7 +157,8 @@ export function normalizeWatchers(v: unknown): Watcher[] {
     const format: WatchFormat = w.format === 'plain' || w.format === 'json' ? w.format : 'auto';
     out.push({
       path: w.path,
-      name: typeof w.name === 'string' && w.name ? w.name : w.path.slice(w.path.lastIndexOf('/') + 1),
+      name:
+        typeof w.name === 'string' && w.name ? w.name : w.path.slice(w.path.lastIndexOf('/') + 1),
       format,
       notify: !!w.notify,
       keepDays: typeof w.keepDays === 'number' ? w.keepDays : 7,
@@ -145,6 +172,12 @@ export function dirOf(path: string): string {
   return i <= 0 ? '/' : path.slice(0, i);
 }
 
-export function entryText(e: { ts: number; level: string; source: string; message: string; raw?: string }): string {
+export function entryText(e: {
+  ts: number;
+  level: string;
+  source: string;
+  message: string;
+  raw?: string;
+}): string {
   return e.raw ?? `${new Date(e.ts).toISOString()} ${e.level} ${e.source}: ${e.message}`;
 }

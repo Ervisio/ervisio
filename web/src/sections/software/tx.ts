@@ -33,8 +33,22 @@ export interface TxState {
 }
 
 const idle: TxState = {
-  phase: 'idle', title: null, op: '', step: 0, steps: 0, done: 0, total: 0, current: '', log: [], message: '', hint: '',
-  rebootNeeded: false, startedAt: 0, percent: undefined, attached: false, panelOpen: false,
+  phase: 'idle',
+  title: null,
+  op: '',
+  step: 0,
+  steps: 0,
+  done: 0,
+  total: 0,
+  current: '',
+  log: [],
+  message: '',
+  hint: '',
+  rebootNeeded: false,
+  startedAt: 0,
+  percent: undefined,
+  attached: false,
+  panelOpen: false,
 };
 let state: TxState = idle;
 const subs = new Set<() => void>();
@@ -80,12 +94,22 @@ export function startJob(job: Job): void {
     return;
   }
   state = {
-    ...idle, phase: 'running', title: job.title, steps: job.steps.length, step: 1, startedAt: Date.now(), panelOpen: true,
-    op: job.steps[0]?.op ?? '', percent: 0,
+    ...idle,
+    phase: 'running',
+    title: job.title,
+    steps: job.steps.length,
+    step: 1,
+    startedAt: Date.now(),
+    panelOpen: true,
+    op: job.steps[0]?.op ?? '',
+    percent: 0,
   };
   subs.forEach((s) => s());
   toastId = toast.show({
-    tone: 'run', title: translate(`tx.title.${job.title.key}`, job.title.vars), progress: 0, duration: 0,
+    tone: 'run',
+    title: translate(`tx.title.${job.title.key}`, job.title.vars),
+    progress: 0,
+    duration: 0,
     action: { label: translate('tx.show'), onClick: showPanel },
   });
   void runSteps(job);
@@ -99,7 +123,8 @@ function showPanel() {
 type StepResult = { ok: boolean; message: string; hint: string; reboot: boolean };
 
 function pushLog(line: string) {
-  const log = state.log.length >= MAX_LOG ? [...state.log.slice(-MAX_LOG + 1), line] : [...state.log, line];
+  const log =
+    state.log.length >= MAX_LOG ? [...state.log.slice(-MAX_LOG + 1), line] : [...state.log, line];
   set({ log });
 }
 
@@ -125,26 +150,43 @@ function runStep(p: TxParams, onToast: () => boolean): Promise<StepResult> {
       onData: (e) => {
         if (e.type === 'log') pushLog(e.line);
         else if (e.type === 'progress') onProgress(e);
-        else if (e.type === 'done') end({ ok: e.ok, message: e.message, hint: e.hint, reboot: e.rebootNeeded });
+        else if (e.type === 'done')
+          end({ ok: e.ok, message: e.message, hint: e.hint, reboot: e.rebootNeeded });
       },
       onEnd: () => end({ ok: false, message: translate('tx.lost'), hint: '', reboot: false }),
-      onError: (err: ApiError) => end({ ok: false, message: err.message, hint: err.code === 'conflict' ? 'locked' : '', reboot: false }),
+      onError: (err: ApiError) =>
+        end({
+          ok: false,
+          message: err.message,
+          hint: err.code === 'conflict' ? 'locked' : '',
+          reboot: false,
+        }),
     });
   });
 }
 
 function failJob(result: StepResult) {
   set({ phase: 'failed', message: result.message, hint: result.hint, percent: undefined });
-  toast.update(toastId, { tone: 'err', title: translate('tx.failed'), detail: result.message, progress: undefined, duration: 9000, action: { label: translate('tx.show'), onClick: showPanel } });
+  toast.update(toastId, {
+    tone: 'err',
+    title: translate('tx.failed'),
+    detail: result.message,
+    progress: undefined,
+    duration: 9000,
+    action: { label: translate('tx.show'), onClick: showPanel },
+  });
   void reloadAll();
 }
 
 function finishJob(job: Job) {
   set({ phase: 'done', percent: 100, done: state.total, message: '' });
   toast.update(toastId, {
-    tone: 'ok', title: translate(`tx.done.${job.title.key}`, job.title.vars),
+    tone: 'ok',
+    title: translate(`tx.done.${job.title.key}`, job.title.vars),
     detail: state.rebootNeeded ? translate('tx.rebootNeeded') : undefined,
-    progress: undefined, duration: state.rebootNeeded ? 10000 : 5000, action: undefined,
+    progress: undefined,
+    duration: state.rebootNeeded ? 10000 : 5000,
+    action: undefined,
   });
   void reloadAll();
 }
@@ -195,15 +237,35 @@ export async function attachIfBusy(): Promise<void> {
 function mirror(t: ServerTx) {
   if (t.running) {
     set({
-      phase: 'running', attached: true, op: t.op, step: t.step, steps: t.steps, done: t.done, total: t.total, current: t.current,
-      log: t.log, startedAt: t.startedAt, percent: pct(t.step, t.steps, t.done, t.total), rebootNeeded: false,
-      title: { key: t.op === 'upgrade' && t.packages.length === 0 ? 'updateAll' : t.op, vars: { name: t.packages.join(', ') } },
+      phase: 'running',
+      attached: true,
+      op: t.op,
+      step: t.step,
+      steps: t.steps,
+      done: t.done,
+      total: t.total,
+      current: t.current,
+      log: t.log,
+      startedAt: t.startedAt,
+      percent: pct(t.step, t.steps, t.done, t.total),
+      rebootNeeded: false,
+      title: {
+        key: t.op === 'upgrade' && t.packages.length === 0 ? 'updateAll' : t.op,
+        vars: { name: t.packages.join(', ') },
+      },
       panelOpen: state.panelOpen || state.phase !== 'running',
     });
   } else {
     set({
-      phase: t.ok ? 'done' : 'failed', attached: true, log: t.log, message: t.message ?? '', hint: t.hint ?? '', percent: t.ok ? 100 : undefined,
-      rebootNeeded: t.rebootNeeded, op: t.op, title: state.title ?? { key: t.op, vars: { name: t.packages.join(', ') } },
+      phase: t.ok ? 'done' : 'failed',
+      attached: true,
+      log: t.log,
+      message: t.message ?? '',
+      hint: t.hint ?? '',
+      percent: t.ok ? 100 : undefined,
+      rebootNeeded: t.rebootNeeded,
+      op: t.op,
+      title: state.title ?? { key: t.op, vars: { name: t.packages.join(', ') } },
     });
   }
 }

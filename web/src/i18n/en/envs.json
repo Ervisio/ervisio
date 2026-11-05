@@ -99,7 +99,11 @@
     "plainServer": "This server speaks plain http, so there is nothing to pin.",
     "localHttp": "Plain http to this machine is fine. Elsewhere it needs the checkbox above."
   },
-  "section": { "connection": "Connection", "credentials": "Credentials", "access": "Who can use it" },
+  "section": {
+    "connection": "Connection",
+    "credentials": "Credentials",
+    "access": "Who can use it"
+  },
   "access": {
     "who": "Who can use this environment",
     "all": "Everyone who can use the plugin",

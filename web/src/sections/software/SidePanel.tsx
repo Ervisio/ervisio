@@ -40,7 +40,9 @@ export function TxPanel({ tx, openTerminal }: { tx: TxState; openTerminal(cmd?: 
     if (tx.phase !== 'running' || tx.steps !== 1 || tx.total === 0 || tx.done === 0) return '';
     const elapsed = (now - tx.startedAt) / 1000;
     const left = Math.max(1, Math.round((elapsed / tx.done) * (tx.total - tx.done)));
-    return left >= 90 ? t('tx.minutesLeft', { count: Math.round(left / 60) }) : t('tx.secondsLeft', { count: left });
+    return left >= 90
+      ? t('tx.minutesLeft', { count: Math.round(left / 60) })
+      : t('tx.secondsLeft', { count: left });
   }, [tx, now, t]);
 
   const title = tx.title ? t(`tx.title.${tx.title.key}`, tx.title.vars) : t('tx.working');
@@ -50,29 +52,70 @@ export function TxPanel({ tx, openTerminal }: { tx: TxState; openTerminal(cmd?: 
     <Panel
       open={tx.panelOpen && tx.phase !== 'idle'}
       onClose={closePanel}
-      title={tx.phase === 'done' ? t(`tx.done.${tx.title?.key ?? 'updateAll'}`, tx.title?.vars) : tx.phase === 'failed' ? t('tx.failed') : title}
-      subtitle={tx.attached ? t('tx.attached') : tx.phase === 'running' && tx.steps > 1 ? t('tx.step', { step: tx.step, steps: tx.steps }) : undefined}
+      title={
+        tx.phase === 'done'
+          ? t(`tx.done.${tx.title?.key ?? 'updateAll'}`, tx.title?.vars)
+          : tx.phase === 'failed'
+            ? t('tx.failed')
+            : title
+      }
+      subtitle={
+        tx.attached
+          ? t('tx.attached')
+          : tx.phase === 'running' && tx.steps > 1
+            ? t('tx.step', { step: tx.step, steps: tx.steps })
+            : undefined
+      }
       icon="software"
       hue="sw"
       footer={
         <div className="sw-tx-ft">
-          <Button icon="terminal" onClick={() => openTerminal()}>{t('openTerminal')}</Button>
+          <Button icon="terminal" onClick={() => openTerminal()}>
+            {t('openTerminal')}
+          </Button>
           {tx.phase === 'running' ? (
             <Button onClick={closePanel}>{t('tx.hide')}</Button>
           ) : (
-            <Button variant="primary" onClick={dismissTx}>{t('tx.close')}</Button>
+            <Button variant="primary" onClick={dismissTx}>
+              {t('tx.close')}
+            </Button>
           )}
         </div>
       }
     >
       <div className="sw-tx">
         <div className="sw-tx-hd">
-          <Progress value={tx.phase === 'done' ? 100 : tx.phase === 'failed' ? undefined : tx.total > 0 ? tx.percent : undefined} tone={tx.phase === 'failed' ? 'err' : tx.phase === 'done' ? 'ok' : undefined} hue="sw" label={title} />
+          <Progress
+            value={
+              tx.phase === 'done'
+                ? 100
+                : tx.phase === 'failed'
+                  ? undefined
+                  : tx.total > 0
+                    ? tx.percent
+                    : undefined
+            }
+            tone={tx.phase === 'failed' ? 'err' : tx.phase === 'done' ? 'ok' : undefined}
+            hue="sw"
+            label={title}
+          />
           <div className="sw-tx-row">
-            <span>{tx.total > 0 ? t('tx.counter', { done: Math.min(tx.done + (tx.phase === 'running' ? 1 : 0), tx.total) || tx.total, total: tx.total }) : tx.phase === 'running' ? t('tx.preparing') : ''}</span>
+            <span>
+              {tx.total > 0
+                ? t('tx.counter', {
+                    done:
+                      Math.min(tx.done + (tx.phase === 'running' ? 1 : 0), tx.total) || tx.total,
+                    total: tx.total,
+                  })
+                : tx.phase === 'running'
+                  ? t('tx.preparing')
+                  : ''}
+            </span>
             <span className="sw-muted">{eta}</span>
           </div>
-          {tx.phase === 'running' && tx.current && <div className="sw-tx-cur sw-mono">{tx.current}</div>}
+          {tx.phase === 'running' && tx.current && (
+            <div className="sw-tx-cur sw-mono">{tx.current}</div>
+          )}
         </div>
         <pre
           ref={ref}
@@ -85,7 +128,10 @@ export function TxPanel({ tx, openTerminal }: { tx: TxState; openTerminal(cmd?: 
           }}
         >
           {tx.log.map((l, i) => (
-            <span key={i} className={logClass(l)}>{l}{'\n'}</span>
+            <span key={i} className={logClass(l)}>
+              {l}
+              {'\n'}
+            </span>
           ))}
         </pre>
         {tx.phase === 'failed' && (
@@ -99,7 +145,10 @@ export function TxPanel({ tx, openTerminal }: { tx: TxState; openTerminal(cmd?: 
           </div>
         )}
         {tx.phase === 'done' && !tx.rebootNeeded && (
-          <div className="sw-notice sw-notice--ok"><Icon name="check" /><div>{t('tx.finished')}</div></div>
+          <div className="sw-notice sw-notice--ok">
+            <Icon name="check" />
+            <div>{t('tx.finished')}</div>
+          </div>
         )}
         {tx.rebootNeeded && (
           <div className="sw-notice sw-notice--warn">
@@ -127,7 +176,15 @@ export interface PkgTarget {
 const SKIP = new Set(['Name']);
 
 export function PkgPanel({
-  target, update, busy, onClose, onInstall, onRemove, onUpdate, openTerminal, aurHelper = 'yay',
+  target,
+  update,
+  busy,
+  onClose,
+  onInstall,
+  onRemove,
+  onUpdate,
+  openTerminal,
+  aurHelper = 'yay',
 }: {
   target: PkgTarget | null;
   update?: Update;
@@ -148,7 +205,10 @@ export function PkgPanel({
     setErr('');
     if (!target) return;
     let live = true;
-    call<Detail>('software.info', { name: target.name, source: target.kind === 'repo' ? target.source : target.kind })
+    call<Detail>('software.info', {
+      name: target.name,
+      source: target.kind === 'repo' ? target.source : target.kind,
+    })
       .then((d) => live && setDetail(d))
       .catch((e) => live && setErr(e instanceof ApiError ? e.message : String(e)));
     return () => {
@@ -171,17 +231,48 @@ export function PkgPanel({
           <div className="sw-tx-ft">
             {update ? (
               update.kind === 'aur' ? (
-                <Button icon="terminal" onClick={() => openTerminal(`${aurHelper} -S ${target.name}`)}>{t('terminal')}</Button>
+                <Button
+                  icon="terminal"
+                  onClick={() => openTerminal(`${aurHelper} -S ${target.name}`)}
+                >
+                  {t('terminal')}
+                </Button>
               ) : (
-                <Button variant="primary" icon="download" disabled={busy} onClick={() => onUpdate(update)}>{t('update')}</Button>
+                <Button
+                  variant="primary"
+                  icon="download"
+                  disabled={busy}
+                  onClick={() => onUpdate(update)}
+                >
+                  {t('update')}
+                </Button>
               )
             ) : null}
             {installed ? (
-              <Button variant="danger" icon="trash" disabled={busy} onClick={() => onRemove(target)}>{t('remove.button')}</Button>
+              <Button
+                variant="danger"
+                icon="trash"
+                disabled={busy}
+                onClick={() => onRemove(target)}
+              >
+                {t('remove.button')}
+              </Button>
             ) : target.kind === 'aur' ? (
-              <Button icon="terminal" onClick={() => openTerminal(`${aurHelper} -S ${target.name}`)}>{t('terminal')}</Button>
+              <Button
+                icon="terminal"
+                onClick={() => openTerminal(`${aurHelper} -S ${target.name}`)}
+              >
+                {t('terminal')}
+              </Button>
             ) : (
-              <Button variant="primary" icon="download" disabled={busy} onClick={() => onInstall(target, detail)}>{t('install.button')}</Button>
+              <Button
+                variant="primary"
+                icon="download"
+                disabled={busy}
+                onClick={() => onInstall(target, detail)}
+              >
+                {t('install.button')}
+              </Button>
             )}
           </div>
         )
@@ -202,7 +293,10 @@ export function PkgPanel({
           </div>
           {detail?.description && <p className="sw-pp-d">{detail.description}</p>}
           {err ? (
-            <div className="sw-notice sw-notice--err"><Icon name="alert" /><div>{err}</div></div>
+            <div className="sw-notice sw-notice--err">
+              <Icon name="alert" />
+              <div>{err}</div>
+            </div>
           ) : !detail ? (
             <Skeleton lines={6} height={14} />
           ) : (
@@ -212,7 +306,13 @@ export function PkgPanel({
                 .map((f) => (
                   <div key={f.key} className="sw-kv-r">
                     <dt>{f.key}</dt>
-                    <dd className={/size|date|version|id|ref|arch/i.test(f.key) ? 'sw-mono' : undefined}>{prettyValue(f.key, f.value)}</dd>
+                    <dd
+                      className={
+                        /size|date|version|id|ref|arch/i.test(f.key) ? 'sw-mono' : undefined
+                      }
+                    >
+                      {prettyValue(f.key, f.value)}
+                    </dd>
                   </div>
                 ))}
             </dl>

@@ -1,4 +1,14 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as RPointerEvent, type RefObject } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent as RPointerEvent,
+  type RefObject,
+} from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { usePrefs, useSession } from '../../api';
 import { useT, type TFn } from '../../i18n';
@@ -11,7 +21,16 @@ import { SettingsDialog } from './SettingsDialog';
 import { RefreshSelect } from '../../lib/RefreshSelect';
 import { refreshNow, useSetRefreshInterval } from '../../lib/refresh';
 import { useAlerts, useHost } from './data';
-import { defaultLayout, setWindowsDefaults, normalizeLayout, snapCols, stepCols, uid, type DashAction, type Widget } from './model';
+import {
+  defaultLayout,
+  setWindowsDefaults,
+  normalizeLayout,
+  snapCols,
+  stepCols,
+  uid,
+  type DashAction,
+  type Widget,
+} from './model';
 import { WidgetBody, widgetTitle, type WidgetCtx } from './widgets';
 import './overview.css';
 
@@ -52,7 +71,6 @@ interface DragRun {
   raf?: number;
 }
 
-
 type WidgetKeyAction = 'grow' | 'shrink' | 'prev' | 'next' | 'settings' | 'remove';
 
 const WIDGET_KEYS = new Map<string, WidgetKeyAction>([
@@ -90,7 +108,16 @@ function createGhost(el: HTMLElement): HTMLElement {
   const g = el.cloneNode(true) as HTMLElement;
   g.removeAttribute('data-wid');
   g.classList.add('ov-ghost');
-  Object.assign(g.style, { position: 'fixed', left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px`, margin: '0', zIndex: '1000', pointerEvents: 'none' });
+  Object.assign(g.style, {
+    position: 'fixed',
+    left: `${r.left}px`,
+    top: `${r.top}px`,
+    width: `${r.width}px`,
+    height: `${r.height}px`,
+    margin: '0',
+    zIndex: '1000',
+    pointerEvents: 'none',
+  });
   document.body.appendChild(g);
   return g;
 }
@@ -102,7 +129,9 @@ function startEdgeScroll(dragRun: RefObject<DragRun | null>, scroller: HTMLEleme
     if (!cur || !cur.started) return;
     const host = scroller ?? document.scrollingElement;
     if (host) {
-      const rect = scroller ? scroller.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
+      const rect = scroller
+        ? scroller.getBoundingClientRect()
+        : { top: 0, bottom: window.innerHeight };
       if (cur.py < rect.top + EDGE_SCROLL_ZONE) host.scrollTop -= EDGE_SCROLL_STEP;
       else if (cur.py > rect.bottom - EDGE_SCROLL_ZONE) host.scrollTop += EDGE_SCROLL_STEP;
     }
@@ -111,7 +140,13 @@ function startEdgeScroll(dragRun: RefObject<DragRun | null>, scroller: HTMLEleme
   return requestAnimationFrame(tick);
 }
 
-function trackResize(grid: HTMLElement, el: HTMLElement, startX: number, onCols: (cols: number) => void, onEnd: () => void) {
+function trackResize(
+  grid: HTMLElement,
+  el: HTMLElement,
+  startX: number,
+  onCols: (cols: number) => void,
+  onEnd: () => void,
+) {
   const colW = (grid.getBoundingClientRect().width + GAP) / GRID_COLUMNS;
   const startW = el.getBoundingClientRect().width;
   const handleMove = (ev: PointerEvent) => onCols((startW + (ev.clientX - startX) + GAP) / colW);
@@ -136,7 +171,9 @@ function dashboardSummary(t: TFn, alerts: { severity: string }[] | null, host: s
 
 function pluginTitleOf(widget: Widget | null, plugins: PluginWidgetInfo[]): string | undefined {
   if (widget?.type !== 'plugin') return undefined;
-  return plugins.find((p) => p.plugin === widget.settings?.plugin && p.id === widget.settings?.widget)?.title;
+  return plugins.find(
+    (p) => p.plugin === widget.settings?.plugin && p.id === widget.settings?.widget,
+  )?.title;
 }
 
 function widgetClass(w: Widget, dragUi: DragUi | null): string {
@@ -155,7 +192,14 @@ interface WidgetDragOptions {
 }
 
 // Pointer drag for widgets and library items.
-function useWidgetDrag({ gridRef, dropRef, draftRef, moveWidget, addItem, announceMoved }: WidgetDragOptions) {
+function useWidgetDrag({
+  gridRef,
+  dropRef,
+  draftRef,
+  moveWidget,
+  addItem,
+  announceMoved,
+}: WidgetDragOptions) {
   const [dragUi, setDragUi] = useState<DragUi | null>(null);
   const dragRun = useRef<DragRun | null>(null);
   const endDrag = useRef<() => void>(() => undefined);
@@ -181,13 +225,17 @@ function useWidgetDrag({ gridRef, dropRef, draftRef, moveWidget, addItem, announ
       setDragUi({ kind: d.kind, id: d.id });
       d.raf = startEdgeScroll(dragRun, d.el.closest('.app-content') as HTMLElement | null);
     }
-    if (d.ghost) d.ghost.style.transform = `translate(${e.clientX - d.sx}px, ${e.clientY - d.sy}px)`;
+    if (d.ghost)
+      d.ghost.style.transform = `translate(${e.clientX - d.sx}px, ${e.clientY - d.sy}px)`;
     const over = widgetAt(gridRef.current, e.clientX, e.clientY);
     if (d.kind === 'widget') {
       reorderOver(d, over);
       return;
     }
-    const overEnd = !over && (isInside(dropRef.current, e.clientX, e.clientY) || isInside(gridRef.current, e.clientX, e.clientY));
+    const overEnd =
+      !over &&
+      (isInside(dropRef.current, e.clientX, e.clientY) ||
+        isInside(gridRef.current, e.clientX, e.clientY));
     if (over !== d.overId || overEnd !== d.overEnd) {
       d.overId = over;
       d.overEnd = overEnd;
@@ -207,9 +255,19 @@ function useWidgetDrag({ gridRef, dropRef, draftRef, moveWidget, addItem, announ
     dragRun.current = null;
     setDragUi(null);
   };
-  const dropNewItem = (item: LibItem, started: boolean, dropOver: string | undefined, dropEnd?: boolean) => {
-    if (!started) addItem(item); // a plain click adds at the end
-    else if (dropOver) addItem(item, draftRef.current?.findIndex((w) => w.id === dropOver));
+  const dropNewItem = (
+    item: LibItem,
+    started: boolean,
+    dropOver: string | undefined,
+    dropEnd?: boolean,
+  ) => {
+    if (!started)
+      addItem(item); // a plain click adds at the end
+    else if (dropOver)
+      addItem(
+        item,
+        draftRef.current?.findIndex((w) => w.id === dropOver),
+      );
     else if (dropEnd) addItem(item);
   };
   onUp.current = (e) => {
@@ -274,9 +332,17 @@ function EditBar({ t, wide, onAdd, onCancel, onSave }: EditBarProps) {
       <b>{t('edit.title')}</b>
       <span>{t('edit.hint')}</span>
       <div className="ov-editbar-r">
-        {!wide && <Button size="sm" icon="plus" variant="ghost" onClick={onAdd}>{t('edit.addWidget')}</Button>}
-        <Button size="sm" variant="ghost" onClick={onCancel}>{t('cancel')}</Button>
-        <Button size="sm" className="ov-save" onClick={onSave}>{t('edit.save')}</Button>
+        {!wide && (
+          <Button size="sm" icon="plus" variant="ghost" onClick={onAdd}>
+            {t('edit.addWidget')}
+          </Button>
+        )}
+        <Button size="sm" variant="ghost" onClick={onCancel}>
+          {t('cancel')}
+        </Button>
+        <Button size="sm" className="ov-save" onClick={onSave}>
+          {t('edit.save')}
+        </Button>
       </div>
     </div>
   );
@@ -294,13 +360,31 @@ function WidgetTools({ t, name, onSettings, onRemove, onResizeDown }: WidgetTool
   return (
     <>
       <div className="ov-tools">
-        <button type="button" className="ov-grip" data-grip aria-label={t('edit.drag')} title={t('edit.drag')}>
+        <button
+          type="button"
+          className="ov-grip"
+          data-grip
+          aria-label={t('edit.drag')}
+          title={t('edit.drag')}
+        >
           <Icon name="grip" />
         </button>
-        <button type="button" data-nodrag aria-label={t('edit.settings', { name })} title={t('edit.settingsShort')} onClick={onSettings}>
+        <button
+          type="button"
+          data-nodrag
+          aria-label={t('edit.settings', { name })}
+          title={t('edit.settingsShort')}
+          onClick={onSettings}
+        >
           <Icon name="edit" />
         </button>
-        <button type="button" data-nodrag aria-label={t('edit.remove', { name })} title={t('edit.removeShort')} onClick={onRemove}>
+        <button
+          type="button"
+          data-nodrag
+          aria-label={t('edit.remove', { name })}
+          title={t('edit.removeShort')}
+          onClick={onRemove}
+        >
           <Icon name="plus" style={{ transform: 'rotate(45deg)' }} />
         </button>
       </div>
@@ -346,7 +430,10 @@ export default function OverviewPage() {
     }
   }, [confirmReq]);
 
-  const startEdit = useCallback(() => setDraft(JSON.parse(JSON.stringify(saved)) as Widget[]), [saved]);
+  const startEdit = useCallback(
+    () => setDraft(JSON.parse(JSON.stringify(saved)) as Widget[]),
+    [saved],
+  );
   useEffect(() => {
     if (params.get('personalize')) {
       startEdit();
@@ -369,7 +456,10 @@ export default function OverviewPage() {
     }
   };
 
-  const update = useCallback((fn: (l: Widget[]) => Widget[]) => setDraft((d) => (d ? fn(d) : d)), []);
+  const update = useCallback(
+    (fn: (l: Widget[]) => Widget[]) => setDraft((d) => (d ? fn(d) : d)),
+    [],
+  );
   const nameOf = useCallback((w: Widget) => widgetTitle(w, t), [t]);
 
   const moveWidget = (id: string, to: number, say = true) => {
@@ -378,7 +468,8 @@ export default function OverviewPage() {
     const from = cur.findIndex((w) => w.id === id);
     if (from < 0 || to < 0 || to >= cur.length || from === to) return;
     update((l) => move(l, from, to));
-    if (say) setAnnounce(t('edit.moved', { name: nameOf(cur[from]), pos: to + 1, total: cur.length }));
+    if (say)
+      setAnnounce(t('edit.moved', { name: nameOf(cur[from]), pos: to + 1, total: cur.length }));
   };
   const resizeWidget = (id: string, cols: number, say = false) => {
     const c = snapCols(cols);
@@ -416,7 +507,8 @@ export default function OverviewPage() {
   const announceMoved = (id: string) => {
     const cur = draftRef.current;
     const w = cur?.find((x) => x.id === id);
-    if (cur && w) setAnnounce(t('edit.moved', { name: nameOf(w), pos: cur.indexOf(w) + 1, total: cur.length }));
+    if (cur && w)
+      setAnnounce(t('edit.moved', { name: nameOf(w), pos: cur.indexOf(w) + 1, total: cur.length }));
   };
   const announceResized = (id: string) => {
     const cur = draftRef.current?.find((x) => x.id === id);
@@ -432,7 +524,14 @@ export default function OverviewPage() {
     }
   }, [focusReq]);
 
-  const { dragUi, onWidgetPointerDown, onLibPointerDown } = useWidgetDrag({ gridRef, dropRef, draftRef, moveWidget, addItem, announceMoved });
+  const { dragUi, onWidgetPointerDown, onLibPointerDown } = useWidgetDrag({
+    gridRef,
+    dropRef,
+    draftRef,
+    moveWidget,
+    addItem,
+    announceMoved,
+  });
 
   const onResizeDown = (w: Widget, e: RPointerEvent<HTMLElement>) => {
     e.preventDefault();
@@ -440,7 +539,13 @@ export default function OverviewPage() {
     const grid = gridRef.current;
     const el = (e.currentTarget.closest('[data-wid]') as HTMLElement) ?? null;
     if (!grid || !el) return;
-    trackResize(grid, el, e.clientX, (cols) => resizeWidget(w.id, cols), () => announceResized(w.id));
+    trackResize(
+      grid,
+      el,
+      e.clientX,
+      (cols) => resizeWidget(w.id, cols),
+      () => announceResized(w.id),
+    );
   };
 
   const onWidgetKey = (w: Widget, i: number, e: KeyboardEvent<HTMLDivElement>) => {
@@ -478,7 +583,10 @@ export default function OverviewPage() {
     },
     [t],
   );
-  const ctx: WidgetCtx = useMemo(() => ({ editing, run, configure: (id) => setSettingsId(id) }), [editing, run]);
+  const ctx: WidgetCtx = useMemo(
+    () => ({ editing, run, configure: (id) => setSettingsId(id) }),
+    [editing, run],
+  );
 
   const settingsWidget = list.find((w) => w.id === settingsId) ?? null;
   const pluginTitle = pluginTitleOf(settingsWidget, pluginWidgets);
@@ -487,66 +595,103 @@ export default function OverviewPage() {
     setSettingsId(null);
     if (!id) return;
     if (editing) update((l) => l.map((w) => (w.id === id ? { ...w, settings: s } : w)));
-    else void set('dashboard', { version: 1, widgets: saved.map((w) => (w.id === id ? { ...w, settings: s } : w)) });
+    else
+      void set('dashboard', {
+        version: 1,
+        widgets: saved.map((w) => (w.id === id ? { ...w, settings: s } : w)),
+      });
   };
 
   const name = session?.name?.trim().split(/\s+/)[0] || session?.user || '';
   const summary = dashboardSummary(t, alerts, host?.hostname || 'this machine');
 
-  const library = <Library onAdd={(i) => addItem(i)} onPointerDown={onLibPointerDown} onReset={resetLayout} className={wide ? '' : 'ov-lib--sheet'} />;
+  const library = (
+    <Library
+      onAdd={(i) => addItem(i)}
+      onPointerDown={onLibPointerDown}
+      onReset={resetLayout}
+      className={wide ? '' : 'ov-lib--sheet'}
+    />
+  );
 
   return (
     <Page
       hue="ov"
       title={editing ? undefined : t('greeting', { name })}
       subtitle={editing ? undefined : summary}
-      actions={editing ? undefined : (
-        <>
-          <span className="ov-refresh">
-            <RefreshSelect label={tc('refreshRate.label')} onPick={(ms) => void setRefresh(ms)} />
-            <Button iconOnly icon="refresh" variant="ghost" aria-label={tc('refreshRate.now')} title={tc('refreshRate.now')} onClick={refreshNow} />
-          </span>
-          <Button icon="edit" onClick={startEdit}>{t('personalize')}</Button>
-        </>
-      )}
+      actions={
+        editing ? undefined : (
+          <>
+            <span className="ov-refresh">
+              <RefreshSelect label={tc('refreshRate.label')} onPick={(ms) => void setRefresh(ms)} />
+              <Button
+                iconOnly
+                icon="refresh"
+                variant="ghost"
+                aria-label={tc('refreshRate.now')}
+                title={tc('refreshRate.now')}
+                onClick={refreshNow}
+              />
+            </span>
+            <Button icon="edit" onClick={startEdit}>
+              {t('personalize')}
+            </Button>
+          </>
+        )
+      }
     >
       <div className={`ov${editing ? ' ov--editing' : ''}${editing && wide ? ' ov--lib' : ''}`}>
         <div className="ov-main">
-          {editing && <EditBar t={t} wide={wide} onAdd={() => setLibOpen(true)} onCancel={cancel} onSave={() => void save()} />}
+          {editing && (
+            <EditBar
+              t={t}
+              wide={wide}
+              onAdd={() => setLibOpen(true)}
+              onCancel={cancel}
+              onSave={() => void save()}
+            />
+          )}
           <div className="ov-canvas">
-          <div ref={gridRef} className="ov-grid" role="list">
-            {list.map((w, i) => (
-              <div
-                key={w.id}
-                role="listitem"
-                data-wid={w.id}
-                className={widgetClass(w, dragUi)}
-                tabIndex={editing ? 0 : undefined}
-                aria-roledescription={editing ? t('edit.roleDesc') : undefined}
-                aria-label={editing ? t('edit.widgetLabel', { name: nameOf(w), pos: i + 1, total: list.length }) : undefined}
-                onPointerDown={editing ? (e) => onWidgetPointerDown(w, e) : undefined}
-                onKeyDown={editing ? (e) => onWidgetKey(w, i, e) : undefined}
-              >
-                {editing && (
-                  <WidgetTools
-                    t={t}
-                    name={nameOf(w)}
-                    onSettings={() => setSettingsId(w.id)}
-                    onRemove={() => removeWidget(w.id)}
-                    onResizeDown={(e) => onResizeDown(w, e)}
-                  />
-                )}
-                <div className="ov-w-body" {...(editing ? ({ inert: '' } as object) : {})}>
-                  <WidgetBody w={w} ctx={ctx} />
+            <div ref={gridRef} className="ov-grid" role="list">
+              {list.map((w, i) => (
+                <div
+                  key={w.id}
+                  role="listitem"
+                  data-wid={w.id}
+                  className={widgetClass(w, dragUi)}
+                  tabIndex={editing ? 0 : undefined}
+                  aria-roledescription={editing ? t('edit.roleDesc') : undefined}
+                  aria-label={
+                    editing
+                      ? t('edit.widgetLabel', { name: nameOf(w), pos: i + 1, total: list.length })
+                      : undefined
+                  }
+                  onPointerDown={editing ? (e) => onWidgetPointerDown(w, e) : undefined}
+                  onKeyDown={editing ? (e) => onWidgetKey(w, i, e) : undefined}
+                >
+                  {editing && (
+                    <WidgetTools
+                      t={t}
+                      name={nameOf(w)}
+                      onSettings={() => setSettingsId(w.id)}
+                      onRemove={() => removeWidget(w.id)}
+                      onResizeDown={(e) => onResizeDown(w, e)}
+                    />
+                  )}
+                  <div className="ov-w-body" {...(editing ? ({ inert: '' } as object) : {})}>
+                    <WidgetBody w={w} ctx={ctx} />
+                  </div>
                 </div>
-              </div>
-            ))}
-            {editing && (
-              <div ref={dropRef} className={`ov-drop${dragUi?.overEnd ? ' ov-drop--on' : ''}`}>
-                <div><Icon name="plus" />{t('edit.drop')}</div>
-              </div>
-            )}
-          </div>
+              ))}
+              {editing && (
+                <div ref={dropRef} className={`ov-drop${dragUi?.overEnd ? ' ov-drop--on' : ''}`}>
+                  <div>
+                    <Icon name="plus" />
+                    {t('edit.drop')}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
         {editing && wide && library}
@@ -558,9 +703,16 @@ export default function OverviewPage() {
         </Sheet>
       )}
 
-      <div className="ov-sr" role="status" aria-live="polite">{announce}</div>
+      <div className="ov-sr" role="status" aria-live="polite">
+        {announce}
+      </div>
 
-      <SettingsDialog widget={settingsWidget} pluginTitle={pluginTitle} onClose={() => setSettingsId(null)} onSave={saveSettings} />
+      <SettingsDialog
+        widget={settingsWidget}
+        pluginTitle={pluginTitle}
+        onClose={() => setSettingsId(null)}
+        onSave={saveSettings}
+      />
       <OutputDialog />
       <ConfirmDialog
         open={!!confirm}
@@ -571,7 +723,11 @@ export default function OverviewPage() {
         danger={false}
         icon="play"
         title={t('action.confirmTitle', { name: confirm?.label ?? '' })}
-        description={confirm ? `${confirm.argv.join(' ')}${confirm.admin ? ` (${t('action.asAdmin')})` : ''}` : undefined}
+        description={
+          confirm
+            ? `${confirm.argv.join(' ')}${confirm.admin ? ` (${t('action.asAdmin')})` : ''}`
+            : undefined
+        }
         confirmLabel={t('action.run')}
       />
       <ConfirmDialog

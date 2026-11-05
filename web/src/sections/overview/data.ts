@@ -12,7 +12,15 @@ export interface Metrics {
   load?: number[] | null;
   memory: { total: number; used: number; available: number; percent: number };
   swap: { total: number; used: number; free: number; percent: number };
-  disks: { mount: string; device: string; fstype: string; total: number; used: number; free: number; percent: number }[];
+  disks: {
+    mount: string;
+    device: string;
+    fstype: string;
+    total: number;
+    used: number;
+    free: number;
+    percent: number;
+  }[];
   net: { iface: string; rxRate: number; txRate: number; virtual: boolean; up: boolean }[];
 }
 
@@ -52,7 +60,14 @@ const MIN_BUCKET = 4000; // history resolution (ms); slower refresh rates get on
 const KEEP_MS = 60 * 60_000; // history is buffered by time, so any refresh rate keeps one hour
 let bucketMs = MIN_BUCKET;
 let history: Point[] = [];
-let bucket: { start: number; n: number; cpu: number; mem: number; net: number; disks: Record<string, number> } | null = null;
+let bucket: {
+  start: number;
+  n: number;
+  cpu: number;
+  mem: number;
+  net: number;
+  disks: Record<string, number>;
+} | null = null;
 
 interface Snap {
   metrics: Metrics | null;
@@ -94,21 +109,31 @@ function trim(h: Point[], now: number): Point[] {
 }
 
 function avg(b: NonNullable<typeof bucket>): Point {
-  return { t: b.start + Math.min(bucketMs, streamMs) / 2, cpu: b.cpu / b.n, mem: b.mem / b.n, net: b.net / b.n, disks: { ...b.disks } };
+  return {
+    t: b.start + Math.min(bucketMs, streamMs) / 2,
+    cpu: b.cpu / b.n,
+    mem: b.mem / b.n,
+    net: b.net / b.n,
+    disks: { ...b.disks },
+  };
 }
 
 function start() {
   if (handle) return;
   handleMs = streamMs;
   bucketMs = Math.max(MIN_BUCKET, streamMs);
-  handle = stream<Metrics>('system.metricsStream', { interval: streamMs }, {
-    reopen: true,
-    onData: ingest,
-    onError: (e) => {
-      snap = { ...snap, error: e.message };
-      subs.forEach((s) => s());
+  handle = stream<Metrics>(
+    'system.metricsStream',
+    { interval: streamMs },
+    {
+      reopen: true,
+      onData: ingest,
+      onError: (e) => {
+        snap = { ...snap, error: e.message };
+        subs.forEach((s) => s());
+      },
     },
-  });
+  );
 }
 
 function restart() {

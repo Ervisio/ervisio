@@ -1,9 +1,33 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useSession } from '../../api';
 import { useT } from '../../i18n';
-import { Button, Dialog, Icon, Input, Segmented, Select, Switch, hueClass, type HueId } from '../../ui';
+import {
+  Button,
+  Dialog,
+  Icon,
+  Input,
+  Segmented,
+  Select,
+  Switch,
+  hueClass,
+  type HueId,
+} from '../../ui';
 import { useMetrics } from './data';
-import { ACTION_ICONS, asMetric, asRange, HUES, isAction, joinArgv, METRICS, splitArgv, uid, type DashAction, type Metric, type Range, type Widget } from './model';
+import {
+  ACTION_ICONS,
+  asMetric,
+  asRange,
+  HUES,
+  isAction,
+  joinArgv,
+  METRICS,
+  splitArgv,
+  uid,
+  type DashAction,
+  type Metric,
+  type Range,
+  type Widget,
+} from './model';
 
 interface ActionDraft {
   id: string;
@@ -38,10 +62,30 @@ function draftToAction(d: ActionDraft, t: T): { action?: DashAction; error?: str
   if (!d.label.trim()) return { error: t('settings.errLabel') };
   const p = parseCmd(d.cmd, t);
   if (!p.argv) return { error: p.error };
-  return { action: { id: d.id, label: d.label.trim(), icon: d.icon, hue: d.hue, argv: p.argv, admin: d.admin || undefined, confirm: d.confirm || undefined } };
+  return {
+    action: {
+      id: d.id,
+      label: d.label.trim(),
+      icon: d.icon,
+      hue: d.hue,
+      argv: p.argv,
+      admin: d.admin || undefined,
+      confirm: d.confirm || undefined,
+    },
+  };
 }
 
-function ActionFields({ d, onChange, onRemove, compact }: { d: ActionDraft; onChange(d: ActionDraft): void; onRemove?: () => void; compact?: boolean }) {
+function ActionFields({
+  d,
+  onChange,
+  onRemove,
+  compact,
+}: {
+  d: ActionDraft;
+  onChange(d: ActionDraft): void;
+  onRemove?: () => void;
+  compact?: boolean;
+}) {
   const t = useT('overview');
   const win = useSession().session?.os === 'windows';
   const th = useT('shell');
@@ -49,15 +93,47 @@ function ActionFields({ d, onChange, onRemove, compact }: { d: ActionDraft; onCh
   return (
     <div className={`ov-af${compact ? ' ov-af--compact' : ''}`}>
       <div className="ov-af-row">
-        <Input label={t('settings.label')} value={d.label} onChange={(e) => set({ label: e.target.value })} placeholder={t('settings.labelPh')} maxLength={40} />
-        {onRemove && <Button variant="ghost" iconOnly icon="trash" aria-label={t('settings.removeAction')} onClick={onRemove} className="ov-af-del" />}
+        <Input
+          label={t('settings.label')}
+          value={d.label}
+          onChange={(e) => set({ label: e.target.value })}
+          placeholder={t('settings.labelPh')}
+          maxLength={40}
+        />
+        {onRemove && (
+          <Button
+            variant="ghost"
+            iconOnly
+            icon="trash"
+            aria-label={t('settings.removeAction')}
+            onClick={onRemove}
+            className="ov-af-del"
+          />
+        )}
       </div>
-      <Input label={t('settings.command')} mono value={d.cmd} onChange={(e) => set({ cmd: e.target.value })} placeholder={win ? "Restart-Service Spooler" : "systemctl restart nginx"} hint={win ? t('settings.commandHintWin') : t('settings.commandHint')} spellCheck={false} autoComplete="off" />
+      <Input
+        label={t('settings.command')}
+        mono
+        value={d.cmd}
+        onChange={(e) => set({ cmd: e.target.value })}
+        placeholder={win ? 'Restart-Service Spooler' : 'systemctl restart nginx'}
+        hint={win ? t('settings.commandHintWin') : t('settings.commandHint')}
+        spellCheck={false}
+        autoComplete="off"
+      />
       <div>
         <div className="ui-label">{t('settings.colour')}</div>
         <div className="ov-swatches" role="radiogroup" aria-label={t('settings.colour')}>
           {HUES.map((h) => (
-            <button key={h} type="button" role="radio" aria-checked={d.hue === h} aria-label={th(`nav.${hueNav[h]}`)} className={`ov-swatch ${hueClass(h)}`} onClick={() => set({ hue: h })}>
+            <button
+              key={h}
+              type="button"
+              role="radio"
+              aria-checked={d.hue === h}
+              aria-label={th(`nav.${hueNav[h]}`)}
+              className={`ov-swatch ${hueClass(h)}`}
+              onClick={() => set({ hue: h })}
+            >
               {d.hue === h && <Icon name="check" />}
             </button>
           ))}
@@ -67,26 +143,54 @@ function ActionFields({ d, onChange, onRemove, compact }: { d: ActionDraft; onCh
         <div className="ui-label">{t('settings.icon')}</div>
         <div className="ov-icons" role="radiogroup" aria-label={t('settings.icon')}>
           {ACTION_ICONS.map((ic) => (
-            <button key={ic} type="button" role="radio" aria-checked={d.icon === ic} aria-label={ic} className={`ov-icbtn ${hueClass(d.hue)}`} onClick={() => set({ icon: ic })}>
+            <button
+              key={ic}
+              type="button"
+              role="radio"
+              aria-checked={d.icon === ic}
+              aria-label={ic}
+              className={`ov-icbtn ${hueClass(d.hue)}`}
+              onClick={() => set({ icon: ic })}
+            >
               <Icon name={ic} />
             </button>
           ))}
         </div>
       </div>
       <Switch checked={d.admin} onChange={(admin) => set({ admin })} label={t('settings.admin')} />
-      <Switch checked={d.confirm} onChange={(confirm) => set({ confirm })} label={t('settings.confirm')} />
+      <Switch
+        checked={d.confirm}
+        onChange={(confirm) => set({ confirm })}
+        label={t('settings.confirm')}
+      />
     </div>
   );
 }
-const hueNav: Record<HueId, string> = { ov: 'overview', term: 'terminal', file: 'files', log: 'logs', svc: 'services', sw: 'software', usr: 'users', plg: 'plugins' };
+const hueNav: Record<HueId, string> = {
+  ov: 'overview',
+  term: 'terminal',
+  file: 'files',
+  log: 'logs',
+  svc: 'services',
+  sw: 'software',
+  usr: 'users',
+  plg: 'plugins',
+};
 
 const WIN_DESC = new Set(['service', 'log']);
 
 type Built = { settings?: Record<string, any>; error?: string };
 
-const isAbsPath = (p: string, win: boolean) => (win ? /^([a-zA-Z]:[\\/]|\\\\)/.test(p) : p.startsWith('/'));
+const isAbsPath = (p: string, win: boolean) =>
+  win ? /^([a-zA-Z]:[\\/]|\\\\)/.test(p) : p.startsWith('/');
 
-function metricSettings(metric: string, mount: string, iface: string, range: string | undefined, withIface: boolean): Built {
+function metricSettings(
+  metric: string,
+  mount: string,
+  iface: string,
+  range: string | undefined,
+  withIface: boolean,
+): Built {
   const settings: Record<string, any> = range ? { metric, range } : { metric };
   if (metric === 'disk' && mount) settings.mount = mount;
   if (withIface && metric === 'network' && iface !== 'auto') settings.iface = iface;
@@ -94,7 +198,10 @@ function metricSettings(metric: string, mount: string, iface: string, range: str
 }
 
 function serviceSettings(units: string, t: T): Built {
-  const list = units.split(/[\s,]+/).map((u) => u.trim()).filter(Boolean);
+  const list = units
+    .split(/[\s,]+/)
+    .map((u) => u.trim())
+    .filter(Boolean);
   if (list.length > 30) return { error: t('settings.errUnits') };
   return { settings: { units: [...new Set(list)] } };
 }
@@ -110,8 +217,12 @@ interface LogDraft {
 function logSettings({ source, channel, unit, file, lines }: LogDraft, win: boolean, t: T): Built {
   if (source === 'unit' && !unit.trim()) return { error: t('settings.errUnit') };
   if (source === 'evt' && !channel.trim()) return { error: t('settings.errChannel') };
-  if (source === 'file' && !isAbsPath(file.trim(), win)) return { error: t(win ? 'win.settings.errFile' : 'settings.errFile') };
-  const settings: Record<string, any> = { source: source === 'evt' ? `evt:${channel.trim()}` : source, lines: parseInt(lines, 10) || 12 };
+  if (source === 'file' && !isAbsPath(file.trim(), win))
+    return { error: t(win ? 'win.settings.errFile' : 'settings.errFile') };
+  const settings: Record<string, any> = {
+    source: source === 'evt' ? `evt:${channel.trim()}` : source,
+    lines: parseInt(lines, 10) || 12,
+  };
   if (source === 'unit') settings.unit = unit.trim();
   if (source === 'file') settings.file = file.trim();
   return { settings };
@@ -120,11 +231,18 @@ function logSettings({ source, channel, unit, file, lines }: LogDraft, win: bool
 function outputSettings(cmd: string, every: string, admin: boolean, t: T): Built {
   const p = parseCmd(cmd, t);
   if (!p.argv) return { error: p.error };
-  return { settings: { argv: p.argv, every: Math.max(2, parseInt(every, 10) || 10), admin: admin || undefined } };
+  return {
+    settings: {
+      argv: p.argv,
+      every: Math.max(2, parseInt(every, 10) || 10),
+      admin: admin || undefined,
+    },
+  };
 }
 
 function folderSettings(path: string, label: string, win: boolean, t: T): Built {
-  if (!isAbsPath(path.trim(), win)) return { error: t(win ? 'win.settings.errPath' : 'settings.errPath') };
+  if (!isAbsPath(path.trim(), win))
+    return { error: t(win ? 'win.settings.errPath' : 'settings.errPath') };
   return { settings: { path: path.trim(), label: label.trim() } };
 }
 
@@ -138,12 +256,40 @@ function actionsSettings(drafts: ActionDraft[], t: T): Built {
   return { settings: { actions } };
 }
 
-export function SettingsDialog({ widget, onClose, onSave, pluginTitle }: { widget: Widget | null; onClose(): void; onSave(settings: Record<string, any>): void; pluginTitle?: string }) {
+export function SettingsDialog({
+  widget,
+  onClose,
+  onSave,
+  pluginTitle,
+}: {
+  widget: Widget | null;
+  onClose(): void;
+  onSave(settings: Record<string, any>): void;
+  pluginTitle?: string;
+}) {
   if (!widget) return null;
-  return <Inner key={widget.id} widget={widget} onClose={onClose} onSave={onSave} pluginTitle={pluginTitle} />;
+  return (
+    <Inner
+      key={widget.id}
+      widget={widget}
+      onClose={onClose}
+      onSave={onSave}
+      pluginTitle={pluginTitle}
+    />
+  );
 }
 
-function Inner({ widget, onClose, onSave, pluginTitle }: { widget: Widget; onClose(): void; onSave(s: Record<string, any>): void; pluginTitle?: string }) {
+function Inner({
+  widget,
+  onClose,
+  onSave,
+  pluginTitle,
+}: {
+  widget: Widget;
+  onClose(): void;
+  onSave(s: Record<string, any>): void;
+  pluginTitle?: string;
+}) {
   const t = useT('overview');
   const win = useSession().session?.os === 'windows';
   const { metrics } = useMetrics();
@@ -156,8 +302,18 @@ function Inner({ widget, onClose, onSave, pluginTitle }: { widget: Widget; onClo
   const [showOk, setShowOk] = useState(s.showOk !== false);
   const [max, setMax] = useState(String(s.max ?? 6));
   const [units, setUnits] = useState<string>(Array.isArray(s.units) ? s.units.join(', ') : '');
-  const [source, setSource] = useState<'journal' | 'unit' | 'file' | 'evt'>(s.source === 'unit' || s.source === 'file' ? s.source : typeof s.source === 'string' && s.source.startsWith('evt:') ? 'evt' : win ? 'evt' : 'journal');
-  const [channel, setChannel] = useState<string>(typeof s.source === 'string' && s.source.startsWith('evt:') ? s.source.slice(4) : 'System');
+  const [source, setSource] = useState<'journal' | 'unit' | 'file' | 'evt'>(
+    s.source === 'unit' || s.source === 'file'
+      ? s.source
+      : typeof s.source === 'string' && s.source.startsWith('evt:')
+        ? 'evt'
+        : win
+          ? 'evt'
+          : 'journal',
+  );
+  const [channel, setChannel] = useState<string>(
+    typeof s.source === 'string' && s.source.startsWith('evt:') ? s.source.slice(4) : 'System',
+  );
   const [unit, setUnit] = useState<string>(s.unit ?? '');
   const [file, setFile] = useState<string>(s.file ?? '');
   const [lines, setLines] = useState(String(s.lines ?? 12));
@@ -166,13 +322,25 @@ function Inner({ widget, onClose, onSave, pluginTitle }: { widget: Widget; onClo
   const [admin, setAdmin] = useState(!!s.admin);
   const [path, setPath] = useState<string>(s.path ?? '');
   const [label, setLabel] = useState<string>(s.label ?? '');
-  const [one, setOne] = useState<ActionDraft>(() => toDraft(isAction(s) ? (s as DashAction) : undefined));
-  const [many, setMany] = useState<ActionDraft[]>(() => (Array.isArray(s.actions) ? (s.actions as unknown[]).filter(isAction).map((a) => toDraft(a)) : []));
+  const [one, setOne] = useState<ActionDraft>(() =>
+    toDraft(isAction(s) ? (s as DashAction) : undefined),
+  );
+  const [many, setMany] = useState<ActionDraft[]>(() =>
+    Array.isArray(s.actions)
+      ? (s.actions as unknown[]).filter(isAction).map((a) => toDraft(a))
+      : [],
+  );
   const [error, setError] = useState('');
 
   const type = widget.type;
-  const mounts = useMemo(() => (metrics?.disks ?? []).map((d) => ({ value: d.mount, label: d.mount })), [metrics]);
-  const ifaces = useMemo(() => (metrics?.net ?? []).map((n) => ({ value: n.iface, label: n.iface })), [metrics]);
+  const mounts = useMemo(
+    () => (metrics?.disks ?? []).map((d) => ({ value: d.mount, label: d.mount })),
+    [metrics],
+  );
+  const ifaces = useMemo(
+    () => (metrics?.net ?? []).map((n) => ({ value: n.iface, label: n.iface })),
+    [metrics],
+  );
 
   const settingsFor = (tt: string): Built => {
     switch (type) {
@@ -223,71 +391,202 @@ function Inner({ widget, onClose, onSave, pluginTitle }: { widget: Widget; onClo
       size="lg"
       icon="cog"
       title={t('settings.title', { name: t(`widgets.${type}.title`) })}
-      description={(() => { const k = win && WIN_DESC.has(type) ? `win.widgets.${type}.desc` : `widgets.${type}.desc`; return t(k) === k ? undefined : t(k); })()}
+      description={(() => {
+        const k = win && WIN_DESC.has(type) ? `win.widgets.${type}.desc` : `widgets.${type}.desc`;
+        return t(k) === k ? undefined : t(k);
+      })()}
       onSubmit={submit}
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>{t('cancel')}</Button>
-          <Button type="submit" variant="primary">{t('settings.apply')}</Button>
+          <Button variant="ghost" onClick={onClose}>
+            {t('cancel')}
+          </Button>
+          <Button type="submit" variant="primary">
+            {t('settings.apply')}
+          </Button>
         </>
       }
     >
       <div className="ov-form">
-        {hasTitle && <Input label={t('settings.widgetTitle')} value={title} onChange={(e) => setTitle(e.target.value)} placeholder={type === 'plugin' ? pluginTitle : t(`widgets.${type}.title`)} maxLength={60} />}
+        {hasTitle && (
+          <Input
+            label={t('settings.widgetTitle')}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder={type === 'plugin' ? pluginTitle : t(`widgets.${type}.title`)}
+            maxLength={60}
+          />
+        )}
 
         {(type === 'stat' || type === 'chart') && (
           <div>
             <div className="ui-label">{t('settings.metric')}</div>
-            <Segmented<Metric> value={metric} onChange={setMetric} aria-label={t('settings.metric')} options={METRICS.map((m) => ({ value: m, label: t(`metrics.${m}`) }))} />
+            <Segmented<Metric>
+              value={metric}
+              onChange={setMetric}
+              aria-label={t('settings.metric')}
+              options={METRICS.map((m) => ({ value: m, label: t(`metrics.${m}`) }))}
+            />
           </div>
         )}
         {(type === 'stat' || type === 'chart') && metric === 'disk' && (
-          <Select label={t('settings.mount')} value={mount} onChange={setMount} options={[{ value: '', label: t('settings.auto') }, ...mounts]} />
+          <Select
+            label={t('settings.mount')}
+            value={mount}
+            onChange={setMount}
+            options={[{ value: '', label: t('settings.auto') }, ...mounts]}
+          />
         )}
         {type === 'stat' && metric === 'network' && (
-          <Select label={t('settings.iface')} value={iface} onChange={setIface} options={[{ value: 'auto', label: t('settings.auto') }, ...ifaces]} />
+          <Select
+            label={t('settings.iface')}
+            value={iface}
+            onChange={setIface}
+            options={[{ value: 'auto', label: t('settings.auto') }, ...ifaces]}
+          />
         )}
         {(type === 'activity' || type === 'chart') && (
           <div>
             <div className="ui-label">{t('settings.range')}</div>
-            <Segmented<Range> value={range} onChange={setRange} aria-label={t('settings.range')} options={(['5m', '15m', '1h'] as const).map((r) => ({ value: r, label: t(`range.${r}`) }))} />
+            <Segmented<Range>
+              value={range}
+              onChange={setRange}
+              aria-label={t('settings.range')}
+              options={(['5m', '15m', '1h'] as const).map((r) => ({
+                value: r,
+                label: t(`range.${r}`),
+              }))}
+            />
           </div>
         )}
 
         {type === 'alerts' && (
           <>
             <Switch checked={showOk} onChange={setShowOk} label={t('settings.showOk')} />
-            <Select label={t('settings.max')} value={max} onChange={setMax} options={[3, 4, 5, 6, 8, 10, 12].map((n) => ({ value: String(n), label: String(n) }))} />
+            <Select
+              label={t('settings.max')}
+              value={max}
+              onChange={setMax}
+              options={[3, 4, 5, 6, 8, 10, 12].map((n) => ({ value: String(n), label: String(n) }))}
+            />
           </>
         )}
 
-        {type === 'service' && <Input label={t('settings.units')} mono value={units} onChange={(e) => setUnits(e.target.value)} placeholder={win ? "Spooler, W32Time" : "nginx, sshd, docker"} hint={t('settings.unitsHint')} spellCheck={false} />}
+        {type === 'service' && (
+          <Input
+            label={t('settings.units')}
+            mono
+            value={units}
+            onChange={(e) => setUnits(e.target.value)}
+            placeholder={win ? 'Spooler, W32Time' : 'nginx, sshd, docker'}
+            hint={t('settings.unitsHint')}
+            spellCheck={false}
+          />
+        )}
 
         {type === 'log' && (
           <>
             <div>
               <div className="ui-label">{t('settings.source')}</div>
-              <Segmented<'journal' | 'unit' | 'file' | 'evt'> value={source} onChange={setSource} aria-label={t('settings.source')} options={win ? [{ value: 'evt', label: t('settings.srcEvt') }, { value: 'file', label: t('settings.srcFile') }] : [{ value: 'journal', label: t('settings.srcJournal') }, { value: 'unit', label: t('settings.srcUnit') }, { value: 'file', label: t('settings.srcFile') }]} />
+              <Segmented<'journal' | 'unit' | 'file' | 'evt'>
+                value={source}
+                onChange={setSource}
+                aria-label={t('settings.source')}
+                options={
+                  win
+                    ? [
+                        { value: 'evt', label: t('settings.srcEvt') },
+                        { value: 'file', label: t('settings.srcFile') },
+                      ]
+                    : [
+                        { value: 'journal', label: t('settings.srcJournal') },
+                        { value: 'unit', label: t('settings.srcUnit') },
+                        { value: 'file', label: t('settings.srcFile') },
+                      ]
+                }
+              />
             </div>
-            {source === 'evt' && <Input label={t('settings.channel')} mono value={channel} onChange={(e) => setChannel(e.target.value)} placeholder="System" spellCheck={false} />}
-            {source === 'unit' && <Input label={t('settings.unit')} mono value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="nginx" spellCheck={false} />}
-            {source === 'file' && <Input label={t('settings.file')} mono value={file} onChange={(e) => setFile(e.target.value)} placeholder={win ? 'C:\\Windows\\Logs\\CBS\\CBS.log' : '/var/log/pacman.log'} hint={t('settings.fileHint')} spellCheck={false} />}
-            <Select label={t('settings.lines')} value={lines} onChange={setLines} options={[6, 8, 12, 20, 40].map((n) => ({ value: String(n), label: String(n) }))} />
+            {source === 'evt' && (
+              <Input
+                label={t('settings.channel')}
+                mono
+                value={channel}
+                onChange={(e) => setChannel(e.target.value)}
+                placeholder="System"
+                spellCheck={false}
+              />
+            )}
+            {source === 'unit' && (
+              <Input
+                label={t('settings.unit')}
+                mono
+                value={unit}
+                onChange={(e) => setUnit(e.target.value)}
+                placeholder="nginx"
+                spellCheck={false}
+              />
+            )}
+            {source === 'file' && (
+              <Input
+                label={t('settings.file')}
+                mono
+                value={file}
+                onChange={(e) => setFile(e.target.value)}
+                placeholder={win ? 'C:\\Windows\\Logs\\CBS\\CBS.log' : '/var/log/pacman.log'}
+                hint={t('settings.fileHint')}
+                spellCheck={false}
+              />
+            )}
+            <Select
+              label={t('settings.lines')}
+              value={lines}
+              onChange={setLines}
+              options={[6, 8, 12, 20, 40].map((n) => ({ value: String(n), label: String(n) }))}
+            />
           </>
         )}
 
         {type === 'output' && (
           <>
-            <Input label={t('settings.command')} mono value={cmd} onChange={(e) => setCmd(e.target.value)} placeholder="uptime" hint={win ? t('settings.commandHintWin') : t('settings.commandHint')} spellCheck={false} />
-            <Select label={t('settings.every')} value={every} onChange={setEvery} options={[2, 5, 10, 30, 60, 300].map((n) => ({ value: String(n), label: t('settings.seconds', { count: n }) }))} />
+            <Input
+              label={t('settings.command')}
+              mono
+              value={cmd}
+              onChange={(e) => setCmd(e.target.value)}
+              placeholder="uptime"
+              hint={win ? t('settings.commandHintWin') : t('settings.commandHint')}
+              spellCheck={false}
+            />
+            <Select
+              label={t('settings.every')}
+              value={every}
+              onChange={setEvery}
+              options={[2, 5, 10, 30, 60, 300].map((n) => ({
+                value: String(n),
+                label: t('settings.seconds', { count: n }),
+              }))}
+            />
             <Switch checked={admin} onChange={setAdmin} label={t('settings.admin')} />
           </>
         )}
 
         {type === 'folder' && (
           <>
-            <Input label={t('settings.path')} mono value={path} onChange={(e) => setPath(e.target.value)} placeholder="/home/you/Documents" spellCheck={false} />
-            <Input label={t('settings.folderLabel')} value={label} onChange={(e) => setLabel(e.target.value)} placeholder={t('settings.folderLabelPh')} maxLength={40} />
+            <Input
+              label={t('settings.path')}
+              mono
+              value={path}
+              onChange={(e) => setPath(e.target.value)}
+              placeholder="/home/you/Documents"
+              spellCheck={false}
+            />
+            <Input
+              label={t('settings.folderLabel')}
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder={t('settings.folderLabelPh')}
+              maxLength={40}
+            />
           </>
         )}
 
@@ -296,14 +595,31 @@ function Inner({ widget, onClose, onSave, pluginTitle }: { widget: Widget; onClo
         {type === 'actions' && (
           <div className="ov-af-list">
             {many.map((d, i) => (
-              <ActionFields key={d.id} d={d} compact onChange={(x) => setMany(many.map((y, j) => (j === i ? x : y)))} onRemove={() => setMany(many.filter((_, j) => j !== i))} />
+              <ActionFields
+                key={d.id}
+                d={d}
+                compact
+                onChange={(x) => setMany(many.map((y, j) => (j === i ? x : y)))}
+                onRemove={() => setMany(many.filter((_, j) => j !== i))}
+              />
             ))}
-            <Button icon="plus" onClick={() => setMany([...many, toDraft()])} disabled={many.length >= 12}>{t('settings.addAction')}</Button>
+            <Button
+              icon="plus"
+              onClick={() => setMany([...many, toDraft()])}
+              disabled={many.length >= 12}
+            >
+              {t('settings.addAction')}
+            </Button>
           </div>
         )}
 
         {noExtra && !hasTitle && <small className="ov-muted">{t('settings.none')}</small>}
-        {error && <div className="ui-form-err" role="alert"><Icon name="alert" />{error}</div>}
+        {error && (
+          <div className="ui-form-err" role="alert">
+            <Icon name="alert" />
+            {error}
+          </div>
+        )}
       </div>
     </Dialog>
   );

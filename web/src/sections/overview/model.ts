@@ -40,9 +40,35 @@ export interface DashAction {
 }
 
 export const HUES: HueId[] = ['ov', 'term', 'file', 'log', 'svc', 'sw', 'usr', 'plg'];
-export const ACTION_ICONS: IconName[] = ['play', 'refresh', 'download', 'broom', 'power', 'terminal', 'server', 'shield', 'zap', 'files', 'trash', 'lock', 'star', 'heart', 'globe', 'cog', 'code', 'clock', 'key', 'upload', 'home', 'wifi', 'disk', 'cpu'];
+export const ACTION_ICONS: IconName[] = [
+  'play',
+  'refresh',
+  'download',
+  'broom',
+  'power',
+  'terminal',
+  'server',
+  'shield',
+  'zap',
+  'files',
+  'trash',
+  'lock',
+  'star',
+  'heart',
+  'globe',
+  'cog',
+  'code',
+  'clock',
+  'key',
+  'upload',
+  'home',
+  'wifi',
+  'disk',
+  'cpu',
+];
 
-export const uid = (p = 'w') => `${p}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+export const uid = (p = 'w') =>
+  `${p}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 export function snapCols(n: number): Cols {
   let best: Cols = SIZES[0];
@@ -57,8 +83,20 @@ export function stepCols(c: number, dir: 1 | -1): Cols {
 }
 
 const WIN_ACTIONS: DashAction[] = [
-  { id: 'a-ports', label: 'Listening ports', icon: 'globe', hue: 'file', argv: ['powershell.exe', '-NoProfile', '-Command', 'Get-NetTCPConnection -State Listen'] },
-  { id: 'a-disk', label: 'Disk usage', icon: 'disk', hue: 'term', argv: ['powershell.exe', '-NoProfile', '-Command', 'Get-PSDrive -PSProvider FileSystem'] },
+  {
+    id: 'a-ports',
+    label: 'Listening ports',
+    icon: 'globe',
+    hue: 'file',
+    argv: ['powershell.exe', '-NoProfile', '-Command', 'Get-NetTCPConnection -State Listen'],
+  },
+  {
+    id: 'a-disk',
+    label: 'Disk usage',
+    icon: 'disk',
+    hue: 'term',
+    argv: ['powershell.exe', '-NoProfile', '-Command', 'Get-PSDrive -PSProvider FileSystem'],
+  },
 ];
 
 let windowsHost = false;
@@ -71,8 +109,22 @@ const defaultActions = (): DashAction[] => (windowsHost ? WIN_ACTIONS : LINUX_AC
 const LINUX_ACTIONS: DashAction[] = [
   { id: 'a-ports', label: 'Listening ports', icon: 'globe', hue: 'file', argv: ['ss', '-tulpn'] },
   { id: 'a-disk', label: 'Disk usage', icon: 'disk', hue: 'term', argv: ['df', '-h'] },
-  { id: 'a-journal', label: 'Trim old logs', icon: 'broom', hue: 'log', argv: ['journalctl', '--vacuum-time=7d'], admin: true },
-  { id: 'a-reload', label: 'Reload systemd', icon: 'refresh', hue: 'svc', argv: ['systemctl', 'daemon-reload'], admin: true },
+  {
+    id: 'a-journal',
+    label: 'Trim old logs',
+    icon: 'broom',
+    hue: 'log',
+    argv: ['journalctl', '--vacuum-time=7d'],
+    admin: true,
+  },
+  {
+    id: 'a-reload',
+    label: 'Reload systemd',
+    icon: 'refresh',
+    hue: 'svc',
+    argv: ['systemctl', 'daemon-reload'],
+    admin: true,
+  },
 ];
 
 export function defaultLayout(): Layout {
@@ -106,7 +158,10 @@ export function normalizeLayout(raw: unknown): Layout {
       id,
       type: w.type,
       cols: snapCols(typeof w.cols === 'number' ? w.cols : 4),
-      settings: w.settings && typeof w.settings === 'object' ? (w.settings as Record<string, any>) : undefined,
+      settings:
+        w.settings && typeof w.settings === 'object'
+          ? (w.settings as Record<string, any>)
+          : undefined,
     });
   }
   return { version: 1, widgets };
@@ -117,14 +172,21 @@ export function layoutActions(l: Layout): DashAction[] {
   const out: DashAction[] = [];
   for (const w of l.widgets) {
     if (w.type === 'action' && isAction(w.settings)) out.push(w.settings as DashAction);
-    if (w.type === 'actions' && Array.isArray(w.settings?.actions)) out.push(...(w.settings!.actions as unknown[]).filter(isAction));
+    if (w.type === 'actions' && Array.isArray(w.settings?.actions))
+      out.push(...(w.settings!.actions as unknown[]).filter(isAction));
   }
   return out;
 }
 
 export function isAction(a: unknown): a is DashAction {
   const x = a as DashAction | undefined;
-  return !!x && Array.isArray(x.argv) && x.argv.length > 0 && x.argv.every((s) => typeof s === 'string') && typeof x.label === 'string';
+  return (
+    !!x &&
+    Array.isArray(x.argv) &&
+    x.argv.length > 0 &&
+    x.argv.every((s) => typeof s === 'string') &&
+    typeof x.label === 'string'
+  );
 }
 
 /* ---------- command line <-> argv ---------- */
@@ -165,7 +227,9 @@ export function splitArgv(line: string): string[] | null {
 }
 
 export function joinArgv(argv: string[]): string {
-  return argv.map((a) => (a !== '' && /^[\w@%+=:,./-]+$/.test(a) ? a : `'${a.replace(/'/g, `'\\''`)}'`)).join(' ');
+  return argv
+    .map((a) => (a !== '' && /^[\w@%+=:,./-]+$/.test(a) ? a : `'${a.replace(/'/g, `'\\''`)}'`))
+    .join(' ');
 }
 
 /* ---------- widget catalogue ---------- */
@@ -182,17 +246,80 @@ export interface CatalogItem {
 }
 
 export const CATALOG: CatalogItem[] = [
-  { type: 'stat', category: 'basics', icon: 'cpu', hue: 'ov', cols: 3, settings: () => ({ metric: 'cpu' }), configure: true },
+  {
+    type: 'stat',
+    category: 'basics',
+    icon: 'cpu',
+    hue: 'ov',
+    cols: 3,
+    settings: () => ({ metric: 'cpu' }),
+    configure: true,
+  },
   { type: 'activity', category: 'basics', icon: 'overview', hue: 'file', cols: 7 },
-  { type: 'actions', category: 'basics', icon: 'play', hue: 'sw', cols: 5, settings: () => ({ actions: defaultActions().map((a) => ({ ...a, id: uid('a') })) }) },
+  {
+    type: 'actions',
+    category: 'basics',
+    icon: 'play',
+    hue: 'sw',
+    cols: 5,
+    settings: () => ({ actions: defaultActions().map((a) => ({ ...a, id: uid('a') })) }),
+  },
   { type: 'alerts', category: 'basics', icon: 'alert', hue: 'svc', cols: 7 },
   { type: 'machine', category: 'basics', icon: 'server', hue: 'ov', cols: 5 },
-  { type: 'chart', category: 'system', icon: 'overview', hue: 'ov', cols: 6, settings: () => ({ metric: 'cpu', range: '15m' }), configure: true },
-  { type: 'service', category: 'system', icon: 'services', hue: 'svc', cols: 4, settings: () => ({ units: [] }), configure: true },
-  { type: 'log', category: 'system', icon: 'logs', hue: 'log', cols: 6, settings: () => ({ source: windowsHost ? 'evt:System' : 'journal', lines: 12 }), configure: true },
-  { type: 'action', category: 'personal', icon: 'play', hue: 'sw', cols: 3, settings: () => ({ id: uid('a'), label: '', icon: 'play', hue: 'sw', argv: [] }), configure: true },
-  { type: 'output', category: 'personal', icon: 'terminal', hue: 'term', cols: 6, settings: () => ({ argv: [], every: 10 }), configure: true },
-  { type: 'folder', category: 'personal', icon: 'files', hue: 'file', cols: 3, settings: () => ({ path: '', label: '' }), configure: true },
+  {
+    type: 'chart',
+    category: 'system',
+    icon: 'overview',
+    hue: 'ov',
+    cols: 6,
+    settings: () => ({ metric: 'cpu', range: '15m' }),
+    configure: true,
+  },
+  {
+    type: 'service',
+    category: 'system',
+    icon: 'services',
+    hue: 'svc',
+    cols: 4,
+    settings: () => ({ units: [] }),
+    configure: true,
+  },
+  {
+    type: 'log',
+    category: 'system',
+    icon: 'logs',
+    hue: 'log',
+    cols: 6,
+    settings: () => ({ source: windowsHost ? 'evt:System' : 'journal', lines: 12 }),
+    configure: true,
+  },
+  {
+    type: 'action',
+    category: 'personal',
+    icon: 'play',
+    hue: 'sw',
+    cols: 3,
+    settings: () => ({ id: uid('a'), label: '', icon: 'play', hue: 'sw', argv: [] }),
+    configure: true,
+  },
+  {
+    type: 'output',
+    category: 'personal',
+    icon: 'terminal',
+    hue: 'term',
+    cols: 6,
+    settings: () => ({ argv: [], every: 10 }),
+    configure: true,
+  },
+  {
+    type: 'folder',
+    category: 'personal',
+    icon: 'files',
+    hue: 'file',
+    cols: 3,
+    settings: () => ({ path: '', label: '' }),
+    configure: true,
+  },
 ];
 
 export const METRICS = ['cpu', 'memory', 'disk', 'network'] as const;
@@ -203,8 +330,10 @@ export const METRIC_META: Record<Metric, { icon: IconName; hue: HueId }> = {
   disk: { icon: 'disk', hue: 'term' },
   network: { icon: 'net', hue: 'file' },
 };
-export const asMetric = (m: unknown): Metric => ((METRICS as readonly string[]).includes(m as string) ? (m as Metric) : 'cpu');
+export const asMetric = (m: unknown): Metric =>
+  (METRICS as readonly string[]).includes(m as string) ? (m as Metric) : 'cpu';
 
 export const RANGES = { '5m': 5 * 60_000, '15m': 15 * 60_000, '1h': 60 * 60_000 } as const;
 export type Range = keyof typeof RANGES;
-export const asRange = (r: unknown, d: Range = '1h'): Range => (r === '5m' || r === '15m' || r === '1h' ? r : d);
+export const asRange = (r: unknown, d: Range = '1h'): Range =>
+  r === '5m' || r === '15m' || r === '1h' ? r : d;

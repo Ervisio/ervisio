@@ -23,20 +23,42 @@ export function NetworkHostsBlock({ disabled }: { disabled?: boolean }) {
   useEffect(() => {
     if (!disabled) void load();
   }, [load, disabled]);
-  if (failed) return <div className="env-empty"><small>{failed}</small></div>;
+  if (failed)
+    return (
+      <div className="env-empty">
+        <small>{failed}</small>
+      </div>
+    );
   if (!list) return <Skeleton lines={2} />;
   return (
     <>
-      {list.length === 0 && <div className="env-empty"><small>{t('hosts.none')}</small></div>}
+      {list.length === 0 && (
+        <div className="env-empty">
+          <small>{t('hosts.none')}</small>
+        </div>
+      )}
       {list.map((a) => (
         <div className="st-host" key={`${a.plugin}/${a.host}`}>
-          <span className="dot" style={{ background: a.scheme === 'http' ? 'var(--warn)' : 'var(--ok)' }} />
+          <span
+            className="dot"
+            style={{ background: a.scheme === 'http' ? 'var(--warn)' : 'var(--ok)' }}
+          />
           <div className="grow">
             <b className="mono">{a.host}</b>
-            <small>{t('hosts.for', { plugin: a.plugin })} · {t('hosts.by', { by: a.by, date: formatDate(a.at) })}</small>
+            <small>
+              {t('hosts.for', { plugin: a.plugin })} ·{' '}
+              {t('hosts.by', { by: a.by, date: formatDate(a.at) })}
+            </small>
           </div>
-          <Badge tone={a.scheme === 'http' ? 'warn' : 'ok'}>{a.scheme === 'http' ? t('network.http') : t('network.https')}</Badge>
-          <IconButton icon="trash" label={t('hosts.revoke', { host: a.host })} disabled={disabled} onClick={() => setRevoking(a)} />
+          <Badge tone={a.scheme === 'http' ? 'warn' : 'ok'}>
+            {a.scheme === 'http' ? t('network.http') : t('network.https')}
+          </Badge>
+          <IconButton
+            icon="trash"
+            label={t('hosts.revoke', { host: a.host })}
+            disabled={disabled}
+            onClick={() => setRevoking(a)}
+          />
         </div>
       ))}
       <ConfirmDialog

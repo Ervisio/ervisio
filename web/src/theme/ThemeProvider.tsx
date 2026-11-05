@@ -1,8 +1,23 @@
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import { usePrefs, useSession } from '../api';
 import { useMediaQuery } from '../ui';
 import { applyVars, parseTheme, themeVars } from './engine';
-import { BUILTIN_THEMES, DEFAULT_LIGHT_THEME_ID, DEFAULT_THEME_ID, type ColourMode, type ThemeDef } from './themes';
+import {
+  BUILTIN_THEMES,
+  DEFAULT_LIGHT_THEME_ID,
+  DEFAULT_THEME_ID,
+  type ColourMode,
+  type ThemeDef,
+} from './themes';
 
 export interface FollowDevice {
   on: boolean;
@@ -49,7 +64,11 @@ export interface ThemeSnapshot {
 }
 
 const Ctx = createContext<ThemeValue | null>(null);
-const DEFAULT_FOLLOW: FollowDevice = { on: false, dark: DEFAULT_THEME_ID, light: DEFAULT_LIGHT_THEME_ID };
+const DEFAULT_FOLLOW: FollowDevice = {
+  on: false,
+  dark: DEFAULT_THEME_ID,
+  light: DEFAULT_LIGHT_THEME_ID,
+};
 
 const newCustomId = () => `custom-${Date.now().toString(36)}`;
 
@@ -84,21 +103,32 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [prevDistro, setPrevDistro] = useState<string | null>(null);
 
   const customThemes = useMemo<ThemeDef[]>(
-    () => ((prefs.customThemes as unknown[]) ?? []).map(parseTheme).filter((t): t is ThemeDef => !!t),
+    () =>
+      ((prefs.customThemes as unknown[]) ?? []).map(parseTheme).filter((t): t is ThemeDef => !!t),
     [prefs.customThemes],
   );
   const themes = useMemo(() => [...BUILTIN_THEMES, ...customThemes], [customThemes]);
-  const find = useCallback((id: string) => themes.find((t) => t.id === id) ?? BUILTIN_THEMES[0], [themes]);
+  const find = useCallback(
+    (id: string) => themes.find((t) => t.id === id) ?? BUILTIN_THEMES[0],
+    [themes],
+  );
 
   const themeId: string = typeof prefs.theme === 'string' ? prefs.theme : DEFAULT_THEME_ID;
-  const colourMode: ColourMode = prefs.colourMode === 'distro' || prefs.colourMode === 'mono' ? prefs.colourMode : 'sections';
-  const follow = useMemo<FollowDevice>(() => ({ ...DEFAULT_FOLLOW, ...(prefs.followDevice ?? {}) }), [prefs.followDevice]);
+  const colourMode: ColourMode =
+    prefs.colourMode === 'distro' || prefs.colourMode === 'mono' ? prefs.colourMode : 'sections';
+  const follow = useMemo<FollowDevice>(
+    () => ({ ...DEFAULT_FOLLOW, ...(prefs.followDevice ?? {}) }),
+    [prefs.followDevice],
+  );
   const density = prefs.density === 'compact' ? 'compact' : 'comfortable';
   const reduceMotion = !!prefs.reduceMotion;
 
   const active = prev ?? find(follow.on ? (sysDark ? follow.dark : follow.light) : themeId);
   const distroColour = prevDistro ?? host?.distro.color ?? active.distro;
-  const vars = useMemo(() => themeVars(active, colourMode, distroColour), [active, colourMode, distroColour]);
+  const vars = useMemo(
+    () => themeVars(active, colourMode, distroColour),
+    [active, colourMode, distroColour],
+  );
 
   useLayoutEffect(() => {
     applyVars(vars, active.kind);
@@ -112,7 +142,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const save = useCallback((k: string, v: unknown) => void set(k, v).catch(() => undefined), [set]);
 
   const value = useMemo<ThemeValue>(() => {
-    const pair = (): [string, string] => (follow.on ? [follow.dark, follow.light] : [DEFAULT_THEME_ID, DEFAULT_LIGHT_THEME_ID]);
+    const pair = (): [string, string] =>
+      follow.on ? [follow.dark, follow.light] : [DEFAULT_THEME_ID, DEFAULT_LIGHT_THEME_ID];
     return {
       theme: active,
       isDark: active.kind === 'dark',
@@ -152,7 +183,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         return clean;
       },
       deleteCustom: (id) => {
-        save('customThemes', customThemes.filter((x) => x.id !== id));
+        save(
+          'customThemes',
+          customThemes.filter((x) => x.id !== id),
+        );
         if (themeId === id) save('theme', DEFAULT_THEME_ID);
       },
       importTheme: (json) => {
@@ -168,7 +202,19 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         save('followDevice', s.follow);
       },
     };
-  }, [active, themeId, themes, customThemes, colourMode, follow, density, reduceMotion, distroColour, find, save]);
+  }, [
+    active,
+    themeId,
+    themes,
+    customThemes,
+    colourMode,
+    follow,
+    density,
+    reduceMotion,
+    distroColour,
+    find,
+    save,
+  ]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

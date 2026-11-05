@@ -39,7 +39,21 @@ export interface TableProps<T> {
   caption?: string;
 }
 
-export function Table<T>({ columns, rows, rowKey, onRowClick, selectable, selected, onSelectedChange, activeKey, sort: sortProp, onSortChange, empty, maxHeight, caption }: TableProps<T>) {
+export function Table<T>({
+  columns,
+  rows,
+  rowKey,
+  onRowClick,
+  selectable,
+  selected,
+  onSelectedChange,
+  activeKey,
+  sort: sortProp,
+  onSortChange,
+  empty,
+  maxHeight,
+  caption,
+}: TableProps<T>) {
   const t = useT('ui');
   const [inner, setInner] = useState<SortState | null>(null);
   const controlled = sortProp !== undefined;
@@ -56,7 +70,9 @@ export function Table<T>({ columns, rows, rowKey, onRowClick, selectable, select
       const x = f(a) ?? '';
       const y = f(b) ?? '';
       if (typeof x === 'number' && typeof y === 'number') return (x - y) * m;
-      return String(x).localeCompare(String(y), undefined, { numeric: true, sensitivity: 'base' }) * m;
+      return (
+        String(x).localeCompare(String(y), undefined, { numeric: true, sensitivity: 'base' }) * m
+      );
     });
   }, [rows, sort, controlled, columns]);
 
@@ -84,15 +100,33 @@ export function Table<T>({ columns, rows, rowKey, onRowClick, selectable, select
           <tr>
             {selectable && (
               <th className="ui-td-sel">
-                <Checkbox checked={allOn} indeterminate={!allOn && someOn} aria-label={t('selectAll')} onChange={(on) => onSelectedChange?.(on ? new Set(allKeys) : new Set())} />
+                <Checkbox
+                  checked={allOn}
+                  indeterminate={!allOn && someOn}
+                  aria-label={t('selectAll')}
+                  onChange={(on) => onSelectedChange?.(on ? new Set(allKeys) : new Set())}
+                />
               </th>
             )}
             {columns.map((c) => (
-              <th key={c.key} className={c.align === 'right' ? 'num' : undefined} style={{ width: c.width, textAlign: c.align }} aria-sort={sort?.key === c.key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
+              <th
+                key={c.key}
+                className={c.align === 'right' ? 'num' : undefined}
+                style={{ width: c.width, textAlign: c.align }}
+                aria-sort={
+                  sort?.key === c.key
+                    ? sort.dir === 'asc'
+                      ? 'ascending'
+                      : 'descending'
+                    : undefined
+                }
+              >
                 {c.sortable ? (
                   <button type="button" onClick={() => cycle(c.key)}>
                     {c.header}
-                    {sort?.key === c.key && <Icon name={sort.dir === 'asc' ? 'chevronup' : 'chevron'} />}
+                    {sort?.key === c.key && (
+                      <Icon name={sort.dir === 'asc' ? 'chevronup' : 'chevron'} />
+                    )}
                   </button>
                 ) : (
                   c.header
@@ -112,15 +146,28 @@ export function Table<T>({ columns, rows, rowKey, onRowClick, selectable, select
                 aria-selected={isSel || undefined}
                 tabIndex={onRowClick ? 0 : undefined}
                 onClick={onRowClick ? () => onRowClick(r) : undefined}
-                onKeyDown={onRowClick ? (e) => { if (e.key === 'Enter' && e.target === e.currentTarget) onRowClick(r); } : undefined}
+                onKeyDown={
+                  onRowClick
+                    ? (e) => {
+                        if (e.key === 'Enter' && e.target === e.currentTarget) onRowClick(r);
+                      }
+                    : undefined
+                }
               >
                 {selectable && (
                   <td className="ui-td-sel" onClick={(e) => e.stopPropagation()}>
-                    <Checkbox checked={sel.has(k)} aria-label={t('selectRow')} onChange={(on) => toggle(k, on)} />
+                    <Checkbox
+                      checked={sel.has(k)}
+                      aria-label={t('selectRow')}
+                      onChange={(on) => toggle(k, on)}
+                    />
                   </td>
                 )}
                 {columns.map((c) => (
-                  <td key={c.key} className={`${c.align === 'right' ? 'num' : ''}${c.mono ? ' mono' : ''}`}>
+                  <td
+                    key={c.key}
+                    className={`${c.align === 'right' ? 'num' : ''}${c.mono ? ' mono' : ''}`}
+                  >
                     {c.render ? c.render(r) : String(c.value?.(r) ?? '')}
                   </td>
                 ))}

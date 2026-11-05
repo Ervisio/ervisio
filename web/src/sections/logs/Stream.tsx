@@ -46,17 +46,31 @@ const Row = memo(function Row({ e, sel, withDate, mobile, lang, levelLabel, onPi
     >
       <span className="tm">{time}</span>
       <span className={`lvb lv-${e.level}`}>{levelLabel}</span>
-      <span className={`src logs-h-${hueFor(e.source)}`} title={e.source}>{e.source}</span>
-      <span className="msg" title={e.message}>{e.message}</span>
+      <span className={`src logs-h-${hueFor(e.source)}`} title={e.source}>
+        {e.source}
+      </span>
+      <span className="msg" title={e.message}>
+        {e.message}
+      </span>
     </div>
   );
 });
 
 // A new head row arrived: find where the old head moved to and compensate the scroll.
-function keepViewSteady(el: HTMLElement, rows: { key: string }[], oldFirst: string, rowH: number, setUnseen: (v: number | ((u: number) => number)) => void) {
+function keepViewSteady(
+  el: HTMLElement,
+  rows: { key: string }[],
+  oldFirst: string,
+  rowH: number,
+  setUnseen: (v: number | ((u: number) => number)) => void,
+) {
   let k = -1;
   const lim = Math.min(rows.length, 5000);
-  for (let i = 0; i < lim; i++) if (rows[i].key === oldFirst) { k = i; break; }
+  for (let i = 0; i < lim; i++)
+    if (rows[i].key === oldFirst) {
+      k = i;
+      break;
+    }
   if (k > 0) {
     if (el.scrollTop > rowH) {
       el.scrollTop += k * rowH;
@@ -68,7 +82,21 @@ function keepViewSteady(el: HTMLElement, rows: { key: string }[], oldFirst: stri
   }
 }
 
-export function Stream({ rows, selectedKey, onSelect, loading, loadingMore, hasMore, onMore, error, onRetry, onClear, withDate, mobile, live }: Props) {
+export function Stream({
+  rows,
+  selectedKey,
+  onSelect,
+  loading,
+  loadingMore,
+  hasMore,
+  onMore,
+  error,
+  onRetry,
+  onClear,
+  withDate,
+  mobile,
+  live,
+}: Props) {
   const t = useT('logs');
   const { lang } = useI18n();
   const rowH = mobile ? ROW_MOBILE : ROW;
@@ -135,7 +163,8 @@ export function Stream({ rows, selectedKey, onSelect, loading, loadingMore, hasM
     const el = ref.current;
     if (el) {
       if (n * rowH < el.scrollTop) el.scrollTop = n * rowH;
-      else if ((n + 1) * rowH > el.scrollTop + el.clientHeight) el.scrollTop = (n + 1) * rowH - el.clientHeight;
+      else if ((n + 1) * rowH > el.scrollTop + el.clientHeight)
+        el.scrollTop = (n + 1) * rowH - el.clientHeight;
     }
   };
 
@@ -146,7 +175,14 @@ export function Stream({ rows, selectedKey, onSelect, loading, loadingMore, hasM
 
   let body;
   if (error && !rows.length) {
-    body = <EmptyState icon="alert" title={t('stream.loadError')} text={error} action={<Button onClick={onRetry}>{t('stream.retry')}</Button>} />;
+    body = (
+      <EmptyState
+        icon="alert"
+        title={t('stream.loadError')}
+        text={error}
+        action={<Button onClick={onRetry}>{t('stream.retry')}</Button>}
+      />
+    );
   } else if (loading && !rows.length) {
     body = (
       <div className="logs-skel" aria-busy="true">
@@ -154,13 +190,28 @@ export function Stream({ rows, selectedKey, onSelect, loading, loadingMore, hasM
       </div>
     );
   } else if (!rows.length) {
-    body = <EmptyState icon="logs" hue="log" title={t('stream.empty')} text={t('stream.emptyText')} action={<Button onClick={onClear}>{t('stream.clear')}</Button>} />;
+    body = (
+      <EmptyState
+        icon="logs"
+        hue="log"
+        title={t('stream.empty')}
+        text={t('stream.emptyText')}
+        action={<Button onClick={onClear}>{t('stream.clear')}</Button>}
+      />
+    );
   }
 
   return (
     <div className="logs-streamwrap">
       {live && unseen > 0 && (
-        <button type="button" className="logs-new" onClick={() => { if (ref.current) ref.current.scrollTop = 0; setUnseen(0); }}>
+        <button
+          type="button"
+          className="logs-new"
+          onClick={() => {
+            if (ref.current) ref.current.scrollTop = 0;
+            setUnseen(0);
+          }}
+        >
           <Badge tone="ok">{t('live.paused', { count: unseen })}</Badge>
         </button>
       )}
@@ -180,11 +231,30 @@ export function Stream({ rows, selectedKey, onSelect, loading, loadingMore, hasM
           <div style={{ height: rows.length * rowH + 48, position: 'relative' }}>
             <div style={{ transform: `translateY(${start * rowH}px)` }}>
               {visible.map((e) => (
-                <Row key={e.key} e={e} sel={e.key === selectedKey} withDate={withDate} mobile={mobile} lang={lang} levelLabel={lv(e.level)} onPick={pick} />
+                <Row
+                  key={e.key}
+                  e={e}
+                  sel={e.key === selectedKey}
+                  withDate={withDate}
+                  mobile={mobile}
+                  lang={lang}
+                  levelLabel={lv(e.level)}
+                  onPick={pick}
+                />
               ))}
             </div>
             <div className="logs-foot" style={{ top: rows.length * rowH }}>
-              {loadingMore ? t('stream.loadingMore') : hasMore ? '' : error ? <Button size="sm" onClick={onRetry}>{t('stream.retry')}</Button> : t('stream.end')}
+              {loadingMore ? (
+                t('stream.loadingMore')
+              ) : hasMore ? (
+                ''
+              ) : error ? (
+                <Button size="sm" onClick={onRetry}>
+                  {t('stream.retry')}
+                </Button>
+              ) : (
+                t('stream.end')
+              )}
             </div>
           </div>
         )}

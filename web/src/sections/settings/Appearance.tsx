@@ -1,7 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSession } from '../../api';
 import { useT } from '../../i18n';
-import { themeVars, useTheme, BUILTIN_THEMES, DISTRO_PRESETS, HUE_KEYS, HUE_LABEL_KEYS, parseTheme, type ColourMode, type HueKey, type ThemeDef } from '../../theme';
+import {
+  themeVars,
+  useTheme,
+  BUILTIN_THEMES,
+  DISTRO_PRESETS,
+  HUE_KEYS,
+  HUE_LABEL_KEYS,
+  parseTheme,
+  type ColourMode,
+  type HueKey,
+  type ThemeDef,
+} from '../../theme';
 import { Button, Icon, Input, Segmented, toast } from '../../ui';
 
 function Mini({ t, mode, distro }: { t: ThemeDef; mode: ColourMode; distro: string }) {
@@ -9,12 +20,18 @@ function Mini({ t, mode, distro }: { t: ThemeDef; mode: ColourMode; distro: stri
   const hues = HUE_KEYS.slice(0, 5).map((k) => v[`--h-${k}`]);
   return (
     <div className="st-mini" style={{ background: t.bg }} aria-hidden="true">
-      <div className="mr" style={{ background: t.surface }}>{hues.map((h, i) => <i key={i} style={{ background: h }} />)}</div>
+      <div className="mr" style={{ background: t.surface }}>
+        {hues.map((h, i) => (
+          <i key={i} style={{ background: h }} />
+        ))}
+      </div>
       <div className="mc" style={{ background: t.surface }}>
         <b style={{ background: t.ink }} />
         <div className="ms">
           {(['ov', 'log', 'term'] as const).map((k) => (
-            <i key={k} style={{ background: v[`--h-${k}-s`] }}><u style={{ background: v[`--h-${k}`] }} /></i>
+            <i key={k} style={{ background: v[`--h-${k}-s`] }}>
+              <u style={{ background: v[`--h-${k}`] }} />
+            </i>
           ))}
         </div>
         <span style={{ background: t.sunk }} />
@@ -23,7 +40,19 @@ function Mini({ t, mode, distro }: { t: ThemeDef; mode: ColourMode; distro: stri
   );
 }
 
-function ThemeCard({ t: def, on, onPick, onEdit, onDelete }: { t: ThemeDef; on: boolean; onPick(): void; onEdit?(): void; onDelete?(): void }) {
+function ThemeCard({
+  t: def,
+  on,
+  onPick,
+  onEdit,
+  onDelete,
+}: {
+  t: ThemeDef;
+  on: boolean;
+  onPick(): void;
+  onEdit?(): void;
+  onDelete?(): void;
+}) {
   const t = useT('settings');
   const th = useTheme();
   return (
@@ -35,13 +64,23 @@ function ThemeCard({ t: def, on, onPick, onEdit, onDelete }: { t: ThemeDef; on: 
           {def.note && <small>{t(`note.${def.note.toLowerCase()}`)}</small>}
           {def.custom && <small>{t('appearance.custom')}</small>}
           {def.own && <span className="st-own">{t('appearance.ownColours')}</span>}
-          <span className="ck"><Icon name="check" /></span>
+          <span className="ck">
+            <Icon name="check" />
+          </span>
         </div>
       </button>
       {(onEdit || onDelete) && (
         <div className="st-tc-act">
-          {onEdit && <button type="button" aria-label={t('appearance.edit')} onClick={onEdit}><Icon name="edit" /></button>}
-          {onDelete && <button type="button" aria-label={t('appearance.delete')} onClick={onDelete}><Icon name="trash" /></button>}
+          {onEdit && (
+            <button type="button" aria-label={t('appearance.edit')} onClick={onEdit}>
+              <Icon name="edit" />
+            </button>
+          )}
+          {onDelete && (
+            <button type="button" aria-label={t('appearance.delete')} onClick={onDelete}>
+              <Icon name="trash" />
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -50,8 +89,20 @@ function ThemeCard({ t: def, on, onPick, onEdit, onDelete }: { t: ThemeDef; on: 
 
 /* ---- colour helpers for the editor ---- */
 const toRgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
-const mix = (a: string, b: string, p: number) => '#' + toRgb(a).map((v, i) => Math.round(v * p + toRgb(b)[i] * (1 - p)).toString(16).padStart(2, '0')).join('').toUpperCase();
-const isLight = (h: string) => { const [r, g, b] = toRgb(h); return 0.299 * r + 0.587 * g + 0.114 * b > 150; };
+const mix = (a: string, b: string, p: number) =>
+  '#' +
+  toRgb(a)
+    .map((v, i) =>
+      Math.round(v * p + toRgb(b)[i] * (1 - p))
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')
+    .toUpperCase();
+const isLight = (h: string) => {
+  const [r, g, b] = toRgb(h);
+  return 0.299 * r + 0.587 * g + 0.114 * b > 150;
+};
 
 export function ThemeGrid() {
   const t = useT('settings');
@@ -63,23 +114,41 @@ export function ThemeGrid() {
   const pick = (id: string, name: string) => {
     const snap = th.snapshot();
     th.setTheme(id);
-    toast.undo(t('saved', { name: t('appearance.theme.title') + ': ' + name }), t('undo'), () => th.restore(snap));
+    toast.undo(t('saved', { name: t('appearance.theme.title') + ': ' + name }), t('undo'), () =>
+      th.restore(snap),
+    );
   };
   const group = (kind: 'dark' | 'light') =>
-    th.themes.filter((x) => x.kind === kind).map((x) => (
-      <ThemeCard
-        key={x.id}
-        t={x}
-        on={th.themeId === x.id}
-        onPick={() => pick(x.id, x.name)}
-        onEdit={x.custom ? () => setEditing(x) : undefined}
-        onDelete={x.custom ? () => { th.deleteCustom(x.id); toast.info(t('appearance.deleted', { name: x.name })); } : undefined}
-      />
-    ));
+    th.themes
+      .filter((x) => x.kind === kind)
+      .map((x) => (
+        <ThemeCard
+          key={x.id}
+          t={x}
+          on={th.themeId === x.id}
+          onPick={() => pick(x.id, x.name)}
+          onEdit={x.custom ? () => setEditing(x) : undefined}
+          onDelete={
+            x.custom
+              ? () => {
+                  th.deleteCustom(x.id);
+                  toast.info(t('appearance.deleted', { name: x.name }));
+                }
+              : undefined
+          }
+        />
+      ));
 
   const startNew = () => {
     const b = th.theme;
-    setEditing({ ...b, id: 'custom-new', name: t('appearance.myTheme'), custom: true, own: false, note: undefined });
+    setEditing({
+      ...b,
+      id: 'custom-new',
+      name: t('appearance.myTheme'),
+      custom: true,
+      own: false,
+      note: undefined,
+    });
   };
 
   const importFile = async (f: File | undefined) => {
@@ -102,12 +171,27 @@ export function ThemeGrid() {
       <div className="st-tg">{group('light')}</div>
       {!editing && (
         <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
-          <Button icon="palette" onClick={startNew}>{t('appearance.create')}</Button>
-          <Button icon="upload" onClick={() => fileRef.current?.click()}>{t('appearance.import')}</Button>
-          <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={(e) => { void importFile(e.target.files?.[0]); e.target.value = ''; }} />
+          <Button icon="palette" onClick={startNew}>
+            {t('appearance.create')}
+          </Button>
+          <Button icon="upload" onClick={() => fileRef.current?.click()}>
+            {t('appearance.import')}
+          </Button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="application/json,.json"
+            hidden
+            onChange={(e) => {
+              void importFile(e.target.files?.[0]);
+              e.target.value = '';
+            }}
+          />
         </div>
       )}
-      {editing && <ThemeEditor key={editing.id} initial={editing} onDone={() => setEditing(null)} />}
+      {editing && (
+        <ThemeEditor key={editing.id} initial={editing} onDone={() => setEditing(null)} />
+      )}
     </>
   );
 }
@@ -134,7 +218,8 @@ function ThemeEditor({ initial, onDone }: { initial: ThemeDef; onDone(): void })
       n.ink3 = mix(n.ink, n.bg, 0.42);
       return n;
     });
-  const hue = (k: HueKey, v: string) => setD((x) => ({ ...x, hues: { ...x.hues, [k]: v }, distro: k === 'ov' ? v : x.distro }));
+  const hue = (k: HueKey, v: string) =>
+    setD((x) => ({ ...x, hues: { ...x.hues, [k]: v }, distro: k === 'ov' ? v : x.distro }));
 
   const finish = (def: ThemeDef) => {
     const parsed = parseTheme({ ...def, name: name.trim() || t('appearance.myTheme') });
@@ -156,23 +241,46 @@ function ThemeEditor({ initial, onDone }: { initial: ThemeDef; onDone(): void })
   };
   const field = (key: string, label: string, val: string, on: (v: string) => void) => (
     <label className="st-cf" key={key}>
-      <input type="color" value={val} onChange={(e) => on(e.target.value.toUpperCase())} aria-label={label} />
-      <div>{label}<small>{val.toUpperCase()}</small></div>
+      <input
+        type="color"
+        value={val}
+        onChange={(e) => on(e.target.value.toUpperCase())}
+        aria-label={label}
+      />
+      <div>
+        {label}
+        <small>{val.toUpperCase()}</small>
+      </div>
     </label>
   );
 
   return (
     <div className="st-ed">
       <div className="hd">
-        <b>{initial.id === 'custom-new' ? t('appearance.createTitle') : t('appearance.editTitle')}</b>
-        <span className="muted" style={{ fontSize: 13 }}>{t('appearance.createHint')}</span>
+        <b>
+          {initial.id === 'custom-new' ? t('appearance.createTitle') : t('appearance.editTitle')}
+        </b>
+        <span className="muted" style={{ fontSize: 13 }}>
+          {t('appearance.createHint')}
+        </span>
         <div className="r">
-          <Button icon="download" onClick={exportJson}>{t('appearance.export')}</Button>
-          <Button variant="ghost" onClick={onDone}>{t('cancel')}</Button>
-          <Button variant="primary" onClick={() => finish(d)}>{t('appearance.saveAs', { name: name || t('appearance.myTheme') })}</Button>
+          <Button icon="download" onClick={exportJson}>
+            {t('appearance.export')}
+          </Button>
+          <Button variant="ghost" onClick={onDone}>
+            {t('cancel')}
+          </Button>
+          <Button variant="primary" onClick={() => finish(d)}>
+            {t('appearance.saveAs', { name: name || t('appearance.myTheme') })}
+          </Button>
         </div>
       </div>
-      <Input label={t('appearance.name')} value={name} maxLength={40} onChange={(e) => setName(e.target.value)} />
+      <Input
+        label={t('appearance.name')}
+        value={name}
+        maxLength={40}
+        onChange={(e) => setName(e.target.value)}
+      />
       <div className="st-ed-lb">{t('appearance.base')}</div>
       <div className="st-cols2">
         {field('bg', t('appearance.c.bg'), d.bg, (v) => base('bg', v))}
@@ -182,7 +290,9 @@ function ThemeEditor({ initial, onDone }: { initial: ThemeDef; onDone(): void })
       </div>
       <div className="st-ed-lb">{t('appearance.sectionColours')}</div>
       <div className="st-cols2">
-        {HUE_KEYS.map((k) => field(k, t(`appearance.h.${HUE_LABEL_KEYS[k]}`), d.hues[k], (v) => hue(k, v)))}
+        {HUE_KEYS.map((k) =>
+          field(k, t(`appearance.h.${HUE_LABEL_KEYS[k]}`), d.hues[k], (v) => hue(k, v)),
+        )}
       </div>
     </div>
   );
@@ -198,7 +308,9 @@ export function ColourBlock() {
   const setMode = (m: ColourMode) => {
     const snap = th.snapshot();
     th.setColourMode(m);
-    toast.undo(t('saved', { name: t('appearance.colours.title') }), t('undo'), () => th.restore(snap));
+    toast.undo(t('saved', { name: t('appearance.colours.title') }), t('undo'), () =>
+      th.restore(snap),
+    );
   };
   return (
     <>
@@ -213,7 +325,9 @@ export function ColourBlock() {
         ]}
       />
       <div className={`st-drow${th.colourMode === 'distro' ? '' : ' dim'}`}>
-        <span className="dl">{t('appearance.colours.detected')} <b>{detected}</b>. {t('appearance.colours.preview')}</span>
+        <span className="dl">
+          {t('appearance.colours.detected')} <b>{detected}</b>. {t('appearance.colours.preview')}
+        </span>
         {DISTRO_PRESETS.map((p) => (
           <button
             key={p.id}
@@ -231,7 +345,14 @@ export function ColourBlock() {
           </button>
         ))}
         {chip && (
-          <button type="button" className="st-dc" onClick={() => { setChip(null); th.previewDistro(null); }}>
+          <button
+            type="button"
+            className="st-dc"
+            onClick={() => {
+              setChip(null);
+              th.previewDistro(null);
+            }}
+          >
             <Icon name="undo" size={14} />
             {t('appearance.colours.reset')}
           </button>

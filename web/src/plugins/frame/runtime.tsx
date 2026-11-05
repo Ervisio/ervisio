@@ -8,20 +8,51 @@
  */
 import * as React from 'react';
 import { errorMessage } from '../../api/types';
-import { Component, useEffect, useRef, useSyncExternalStore, type ComponentType, type ReactNode } from 'react';
+import {
+  Component,
+  useEffect,
+  useRef,
+  useSyncExternalStore,
+  type ComponentType,
+  type ReactNode,
+} from 'react';
 import { createRoot } from 'react-dom/client';
 import tokensCss from '../../styles/tokens.css?inline';
 import uiCss from '../../ui/ui.css?inline';
 import frameCss from './frame.css?inline';
-import type { FrameHttpRequest, FrameHttpResult, FrameTheme, FrameUploadResult, FrameView, HostToFrame } from '../protocol';
-import { handleReply, openHttpStream, unwatchDownload, watchDownload, type DownloadDone, openPty, openStream, openUpload, PluginError, request, send, type HttpStreamCallbacks, type PtyCallbacks, type UploadCallbacks } from './channel';
+import type {
+  FrameHttpRequest,
+  FrameHttpResult,
+  FrameTheme,
+  FrameUploadResult,
+  FrameView,
+  HostToFrame,
+} from '../protocol';
+import {
+  handleReply,
+  openHttpStream,
+  unwatchDownload,
+  watchDownload,
+  type DownloadDone,
+  openPty,
+  openStream,
+  openUpload,
+  PluginError,
+  request,
+  send,
+  type HttpStreamCallbacks,
+  type PtyCallbacks,
+  type UploadCallbacks,
+} from './channel';
 import { getLang, setLang, subscribeLang } from './i18n-shim';
 import { jobsApi, notifyApi } from './jobs';
 import * as kit from './kit';
 import { b64encode } from '../../auth/sshkey/bytes.ts';
 import type { AuditEntry, HttpRequestOptions, UploadOptions } from '../types';
 
-type ViewDef<S> = ComponentType<{ sdk: S }> | { render(container: HTMLElement, sdk: S): void | (() => void) };
+type ViewDef<S> =
+  | ComponentType<{ sdk: S }>
+  | { render(container: HTMLElement, sdk: S): void | (() => void) };
 
 const style = document.createElement('style');
 style.textContent = `${tokensCss}\n${uiCss}\n${frameCss}`;
@@ -33,7 +64,8 @@ const themeListeners = new Set<() => void>();
 function applyTheme(t: FrameTheme) {
   theme = t;
   const root = document.documentElement;
-  for (const [k, v] of Object.entries(t.vars ?? {})) if (k.startsWith('--')) root.style.setProperty(k, String(v));
+  for (const [k, v] of Object.entries(t.vars ?? {}))
+    if (k.startsWith('--')) root.style.setProperty(k, String(v));
   root.style.colorScheme = t.kind === 'light' ? 'light' : 'dark';
   if (t.density) root.dataset.density = t.density;
   themeListeners.forEach((f) => f());
@@ -48,15 +80,21 @@ function envArg(o?: { env?: string }): { env?: string } {
 
 /* ---------- HTTP (SDK v3) ---------- */
 function httpRequest(name: string, o: HttpRequestOptions): FrameHttpRequest {
-  if (!o || typeof o !== 'object') throw new PluginError({ code: 'invalid', message: 'Give {method, path}.' });
+  if (!o || typeof o !== 'object')
+    throw new PluginError({ code: 'invalid', message: 'Give {method, path}.' });
   let query = '';
   if (typeof o.query === 'string') query = o.query.replace(/^\?/, '');
   else if (o.query && typeof o.query === 'object') {
     const q = new URLSearchParams();
-    for (const [k, v] of Object.entries(o.query)) for (const x of Array.isArray(v) ? v : [v]) q.append(k, String(x));
+    for (const [k, v] of Object.entries(o.query))
+      for (const x of Array.isArray(v) ? v : [v]) q.append(k, String(x));
     query = q.toString();
   }
-  const req: FrameHttpRequest = { name, method: String(o.method ?? 'GET').toUpperCase(), path: String(o.path ?? '') };
+  const req: FrameHttpRequest = {
+    name,
+    method: String(o.method ?? 'GET').toUpperCase(),
+    path: String(o.path ?? ''),
+  };
   if (query) req.query = query;
   if (o.headers) req.headers = { ...o.headers };
   if (o.env) req.env = String(o.env);
@@ -70,12 +108,19 @@ function httpRequest(name: string, o: HttpRequestOptions): FrameHttpRequest {
 }
 
 const saveFile = (filename: string, data: string | Uint8Array | Blob, mime?: string) =>
-  request<{ filename: string; size: number }>('saveFile', { filename, data, ...(mime ? { mime } : {}) });
+  request<{ filename: string; size: number }>('saveFile', {
+    filename,
+    data,
+    ...(mime ? { mime } : {}),
+  });
 
 /** The file name of a download: a string, or taken from the path when the plugin gives none. */
 const downloadName = (name: unknown, req: { path?: string }): string => {
   if (typeof name === 'string' && name) return name;
-  const last = String(req.path ?? '').split('/').filter(Boolean).pop();
+  const last = String(req.path ?? '')
+    .split('/')
+    .filter(Boolean)
+    .pop();
   return last || 'download';
 };
 
@@ -96,7 +141,10 @@ function httpResponse(r: FrameHttpResult & { truncated?: boolean }) {
 async function startDownload(args: Record<string, unknown>, onDone?: (r: DownloadDone) => void) {
   const did = typeof onDone === 'function' ? watchDownload(onDone) : 0;
   try {
-    return await request<{ filename: string; size?: number; status?: number }>('download', did ? { ...args, did } : args);
+    return await request<{ filename: string; size?: number; status?: number }>(
+      'download',
+      did ? { ...args, did } : args,
+    );
   } catch (e) {
     if (did) unwatchDownload(did);
     throw e;
@@ -104,7 +152,12 @@ async function startDownload(args: Record<string, unknown>, onDone?: (r: Downloa
 }
 
 /* ---------- SDK ---------- */
-function makeSdk(plugin: { id: string; name: string; version: string }, view: FrameView, appOrigin: string, platform: 'linux' | 'windows') {
+function makeSdk(
+  plugin: { id: string; name: string; version: string },
+  view: FrameView,
+  appOrigin: string,
+  platform: 'linux' | 'windows',
+) {
   const pages = new Map<string, ViewDef<unknown>>();
   const widgets = new Map<string, ViewDef<unknown>>();
   const strings: Record<string, Record<string, string>> = {};
@@ -121,67 +174,157 @@ function makeSdk(plugin: { id: string; name: string; version: string }, view: Fr
     ui: kit,
     api: {
       exec: (command: string, args: string[] = [], o?: { env?: string }) =>
-        request<{ stdout: string; stderr: string; exitCode: number; truncated?: boolean }>('exec', { command, args, ...(o?.env ? { env: o.env } : {}) }),
-      execStream: (command: string, args: string[], h: Parameters<typeof openStream>[2], o?: { env?: string }) => openStream(command, args ?? [], h ?? {}, o?.env),
+        request<{ stdout: string; stderr: string; exitCode: number; truncated?: boolean }>('exec', {
+          command,
+          args,
+          ...(o?.env ? { env: o.env } : {}),
+        }),
+      execStream: (
+        command: string,
+        args: string[],
+        h: Parameters<typeof openStream>[2],
+        o?: { env?: string },
+      ) => openStream(command, args ?? [], h ?? {}, o?.env),
       async http(name: string, o: HttpRequestOptions) {
-        return httpResponse(await request<FrameHttpResult>('http', httpRequest(name, o) as unknown as Record<string, unknown>));
+        return httpResponse(
+          await request<FrameHttpResult>(
+            'http',
+            httpRequest(name, o) as unknown as Record<string, unknown>,
+          ),
+        );
       },
-      httpStream: (name: string, o: HttpRequestOptions, h: HttpStreamCallbacks) => openHttpStream(httpRequest(name, o), h ?? {}),
+      httpStream: (name: string, o: HttpRequestOptions, h: HttpStreamCallbacks) =>
+        openHttpStream(httpRequest(name, o), h ?? {}),
       /** SDK 0.2: the browser saves the response of a GET as a file; it streams, there is no size limit. Resolves when the download starts. */
-      async download(name: string, o: HttpRequestOptions, filename?: string, d?: { onDone?: (r: DownloadDone) => void }) {
+      async download(
+        name: string,
+        o: HttpRequestOptions,
+        filename?: string,
+        d?: { onDone?: (r: DownloadDone) => void },
+      ) {
         const req = httpRequest(name, { ...o, method: o?.method ?? 'GET' });
         return startDownload({ req, filename: downloadName(filename, req) }, d?.onDone);
       },
       /** SDK 0.2: same for the standard output of a declared command. */
-      async downloadCommand(command: string, args: string[], filename?: string, o?: { env?: string; onDone?: (r: DownloadDone) => void }) {
-        return startDownload({ command, args: args ?? [], filename: downloadName(filename, { path: command }), ...(o?.env ? { env: o.env } : {}) }, o?.onDone);
+      async downloadCommand(
+        command: string,
+        args: string[],
+        filename?: string,
+        o?: { env?: string; onDone?: (r: DownloadDone) => void },
+      ) {
+        return startDownload(
+          {
+            command,
+            args: args ?? [],
+            filename: downloadName(filename, { path: command }),
+            ...(o?.env ? { env: o.env } : {}),
+          },
+          o?.onDone,
+        );
       },
       /** SDK 0.2: sends a File or Blob as the body of a POST or PUT, streamed with progress; cancel() stops it. */
-      upload(name: string, o: HttpRequestOptions, file: Blob, opts?: UploadOptions | ((p: { loaded: number; total: number }) => void)) {
-        if (!(file instanceof Blob)) throw new PluginError({ code: 'invalid', message: 'Give a File or Blob.' });
+      upload(
+        name: string,
+        o: HttpRequestOptions,
+        file: Blob,
+        opts?: UploadOptions | ((p: { loaded: number; total: number }) => void),
+      ) {
+        if (!(file instanceof Blob))
+          throw new PluginError({ code: 'invalid', message: 'Give a File or Blob.' });
         const req = httpRequest(name, { ...o, method: o?.method ?? 'POST', body: undefined });
-        const u: UploadOptions = typeof opts === 'function' ? { onProgress: opts } : opts ?? {};
+        const u: UploadOptions = typeof opts === 'function' ? { onProgress: opts } : (opts ?? {});
         const cb: UploadCallbacks = {
-          onProgress: u.onProgress ? (loaded, total) => u.onProgress!({ loaded, total }) : undefined,
+          onProgress: u.onProgress
+            ? (loaded, total) => u.onProgress!({ loaded, total })
+            : undefined,
           onResponseStart: u.onResponseStart,
           onResponseData: u.onResponseData,
         };
         const h = openUpload(req, file, cb);
-        const done = h.result.then((r: FrameUploadResult) => ({ ...httpResponse(r), truncated: !!r.truncated }));
+        const done = h.result.then((r: FrameUploadResult) => ({
+          ...httpResponse(r),
+          truncated: !!r.truncated,
+        }));
         return Object.assign(done, { cancel: h.cancel });
       },
       /** SDK 0.2: saves data the plugin holds in memory (a string, bytes or a Blob, at most 64 MiB) as a browser download. */
-      saveFile: (filename: string, data: string | Uint8Array | Blob, mime?: string) => saveFile(filename, data, mime),
-      pty: (command: string, args: string[], o: { cols?: number; rows?: number; env?: string } & PtyCallbacks) =>
-        openPty(command, args ?? [], Math.floor(o?.cols ?? 80), Math.floor(o?.rows ?? 24), o ?? {}, o?.env),
+      saveFile: (filename: string, data: string | Uint8Array | Blob, mime?: string) =>
+        saveFile(filename, data, mime),
+      pty: (
+        command: string,
+        args: string[],
+        o: { cols?: number; rows?: number; env?: string } & PtyCallbacks,
+      ) =>
+        openPty(
+          command,
+          args ?? [],
+          Math.floor(o?.cols ?? 80),
+          Math.floor(o?.rows ?? 24),
+          o ?? {},
+          o?.env,
+        ),
       /** Background jobs and notifications (SDK 0.2; needs capabilities.jobs / capabilities.notify). */
       jobs: jobsApi,
       notify: notifyApi,
-      call: () => Promise.reject(new PluginError({ code: 'forbidden', message: 'sdk.api.call is not available to plugins (SDK v2+): use sdk.api.exec with a declared command.' })),
+      call: () =>
+        Promise.reject(
+          new PluginError({
+            code: 'forbidden',
+            message:
+              'sdk.api.call is not available to plugins (SDK v2+): use sdk.api.exec with a declared command.',
+          }),
+        ),
       stream: () => {
-        throw new PluginError({ code: 'forbidden', message: 'sdk.api.stream is not available to plugins (SDK v2+): use sdk.api.execStream.' });
+        throw new PluginError({
+          code: 'forbidden',
+          message: 'sdk.api.stream is not available to plugins (SDK v2+): use sdk.api.execStream.',
+        });
       },
     },
     saveFile,
     /** SDK 0.2: this plugin's entries of the activity log, newest first. Everyone sees their own; administrators see all users. */
     audit: {
-      list: (q: { user?: string; action?: string; text?: string; since?: number | string; until?: number | string; limit?: number; cursor?: string } = {}) =>
+      list: (
+        q: {
+          user?: string;
+          action?: string;
+          text?: string;
+          since?: number | string;
+          until?: number | string;
+          limit?: number;
+          cursor?: string;
+        } = {},
+      ) =>
         request<{ entries: AuditEntry[]; next: string; enabled: boolean }>('auditList', { ...q }),
     },
     files: {
       async read(path: string, o?: { env?: string }): Promise<string> {
-        const r = await request<{ data: string; b64?: boolean }>('readFile', { path, ...envArg(o) });
+        const r = await request<{ data: string; b64?: boolean }>('readFile', {
+          path,
+          ...envArg(o),
+        });
         return r.b64 ? new TextDecoder().decode(b64ToBytes(r.data)) : r.data;
       },
       async readBytes(path: string, o?: { env?: string }): Promise<Uint8Array> {
-        const r = await request<{ data: string; b64?: boolean }>('readFile', { path, b64: true, ...envArg(o) });
+        const r = await request<{ data: string; b64?: boolean }>('readFile', {
+          path,
+          b64: true,
+          ...envArg(o),
+        });
         return r.b64 ? b64ToBytes(r.data) : new TextEncoder().encode(r.data);
       },
       async write(path: string, data: string | Uint8Array, o?: { env?: string }): Promise<void> {
-        await request('writeFile', { ...(typeof data === 'string' ? { path, data } : { path, data: b64encode(data), b64: true }), ...envArg(o) });
+        await request('writeFile', {
+          ...(typeof data === 'string'
+            ? { path, data }
+            : { path, data: b64encode(data), b64: true }),
+          ...envArg(o),
+        });
       },
       async list(path: string, o?: { env?: string }) {
-        const r = await request<{ entries: { name: string; type: string; size: number; mtime: number }[] }>('listDir', { path, ...envArg(o) });
+        const r = await request<{
+          entries: { name: string; type: string; size: number; mtime: number }[];
+        }>('listDir', { path, ...envArg(o) });
         return r.entries ?? [];
       },
       async mkdir(path: string, o?: { env?: string }): Promise<void> {
@@ -196,12 +339,17 @@ function makeSdk(plugin: { id: string; name: string; version: string }, view: Fr
     },
     network: {
       request: (host: string, o?: { scheme?: 'https' | 'http' }) =>
-        request<{ host: string; approved: true; reloading: boolean }>('network', { host, ...(o?.scheme ? { scheme: o.scheme } : {}) }),
+        request<{ host: string; approved: true; reloading: boolean }>('network', {
+          host,
+          ...(o?.scheme ? { scheme: o.scheme } : {}),
+        }),
     },
     asset(path: string): Promise<string> {
       let p = assets.get(path);
       if (!p) {
-        p = request<{ data: ArrayBuffer; type: string }>('asset', { path }).then((r) => URL.createObjectURL(new Blob([r.data], { type: r.type })));
+        p = request<{ data: ArrayBuffer; type: string }>('asset', { path }).then((r) =>
+          URL.createObjectURL(new Blob([r.data], { type: r.type })),
+        );
         assets.set(path, p);
       }
       return p;
@@ -251,7 +399,11 @@ class Boundary extends Component<{ children: ReactNode }, { error: string | null
     send({ la: 'plugin', t: 'failed', message: errorMessage(e) });
   }
   render() {
-    return this.state.error ? <div className="la-frame-error">{this.state.error}</div> : this.props.children;
+    return this.state.error ? (
+      <div className="la-frame-error">{this.state.error}</div>
+    ) : (
+      this.props.children
+    );
   }
 }
 
@@ -265,7 +417,10 @@ function Mount({ def, sdk }: { def: ViewDef<Sdk>; sdk: Sdk }) {
   useEffect(() => send({ la: 'plugin', t: 'loaded' }), []);
   useEffect(() => {
     if (isComponent || !ref.current) return;
-    const cleanup = (def as { render(c: HTMLElement, s: Sdk): void | (() => void) }).render(ref.current, sdk);
+    const cleanup = (def as { render(c: HTMLElement, s: Sdk): void | (() => void) }).render(
+      ref.current,
+      sdk,
+    );
     return () => {
       if (typeof cleanup === 'function') cleanup();
     };
@@ -286,13 +441,19 @@ async function start(m: Extract<HostToFrame, { t: 'init' }>) {
   const url = URL.createObjectURL(new Blob([m.code], { type: 'text/javascript' }));
   const mod = (await import(/* @vite-ignore */ url)) as { default?: unknown; activate?: unknown };
   URL.revokeObjectURL(url);
-  const fn = (mod.default ?? mod.activate) as ((s: Sdk) => unknown) | { activate?(s: Sdk): unknown } | undefined;
+  const fn = (mod.default ?? mod.activate) as
+    | ((s: Sdk) => unknown)
+    | { activate?(s: Sdk): unknown }
+    | undefined;
   if (typeof fn === 'function') await fn(sdk);
   else if (fn && typeof fn.activate === 'function') await fn.activate(sdk);
   else throw new Error('The plugin module exports no activate function.');
 
   const def = (m.view.kind === 'page' ? pages : widgets).get(m.view.id) as ViewDef<Sdk> | undefined;
-  if (!def) throw new Error(`The plugin did not register the ${m.view.kind} "${m.view.id}" declared in its manifest.`);
+  if (!def)
+    throw new Error(
+      `The plugin did not register the ${m.view.kind} "${m.view.id}" declared in its manifest.`,
+    );
   const el = document.getElementById('root')!;
   createRoot(el).render(
     <Boundary>

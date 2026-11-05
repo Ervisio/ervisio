@@ -14,7 +14,11 @@ class Blowfish {
 
   private F(x: number): number {
     const S = this.S;
-    return (((S[x >>> 24] + S[256 + ((x >>> 16) & 0xff)]) ^ S[512 + ((x >>> 8) & 0xff)]) + S[768 + (x & 0xff)]) >>> 0;
+    return (
+      (((S[x >>> 24] + S[256 + ((x >>> 16) & 0xff)]) ^ S[512 + ((x >>> 8) & 0xff)]) +
+        S[768 + (x & 0xff)]) >>>
+      0
+    );
   }
 
   /** Encrypts the block lr[o], lr[o+1] in place. */
@@ -99,14 +103,28 @@ export function bcryptHash(sha2pass: Uint8Array, sha2salt: Uint8Array): Bytes {
 
 export type Sha512 = (data: Uint8Array) => Promise<Uint8Array>;
 
-export const webSha512: Sha512 = async (data) => new Uint8Array(await crypto.subtle.digest('SHA-512', data as Bytes));
+export const webSha512: Sha512 = async (data) =>
+  new Uint8Array(await crypto.subtle.digest('SHA-512', data as Bytes));
 
 /**
  * bcrypt_pbkdf(pass, salt, rounds) → keylen bytes. Async only because SHA-512 comes from WebCrypto;
  * between rounds it awaits WebCrypto, which lets the page breathe (one round of Blowfish work is ~30 ms).
  */
-export async function bcryptPbkdf(pass: Uint8Array, salt: Uint8Array, rounds: number, keylen: number, sha512: Sha512 = webSha512): Promise<Bytes> {
-  if (rounds < 1 || rounds > 1 << 16 || keylen < 1 || keylen > 1024 || salt.length === 0 || salt.length > 1 << 20) {
+export async function bcryptPbkdf(
+  pass: Uint8Array,
+  salt: Uint8Array,
+  rounds: number,
+  keylen: number,
+  sha512: Sha512 = webSha512,
+): Promise<Bytes> {
+  if (
+    rounds < 1 ||
+    rounds > 1 << 16 ||
+    keylen < 1 ||
+    keylen > 1024 ||
+    salt.length === 0 ||
+    salt.length > 1 << 20
+  ) {
     throw new RangeError('bcrypt_pbkdf: bad parameters');
   }
   const stride = Math.ceil(keylen / 32);

@@ -26,7 +26,8 @@ export function withPath(dir: string, e: RawEntry): FEntry {
 
 export function sortEntries(list: FEntry[], s: SortState): FEntry[] {
   const m = s.dir === 'asc' ? 1 : -1;
-  const cmpName = (a: FEntry, b: FEntry) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+  const cmpName = (a: FEntry, b: FEntry) =>
+    a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
   return [...list].sort((a, b) => {
     const da = isDirLike(a);
     const db = isDirLike(b);
@@ -59,7 +60,12 @@ export function formatWhen(ms: number, lang: string): string {
   const y = new Date(now);
   y.setDate(now.getDate() - 1);
   if (d.toDateString() === y.toDateString()) return time;
-  return d.toLocaleDateString(lang, d.getFullYear() === now.getFullYear() ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' });
+  return d.toLocaleDateString(
+    lang,
+    d.getFullYear() === now.getFullYear()
+      ? { day: 'numeric', month: 'short' }
+      : { day: 'numeric', month: 'short', year: 'numeric' },
+  );
 }
 
 /** Parses an octal mode string such as "0644" into 9 permission bits (owner, group, others x r/w/x). */
@@ -85,5 +91,7 @@ export function nextId(): string {
 }
 
 export function validFileName(name: string): boolean {
-  return name.length > 0 && name !== '.' && name !== '..' && !name.includes('/') && !name.includes('\0');
+  return (
+    name.length > 0 && name !== '.' && name !== '..' && !name.includes('/') && !name.includes('\0')
+  );
 }

@@ -20,7 +20,10 @@ export interface TransferStart {
 }
 
 /** Asks for a transfer; opens the unlock dialog (once) when it needs administrator rights. */
-export async function startTransfer(body: Record<string, unknown>, admin: boolean): Promise<TransferStart> {
+export async function startTransfer(
+  body: Record<string, unknown>,
+  admin: boolean,
+): Promise<TransferStart> {
   const go = () => http<TransferStart>('/api/plugins/transfer', { body });
   try {
     return await go();
@@ -55,18 +58,28 @@ export interface DownloadOutcome {
  * Asks the daemon how a download ended (GET <url>/status, long poll). Resolves once with the outcome; if the daemon
  * cannot be asked (signed out, record gone) it resolves with ok:false and says so. Never rejects.
  */
-export async function watchDownloadEnd(start: TransferStart, signal?: AbortSignal): Promise<DownloadOutcome> {
+export async function watchDownloadEnd(
+  start: TransferStart,
+  signal?: AbortSignal,
+): Promise<DownloadOutcome> {
   // A started transfer lives 60 s unfetched; a download itself has no limit, so keep asking while it runs.
   for (;;) {
     try {
-      const r = await http<{ done: boolean; ok?: boolean; bytes?: number; error?: string }>(`${start.url}/status?wait=20`, { signal });
-      if (r.done) return { ok: !!r.ok, bytes: r.bytes ?? 0, ...(r.error ? { error: r.error } : {}) };
+      const r = await http<{ done: boolean; ok?: boolean; bytes?: number; error?: string }>(
+        `${start.url}/status?wait=20`,
+        { signal },
+      );
+      if (r.done)
+        return { ok: !!r.ok, bytes: r.bytes ?? 0, ...(r.error ? { error: r.error } : {}) };
     } catch (e) {
-      if (e instanceof ApiError && e.code === 'cancelled') return { ok: false, bytes: 0, error: 'The page was closed before the download ended.' };
-      if (e instanceof ApiError && e.code !== 'network') return { ok: false, bytes: 0, error: 'The end of the download could not be read.' };
+      if (e instanceof ApiError && e.code === 'cancelled')
+        return { ok: false, bytes: 0, error: 'The page was closed before the download ended.' };
+      if (e instanceof ApiError && e.code !== 'network')
+        return { ok: false, bytes: 0, error: 'The end of the download could not be read.' };
       await new Promise((res) => window.setTimeout(res, 2000)); // a network blip: ask again
     }
-    if (signal?.aborted) return { ok: false, bytes: 0, error: 'The page was closed before the download ended.' };
+    if (signal?.aborted)
+      return { ok: false, bytes: 0, error: 'The page was closed before the download ended.' };
   }
 }
 
@@ -94,7 +107,11 @@ export interface UploadStream {
 export function sendUpload(
   start: TransferStart,
   file: Blob,
-  o: { onProgress?(loaded: number, total: number): void; signal?: AbortSignal; stream?: UploadStream },
+  o: {
+    onProgress?(loaded: number, total: number): void;
+    signal?: AbortSignal;
+    stream?: UploadStream;
+  },
 ): Promise<UploadResult> {
   return new Promise<UploadResult>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -102,8 +119,12 @@ export function sendUpload(
     xhr.withCredentials = FETCH_CREDENTIALS === 'include';
     xhr.setRequestHeader('X-Requested-With', 'ervisio');
     xhr.responseType = 'text';
-    xhr.upload.onprogress = (ev) => o.onProgress?.(ev.loaded, ev.lengthComputable ? ev.total : file.size);
-    xhr.onerror = () => reject(new ApiError('network', 'The upload was interrupted. Check the connection and try again.'));
+    xhr.upload.onprogress = (ev) =>
+      o.onProgress?.(ev.loaded, ev.lengthComputable ? ev.total : file.size);
+    xhr.onerror = () =>
+      reject(
+        new ApiError('network', 'The upload was interrupted. Check the connection and try again.'),
+      );
     xhr.onabort = () => reject(new ApiError('cancelled', 'The upload was cancelled.'));
     // Streamed responses: ndjson lines {"start":{status,headers}}, {"data":"<base64>"}, {"done":true,"status"} or {"error":{}}.
     let seen = 0;
@@ -132,9 +153,16 @@ export function sendUpload(
       } else if (typeof m.data === 'string') {
         o.stream?.onData?.(fromBase64(m.data));
       } else if (m.done) {
-        finished = { status: m.status ?? startInfo?.status ?? 0, headers: m.headers ?? startInfo?.headers ?? {}, body: '' };
+        finished = {
+          status: m.status ?? startInfo?.status ?? 0,
+          headers: m.headers ?? startInfo?.headers ?? {},
+          body: '',
+        };
       } else if (m.error) {
-        streamError = new ApiError(m.error.code ?? 'internal', m.error.message ?? 'The upload failed.');
+        streamError = new ApiError(
+          m.error.code ?? 'internal',
+          m.error.message ?? 'The upload failed.',
+        );
       }
     };
     const readLines = (final: boolean) => {
@@ -148,7 +176,9 @@ export function sendUpload(
         if (m) handleMsg(m);
       }
     };
-    const streaming = () => !!o.stream && (xhr.getResponseHeader('Content-Type') ?? '').startsWith('application/x-ndjson');
+    const streaming = () =>
+      !!o.stream &&
+      (xhr.getResponseHeader('Content-Type') ?? '').startsWith('application/x-ndjson');
     xhr.onprogress = () => {
       if (streaming()) readLines(false);
     };
@@ -156,11 +186,15 @@ export function sendUpload(
       if (streaming()) {
         readLines(true);
         if (streamError) return reject(streamError);
-        if (!finished) return reject(new ApiError('network', 'The response broke off before it ended.'));
+        if (!finished)
+          return reject(new ApiError('network', 'The response broke off before it ended.'));
         o.onProgress?.(file.size, file.size);
         return resolve(finished);
       }
-      type Body = { result?: UploadResult; error?: { code?: string; message?: string; data?: unknown } };
+      type Body = {
+        result?: UploadResult;
+        error?: { code?: string; message?: string; data?: unknown };
+      };
       const parse = (): Body | null => {
         try {
           return JSON.parse(xhr.responseText) as Body;
@@ -174,8 +208,17 @@ export function sendUpload(
         resolve(json.result);
         return;
       }
-      const code = json?.error?.code ?? (xhr.status === 401 ? 'unauthenticated' : xhr.status === 403 ? 'forbidden' : 'internal');
-      reject(new ApiError(code, json?.error?.message ?? (xhr.statusText || 'The upload failed.'), json?.error?.data, xhr.status));
+      const code =
+        json?.error?.code ??
+        (xhr.status === 401 ? 'unauthenticated' : xhr.status === 403 ? 'forbidden' : 'internal');
+      reject(
+        new ApiError(
+          code,
+          json?.error?.message ?? (xhr.statusText || 'The upload failed.'),
+          json?.error?.data,
+          xhr.status,
+        ),
+      );
     };
     if (o.signal) {
       if (o.signal.aborted) return reject(new ApiError('cancelled', 'The upload was cancelled.'));

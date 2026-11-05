@@ -15,7 +15,9 @@ function useVisible<T extends HTMLElement>() {
       setVis(true);
       return;
     }
-    const io = new IntersectionObserver((es) => es.some((x) => x.isIntersecting) && setVis(true), { rootMargin: '120px' });
+    const io = new IntersectionObserver((es) => es.some((x) => x.isIntersecting) && setVis(true), {
+      rootMargin: '120px',
+    });
     io.observe(el);
     return () => io.disconnect();
   }, [vis]);
@@ -28,23 +30,51 @@ export function Thumb({ e, admin }: { e: FEntry; admin: boolean }) {
   const [ref, vis] = useVisible<HTMLDivElement>();
   const stamp = `${e.mtime}:${e.size}`;
   const isThumb = kind === 'img' && canThumb(e.name) && e.size > 0;
-  const isText = (kind === 'code' || kind === 'txt' || kind === 'other') && looksTextual(e) && e.size > 0 && e.size < 4 << 20 && !!e.path;
-  const [src, setSrc] = useState<string | null | undefined>(() => (isThumb ? cachedThumb(thumbKey(admin, e.path, stamp)) : undefined));
-  const [text, setText] = useState<string | null | undefined>(() => (isText ? cachedSnippet(thumbKey(admin, e.path, stamp)) : undefined));
+  const isText =
+    (kind === 'code' || kind === 'txt' || kind === 'other') &&
+    looksTextual(e) &&
+    e.size > 0 &&
+    e.size < 4 << 20 &&
+    !!e.path;
+  const [src, setSrc] = useState<string | null | undefined>(() =>
+    isThumb ? cachedThumb(thumbKey(admin, e.path, stamp)) : undefined,
+  );
+  const [text, setText] = useState<string | null | undefined>(() =>
+    isText ? cachedSnippet(thumbKey(admin, e.path, stamp)) : undefined,
+  );
 
   useEffect(() => {
     if (!vis || !e.path) return;
     let live = true;
-    if (isThumb && src === undefined) void loadThumb(e.path, stamp, admin).then((v) => live && setSrc(v));
-    if (isText && text === undefined) void loadSnippet(e.path, stamp, admin).then((v) => live && setText(v));
+    if (isThumb && src === undefined)
+      void loadThumb(e.path, stamp, admin).then((v) => live && setSrc(v));
+    if (isText && text === undefined)
+      void loadSnippet(e.path, stamp, admin).then((v) => live && setText(v));
     return () => {
       live = false;
     };
   }, [vis, e.path, stamp, admin, isThumb, isText, src, text]);
 
   let inner;
-  if (kind === 'img' && src) inner = <img className="files-th-img" src={src} alt="" draggable={false} />;
-  else if (kind === 'img' && !isThumb && canInlineImage(e.name) && e.size < 6 << 20 && vis && e.path) inner = <img className="files-th-img" src={downloadUrl(e.path, admin, true)} alt="" loading="lazy" draggable={false} />;
+  if (kind === 'img' && src)
+    inner = <img className="files-th-img" src={src} alt="" draggable={false} />;
+  else if (
+    kind === 'img' &&
+    !isThumb &&
+    canInlineImage(e.name) &&
+    e.size < 6 << 20 &&
+    vis &&
+    e.path
+  )
+    inner = (
+      <img
+        className="files-th-img"
+        src={downloadUrl(e.path, admin, true)}
+        alt=""
+        loading="lazy"
+        draggable={false}
+      />
+    );
   else if (isText && text) inner = <pre className="files-th-pre">{text}</pre>;
   else
     inner = (
@@ -52,7 +82,12 @@ export function Thumb({ e, admin }: { e: FEntry; admin: boolean }) {
         <Icon name={KIND_ICON[kind]} />
       </span>
     );
-  const cls = kind === 'img' && (src || (!isThumb && canInlineImage(e.name))) ? 'files-th files-th--img' : isText && text ? 'files-th files-th--txt' : 'files-th files-th--big';
+  const cls =
+    kind === 'img' && (src || (!isThumb && canInlineImage(e.name)))
+      ? 'files-th files-th--img'
+      : isText && text
+        ? 'files-th files-th--txt'
+        : 'files-th files-th--big';
   return (
     <div ref={ref} className={cls}>
       {inner}

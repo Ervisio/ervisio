@@ -13,7 +13,12 @@ export function usePrefSave() {
     (key: string, value: unknown, name: string) => {
       const before = ref.current[key];
       set(key, value).then(
-        () => toast.undo(t('saved', { name }), t('undo'), () => void set(key, before).catch(() => undefined)),
+        () =>
+          toast.undo(
+            t('saved', { name }),
+            t('undo'),
+            () => void set(key, before).catch(() => undefined),
+          ),
         (e) => toast.err(t('saveFailed', { name }), e instanceof Error ? e.message : undefined),
       );
     },
@@ -70,22 +75,28 @@ export function useServerConfig(enabled: boolean) {
   }, [enabled, load]);
 
   const cfg = info?.values ?? null;
-  const get = useCallback(<T,>(key: string, fallback: T): T => {
-    const v = pick(cfg, key);
-    return (v === undefined ? fallback : v) as T;
-  }, [cfg]);
+  const get = useCallback(
+    <T>(key: string, fallback: T): T => {
+      const v = pick(cfg, key);
+      return (v === undefined ? fallback : v) as T;
+    },
+    [cfg],
+  );
 
   const setKey = useCallback(
     async (key: string, value: unknown, name: string) => {
       const before = pick(ref.current?.values ?? null, key);
       const write = (v: unknown) => call<ConfigState>('config.set', { key, value: v });
-      const patch = (v: unknown) => setInfo((c) => (c ? { ...c, values: { ...c.values, [key]: v } } : c));
+      const patch = (v: unknown) =>
+        setInfo((c) => (c ? { ...c, values: { ...c.values, [key]: v } } : c));
       patch(value); // optimistic
       try {
         setInfo(await write(value));
         toast.undo(t('saved', { name }), t('undo'), () => {
           patch(before);
-          write(before).then(setInfo, (e) => toast.err(t('saveFailed', { name }), e instanceof Error ? e.message : undefined));
+          write(before).then(setInfo, (e) =>
+            toast.err(t('saveFailed', { name }), e instanceof Error ? e.message : undefined),
+          );
         });
       } catch (e) {
         patch(before);
@@ -96,7 +107,11 @@ export function useServerConfig(enabled: boolean) {
   );
 
   return {
-    cfg, state, get, set: setKey, reload: load,
+    cfg,
+    state,
+    get,
+    set: setKey,
+    reload: load,
     path: info?.path ?? '/etc/ervisio/ervisio.conf',
     warnings: info?.warnings ?? [],
     hasKey: (k: string) => !!info?.keys.some((x) => x.key === k),

@@ -45,10 +45,26 @@ export function SidePanel(p: SidePanelProps) {
       open
       onClose={p.onClose}
       title={title}
-      subtitle={e ? typeLabel(e, t) : formatBytes(p.entries.reduce((s, x) => s + (isDirLike(x) ? 0 : x.size), 0))}
+      subtitle={
+        e
+          ? typeLabel(e, t)
+          : formatBytes(p.entries.reduce((s, x) => s + (isDirLike(x) ? 0 : x.size), 0))
+      }
       icon={e ? KIND_ICON[k] : 'files'}
       hue="file"
-      tabs={e && !isDirLike(e) ? <Tabs<Tab> variant="pill" value={tab} onChange={setTab} items={[{ id: 'details', label: t('tab.details') }, { id: 'preview', label: t('tab.preview') }]} /> : undefined}
+      tabs={
+        e && !isDirLike(e) ? (
+          <Tabs<Tab>
+            variant="pill"
+            value={tab}
+            onChange={setTab}
+            items={[
+              { id: 'details', label: t('tab.details') },
+              { id: 'preview', label: t('tab.preview') },
+            ]}
+          />
+        ) : undefined
+      }
     >
       {many && <Summary entries={p.entries} p={p} t={t} />}
       {e && tab === 'details' && <Details e={e} p={p} t={t} />}
@@ -64,7 +80,15 @@ function typeLabel(e: FEntry, t: ReturnType<typeof useT>) {
   return e.mime || t(`kind.${kindOf(e)}`);
 }
 
-function Summary({ entries, p, t }: { entries: FEntry[]; p: SidePanelProps; t: ReturnType<typeof useT> }) {
+function Summary({
+  entries,
+  p,
+  t,
+}: {
+  entries: FEntry[];
+  p: SidePanelProps;
+  t: ReturnType<typeof useT>;
+}) {
   const folders = entries.filter(isDirLike).length;
   return (
     <div className="files-side">
@@ -97,7 +121,15 @@ function Details({ e, p, t }: { e: FEntry; p: SidePanelProps; t: ReturnType<type
   const dir = isDirLike(e);
   return (
     <div className="files-side">
-      <div className="files-pv">{dir ? <span className="files-ic files-ic--big files-t-dir"><Icon name="files" /></span> : <Thumb e={e} admin={p.admin} />}</div>
+      <div className="files-pv">
+        {dir ? (
+          <span className="files-ic files-ic--big files-t-dir">
+            <Icon name="files" />
+          </span>
+        ) : (
+          <Thumb e={e} admin={p.admin} />
+        )}
+      </div>
       <dl className="files-kv">
         <dt>{t('col.type')}</dt>
         <dd>{typeLabel(e, t)}</dd>
@@ -211,7 +243,13 @@ function Permissions({ e, admin, t }: { e: FEntry; admin: boolean; t: ReturnType
           </span>
         ))}
         {ROWS.map((r, ri) => (
-          <PermRow key={r} label={t(`perm.${r}`)} bits={bits.slice(ri * 3, ri * 3 + 3)} onToggle={(ci) => toggle(ri * 3 + ci)} cols={COLS.map((c) => t(`perm.${c}`))} />
+          <PermRow
+            key={r}
+            label={t(`perm.${r}`)}
+            bits={bits.slice(ri * 3, ri * 3 + 3)}
+            onToggle={(ci) => toggle(ri * 3 + ci)}
+            cols={COLS.map((c) => t(`perm.${c}`))}
+          />
         ))}
       </div>
       {dir && (
@@ -223,12 +261,30 @@ function Permissions({ e, admin, t }: { e: FEntry; admin: boolean; t: ReturnType
   );
 }
 
-function PermRow({ label, bits, onToggle, cols }: { label: string; bits: boolean[]; onToggle(i: number): void; cols: string[] }) {
+function PermRow({
+  label,
+  bits,
+  onToggle,
+  cols,
+}: {
+  label: string;
+  bits: boolean[];
+  onToggle(i: number): void;
+  cols: string[];
+}) {
   return (
     <>
       <span className="files-perm-r">{label}</span>
       {bits.map((on, i) => (
-        <button key={i} type="button" className={`files-ck${on ? ' on' : ''}`} role="switch" aria-checked={on} aria-label={`${label}: ${cols[i]}`} onClick={() => onToggle(i)}>
+        <button
+          key={i}
+          type="button"
+          className={`files-ck${on ? ' on' : ''}`}
+          role="switch"
+          aria-checked={on}
+          aria-label={`${label}: ${cols[i]}`}
+          onClick={() => onToggle(i)}
+        >
           {on && <Icon name="check" />}
         </button>
       ))}
@@ -238,7 +294,9 @@ function PermRow({ label, bits, onToggle, cols }: { label: string; bits: boolean
 
 function Preview({ e, p, t }: { e: FEntry; p: SidePanelProps; t: ReturnType<typeof useT> }) {
   const k = kindOf(e);
-  const [text, setText] = useState<{ content: string; truncated: boolean; encoding: string } | null | 'binary'>(null);
+  const [text, setText] = useState<
+    { content: string; truncated: boolean; encoding: string } | null | 'binary'
+  >(null);
   const [err, setErr] = useState('');
   const textual = looksTextual(e);
   useEffect(() => {
@@ -246,7 +304,11 @@ function Preview({ e, p, t }: { e: FEntry; p: SidePanelProps; t: ReturnType<type
     setErr('');
     if (!textual || !e.path) return;
     let live = true;
-    fcall<{ content: string; truncated: boolean; encoding: string }>('files.readText', { path: e.path, maxBytes: 64 << 10 }, { admin: p.admin }).then(
+    fcall<{ content: string; truncated: boolean; encoding: string }>(
+      'files.readText',
+      { path: e.path, maxBytes: 64 << 10 },
+      { admin: p.admin },
+    ).then(
       (r) => live && setText(r),
       (x) => {
         if (!live) return;

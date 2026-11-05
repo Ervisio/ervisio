@@ -1,12 +1,35 @@
-export { call, session, login, logout, unlock, lock, publicHost, downloadUrl, uploadUrl } from './client';
+export {
+  call,
+  session,
+  login,
+  logout,
+  unlock,
+  lock,
+  publicHost,
+  downloadUrl,
+  uploadUrl,
+} from './client';
 export { requestUnlock } from './unlock';
 export { stream, toBase64, fromBase64 } from './stream';
 export { ApiError, errorMessage } from './types';
-export type { CallOptions, Session, PublicHost, DistroInfo, StreamHandle, StreamHandlers, ErrorCode } from './types';
+export type {
+  CallOptions,
+  Session,
+  PublicHost,
+  DistroInfo,
+  StreamHandle,
+  StreamHandlers,
+  ErrorCode,
+} from './types';
 export { SessionProvider, useSession } from './session';
 export type { SessionValue } from './session';
 export { PrefsProvider, usePrefs } from './prefs';
 export { MOCK } from './http';
 export { API_BASE, apiUrl, wsUrl } from './base';
-export { recentUsersEnabled, setRecentUsersEnabled, readRecentUsers, rememberRecentUser } from './recentUsers';
+export {
+  recentUsersEnabled,
+  setRecentUsersEnabled,
+  readRecentUsers,
+  rememberRecentUser,
+} from './recentUsers';
 export type { RecentUser } from './recentUsers';

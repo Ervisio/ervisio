@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import { usePrefs } from '../api';
 import { setRegion } from '../lib/format';
 import { flatten, type Dict } from './flatten';
@@ -9,8 +17,20 @@ export const LANGUAGES = [
 ] as const;
 export type Lang = (typeof LANGUAGES)[number]['id'];
 export const NAMESPACES = [
-  'common', 'shell', 'auth', 'ui', 'settings',
-  'overview', 'terminal', 'files', 'logs', 'services', 'software', 'users', 'plugins', 'envs',
+  'common',
+  'shell',
+  'auth',
+  'ui',
+  'settings',
+  'overview',
+  'terminal',
+  'files',
+  'logs',
+  'services',
+  'software',
+  'users',
+  'plugins',
+  'envs',
 ] as const;
 
 const loaders = import.meta.glob<{ default: Record<string, unknown> }>('./*/*.json');
@@ -41,9 +61,17 @@ function interpolate(s: string, vars?: Record<string, string | number>): string 
   return s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
 }
 
-function lookup(lang: string, ns: string, key: string, vars?: Record<string, string | number>): string | undefined {
+function lookup(
+  lang: string,
+  ns: string,
+  key: string,
+  vars?: Record<string, string | number>,
+): string | undefined {
   const chain = lang === 'en' ? ['en'] : [lang, 'en'];
-  const keys = vars && typeof vars.count === 'number' ? [`${key}_${vars.count === 1 ? 'one' : 'other'}`, key] : [key];
+  const keys =
+    vars && typeof vars.count === 'number'
+      ? [`${key}_${vars.count === 1 ? 'one' : 'other'}`, key]
+      : [key];
   for (const l of chain) {
     const d = cache.get(`${l}/${ns}`);
     if (!d) continue;
@@ -72,12 +100,17 @@ const initialLang = (): Lang => {
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const { prefs, set } = usePrefs();
-  const pref = prefs.language === 'it' || prefs.language === 'en' ? (prefs.language as Lang) : undefined;
+  const pref =
+    prefs.language === 'it' || prefs.language === 'en' ? (prefs.language as Lang) : undefined;
   const lang: Lang = pref ?? initialLang();
   const [ready, setReady] = useState(false);
   // Region settings for lib/format (set during render so children format with the current values).
   const reg = (prefs.region ?? {}) as { timeFormat?: string; weekStart?: string };
-  setRegion({ lang, hour12: reg.timeFormat === '12', weekStart: reg.weekStart === 'sun' ? 0 : reg.weekStart === 'sat' ? 6 : 1 });
+  setRegion({
+    lang,
+    hour12: reg.timeFormat === '12',
+    weekStart: reg.weekStart === 'sun' ? 0 : reg.weekStart === 'sat' ? 6 : 1,
+  });
 
   useEffect(() => {
     try {
@@ -88,14 +121,20 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     document.documentElement.lang = lang;
     let live = true;
     const base = ['common', 'shell', 'auth', 'ui'];
-    void Promise.all([...base.map((n) => load(lang, n)), ...(lang === 'en' ? [] : base.map((n) => load('en', n)))]).then(() => live && setReady(true));
+    void Promise.all([
+      ...base.map((n) => load(lang, n)),
+      ...(lang === 'en' ? [] : base.map((n) => load('en', n))),
+    ]).then(() => live && setReady(true));
     return () => {
       live = false;
     };
   }, [lang]);
 
   const regionKey = `${reg.timeFormat ?? ''}/${reg.weekStart ?? ''}`;
-  const value = useMemo<I18nValue>(() => ({ lang, regionKey, setLang: (l) => void set('language', l).catch(() => undefined) }), [lang, regionKey, set]);
+  const value = useMemo<I18nValue>(
+    () => ({ lang, regionKey, setLang: (l) => void set('language', l).catch(() => undefined) }),
+    [lang, regionKey, set],
+  );
   return <Ctx.Provider value={value}>{ready ? children : null}</Ctx.Provider>;
 }
 
@@ -119,5 +158,9 @@ export function useT(ns: string): TFn {
     if (lang !== 'en') void load('en', ns);
     return () => void listeners.delete(l);
   }, [lang, ns]);
-  return useCallback<TFn>((key, vars) => lookup(lang, ns, key, vars) ?? (cache.has(`en/${ns}`) ? key : ''), [lang, ns, ver]); // eslint-disable-line react-hooks/exhaustive-deps
+  return useCallback<TFn>(
+    (key, vars) => lookup(lang, ns, key, vars) ?? (cache.has(`en/${ns}`) ? key : ''),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lang, ns, ver],
+  );
 }

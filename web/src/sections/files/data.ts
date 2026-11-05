@@ -100,14 +100,11 @@ export function usePaneData(a: Args): PaneData {
     const onTruncated = (v: boolean) => {
       if (live) setTruncated(v);
     };
-    loadLocation(a.loc, starredKey, a.showHidden, opts, onTruncated).then(
-      (list) => {
-        if (!live) return;
-        setEntries(list);
-        setLoading(false);
-      },
-      fail,
-    );
+    loadLocation(a.loc, starredKey, a.showHidden, opts, onTruncated).then((list) => {
+      if (!live) return;
+      setEntries(list);
+      setLoading(false);
+    }, fail);
     return () => {
       live = false;
       ctl.abort();
@@ -122,7 +119,8 @@ function isAffectedBy(loc: string, dir: string | undefined): boolean {
   return !dir || dir === loc || loc.startsWith('trash:') || loc === 'recent:' || loc === 'starred:';
 }
 
-const toApiError = (e: unknown) => (e instanceof ApiError ? e : new ApiError('internal', errorMessage(e)));
+const toApiError = (e: unknown) =>
+  e instanceof ApiError ? e : new ApiError('internal', errorMessage(e));
 
 interface SearchMessage {
   entries?: RawEntry[];
@@ -137,45 +135,73 @@ interface SearchView {
   setLoading(loading: boolean): void;
 }
 
-function streamSearch(root: string, query: string, admin: boolean, isLive: () => boolean, view: SearchView, onError: (e: unknown) => void) {
+function streamSearch(
+  root: string,
+  query: string,
+  admin: boolean,
+  isLive: () => boolean,
+  view: SearchView,
+  onError: (e: unknown) => void,
+) {
   const acc: FEntry[] = [];
-  return stream<SearchMessage>('files.search', { root, query, maxResults: SEARCH_MAX_RESULTS }, {
-    admin,
-    onData: (m) => {
-      if (!isLive()) return;
-      if (m.entries) {
-        for (const e of m.entries) acc.push(withPath(root, e));
-        view.setEntries([...acc]);
-        view.setLoading(false);
-      }
-      if (m.done) {
-        view.setTruncated(!!m.truncated);
-        view.setSearching(false);
-        view.setLoading(false);
-      }
+  return stream<SearchMessage>(
+    'files.search',
+    { root, query, maxResults: SEARCH_MAX_RESULTS },
+    {
+      admin,
+      onData: (m) => {
+        if (!isLive()) return;
+        if (m.entries) {
+          for (const e of m.entries) acc.push(withPath(root, e));
+          view.setEntries([...acc]);
+          view.setLoading(false);
+        }
+        if (m.done) {
+          view.setTruncated(!!m.truncated);
+          view.setSearching(false);
+          view.setLoading(false);
+        }
+      },
+      onEnd: () => {
+        if (isLive()) {
+          view.setSearching(false);
+          view.setLoading(false);
+        }
+      },
+      onError,
     },
-    onEnd: () => {
-      if (isLive()) {
-        view.setSearching(false);
-        view.setLoading(false);
-      }
-    },
-    onError,
-  });
+  );
 }
 
-async function loadLocation(loc: string, starredKey: string, showHidden: boolean, opts: RunOpts, onTruncated: (v: boolean) => void): Promise<FEntry[]> {
+async function loadLocation(
+  loc: string,
+  starredKey: string,
+  showHidden: boolean,
+  opts: RunOpts,
+  onTruncated: (v: boolean) => void,
+): Promise<FEntry[]> {
   if (loc === 'trash:') return loadTrash(opts);
   if (loc === 'recent:') return loadRecent(opts);
   if (loc === 'starred:') return loadStarred(starredKey.split('\n').filter(Boolean), opts);
-  const r = await fcall<{ path: string; entries: RawEntry[]; truncated?: boolean }>('files.list', { path: loc, showHidden }, opts);
+  const r = await fcall<{ path: string; entries: RawEntry[]; truncated?: boolean }>(
+    'files.list',
+    { path: loc, showHidden },
+    opts,
+  );
   onTruncated(!!r.truncated);
   return r.entries.map((e) => ({ ...e, path: join(r.path, e.name) }));
 }
 
 async function loadTrash(opts: RunOpts): Promise<FEntry[]> {
   const r = await fcall<{ items: TrashItem[] }>('files.trashList', {}, opts);
-  return r.items.map<FEntry>((it) => ({ ...it.entry, path: it.entry.path ?? '', name: it.entry.name, trashId: it.id, origin: it.originalPath, deletedAt: it.deletedAt }));
+  return r.items.map<FEntry>((it) => ({
+    ...it.entry,
+    path: it.entry.path ?? '',
+    name: it.entry.name,
+    trashId: it.id,
+    origin: it.originalPath,
+    deletedAt: it.deletedAt,
+  }));
 }
 
 async function loadRecent(opts: RunOpts): Promise<FEntry[]> {

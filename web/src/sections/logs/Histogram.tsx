@@ -18,13 +18,20 @@ export function Histogram({ data, levels, onZoom, loading }: Props) {
   const show = (l: Level) => levels.includes(l);
 
   const buckets = data?.buckets ?? [];
-  const totals = buckets.map((b) => (show('err') ? b.err : 0) + (show('warn') ? b.warn : 0) + (show('info') ? b.info : 0) + (show('debug') ? b.debug : 0));
+  const totals = buckets.map(
+    (b) =>
+      (show('err') ? b.err : 0) +
+      (show('warn') ? b.warn : 0) +
+      (show('info') ? b.info : 0) +
+      (show('debug') ? b.debug : 0),
+  );
   const max = Math.max(1, ...totals);
   const span = data ? data.until - data.since : 0;
 
   const label = (i: number) => {
     const b = buckets[i];
-    const time = span > 36 * 3_600_000 ? `${fmtDay(b.t, lang)} ${fmtClock(b.t, false)}` : fmtClock(b.t, false);
+    const time =
+      span > 36 * 3_600_000 ? `${fmtDay(b.t, lang)} ${fmtClock(b.t, false)}` : fmtClock(b.t, false);
     return t('histogram.bar', { time, err: b.err, warn: b.warn, info: b.info, debug: b.debug });
   };
 
@@ -43,7 +50,13 @@ export function Histogram({ data, levels, onZoom, loading }: Props) {
 
   return (
     <div className={`logs-hist${loading ? ' loading' : ''}`}>
-      <div className="logs-bars" ref={box} role="group" aria-label={t('histogram.label')} onKeyDown={onKey}>
+      <div
+        className="logs-bars"
+        ref={box}
+        role="group"
+        aria-label={t('histogram.label')}
+        onKeyDown={onKey}
+      >
         {buckets.map((b, i) => {
           const h = (n: number) => `${(n / max) * 100}%`;
           return (
@@ -55,9 +68,13 @@ export function Histogram({ data, levels, onZoom, loading }: Props) {
               aria-label={label(i)}
               title={`${label(i)}\n${t('histogram.zoom')}`}
               onFocus={() => setFocus(i)}
-              onClick={() => onZoom(b.t, Math.min(b.t + (data?.step ?? 60000), data?.until ?? b.t + 60000))}
+              onClick={() =>
+                onZoom(b.t, Math.min(b.t + (data?.step ?? 60000), data?.until ?? b.t + 60000))
+              }
             >
-              {show('debug') && b.debug > 0 && <span className="d" style={{ height: h(b.debug) }} />}
+              {show('debug') && b.debug > 0 && (
+                <span className="d" style={{ height: h(b.debug) }} />
+              )}
               {show('info') && b.info > 0 && <span className="i" style={{ height: h(b.info) }} />}
               {show('warn') && b.warn > 0 && <span className="w" style={{ height: h(b.warn) }} />}
               {show('err') && b.err > 0 && <span className="e" style={{ height: h(b.err) }} />}

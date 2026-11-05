@@ -10,7 +10,15 @@ export interface TabItem<T extends string = string> {
 }
 
 /** Tab list. Render your own panels; use `panelId(id)` on the content for aria-controls if you want it. */
-export function Tabs<T extends string>({ items, value, onChange, variant = 'underline', hue, 'aria-label': ariaLabel, className }: {
+export function Tabs<T extends string>({
+  items,
+  value,
+  onChange,
+  variant = 'underline',
+  hue,
+  'aria-label': ariaLabel,
+  className,
+}: {
   items: TabItem<T>[];
   value: T;
   onChange(id: T): void;
@@ -34,7 +42,12 @@ export function Tabs<T extends string>({ items, value, onChange, variant = 'unde
     }
   };
   return (
-    <div className={`ui-tabs ui-tabs--${variant} ${hueClass(hue)} ${className ?? ''}`} role="tablist" aria-label={ariaLabel} onKeyDown={onKey}>
+    <div
+      className={`ui-tabs ui-tabs--${variant} ${hueClass(hue)} ${className ?? ''}`}
+      role="tablist"
+      aria-label={ariaLabel}
+      onKeyDown={onKey}
+    >
       {items.map((t) => (
         <button
           key={t.id}

@@ -99,7 +99,11 @@
     "plainServer": "Questo server usa http semplice, quindi non c'è nulla da fissare.",
     "localHttp": "L'http semplice verso questa macchina va bene. Altrove serve la casella qui sopra."
   },
-  "section": { "connection": "Connessione", "credentials": "Credenziali", "access": "Chi può usarlo" },
+  "section": {
+    "connection": "Connessione",
+    "credentials": "Credenziali",
+    "access": "Chi può usarlo"
+  },
   "access": {
     "who": "Chi può usare questo ambiente",
     "all": "Tutti quelli che possono usare il plugin",
@@ -111,7 +115,10 @@
     "groupsHint": "Aggiungi un nome gruppo e premi Invio",
     "restrictedShort": "limitato"
   },
-  "pem": { "choose": "Scegli file…", "tooBig": "{name} è troppo grande per un certificato o una chiave." },
+  "pem": {
+    "choose": "Scegli file…",
+    "tooBig": "{name} è troppo grande per un certificato o una chiave."
+  },
   "add": {
     "action": "Aggiungi ambiente",
     "title": "Aggiungi un ambiente",

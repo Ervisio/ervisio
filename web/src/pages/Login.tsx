@@ -14,14 +14,25 @@ const readRecent = readRecentUsers;
 const remember = rememberRecentUser;
 const TILE_HUES = ['usr', 'file', 'log'];
 
-type Problem = null | { kind: 'key' | 'wrong' | 'root' | 'rate' | 'busy' | 'forbidden' | 'network' | 'other'; text?: string; minutes?: number; code?: SshKeyErrorCode; seconds?: number };
+type Problem = null | {
+  kind: 'key' | 'wrong' | 'root' | 'rate' | 'busy' | 'forbidden' | 'network' | 'other';
+  text?: string;
+  minutes?: number;
+  code?: SshKeyErrorCode;
+  seconds?: number;
+};
 
 function classify(e: unknown): Problem {
   if (!(e instanceof ApiError)) return { kind: 'other', text: String(e) };
   const d = (e.data ?? {}) as { reason?: string; retryAfter?: number };
-  if (d.reason === 'root_disabled' || (e.code === 'forbidden' && /root/i.test(e.message))) return { kind: 'root' };
+  if (d.reason === 'root_disabled' || (e.code === 'forbidden' && /root/i.test(e.message)))
+    return { kind: 'root' };
   if (d.reason === 'busy') return { kind: 'busy' };
-  if (e.status === 429 || d.reason === 'rate_limited' || /too many|rate/i.test(e.message)) return { kind: 'rate', minutes: d.retryAfter ? Math.max(1, Math.ceil(d.retryAfter / 60)) : undefined };
+  if (e.status === 429 || d.reason === 'rate_limited' || /too many|rate/i.test(e.message))
+    return {
+      kind: 'rate',
+      minutes: d.retryAfter ? Math.max(1, Math.ceil(d.retryAfter / 60)) : undefined,
+    };
   if (e.code === 'forbidden') return { kind: 'forbidden', text: e.message };
   if (e.code === 'unauthenticated' || e.code === 'invalid') return { kind: 'wrong' };
   if (e.code === 'network') return { kind: 'network' };
@@ -59,7 +70,8 @@ const KEY_MSG: Record<SshKeyErrorCode, { icon: string; hue: string }> = {
 type Message = { icon: string; hue: string; body: ReactNode };
 
 function keyWaitVars(t: TFn, seconds?: number) {
-  if (seconds && seconds > 90) return { wait: t('key.waitMinutes', { minutes: Math.ceil(seconds / 60) }) };
+  if (seconds && seconds > 90)
+    return { wait: t('key.waitMinutes', { minutes: Math.ceil(seconds / 60) }) };
   if (seconds) return { wait: t('key.waitSeconds', { seconds: Math.ceil(seconds) }) };
   return { wait: t('key.waitLater') };
 }
@@ -75,20 +87,32 @@ function rateBody(problem: NonNullable<Problem>, t: TFn) {
 }
 
 function rootBody(t: TFn) {
-  return <>{t('err.root.before')} <code>allow_root = true</code> {t('err.root.after')}</>;
+  return (
+    <>
+      {t('err.root.before')} <code>allow_root = true</code> {t('err.root.after')}
+    </>
+  );
 }
 
 function problemMessage(problem: Problem, t: TFn): Message | null {
   if (!problem) return null;
   switch (problem.kind) {
-    case 'key': return keyMessage(problem, t);
-    case 'wrong': return { icon: 'alert', hue: 'hue-svc', body: t('err.wrong') };
-    case 'root': return { icon: 'shield', hue: 'hue-log', body: rootBody(t) };
-    case 'busy': return { icon: 'clock', hue: 'hue-log', body: t('err.busy') };
-    case 'rate': return { icon: 'clock', hue: 'hue-log', body: rateBody(problem, t) };
-    case 'forbidden': return { icon: 'lock', hue: 'hue-svc', body: problem.text || t('err.forbidden') };
-    case 'network': return { icon: 'alert', hue: 'hue-svc', body: t('err.network') };
-    default: return { icon: 'alert', hue: 'hue-svc', body: problem.text || t('err.other') };
+    case 'key':
+      return keyMessage(problem, t);
+    case 'wrong':
+      return { icon: 'alert', hue: 'hue-svc', body: t('err.wrong') };
+    case 'root':
+      return { icon: 'shield', hue: 'hue-log', body: rootBody(t) };
+    case 'busy':
+      return { icon: 'clock', hue: 'hue-log', body: t('err.busy') };
+    case 'rate':
+      return { icon: 'clock', hue: 'hue-log', body: rateBody(problem, t) };
+    case 'forbidden':
+      return { icon: 'lock', hue: 'hue-svc', body: problem.text || t('err.forbidden') };
+    case 'network':
+      return { icon: 'alert', hue: 'hue-svc', body: t('err.network') };
+    default:
+      return { icon: 'alert', hue: 'hue-svc', body: problem.text || t('err.other') };
   }
 }
 
@@ -98,7 +122,12 @@ function HostArt({ host }: { host: Host }) {
   return (
     <section className="lb-art" aria-label={host?.hostname}>
       <span className="glow" />
-      <DistroLogo className="big" id={host?.distro.id} logo={host?.distro.logo} url={host?.distro.logoUrl} />
+      <DistroLogo
+        className="big"
+        id={host?.distro.id}
+        logo={host?.distro.logo}
+        url={host?.distro.logoUrl}
+      />
       <div className="nm">
         <h2>{host?.hostname ?? '...'}</h2>
         {host?.ip && <p className="ip">{host.ip}</p>}
@@ -134,7 +163,9 @@ function RecentAccounts({ t, recent, user, other, onPick, onOther }: RecentAccou
         </button>
       ))}
       <button type="button" className="ut other" aria-pressed={other} onClick={onOther}>
-        <span className="av"><Icon name="plus" /></span>
+        <span className="av">
+          <Icon name="plus" />
+        </span>
         <b>{t('other')}</b>
         <small>{t('otherHint')}</small>
       </button>
@@ -144,17 +175,36 @@ function RecentAccounts({ t, recent, user, other, onPick, onOther }: RecentAccou
 
 type Method = 'password' | 'key';
 
-function MethodSwitch({ t, keyMode, busy, onSwitch }: { t: TFn; keyMode: boolean; busy: boolean; onSwitch: (m: Method) => void }) {
+function MethodSwitch({
+  t,
+  keyMode,
+  busy,
+  onSwitch,
+}: {
+  t: TFn;
+  keyMode: boolean;
+  busy: boolean;
+  onSwitch: (m: Method) => void;
+}) {
   return (
     <>
-      <div className="sk-or" aria-hidden="true">{t('or')}</div>
+      <div className="sk-or" aria-hidden="true">
+        {t('or')}
+      </div>
       {keyMode ? (
-        <button type="button" className="sk-alt" onClick={() => onSwitch('password')} disabled={busy}>
-          <Icon name="shield" />{t('usePassword')}
+        <button
+          type="button"
+          className="sk-alt"
+          onClick={() => onSwitch('password')}
+          disabled={busy}
+        >
+          <Icon name="shield" />
+          {t('usePassword')}
         </button>
       ) : (
         <button type="button" className="sk-alt" onClick={() => onSwitch('key')}>
-          <Icon name="key" />{t('useKey')}
+          <Icon name="key" />
+          {t('useKey')}
         </button>
       )}
     </>
@@ -189,13 +239,17 @@ export default function LoginPage() {
     (other ? userRef : pwRef).current?.focus();
   }, [other]);
 
-  useEffect(() => () => {
-    // Nothing of the key is kept: the state goes with the component, and this drops the references early.
-    setLoadedKey(null);
-    setPassphrase('');
-  }, []);
+  useEffect(
+    () => () => {
+      // Nothing of the key is kept: the state goes with the component, and this drops the references early.
+      setLoadedKey(null);
+      setPassphrase('');
+    },
+    [],
+  );
 
-  if (status === 'authed') return <Navigate to={(loc.state as { from?: string } | null)?.from ?? '/'} replace />;
+  if (status === 'authed')
+    return <Navigate to={(loc.state as { from?: string } | null)?.from ?? '/'} replace />;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -231,7 +285,12 @@ export default function LoginPage() {
     setBusy(true);
     setProblem(null);
     try {
-      const r = await signInWithKey({ user: u, keyText: loadedKey.text, passphrase: loadedKey.needsPass ? passphrase : undefined, stay });
+      const r = await signInWithKey({
+        user: u,
+        keyText: loadedKey.text,
+        passphrase: loadedKey.needsPass ? passphrase : undefined,
+        stay,
+      });
       remember({ user: u, isAdmin: r.isAdmin, method: 'key' });
       setLoadedKey(null);
       setPassphrase('');
@@ -273,10 +332,42 @@ export default function LoginPage() {
         <div className="lb-in">
           <h1>{t('title')}</h1>
           <p>{recent.length ? t('pick') : t('enter')}</p>
-          {recent.length > 0 && <RecentAccounts t={t} recent={recent} user={user} other={other} onPick={pickRecent} onOther={pickOther} />}
-          <form className="lf" onSubmit={keyMode ? (e) => { e.preventDefault(); void submitKey(); } : submit} noValidate>
+          {recent.length > 0 && (
+            <RecentAccounts
+              t={t}
+              recent={recent}
+              user={user}
+              other={other}
+              onPick={pickRecent}
+              onOther={pickOther}
+            />
+          )}
+          <form
+            className="lf"
+            onSubmit={
+              keyMode
+                ? (e) => {
+                    e.preventDefault();
+                    void submitKey();
+                  }
+                : submit
+            }
+            noValidate
+          >
             {other && (
-              <Input ref={userRef} label={t('username')} icon="user" id="u" name="username" autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder={t('usernamePlaceholder')} value={user} onChange={(e) => setUser(e.target.value)} />
+              <Input
+                ref={userRef}
+                label={t('username')}
+                icon="user"
+                id="u"
+                name="username"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                placeholder={t('usernamePlaceholder')}
+                value={user}
+                onChange={(e) => setUser(e.target.value)}
+              />
             )}
             {keyMode ? (
               <KeyStep
@@ -289,7 +380,9 @@ export default function LoginPage() {
                 onError={(code) => setProblem(code ? { kind: 'key', code } : null)}
                 passphrase={passphrase}
                 onPassphrase={setPassphrase}
-                passError={problem?.code === 'bad_passphrase' || problem?.code === 'passphrase_required'}
+                passError={
+                  problem?.code === 'bad_passphrase' || problem?.code === 'passphrase_required'
+                }
                 disabled={busy}
               />
             ) : (
@@ -305,7 +398,13 @@ export default function LoginPage() {
                 value={pw}
                 onChange={(e) => setPw(e.target.value)}
                 error={problem?.kind === 'wrong' ? true : undefined}
-                end={<IconButton icon={show ? 'eyeoff' : 'eye'} label={show ? t('hidePassword') : t('showPassword')} onClick={() => setShow((s) => !s)} />}
+                end={
+                  <IconButton
+                    icon={show ? 'eyeoff' : 'eye'}
+                    label={show ? t('hidePassword') : t('showPassword')}
+                    onClick={() => setShow((s) => !s)}
+                  />
+                }
               />
             )}
             {msg && (
@@ -315,7 +414,14 @@ export default function LoginPage() {
               </div>
             )}
             <Checkbox checked={stay} onChange={setStay} label={t('stay')} />
-            <Button type="submit" variant="primary" size="lg" block loading={busy} disabled={keyMode && !keyReady}>
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              block
+              loading={busy}
+              disabled={keyMode && !keyReady}
+            >
               {busy && keyMode ? t('key.signingIn') : t('submit')}
             </Button>
             {keysOn && <MethodSwitch t={t} keyMode={keyMode} busy={busy} onSwitch={switchMethod} />}
@@ -329,7 +435,10 @@ export default function LoginPage() {
           {recent.length > 0 && <p className="lb-note">{t('footnote')}</p>}
           <div className="lb-foot">
             <BrandLockup size={20} />
-            <button type="button" onClick={toggleDark}><Icon name={isDark ? 'moon' : 'sun'} size={15} />{t('theme')}</button>
+            <button type="button" onClick={toggleDark}>
+              <Icon name={isDark ? 'moon' : 'sun'} size={15} />
+              {t('theme')}
+            </button>
           </div>
         </div>
       </section>

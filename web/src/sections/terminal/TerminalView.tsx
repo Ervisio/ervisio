@@ -1,4 +1,13 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type Dispatch,
+  type MutableRefObject,
+  type SetStateAction,
+} from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
@@ -175,11 +184,7 @@ function attachSession(o: AttachOptions): () => void {
   };
 }
 
-function bindInput(
-  term: Terminal,
-  live: MutableRefObject<Props>,
-  sendRaw: (s: string) => void,
-) {
+function bindInput(term: Terminal, live: MutableRefObject<Props>, sendRaw: (s: string) => void) {
   term.onData((d) => {
     let out = d;
     if (live.current.ctrl && d.length === 1) {
@@ -215,7 +220,12 @@ function bindTerminalEvents(
   sendRaw: (s: string) => void,
 ) {
   bindInput(term, live, sendRaw);
-  term.onBinary((d) => handleRef.current?.send({ type: 'input', data: toBase64(Uint8Array.from(d, (c) => c.charCodeAt(0))) }));
+  term.onBinary((d) =>
+    handleRef.current?.send({
+      type: 'input',
+      data: toBase64(Uint8Array.from(d, (c) => c.charCodeAt(0))),
+    }),
+  );
   term.onResize(({ cols, rows }) => handleRef.current?.send({ type: 'resize', cols, rows }));
   term.onSelectionChange(() => {
     if (live.current.copyOnSelect && term.hasSelection()) copySilently(term.getSelection());
@@ -302,7 +312,17 @@ const TerminalView = forwardRef<TermHandle, Props>(function TerminalView(props, 
 
     const doFit = () => fitToHost(el, fit);
     doFit();
-    const stopAttach = attachSession({ term, id, admin, t, live, gotData, handleRef, setStatus, setExitCode });
+    const stopAttach = attachSession({
+      term,
+      id,
+      admin,
+      t,
+      live,
+      gotData,
+      handleRef,
+      setStatus,
+      setExitCode,
+    });
     bindTerminalEvents(term, live, handleRef, sendRaw);
     const stopObserving = observeHostSize(el, doFit);
     const onFocusIn = () => live.current.onActivate();
@@ -326,7 +346,10 @@ const TerminalView = forwardRef<TermHandle, Props>(function TerminalView(props, 
   // Follow the app theme (CSS variables on :root change when the theme or colour mode does).
   useEffect(() => {
     const mo = new MutationObserver(() => setTick((n) => n + 1));
-    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'data-scheme', 'class'] });
+    mo.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['style', 'data-scheme', 'class'],
+    });
     return () => mo.disconnect();
   }, []);
   useEffect(() => {

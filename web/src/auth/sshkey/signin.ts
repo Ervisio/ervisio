@@ -62,10 +62,14 @@ export function toSshKeyError(e: unknown): SshKeyError {
   const a = (e ?? {}) as ApiLikeError;
   const reason = a.data?.reason ?? '';
   const retry = typeof a.data?.retryAfter === 'number' ? a.data.retryAfter : undefined;
-  if (SERVER_REASONS[reason]) return new SshKeyError(SERVER_REASONS[reason], a.message || reason, retry);
-  if (a.status === 429) return new SshKeyError('rate_limited', a.message || 'Too many attempts.', retry);
-  if (a.code === 'network') return new SshKeyError('network', a.message || 'Cannot reach the server.');
-  if (a.code === 'unauthenticated') return new SshKeyError('key_refused', a.message || 'This key is not accepted for this user.');
+  if (SERVER_REASONS[reason])
+    return new SshKeyError(SERVER_REASONS[reason], a.message || reason, retry);
+  if (a.status === 429)
+    return new SshKeyError('rate_limited', a.message || 'Too many attempts.', retry);
+  if (a.code === 'network')
+    return new SshKeyError('network', a.message || 'Cannot reach the server.');
+  if (a.code === 'unauthenticated')
+    return new SshKeyError('key_refused', a.message || 'This key is not accepted for this user.');
   return new SshKeyError('server_error', a.message || 'The server could not sign you in.');
 }
 
@@ -73,16 +77,28 @@ export function toSshKeyError(e: unknown): SshKeyError {
  * Loads the key and returns what the UI may show before signing in (type, size, fingerprint,
  * comment, public key). Throws SshKeyError (bad_passphrase, passphrase_required, …).
  */
-export async function describeKey(keyText: string, passphrase = ''): Promise<Omit<PrivateKey, 'sign'>> {
+export async function describeKey(
+  keyText: string,
+  passphrase = '',
+): Promise<Omit<PrivateKey, 'sign'>> {
   const k = await parsePrivateKey(keyText, passphrase);
-  return { type: k.type, bits: k.bits, comment: k.comment, publicKey: k.publicKey, fingerprint: k.fingerprint };
+  return {
+    type: k.type,
+    bits: k.bits,
+    comment: k.comment,
+    publicKey: k.publicKey,
+    fingerprint: k.fingerprint,
+  };
 }
 
 /**
  * The whole flow: parse/decrypt the key locally, ask the server for a challenge, sign it, send the
  * signature with the public key. The private key and passphrase never leave the browser.
  */
-export async function signInWithKeyUsing(t: Transport, args: SignInWithKeyArgs): Promise<KeySignInResult> {
+export async function signInWithKeyUsing(
+  t: Transport,
+  args: SignInWithKeyArgs,
+): Promise<KeySignInResult> {
   const user = (args.user ?? '').trim();
   if (!user) throw new SshKeyError('key_refused', 'Enter a user name.');
   const key = await parsePrivateKey(args.keyText, args.passphrase ?? '');
@@ -95,7 +111,12 @@ export async function signInWithKeyUsing(t: Transport, args: SignInWithKeyArgs):
   }
   // Never sign text chosen by the server: only the message built here.
   const msg = challengeMessage(host, user, ch?.nonce ?? '');
-  if (!ch || typeof ch.nonce !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(ch.nonce) || ch.challenge !== msg) {
+  if (
+    !ch ||
+    typeof ch.nonce !== 'string' ||
+    !/^[A-Za-z0-9_-]{43}$/.test(ch.nonce) ||
+    ch.challenge !== msg
+  ) {
     throw new SshKeyError('server_error', 'The server sent an unexpected challenge.');
   }
   const sig = await key.sign(utf8(msg));

@@ -20,7 +20,11 @@ export interface RunOpts {
  * Calls a files.* method. When the user bridge answers needs_admin the unlock dialog opens and
  * the call is repeated on the root bridge (User methods need admin:true to run as root).
  */
-export async function fcall<T = unknown>(method: string, params: unknown, o: RunOpts = {}): Promise<T> {
+export async function fcall<T = unknown>(
+  method: string,
+  params: unknown,
+  o: RunOpts = {},
+): Promise<T> {
   try {
     return await call<T>(method, params, { admin: o.admin, noUnlock: true, signal: o.signal });
   } catch (e) {
@@ -47,7 +51,10 @@ class Loader<V> {
   private cache = new Map<string, V | null>();
   private queue: (() => void)[] = [];
   private running = 0;
-  constructor(private limit: number, private max: number) {}
+  constructor(
+    private limit: number,
+    private max: number,
+  ) {}
   get(key: string): V | null | undefined {
     return this.cache.get(key);
   }
@@ -57,7 +64,10 @@ class Loader<V> {
       const run = () => {
         this.running++;
         fn()
-          .then((v) => this.set(key, v), () => this.set(key, null))
+          .then(
+            (v) => this.set(key, v),
+            () => this.set(key, null),
+          )
           .then(() => resolve(this.cache.get(key) ?? null))
           .finally(() => {
             this.running--;
@@ -82,16 +92,29 @@ export const cachedSnippet = (key: string) => snippets.get(key);
 
 export function loadThumb(path: string, stamp: string, admin: boolean): Promise<string | null> {
   return thumbs.load(`${admin ? 'a' : 'u'}:${path}:${stamp}`, async () => {
-    const r = await call<{ data: string }>('files.thumbnail', { path, size: 320 }, { admin, noUnlock: true });
+    const r = await call<{ data: string }>(
+      'files.thumbnail',
+      { path, size: 320 },
+      { admin, noUnlock: true },
+    );
     return 'data:image/png;base64,' + r.data;
   });
 }
 
 export function loadSnippet(path: string, stamp: string, admin: boolean): Promise<string | null> {
   return snippets.load(`${admin ? 'a' : 'u'}:${path}:${stamp}`, async () => {
-    const r = await call<{ content: string }>('files.readText', { path, maxBytes: 1200 }, { admin, noUnlock: true });
-    return r.content.split('\n').slice(0, 7).map((l) => l.slice(0, 60)).join('\n');
+    const r = await call<{ content: string }>(
+      'files.readText',
+      { path, maxBytes: 1200 },
+      { admin, noUnlock: true },
+    );
+    return r.content
+      .split('\n')
+      .slice(0, 7)
+      .map((l) => l.slice(0, 60))
+      .join('\n');
   });
 }
 
-export const thumbKey = (admin: boolean, path: string, stamp: string) => `${admin ? 'a' : 'u'}:${path}:${stamp}`;
+export const thumbKey = (admin: boolean, path: string, stamp: string) =>
+  `${admin ? 'a' : 'u'}:${path}:${stamp}`;

@@ -16,11 +16,21 @@
  * "ervisio-ssh-auth-v1\n<host>\n<user>\n<nonce>" are sent.
  */
 import { authChallenge, loginKey } from '../../api/client';
-import { signInWithKeyUsing, type KeySignInResult, type SignInWithKeyArgs, type Transport } from './signin.ts';
+import {
+  signInWithKeyUsing,
+  type KeySignInResult,
+  type SignInWithKeyArgs,
+  type Transport,
+} from './signin.ts';
 
 export { SshKeyError, type SshKeyErrorCode } from './errors.ts';
 export { needsPassphrase, publicInfo, type KeyType, type PrivateKey } from './keys.ts';
-export { describeKey, challengeMessage, type KeySignInResult, type SignInWithKeyArgs } from './signin.ts';
+export {
+  describeKey,
+  challengeMessage,
+  type KeySignInResult,
+  type SignInWithKeyArgs,
+} from './signin.ts';
 
 const transport: Transport = {
   post<T>(path: string, body: unknown): Promise<T> {

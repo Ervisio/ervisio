@@ -7,7 +7,12 @@ export default function Placeholder({ icon, hue }: { icon: string; hue: HueId })
   const t = useT('shell');
   return (
     <div style={{ display: 'grid', placeItems: 'center', minHeight: '60vh' }}>
-      <EmptyState icon={icon} hue={hue} title={t('placeholder.title')} text={t('placeholder.text')} />
+      <EmptyState
+        icon={icon}
+        hue={hue}
+        title={t('placeholder.title')}
+        text={t('placeholder.text')}
+      />
     </div>
   );
 }

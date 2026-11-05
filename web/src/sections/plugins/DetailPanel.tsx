@@ -62,7 +62,9 @@ export function DetailPanel({ p, onClose, onToggle, onUpdate, refresh, busy }: P
     >
       {p.error && <div className="plugins-note is-err">{p.error}</div>}
       {p.blocked && <div className="plugins-note is-warn">{t('blockedText')}</div>}
-      <div className="plugins-plat-row"><PlatformIcons platforms={p.platforms} /></div>
+      <div className="plugins-plat-row">
+        <PlatformIcons platforms={p.platforms} />
+      </div>
       {p.incompatible && <div className="plugins-note is-warn">{p.incompatible}</div>}
       {p.devUnsigned && <div className="plugins-note is-warn">{t('devUnsignedText')}</div>}
       {p.updateAvailable && (
@@ -70,17 +72,41 @@ export function DetailPanel({ p, onClose, onToggle, onUpdate, refresh, busy }: P
           <div>
             <b>{t('updateTitle', { version: p.updateAvailable.version })}</b>
             <small>
-              {p.updateAvailable.notes ?? ''} {p.updateAvailable.newPermissions ? t('updateAsksMore') : t('updateNoMore')}
+              {p.updateAvailable.notes ?? ''}{' '}
+              {p.updateAvailable.newPermissions ? t('updateAsksMore') : t('updateNoMore')}
             </small>
           </div>
-          <Button variant="primary" size="sm" disabled={busy || !p.updateAvailable.source} onClick={() => onUpdate(p)}>{t('update')}</Button>
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={busy || !p.updateAvailable.source}
+            onClick={() => onUpdate(p)}
+          >
+            {t('update')}
+          </Button>
         </div>
       )}
       <div className="plugins-acts">
-        <Button icon="cog" onClick={() => setSettings(true)}>{t('settings')}</Button>
-        <Button icon={p.enabled ? 'pause' : 'play'} disabled={busy || !!p.blocked || !!p.incompatible || !!p.error} onClick={() => onToggle(!p.enabled)}>{p.enabled ? t('disable') : t('enable')}</Button>
-        {p.location === 'installed' && <Button variant="danger" icon="trash" onClick={() => setConfirm(true)}>{t('uninstall')}</Button>}
-        {p.unloadable && <Button variant="danger" icon="close" loading={working} onClick={unload}>{t('unload')}</Button>}
+        <Button icon="cog" onClick={() => setSettings(true)}>
+          {t('settings')}
+        </Button>
+        <Button
+          icon={p.enabled ? 'pause' : 'play'}
+          disabled={busy || !!p.blocked || !!p.incompatible || !!p.error}
+          onClick={() => onToggle(!p.enabled)}
+        >
+          {p.enabled ? t('disable') : t('enable')}
+        </Button>
+        {p.location === 'installed' && (
+          <Button variant="danger" icon="trash" onClick={() => setConfirm(true)}>
+            {t('uninstall')}
+          </Button>
+        )}
+        {p.unloadable && (
+          <Button variant="danger" icon="close" loading={working} onClick={unload}>
+            {t('unload')}
+          </Button>
+        )}
       </div>
       {p.location === 'system' && <small className="plugins-muted">{t('systemPlugin')}</small>}
       <H4>{t('whatItCanDo')}</H4>
@@ -105,25 +131,51 @@ export function DetailPanel({ p, onClose, onToggle, onUpdate, refresh, busy }: P
         footer={
           <>
             {page && p.enabled && (
-              <Button variant="primary" icon="right" onClick={() => { setSettings(false); nav(`/p/${p.id}/${page.id}`); }}>{t('openPage')}</Button>
+              <Button
+                variant="primary"
+                icon="right"
+                onClick={() => {
+                  setSettings(false);
+                  nav(`/p/${p.id}/${page.id}`);
+                }}
+              >
+                {t('openPage')}
+              </Button>
             )}
             <Button onClick={() => setSettings(false)}>{t('close')}</Button>
           </>
         }
       >
         <dl className="plugins-kv">
-          <dt>{t('kv.id')}</dt><dd className="mono">{p.id}</dd>
-          <dt>{t('kv.version')}</dt><dd>{p.version}</dd>
-          <dt>{t('kv.location')}</dt><dd>{t(`location.${p.location}`)}</dd>
-          {p.dir && <><dt>{t('kv.folder')}</dt><dd className="mono">{p.dir}</dd></>}
+          <dt>{t('kv.id')}</dt>
+          <dd className="mono">{p.id}</dd>
+          <dt>{t('kv.version')}</dt>
+          <dd>{p.version}</dd>
+          <dt>{t('kv.location')}</dt>
+          <dd>{t(`location.${p.location}`)}</dd>
+          {p.dir && (
+            <>
+              <dt>{t('kv.folder')}</dt>
+              <dd className="mono">{p.dir}</dd>
+            </>
+          )}
           <dt>{t('kv.signature')}</dt>
           <dd>
-            {p.verified ? <Badge tone="ok">{t('signedOk')}</Badge> : p.signed ? <Badge tone="err">{t('invalidSignature')}</Badge> : <Badge tone="neutral">{t('unsigned')}</Badge>}
+            {p.verified ? (
+              <Badge tone="ok">{t('signedOk')}</Badge>
+            ) : p.signed ? (
+              <Badge tone="err">{t('invalidSignature')}</Badge>
+            ) : (
+              <Badge tone="neutral">{t('unsigned')}</Badge>
+            )}
             {p.signatureError && <small className="plugins-muted"> {p.signatureError}</small>}
           </dd>
-          <dt>{t('kv.commands')}</dt><dd>{p.capabilities.commands.map((c) => c.name).join(', ') || t('kv.noCommands')}</dd>
+          <dt>{t('kv.commands')}</dt>
+          <dd>{p.capabilities.commands.map((c) => c.name).join(', ') || t('kv.noCommands')}</dd>
         </dl>
-        <p className="plugins-muted"><Icon name="info" size={14} /> {t('settingsHint')}</p>
+        <p className="plugins-muted">
+          <Icon name="info" size={14} /> {t('settingsHint')}
+        </p>
       </Dialog>
     </Panel>
   );

@@ -10,7 +10,12 @@ import type { Update } from './types';
 const FOLD = 6;
 
 interface Props {
-  actions: { busy: boolean; updateAll(): void; updateSome(list: Update[]): void; openTerminal(cmd?: string): void };
+  actions: {
+    busy: boolean;
+    updateAll(): void;
+    updateSome(list: Update[]): void;
+    openTerminal(cmd?: string): void;
+  };
 }
 
 export function UpdatesTab({ actions }: Props) {
@@ -28,8 +33,12 @@ export function UpdatesTab({ actions }: Props) {
   const groups = useMemo(() => {
     const u = updates ?? [];
     // Kernel, security and service-restart updates first, then by name.
-    const weight = (x: Update) => (x.notes.includes('security') ? 0 : x.notes.includes('reboot') ? 1 : x.notes.length ? 2 : 3);
-    const sorted = (k: Update['kind']) => u.filter((x) => x.kind === k).sort((a, b) => weight(a) - weight(b) || a.name.localeCompare(b.name));
+    const weight = (x: Update) =>
+      x.notes.includes('security') ? 0 : x.notes.includes('reboot') ? 1 : x.notes.length ? 2 : 3;
+    const sorted = (k: Update['kind']) =>
+      u
+        .filter((x) => x.kind === k)
+        .sort((a, b) => weight(a) - weight(b) || a.name.localeCompare(b.name));
     return {
       repo: sorted('repo'),
       aur: sorted('aur'),
@@ -39,9 +48,17 @@ export function UpdatesTab({ actions }: Props) {
 
   if (!summary && !updates) {
     return error ? (
-      <EmptyState icon="alert" title={t('error.load')} text={error.message} action={<Button onClick={() => void checkNow().catch(() => {})}>{t('checkNow')}</Button>} />
+      <EmptyState
+        icon="alert"
+        title={t('error.load')}
+        text={error.message}
+        action={<Button onClick={() => void checkNow().catch(() => {})}>{t('checkNow')}</Button>}
+      />
     ) : (
-      <div className="sw-body"><Skeleton height={96} style={{ borderRadius: 22 }} /><Skeleton lines={5} height={46} style={{ marginTop: 18 }} /></div>
+      <div className="sw-body">
+        <Skeleton height={96} style={{ borderRadius: 22 }} />
+        <Skeleton lines={5} height={46} style={{ marginTop: 18 }} />
+      </div>
     );
   }
 
@@ -72,16 +89,35 @@ export function UpdatesTab({ actions }: Props) {
     });
 
   const detail = [
-    size > 0 ? t('hero.size', { size: formatBytes(size) }) : selectable.length === 0 ? t('hero.aurOnly') : '',
-    rebootNames.length ? t('hero.reboot', { names: rebootNames.slice(0, 2).join(', '), count: Math.min(rebootNames.length, 2) }) : '',
-    securityNames.length ? t('hero.security', { names: securityNames.slice(0, 2).join(', '), count: Math.min(securityNames.length, 2) }) : '',
+    size > 0
+      ? t('hero.size', { size: formatBytes(size) })
+      : selectable.length === 0
+        ? t('hero.aurOnly')
+        : '',
+    rebootNames.length
+      ? t('hero.reboot', {
+          names: rebootNames.slice(0, 2).join(', '),
+          count: Math.min(rebootNames.length, 2),
+        })
+      : '',
+    securityNames.length
+      ? t('hero.security', {
+          names: securityNames.slice(0, 2).join(', '),
+          count: Math.min(securityNames.length, 2),
+        })
+      : '',
   ]
     .filter(Boolean)
     .join(' ');
 
   const row = (u: Update, disabled = false) => (
     <div className={`sw-ur${sel.has(updateKey(u)) ? ' sw-ur--on' : ''}`} key={updateKey(u)}>
-      <Checkbox checked={sel.has(updateKey(u))} disabled={disabled} onChange={(on) => toggle(u, on)} aria-label={t('select', { name: u.title || u.name })} />
+      <Checkbox
+        checked={sel.has(updateKey(u))}
+        disabled={disabled}
+        onChange={(on) => toggle(u, on)}
+        aria-label={t('select', { name: u.title || u.name })}
+      />
       <div className="sw-nm">
         <b>{u.title || u.name}</b>
         <span className="sw-ver">
@@ -100,7 +136,9 @@ export function UpdatesTab({ actions }: Props) {
         </span>
       </div>
       <SourceBadge kind={u.kind} source={u.source} />
-      <span className="sw-notes"><Notes u={u} /></span>
+      <span className="sw-notes">
+        <Notes u={u} />
+      </span>
       <span className="sw-sz">{u.size ? formatBytes(u.size) : ''}</span>
     </div>
   );
@@ -116,7 +154,9 @@ export function UpdatesTab({ actions }: Props) {
           <h3>{title}</h3>
           <span className="sw-muted">{items.length}</span>
           {id !== 'aur' && (
-            <button type="button" className="sw-link" onClick={() => setGroup(items, !allOn)}>{allOn ? t('selectNone') : t('selectAll')}</button>
+            <button type="button" className="sw-link" onClick={() => setGroup(items, !allOn)}>
+              {allOn ? t('selectNone') : t('selectAll')}
+            </button>
           )}
         </div>
         {id === 'aur' && (
@@ -126,12 +166,22 @@ export function UpdatesTab({ actions }: Props) {
               <div>{t('aur.warning')}</div>
               <small>{t('aur.terminal', { helper: summary?.aurHelper || 'yay' })}</small>
             </div>
-            <Button size="sm" icon="terminal" onClick={() => actions.openTerminal(`${summary?.aurHelper || 'yay'} -Sua`)}>{t('openTerminal')}</Button>
+            <Button
+              size="sm"
+              icon="terminal"
+              onClick={() => actions.openTerminal(`${summary?.aurHelper || 'yay'} -Sua`)}
+            >
+              {t('openTerminal')}
+            </Button>
           </div>
         )}
         {shown.map((u) => row(u, id === 'aur'))}
         {items.length > FOLD && (
-          <button type="button" className="sw-more" onClick={() => setOpen((o) => ({ ...o, [id]: !expanded }))}>
+          <button
+            type="button"
+            className="sw-more"
+            onClick={() => setOpen((o) => ({ ...o, [id]: !expanded }))}
+          >
             {expanded ? t('showLess') : t('showMore', { count: items.length - FOLD })}
           </button>
         )}
@@ -139,20 +189,32 @@ export function UpdatesTab({ actions }: Props) {
     );
   };
 
-  const schedLabel = summary?.schedule ? t('schedule.at', { time: summary.schedule.at }) : t('schedule.tonight', { time: '03:00' });
+  const schedLabel = summary?.schedule
+    ? t('schedule.at', { time: summary.schedule.at })
+    : t('schedule.tonight', { time: '03:00' });
 
   return (
     <div className="sw-body">
       {count === 0 ? (
         <div className="sw-hero sw-hero--ok">
-          <span className="sw-hero-ic"><Icon name="check" /></span>
+          <span className="sw-hero-ic">
+            <Icon name="check" />
+          </span>
           <div>
             <b>{t('hero.upToDate')}</b>
             <small>{t('hero.upToDateText')}</small>
           </div>
           <div className="sw-hero-act">
-            <Button icon="clock" onClick={() => setSched(true)}>{schedLabel}</Button>
-            <Button icon="refresh" loading={checking} onClick={() => void checkNow().catch(() => {})}>{t('checkNow')}</Button>
+            <Button icon="clock" onClick={() => setSched(true)}>
+              {schedLabel}
+            </Button>
+            <Button
+              icon="refresh"
+              loading={checking}
+              onClick={() => void checkNow().catch(() => {})}
+            >
+              {t('checkNow')}
+            </Button>
           </div>
         </div>
       ) : (
@@ -163,23 +225,47 @@ export function UpdatesTab({ actions }: Props) {
             <small>{detail}</small>
           </div>
           <div className="sw-hero-act">
-            <Button icon={summary?.schedule ? 'check' : 'clock'} onClick={() => setSched(true)}>{schedLabel}</Button>
+            <Button icon={summary?.schedule ? 'check' : 'clock'} onClick={() => setSched(true)}>
+              {schedLabel}
+            </Button>
             {partial && (
-              <Button disabled={actions.busy} onClick={() => actions.updateSome(chosen)}>{t('updateSelected', { count: chosen.length })}</Button>
+              <Button disabled={actions.busy} onClick={() => actions.updateSome(chosen)}>
+                {t('updateSelected', { count: chosen.length })}
+              </Button>
             )}
-            <Button variant="primary" icon="download" disabled={actions.busy || selectable.length === 0} onClick={actions.updateAll}>{t('updateAll')}</Button>
+            <Button
+              variant="primary"
+              icon="download"
+              disabled={actions.busy || selectable.length === 0}
+              onClick={actions.updateAll}
+            >
+              {t('updateAll')}
+            </Button>
           </div>
         </div>
       )}
 
       {summary && summary.warnings.length > 0 && (
-        <div className="sw-warn"><Icon name="info" /><div>{summary.warnings.map((w) => <div key={w}>{w}</div>)}</div></div>
+        <div className="sw-warn">
+          <Icon name="info" />
+          <div>
+            {summary.warnings.map((w) => (
+              <div key={w}>{w}</div>
+            ))}
+          </div>
+        </div>
       )}
       {summary?.rebootPending && (
-        <div className="sw-warn sw-warn--reboot"><Icon name="power" /><div>{t('rebootPending')}</div></div>
+        <div className="sw-warn sw-warn--reboot">
+          <Icon name="power" />
+          <div>{t('rebootPending')}</div>
+        </div>
       )}
       {partial && summary?.manager === 'pacman' && (
-        <div className="sw-warn"><Icon name="alert" /><div>{t('partial.hint')}</div></div>
+        <div className="sw-warn">
+          <Icon name="alert" />
+          <div>{t('partial.hint')}</div>
+        </div>
       )}
 
       <div className="sw-list">
@@ -188,7 +274,11 @@ export function UpdatesTab({ actions }: Props) {
         {group('flatpak', t('group.flatpak'), groups.flatpak)}
       </div>
 
-      <ScheduleDialog open={sched} onClose={() => setSched(false)} current={summary?.schedule?.at ?? null} />
+      <ScheduleDialog
+        open={sched}
+        onClose={() => setSched(false)}
+        current={summary?.schedule?.at ?? null}
+      />
     </div>
   );
 }

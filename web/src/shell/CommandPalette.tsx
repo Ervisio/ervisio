@@ -79,7 +79,13 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose(): vo
 
   return createPortal(
     <div className="pal-scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={ref} className="pal" role="dialog" aria-modal="true" aria-label={t('palette.title')}>
+      <div
+        ref={ref}
+        className="pal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('palette.title')}
+      >
         <div className="pal-in">
           <Icon name="search" />
           <input
@@ -109,9 +115,22 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose(): vo
           {shown.length === 0 && <div className="pal-empty">{t('palette.empty')}</div>}
           {shown.map((r, i) => (
             <div key={r.id}>
-              {(i === 0 || shown[i - 1].group !== r.group) && <div className="pal-g">{r.group === 'go' ? t('palette.sections') : t('palette.actions')}</div>}
-              <button type="button" role="option" aria-selected={i === sel} className={`pal-i ${r.hue ?? ''}`} onMouseMove={() => setSel(i)} onClick={() => run(r)}>
-                <span className="ic"><NavIcon e={r} /></span>
+              {(i === 0 || shown[i - 1].group !== r.group) && (
+                <div className="pal-g">
+                  {r.group === 'go' ? t('palette.sections') : t('palette.actions')}
+                </div>
+              )}
+              <button
+                type="button"
+                role="option"
+                aria-selected={i === sel}
+                className={`pal-i ${r.hue ?? ''}`}
+                onMouseMove={() => setSel(i)}
+                onClick={() => run(r)}
+              >
+                <span className="ic">
+                  <NavIcon e={r} />
+                </span>
                 {r.title}
                 {r.hint && <small>{r.hint}</small>}
               </button>

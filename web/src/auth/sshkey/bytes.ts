@@ -121,7 +121,8 @@ export class Reader {
     return this.buf.length - this.off;
   }
   bytes(n: number): Bytes {
-    if (n < 0 || this.off + n > this.buf.length) throw new SshKeyError('corrupt_key', 'The key data is truncated.');
+    if (n < 0 || this.off + n > this.buf.length)
+      throw new SshKeyError('corrupt_key', 'The key data is truncated.');
     const v = this.buf.subarray(this.off, this.off + n);
     this.off += n;
     return v;

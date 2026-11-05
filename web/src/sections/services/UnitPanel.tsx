@@ -4,7 +4,20 @@ import { ApiError, call, useSession } from '../../api';
 import { useT } from '../../i18n';
 import { formatBytes, formatDuration } from '../../lib/format';
 import { usePolling, useRefreshInterval } from '../../lib/refresh';
-import { Badge, Button, ConfirmDialog, EmptyState, Icon, Panel, Skeleton, Sparkline, Switch, Tabs, Textarea, toast } from '../../ui';
+import {
+  Badge,
+  Button,
+  ConfirmDialog,
+  EmptyState,
+  Icon,
+  Panel,
+  Skeleton,
+  Sparkline,
+  Switch,
+  Tabs,
+  Textarea,
+  toast,
+} from '../../ui';
 import { bootMode, formatClockTime, short, stateKey, stateTone } from './helpers';
 import type { Action, Detail, LogLine, PanelTab, Unit, UnitFile } from './types';
 
@@ -25,7 +38,19 @@ interface Props {
 
 const MAX_SAMPLES = 60;
 
-export function UnitPanel({ name, tab, onTab, onClose, inline, rev, row, run, busy, onOpenUnit, onChanged }: Props) {
+export function UnitPanel({
+  name,
+  tab,
+  onTab,
+  onClose,
+  inline,
+  rev,
+  row,
+  run,
+  busy,
+  onOpenUnit,
+  onChanged,
+}: Props) {
   const t = useT('services');
   const win = useSession().session?.os === 'windows';
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -68,13 +93,38 @@ export function UnitPanel({ name, tab, onTab, onClose, inline, rev, row, run, bu
   const tabs = (
     <>
       <div className="svc-pacts">
-        <Button icon="refresh" variant="primary" loading={busy} onClick={() => run(name, 'restart')}>{t('actions.restart')}</Button>
+        <Button
+          icon="refresh"
+          variant="primary"
+          loading={busy}
+          onClick={() => run(name, 'restart')}
+        >
+          {t('actions.restart')}
+        </Button>
         {win ? (
-          u?.sub === 'paused' ? <Button icon="play" disabled={busy} onClick={() => run(name, 'continue')}>{t('actions.continue')}</Button> : <Button disabled={busy || !running} onClick={() => run(name, 'pause')}>{t('actions.pause')}</Button>
+          u?.sub === 'paused' ? (
+            <Button icon="play" disabled={busy} onClick={() => run(name, 'continue')}>
+              {t('actions.continue')}
+            </Button>
+          ) : (
+            <Button disabled={busy || !running} onClick={() => run(name, 'pause')}>
+              {t('actions.pause')}
+            </Button>
+          )
         ) : (
-          <Button disabled={busy || !running} onClick={() => run(name, 'reload')}>{t('actions.reload')}</Button>
+          <Button disabled={busy || !running} onClick={() => run(name, 'reload')}>
+            {t('actions.reload')}
+          </Button>
         )}
-        {running ? <Button icon="power" disabled={busy} onClick={() => run(name, 'stop')}>{t('actions.stop')}</Button> : <Button icon="play" disabled={busy} onClick={() => run(name, 'start')}>{t('actions.start')}</Button>}
+        {running ? (
+          <Button icon="power" disabled={busy} onClick={() => run(name, 'stop')}>
+            {t('actions.stop')}
+          </Button>
+        ) : (
+          <Button icon="play" disabled={busy} onClick={() => run(name, 'start')}>
+            {t('actions.start')}
+          </Button>
+        )}
       </div>
       <Tabs
         variant="underline"
@@ -84,7 +134,12 @@ export function UnitPanel({ name, tab, onTab, onClose, inline, rev, row, run, bu
         aria-label={t('panel.tabs')}
         items={[
           { id: 'info' as const, label: t('panel.info') },
-          ...(win ? [] : [{ id: 'logs' as const, label: t('panel.logs') }, { id: 'unit' as const, label: t('panel.unitFile') }]),
+          ...(win
+            ? []
+            : [
+                { id: 'logs' as const, label: t('panel.logs') },
+                { id: 'unit' as const, label: t('panel.unitFile') },
+              ]),
           { id: 'deps' as const, label: t('panel.deps') },
         ]}
       />
@@ -92,7 +147,16 @@ export function UnitPanel({ name, tab, onTab, onClose, inline, rev, row, run, bu
   );
 
   return (
-    <Panel open onClose={onClose} title={short(name)} subtitle={subtitle} icon="services" hue="svc" inline={inline} tabs={tabs}>
+    <Panel
+      open
+      onClose={onClose}
+      title={short(name)}
+      subtitle={subtitle}
+      icon="services"
+      hue="svc"
+      inline={inline}
+      tabs={tabs}
+    >
       {err && !detail ? (
         <EmptyState icon="alert" hue="svc" title={t('panel.notFound')} text={err.message} />
       ) : !detail && !row ? (
@@ -102,7 +166,13 @@ export function UnitPanel({ name, tab, onTab, onClose, inline, rev, row, run, bu
       ) : tab === 'logs' ? (
         <LogsTab name={name} />
       ) : tab === 'unit' ? (
-        <UnitFileTab name={name} onSaved={() => { void load(); onChanged(); }} />
+        <UnitFileTab
+          name={name}
+          onSaved={() => {
+            void load();
+            onChanged();
+          }}
+        />
       ) : (
         <DepsTab detail={detail} onOpenUnit={onOpenUnit} />
       )}
@@ -110,7 +180,23 @@ export function UnitPanel({ name, tab, onTab, onClose, inline, rev, row, run, bu
   );
 }
 
-function InfoTab({ name, u, detail, mem, run, busy, win }: { name: string; u: Unit; detail: Detail | null; mem: number[]; run(n: string, a: Action): void; busy: boolean; win: boolean }) {
+function InfoTab({
+  name,
+  u,
+  detail,
+  mem,
+  run,
+  busy,
+  win,
+}: {
+  name: string;
+  u: Unit;
+  detail: Detail | null;
+  mem: number[];
+  run(n: string, a: Action): void;
+  busy: boolean;
+  win: boolean;
+}) {
   const t = useT('services');
   const mode = bootMode(u.enabled);
   const lo = mem.length ? Math.min(...mem) : 0;
@@ -120,7 +206,9 @@ function InfoTab({ name, u, detail, mem, run, busy, win }: { name: string; u: Un
     <>
       <dl className="svc-kv">
         <dt>{t('info.status')}</dt>
-        <dd><Badge tone={stateTone(u)}>{t(`state.${stateKey(u)}`)}</Badge></dd>
+        <dd>
+          <Badge tone={stateTone(u)}>{t(`state.${stateKey(u)}`)}</Badge>
+        </dd>
         <dt>{t('info.pid')}</dt>
         <dd className="svc-mono">{u.pid || '—'}</dd>
         <dt>{t('info.memory')}</dt>
@@ -135,9 +223,26 @@ function InfoTab({ name, u, detail, mem, run, busy, win }: { name: string; u: Un
       <div className="svc-tg">
         <div>
           <b>{t('info.boot')}</b>
-          <small>{mode === 'fixed' ? t('info.bootFixed', { state: u.enabled ? (win ? t(`win.boot.${u.enabled}`) : t(`boot.${u.enabled}`)) : t('boot.unknown') }) : t('info.bootHint')}</small>
+          <small>
+            {mode === 'fixed'
+              ? t('info.bootFixed', {
+                  state: u.enabled
+                    ? win
+                      ? t(`win.boot.${u.enabled}`)
+                      : t(`boot.${u.enabled}`)
+                    : t('boot.unknown'),
+                })
+              : t('info.bootHint')}
+          </small>
         </div>
-        {mode !== 'fixed' && <Switch checked={mode === 'on'} disabled={busy} onChange={() => run(name, mode === 'on' ? 'disable' : 'enable')} aria-label={t('boot.label', { name: short(name) })} />}
+        {mode !== 'fixed' && (
+          <Switch
+            checked={mode === 'on'}
+            disabled={busy}
+            onChange={() => run(name, mode === 'on' ? 'disable' : 'enable')}
+            aria-label={t('boot.label', { name: short(name) })}
+          />
+        )}
       </div>
       <dl className="svc-kv">
         <dt>{t('info.loadedFrom')}</dt>
@@ -157,14 +262,21 @@ function InfoTab({ name, u, detail, mem, run, busy, win }: { name: string; u: Un
         {detail && detail.result && detail.result !== 'success' && (
           <>
             <dt>{t('info.lastResult')}</dt>
-            <dd>{detail.result}{detail.exitCode ? ` (${detail.exitCode})` : ''}</dd>
+            <dd>
+              {detail.result}
+              {detail.exitCode ? ` (${detail.exitCode})` : ''}
+            </dd>
           </>
         )}
       </dl>
       {(win ? u.enabled !== 'masked' : u.load !== 'masked') ? (
-        <Button variant="ghost" className="svc-self" onClick={() => run(name, 'mask')}>{win ? t('win.mask') : t('actions.mask')}</Button>
+        <Button variant="ghost" className="svc-self" onClick={() => run(name, 'mask')}>
+          {win ? t('win.mask') : t('actions.mask')}
+        </Button>
       ) : (
-        <Button variant="ghost" className="svc-self" onClick={() => run(name, 'unmask')}>{win ? t('win.unmask') : t('actions.unmask')}</Button>
+        <Button variant="ghost" className="svc-self" onClick={() => run(name, 'unmask')}>
+          {win ? t('win.unmask') : t('actions.unmask')}
+        </Button>
       )}
     </>
   );
@@ -214,13 +326,22 @@ function LogsTab({ name }: { name: string }) {
       ) : (
         <pre className="svc-logs" ref={box} tabIndex={0} aria-label={t('panel.logs')}>
           {lines.map((l, i) => (
-            <div key={i} className={l.priority <= 3 ? 'svc-l-err' : l.priority === 4 ? 'svc-l-warn' : undefined}>
+            <div
+              key={i}
+              className={
+                l.priority <= 3 ? 'svc-l-err' : l.priority === 4 ? 'svc-l-warn' : undefined
+              }
+            >
               <span className="svc-l-t">{formatClockTime(l.time)}</span> {l.message}
             </div>
           ))}
         </pre>
       )}
-      <button type="button" className="svc-lnk" onClick={() => nav(`/logs?unit=${encodeURIComponent(name)}`)}>
+      <button
+        type="button"
+        className="svc-lnk"
+        onClick={() => nav(`/logs?unit=${encodeURIComponent(name)}`)}
+      >
         <Icon name="externallink" />
         {t('openInLogs')}
       </button>
@@ -253,7 +374,11 @@ function UnitFileTab({ name, onSaved }: { name: string; onSaved(): void }) {
     setSaving(true);
     try {
       await call('services.saveOverride', { name, content });
-      toast.ok(content.trim() ? t('unit.saved', { name: short(name) }) : t('unit.removed', { name: short(name) }));
+      toast.ok(
+        content.trim()
+          ? t('unit.saved', { name: short(name) })
+          : t('unit.removed', { name: short(name) }),
+      );
       setEditing(false);
       await load();
       onSaved();
@@ -271,11 +396,23 @@ function UnitFileTab({ name, onSaved }: { name: string; onSaved(): void }) {
     return (
       <>
         <p className="svc-note">{t('unit.editNote', { path: file.overridePath })}</p>
-        <Textarea mono className="svc-editor" value={text} onChange={(e) => setText(e.target.value)} rows={14} spellCheck={false} aria-label={t('unit.editorLabel')} />
+        <Textarea
+          mono
+          className="svc-editor"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={14}
+          spellCheck={false}
+          aria-label={t('unit.editorLabel')}
+        />
         <p className="svc-note">{t('unit.applyNote')}</p>
         <div className="svc-pacts">
-          <Button variant="primary" loading={saving} onClick={() => void save(text)}>{t('save')}</Button>
-          <Button disabled={saving} onClick={() => setEditing(false)}>{t('cancel')}</Button>
+          <Button variant="primary" loading={saving} onClick={() => void save(text)}>
+            {t('save')}
+          </Button>
+          <Button disabled={saving} onClick={() => setEditing(false)}>
+            {t('cancel')}
+          </Button>
         </div>
       </>
     );
@@ -299,8 +436,21 @@ function UnitFileTab({ name, onSaved }: { name: string; onSaved(): void }) {
         ))
       )}
       <div className="svc-pacts">
-        <Button icon="edit" variant="primary" onClick={() => { setText(file.override || '[Service]\n'); setEditing(true); }}>{t('unit.edit')}</Button>
-        {file.override.trim() && <Button variant="ghost" onClick={() => setRemoving(true)}>{t('unit.remove')}</Button>}
+        <Button
+          icon="edit"
+          variant="primary"
+          onClick={() => {
+            setText(file.override || '[Service]\n');
+            setEditing(true);
+          }}
+        >
+          {t('unit.edit')}
+        </Button>
+        {file.override.trim() && (
+          <Button variant="ghost" onClick={() => setRemoving(true)}>
+            {t('unit.remove')}
+          </Button>
+        )}
       </div>
       <p className="svc-note">{t('unit.safeNote')}</p>
       <ConfirmDialog
@@ -328,7 +478,9 @@ function DepsTab({ detail, onOpenUnit }: { detail: Detail | null; onOpenUnit(n: 
     { id: 'triggers', items: d.triggers ?? [] },
     { id: 'triggeredBy', items: d.triggeredBy ?? [] },
   ];
-  const shown = groups.filter((g) => g.items.length || ['needs', 'neededBy', 'conflicts'].includes(g.id));
+  const shown = groups.filter(
+    (g) => g.items.length || ['needs', 'neededBy', 'conflicts'].includes(g.id),
+  );
   return (
     <>
       {shown.map((g) => (
@@ -339,7 +491,9 @@ function DepsTab({ detail, onOpenUnit }: { detail: Detail | null; onOpenUnit(n: 
           ) : (
             <div className="svc-chips-list">
               {g.items.map((n) => (
-                <button key={n} type="button" className="svc-depchip" onClick={() => onOpenUnit(n)}>{n}</button>
+                <button key={n} type="button" className="svc-depchip" onClick={() => onOpenUnit(n)}>
+                  {n}
+                </button>
               ))}
             </div>
           )}
@@ -348,4 +502,3 @@ function DepsTab({ detail, onOpenUnit }: { detail: Detail | null; onOpenUnit(n: 
     </>
   );
 }
-

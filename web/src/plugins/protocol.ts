@@ -75,16 +75,47 @@ export type FrameToHost =
   | { la: 'plugin'; t: 'size'; height: number }
   | { la: 'plugin'; t: 'req'; id: number; op: FrameOp; args: Record<string, unknown> }
   /** plugins.execStream (no kind, SDK v2) */
-  | { la: 'plugin'; t: 'stream-open'; sid: number; kind?: 'exec'; command: string; args: unknown; env?: string }
+  | {
+      la: 'plugin';
+      t: 'stream-open';
+      sid: number;
+      kind?: 'exec';
+      command: string;
+      args: unknown;
+      env?: string;
+    }
   /** plugins.httpStream */
   | { la: 'plugin'; t: 'stream-open'; sid: number; kind: 'http'; req: FrameHttpRequest }
   /** plugins.pty */
-  | { la: 'plugin'; t: 'stream-open'; sid: number; kind: 'pty'; command: string; args: unknown; cols: number; rows: number; env?: string }
+  | {
+      la: 'plugin';
+      t: 'stream-open';
+      sid: number;
+      kind: 'pty';
+      command: string;
+      args: unknown;
+      cols: number;
+      rows: number;
+      env?: string;
+    }
   /** Input to an open pty: bytes to type, or a new size. */
-  | { la: 'plugin'; t: 'stream-input'; sid: number; data?: Uint8Array; resize?: { cols: number; rows: number } }
+  | {
+      la: 'plugin';
+      t: 'stream-input';
+      sid: number;
+      data?: Uint8Array;
+      resize?: { cols: number; rows: number };
+    }
   | { la: 'plugin'; t: 'stream-close'; sid: number }
   /** plugins.upload: the host streams `file` (a File or Blob, handed over by structured clone) as the request body. */
-  | { la: 'plugin'; t: 'upload-open'; uid: number; req: FrameHttpRequest; file: Blob; stream?: boolean }
+  | {
+      la: 'plugin';
+      t: 'upload-open';
+      uid: number;
+      req: FrameHttpRequest;
+      file: Blob;
+      stream?: boolean;
+    }
   | { la: 'plugin'; t: 'upload-cancel'; uid: number };
 
 export interface FrameError {
@@ -111,10 +142,24 @@ export type HostToFrame =
   | { la: 'plugin'; t: 'lang'; lang: string }
   | { la: 'plugin'; t: 'res'; id: number; ok: true; value: unknown }
   | { la: 'plugin'; t: 'res'; id: number; ok: false; error: FrameError }
-  | { la: 'plugin'; t: 'stream'; sid: number; ev: 'line'; stream: 'stdout' | 'stderr'; line: string }
+  | {
+      la: 'plugin';
+      t: 'stream';
+      sid: number;
+      ev: 'line';
+      stream: 'stdout' | 'stderr';
+      line: string;
+    }
   | { la: 'plugin'; t: 'stream'; sid: number; ev: 'exit'; code: number }
   /** httpStream: the response started. */
-  | { la: 'plugin'; t: 'stream'; sid: number; ev: 'start'; status: number; headers: Record<string, string> }
+  | {
+      la: 'plugin';
+      t: 'stream';
+      sid: number;
+      ev: 'start';
+      status: number;
+      headers: Record<string, string>;
+    }
   /** httpStream body chunk or pty output. */
   | { la: 'plugin'; t: 'stream'; sid: number; ev: 'data'; chunk: Uint8Array }
   | { la: 'plugin'; t: 'stream'; sid: number; ev: 'end' }
@@ -122,7 +167,14 @@ export type HostToFrame =
   /** Progress of an upload (bytes handed to the browser's network stack), then its result or error. */
   | { la: 'plugin'; t: 'upload'; uid: number; ev: 'progress'; loaded: number; total: number }
   /** Streamed response of an upload (stream: true): the service answered, then its body in chunks. */
-  | { la: 'plugin'; t: 'upload'; uid: number; ev: 'start'; status: number; headers: Record<string, string> }
+  | {
+      la: 'plugin';
+      t: 'upload';
+      uid: number;
+      ev: 'start';
+      status: number;
+      headers: Record<string, string>;
+    }
   | { la: 'plugin'; t: 'upload'; uid: number; ev: 'data'; chunk: Uint8Array }
   | { la: 'plugin'; t: 'upload'; uid: number; ev: 'done'; result: FrameUploadResult }
   | { la: 'plugin'; t: 'upload'; uid: number; ev: 'error'; error: FrameError }
@@ -130,4 +182,7 @@ export type HostToFrame =
   | { la: 'plugin'; t: 'download-done'; did: number; ok: boolean; bytes: number; error?: string };
 
 export const isFrameMessage = (d: unknown): d is FrameToHost =>
-  !!d && typeof d === 'object' && (d as { la?: unknown }).la === 'plugin' && typeof (d as { t?: unknown }).t === 'string';
+  !!d &&
+  typeof d === 'object' &&
+  (d as { la?: unknown }).la === 'plugin' &&
+  typeof (d as { t?: unknown }).t === 'string';

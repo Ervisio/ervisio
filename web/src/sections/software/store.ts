@@ -12,7 +12,14 @@ interface State {
   error: ApiError | null;
 }
 
-let state: State = { summary: null, updates: null, installed: null, apps: null, checking: false, error: null };
+let state: State = {
+  summary: null,
+  updates: null,
+  installed: null,
+  apps: null,
+  checking: false,
+  error: null,
+};
 const subs = new Set<() => void>();
 const set = (p: Partial<State>) => {
   state = { ...state, ...p };
@@ -38,7 +45,10 @@ export async function loadSummary(force = false): Promise<void> {
 
 export async function loadUpdates(force = false): Promise<void> {
   try {
-    const [u, s] = await Promise.all([call<Update[]>('software.updates', { force }), call<Summary>('software.summary')]);
+    const [u, s] = await Promise.all([
+      call<Update[]>('software.updates', { force }),
+      call<Summary>('software.summary'),
+    ]);
     set({ updates: u, summary: s, error: null });
   } catch (e) {
     fail(e);

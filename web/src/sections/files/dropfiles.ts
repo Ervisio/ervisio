@@ -8,7 +8,9 @@ export interface Dropped {
 export async function collectDropped(dt: DataTransfer): Promise<Dropped[]> {
   const out: Dropped[] = [];
   const items = Array.from(dt.items ?? []);
-  const entries = items.map((i) => (i.kind === 'file' && typeof i.webkitGetAsEntry === 'function' ? i.webkitGetAsEntry() : null));
+  const entries = items.map((i) =>
+    i.kind === 'file' && typeof i.webkitGetAsEntry === 'function' ? i.webkitGetAsEntry() : null,
+  );
   if (entries.length && entries.every(Boolean)) {
     for (const e of entries) await walk(e as FileSystemEntry, '', out);
     return out;
@@ -26,7 +28,9 @@ async function walk(e: FileSystemEntry, prefix: string, out: Dropped[]): Promise
   if (e.isDirectory) {
     const reader = (e as FileSystemDirectoryEntry).createReader();
     for (;;) {
-      const batch = await new Promise<FileSystemEntry[]>((res, rej) => reader.readEntries(res, rej));
+      const batch = await new Promise<FileSystemEntry[]>((res, rej) =>
+        reader.readEntries(res, rej),
+      );
       if (!batch.length) break;
       for (const c of batch) await walk(c, prefix + e.name + '/', out);
     }

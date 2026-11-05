@@ -50,7 +50,10 @@ export function readRecentUsers(): RecentUser[] {
 export function rememberRecentUser(r: RecentUser): void {
   if (!recentUsersEnabled()) return;
   try {
-    localStorage.setItem(LIST, JSON.stringify([r, ...readRecentUsers().filter((x) => x.user !== r.user)].slice(0, 3)));
+    localStorage.setItem(
+      LIST,
+      JSON.stringify([r, ...readRecentUsers().filter((x) => x.user !== r.user)].slice(0, 3)),
+    );
   } catch {
     /* ignore */
   }

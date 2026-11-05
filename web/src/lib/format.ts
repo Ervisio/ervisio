@@ -23,20 +23,32 @@ export const clockOptions = (seconds = false): Intl.DateTimeFormatOptions => ({
 });
 
 /** Time of day ("14:05", "2:05 PM"), optionally with seconds and milliseconds. */
-export function formatTime(date: Date | number | string, o: { seconds?: boolean; ms?: boolean; lang?: string } = {}): string {
+export function formatTime(
+  date: Date | number | string,
+  o: { seconds?: boolean; ms?: boolean; lang?: string } = {},
+): string {
   const d = new Date(date);
   if (Number.isNaN(d.getTime())) return '';
   const opts = clockOptions(o.seconds || o.ms);
   if (!o.ms) return d.toLocaleTimeString(o.lang ?? region.lang, opts);
-  const parts = new Intl.DateTimeFormat(o.lang ?? region.lang, { ...opts, fractionalSecondDigits: 3 } as Intl.DateTimeFormatOptions).format(d);
+  const parts = new Intl.DateTimeFormat(o.lang ?? region.lang, {
+    ...opts,
+    fractionalSecondDigits: 3,
+  } as Intl.DateTimeFormatOptions).format(d);
   return parts;
 }
 
 /** Calendar date in the user's language ("1 Oct", "1 Oct 2025" when not this year). */
-export function formatDate(date: Date | number | string, o: Intl.DateTimeFormatOptions = {}): string {
+export function formatDate(
+  date: Date | number | string,
+  o: Intl.DateTimeFormatOptions = {},
+): string {
   const d = new Date(date);
   if (Number.isNaN(d.getTime())) return '';
-  const base: Intl.DateTimeFormatOptions = d.getFullYear() === new Date().getFullYear() ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: 'numeric' };
+  const base: Intl.DateTimeFormatOptions =
+    d.getFullYear() === new Date().getFullYear()
+      ? { day: 'numeric', month: 'short' }
+      : { day: 'numeric', month: 'short', year: 'numeric' };
   return d.toLocaleDateString(region.lang, Object.keys(o).length ? o : base);
 }
 
@@ -81,7 +93,13 @@ export function relativeTime(date: Date | number | string, lang = region.lang): 
   const t = new Date(date).getTime();
   const diff = (t - Date.now()) / 1000;
   const rtf = new Intl.RelativeTimeFormat(lang, { numeric: 'auto' });
-  const steps: [number, Intl.RelativeTimeFormatUnit][] = [[60, 'second'], [3600, 'minute'], [86400, 'hour'], [2592000, 'day'], [31536000, 'month']];
+  const steps: [number, Intl.RelativeTimeFormatUnit][] = [
+    [60, 'second'],
+    [3600, 'minute'],
+    [86400, 'hour'],
+    [2592000, 'day'],
+    [31536000, 'month'],
+  ];
   let div = 1;
   for (const [limit, unit] of steps) {
     if (Math.abs(diff) < limit) return rtf.format(Math.round(diff / div), unit);

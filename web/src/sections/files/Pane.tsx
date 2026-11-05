@@ -1,16 +1,53 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+} from 'react';
 import { ApiError } from '../../api';
 import { useI18n, useT, type TFn } from '../../i18n';
 import { formatBytes } from '../../lib/format';
-import { Badge, Button, DropdownMenu, EmptyState, Icon, IconButton, Segmented, Skeleton, type IconName, type MenuItem } from '../../ui';
+import {
+  Badge,
+  Button,
+  DropdownMenu,
+  EmptyState,
+  Icon,
+  IconButton,
+  Segmented,
+  Skeleton,
+  type IconName,
+  type MenuItem,
+} from '../../ui';
 import { DRAG_TYPE } from './dropfiles';
 import type { PaneData } from './data';
 import { KIND_ICON, kindOf } from './kinds';
 import { Thumb } from './Thumb';
-import { isDirLike, type FEntry, type PaneState, type SortKey, type SortState, type View } from './types';
+import {
+  isDirLike,
+  type FEntry,
+  type PaneState,
+  type SortKey,
+  type SortState,
+  type View,
+} from './types';
 import { basename, crumbs, dirname, formatWhen, isVirtual, sortEntries } from './util';
 
-export type Shortcut = 'delete' | 'permDelete' | 'rename' | 'copy' | 'cut' | 'paste' | 'open' | 'up' | 'newFolder' | 'refresh' | 'details';
+export type Shortcut =
+  | 'delete'
+  | 'permDelete'
+  | 'rename'
+  | 'copy'
+  | 'cut'
+  | 'paste'
+  | 'open'
+  | 'up'
+  | 'newFolder'
+  | 'refresh'
+  | 'details';
 
 export interface PaneProps {
   /** "Left" / "Right" chip, only in split view. */
@@ -39,15 +76,35 @@ export interface PaneProps {
   dragPaths(e: FEntry): string[];
 }
 
-const VIRTUAL_ICON: Record<string, IconName> = { 'trash:': 'trash', 'recent:': 'clock', 'starred:': 'star' };
-const ARROW_STEP: Record<string, number> = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 };
+const VIRTUAL_ICON: Record<string, IconName> = {
+  'trash:': 'trash',
+  'recent:': 'clock',
+  'starred:': 'star',
+};
+const ARROW_STEP: Record<string, number> = {
+  ArrowDown: 1,
+  ArrowRight: 1,
+  ArrowUp: -1,
+  ArrowLeft: -1,
+};
 
 type PickKeys = { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean };
 
 /** Per-item wiring shared by the grid and list views. */
 interface ItemKit {
-  wire(e: FEntry): { 'data-path': string; draggable: boolean; onDragStart(ev: DragEvent): void; onClick(ev: MouseEvent): void; onDoubleClick(): void; onContextMenu(ev: MouseEvent): void };
-  folderDrop(e: FEntry): { onDragOver?(ev: DragEvent): void; onDragLeave?(): void; onDrop?(ev: DragEvent): void };
+  wire(e: FEntry): {
+    'data-path': string;
+    draggable: boolean;
+    onDragStart(ev: DragEvent): void;
+    onClick(ev: MouseEvent): void;
+    onDoubleClick(): void;
+    onContextMenu(ev: MouseEvent): void;
+  };
+  folderDrop(e: FEntry): {
+    onDragOver?(ev: DragEvent): void;
+    onDragLeave?(): void;
+    onDrop?(ev: DragEvent): void;
+  };
   moreButton(e: FEntry): JSX.Element;
   subtitle(e: FEntry): string;
   isSelected(e: FEntry): boolean;
@@ -60,9 +117,16 @@ interface ItemKit {
 const isHidden = (e: FEntry) => e.name.startsWith('.');
 const hasFiles = (dt: DataTransfer) => Array.from(dt.types).includes('Files');
 const hasInternal = (dt: DataTransfer) => Array.from(dt.types).includes(DRAG_TYPE);
-const nextSort = (sort: SortState, key: SortKey): SortState => ({ key, dir: sort.key === key && sort.dir === 'asc' ? 'desc' : 'asc' });
+const nextSort = (sort: SortState, key: SortKey): SortState => ({
+  key,
+  dir: sort.key === key && sort.dir === 'asc' ? 'desc' : 'asc',
+});
 
-const PLAIN_KEY_SHORTCUTS: Record<string, Shortcut> = { F2: 'rename', F5: 'refresh', Backspace: 'up' };
+const PLAIN_KEY_SHORTCUTS: Record<string, Shortcut> = {
+  F2: 'rename',
+  F5: 'refresh',
+  Backspace: 'up',
+};
 const MOD_KEY_SHORTCUTS: Record<string, Shortcut> = { c: 'copy', x: 'cut', v: 'paste' };
 
 function keyShortcut(ev: KeyboardEvent, mod: boolean): Shortcut | null {
@@ -117,7 +181,9 @@ export function Pane(p: PaneProps) {
     const cur = anchor.current ? rows.findIndex((r) => r.path === anchor.current) : -1;
     const n = Math.min(rows.length - 1, Math.max(0, cur < 0 ? 0 : cur + step));
     pick(rows[n], ev);
-    root.current?.querySelector(`[data-path="${CSS.escape(rows[n].path)}"]`)?.scrollIntoView({ block: 'nearest' });
+    root.current
+      ?.querySelector(`[data-path="${CSS.escape(rows[n].path)}"]`)
+      ?.scrollIntoView({ block: 'nearest' });
   };
 
   const onKeyDown = (ev: KeyboardEvent<HTMLDivElement>) => {
@@ -145,7 +211,8 @@ export function Pane(p: PaneProps) {
   const onDragOver = (ev: DragEvent) => {
     if (!canDropHere || !(hasFiles(ev.dataTransfer) || hasInternal(ev.dataTransfer))) return;
     ev.preventDefault();
-    ev.dataTransfer.dropEffect = hasInternal(ev.dataTransfer) && !(ev.ctrlKey || ev.altKey) ? 'move' : 'copy';
+    ev.dataTransfer.dropEffect =
+      hasInternal(ev.dataTransfer) && !(ev.ctrlKey || ev.altKey) ? 'move' : 'copy';
     setDrop(true);
   };
   const doDrop = (ev: DragEvent, dest: string) => {
@@ -216,16 +283,39 @@ export function Pane(p: PaneProps) {
       <Icon name="more" />
     </button>
   );
-  const sub = (e: FEntry) => (trash && e.deletedAt ? t('deletedAt', { when: formatWhen(e.deletedAt, lang) }) : `${isDirLike(e) ? '' : formatBytes(e.size) + ', '}${formatWhen(e.mtime, lang)}`);
+  const sub = (e: FEntry) =>
+    trash && e.deletedAt
+      ? t('deletedAt', { when: formatWhen(e.deletedAt, lang) })
+      : `${isDirLike(e) ? '' : formatBytes(e.size) + ', '}${formatWhen(e.mtime, lang)}`;
   const sel = (e: FEntry) => p.selected.has(e.path);
-  const kit: ItemKit = { wire: wireItem, folderDrop, moreButton: moreBtn, subtitle: sub, isSelected: sel, dropFolder, trash, lang, t };
+  const kit: ItemKit = {
+    wire: wireItem,
+    folderDrop,
+    moreButton: moreBtn,
+    subtitle: sub,
+    isSelected: sel,
+    dropFolder,
+    trash,
+    lang,
+    t,
+  };
 
   const title = virtual ? t(`place.${loc.replace(':', '')}`) : basename(loc) || '/';
 
   let body;
-  if (data.error) body = <ErrorView err={data.error} loc={loc} t={t} onRetry={p.onRetryAdmin} onHome={() => p.onNavigate('home:')} />;
+  if (data.error)
+    body = (
+      <ErrorView
+        err={data.error}
+        loc={loc}
+        t={t}
+        onRetry={p.onRetryAdmin}
+        onHome={() => p.onNavigate('home:')}
+      />
+    );
   else if (data.loading && rows.length === 0) body = <LoadingView grid={state.view === 'grid'} />;
-  else if (rows.length === 0) body = <EmptyView loc={loc} query={p.query} searching={data.searching} t={t} />;
+  else if (rows.length === 0)
+    body = <EmptyView loc={loc} query={p.query} searching={data.searching} t={t} />;
   else if (state.view === 'grid') body = <GridView rows={rows} admin={state.admin} kit={kit} />;
   else {
     body = (
@@ -259,7 +349,12 @@ export function Pane(p: PaneProps) {
     >
       <div className="files-bar">
         {p.label && <span className="files-pl">{p.label}</span>}
-        <IconButton icon="chevronup" label={t('up')} disabled={!canUp} onClick={() => p.onShortcut('up')} />
+        <IconButton
+          icon="chevronup"
+          label={t('up')}
+          disabled={!canUp}
+          onClick={() => p.onShortcut('up')}
+        />
         <Crumbs loc={loc} onNavigate={p.onNavigate} title={title} t={t} />
         {state.admin && (
           <Badge tone="warn" dot>
@@ -286,7 +381,12 @@ export function Pane(p: PaneProps) {
       <div
         className="files-content"
         onClick={(ev) => {
-          if (ev.target === ev.currentTarget || (ev.target as HTMLElement).classList.contains('files-grid') || (ev.target as HTMLElement).classList.contains('files-folds')) p.onSelected(new Set());
+          if (
+            ev.target === ev.currentTarget ||
+            (ev.target as HTMLElement).classList.contains('files-grid') ||
+            (ev.target as HTMLElement).classList.contains('files-folds')
+          )
+            p.onSelected(new Set());
         }}
         onContextMenu={(ev) => {
           ev.preventDefault();
@@ -296,7 +396,9 @@ export function Pane(p: PaneProps) {
         }}
       >
         {data.searching && rows.length > 0 && <div className="files-note">{t('searching')}</div>}
-        {data.truncated && <div className="files-note">{p.query ? t('searchTruncated') : t('listTruncated')}</div>}
+        {data.truncated && (
+          <div className="files-note">{p.query ? t('searchTruncated') : t('listTruncated')}</div>
+        )}
         {body}
         {drop && !virtual && (
           <div className="files-dropmsg">
@@ -310,18 +412,39 @@ export function Pane(p: PaneProps) {
   );
 }
 
-function SearchBox({ query, onQuery, canOpen, t }: { query: string; onQuery(q: string): void; canOpen: boolean; t: TFn }) {
+function SearchBox({
+  query,
+  onQuery,
+  canOpen,
+  t,
+}: {
+  query: string;
+  onQuery(q: string): void;
+  canOpen: boolean;
+  t: TFn;
+}) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
     if (!query) setOpen(false);
   }, [query]);
 
-  if (!open && !query) return canOpen && <IconButton icon="search" label={t('search')} onClick={() => setOpen(true)} />;
+  if (!open && !query)
+    return (
+      canOpen && <IconButton icon="search" label={t('search')} onClick={() => setOpen(true)} />
+    );
   return (
     <div className="files-search ui-in">
       <Icon name="search" />
-      <input autoFocus value={query} placeholder={t('searchHere')} aria-label={t('searchHere')} onChange={(e) => onQuery(e.target.value)} onBlur={() => !query && setOpen(false)} onKeyDown={(e) => e.key === 'Escape' && (onQuery(''), setOpen(false))} />
+      <input
+        autoFocus
+        value={query}
+        placeholder={t('searchHere')}
+        aria-label={t('searchHere')}
+        onChange={(e) => onQuery(e.target.value)}
+        onBlur={() => !query && setOpen(false)}
+        onKeyDown={(e) => e.key === 'Escape' && (onQuery(''), setOpen(false))}
+      />
     </div>
   );
 }
@@ -332,22 +455,54 @@ function SortMenu({ sort, onSort, t }: { sort: SortState; onSort(s: SortState): 
     label: (sort.key === k ? (sort.dir === 'asc' ? '↑ ' : '↓ ') : '') + t(`sort.${k}`),
     onSelect: () => onSort(nextSort(sort, k)),
   }));
-  return <DropdownMenu items={items} aria-label={t('sort.label')} trigger={(tp) => <IconButton icon="sort" label={t('sort.label')} {...tp} />} />;
+  return (
+    <DropdownMenu
+      items={items}
+      aria-label={t('sort.label')}
+      trigger={(tp) => <IconButton icon="sort" label={t('sort.label')} {...tp} />}
+    />
+  );
 }
 
 function LoadingView({ grid }: { grid: boolean }) {
   return (
     <div className={grid ? 'files-grid' : 'files-skel'}>
-      {Array.from({ length: 8 }, (_, i) => (grid ? <Skeleton key={i} height={150} style={{ borderRadius: 18 }} /> : <Skeleton key={i} height={38} style={{ borderRadius: 12 }} />))}
+      {Array.from({ length: 8 }, (_, i) =>
+        grid ? (
+          <Skeleton key={i} height={150} style={{ borderRadius: 18 }} />
+        ) : (
+          <Skeleton key={i} height={38} style={{ borderRadius: 12 }} />
+        ),
+      )}
     </div>
   );
 }
 
-function EmptyView({ loc, query, searching, t }: { loc: string; query: string; searching: boolean; t: TFn }) {
+function EmptyView({
+  loc,
+  query,
+  searching,
+  t,
+}: {
+  loc: string;
+  query: string;
+  searching: boolean;
+  t: TFn;
+}) {
   const icon = VIRTUAL_ICON[loc] ?? (query ? 'search' : 'files');
-  if (query) return <EmptyState hue="file" icon={icon} title={t('empty.search', { q: query })} text={searching ? t('searching') : t('empty.searchHint')} />;
+  if (query)
+    return (
+      <EmptyState
+        hue="file"
+        icon={icon}
+        title={t('empty.search', { q: query })}
+        text={searching ? t('searching') : t('empty.searchHint')}
+      />
+    );
   const place = VIRTUAL_ICON[loc] ? loc.replace(':', '') : 'folder';
-  return <EmptyState hue="file" icon={icon} title={t(`empty.${place}`)} text={t(`empty.${place}Hint`)} />;
+  return (
+    <EmptyState hue="file" icon={icon} title={t(`empty.${place}`)} text={t(`empty.${place}Hint`)} />
+  );
 }
 
 function GridView({ rows, admin, kit }: { rows: FEntry[]; admin: boolean; kit: ItemKit }) {
@@ -363,7 +518,12 @@ function GridView({ rows, admin, kit }: { rows: FEntry[]; admin: boolean; kit: I
           </div>
           <div className="files-folds">
             {folders.map((e) => (
-              <div key={e.path} {...kit.wire(e)} {...kit.folderDrop(e)} className={`files-fold files-t-dir${kit.isSelected(e) ? ' is-sel' : ''}${isHidden(e) ? ' is-hid' : ''}${kit.dropFolder === e.path ? ' is-drop' : ''}`}>
+              <div
+                key={e.path}
+                {...kit.wire(e)}
+                {...kit.folderDrop(e)}
+                className={`files-fold files-t-dir${kit.isSelected(e) ? ' is-sel' : ''}${isHidden(e) ? ' is-hid' : ''}${kit.dropFolder === e.path ? ' is-drop' : ''}`}
+              >
                 <span className="files-ic">
                   <Icon name={e.type === 'symlink' ? 'link' : 'files'} />
                 </span>
@@ -386,7 +546,11 @@ function GridView({ rows, admin, kit }: { rows: FEntry[]; admin: boolean; kit: I
             {files.map((e) => {
               const k = kindOf(e);
               return (
-                <div key={e.path} {...kit.wire(e)} className={`files-fc files-t-${k}${kit.isSelected(e) ? ' is-sel' : ''}${isHidden(e) ? ' is-hid' : ''}`}>
+                <div
+                  key={e.path}
+                  {...kit.wire(e)}
+                  className={`files-fc files-t-${k}${kit.isSelected(e) ? ' is-sel' : ''}${isHidden(e) ? ' is-hid' : ''}`}
+                >
                   <Thumb e={e} admin={admin} />
                   <div className="files-meta">
                     <span className="files-ic files-ic--sm">
@@ -421,7 +585,10 @@ function ListView({ rows, kit, sort, onSort, onSelected, onToggle, showDir }: Li
   const { t, lang, trash } = kit;
   const allOn = rows.length > 0 && rows.every((r) => kit.isSelected(r));
   const th = (key: SortKey, label: string, cls?: string) => (
-    <th className={cls} aria-sort={sort.key === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
+    <th
+      className={cls}
+      aria-sort={sort.key === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
+    >
       <button type="button" onClick={() => onSort(nextSort(sort, key))}>
         {label}
         {sort.key === key && <Icon name={sort.dir === 'asc' ? 'chevronup' : 'chevron'} />}
@@ -433,7 +600,13 @@ function ListView({ rows, kit, sort, onSort, onSelected, onToggle, showDir }: Li
       <thead>
         <tr>
           <th className="files-cb">
-            <button type="button" className={`files-box${allOn ? ' on' : ''}`} aria-label={t('selectAll')} aria-pressed={allOn} onClick={() => onSelected(allOn ? new Set() : new Set(rows.map((r) => r.path)))}>
+            <button
+              type="button"
+              className={`files-box${allOn ? ' on' : ''}`}
+              aria-label={t('selectAll')}
+              aria-pressed={allOn}
+              onClick={() => onSelected(allOn ? new Set() : new Set(rows.map((r) => r.path)))}
+            >
               {allOn && <Icon name="check" />}
             </button>
           </th>
@@ -449,7 +622,13 @@ function ListView({ rows, kit, sort, onSort, onSelected, onToggle, showDir }: Li
           const k = kindOf(e);
           const isSel = kit.isSelected(e);
           return (
-            <tr key={e.path} {...kit.wire(e)} {...kit.folderDrop(e)} aria-selected={isSel || undefined} className={`files-t-${k}${isHidden(e) ? ' is-hid' : ''}${kit.dropFolder === e.path ? ' is-drop' : ''}`}>
+            <tr
+              key={e.path}
+              {...kit.wire(e)}
+              {...kit.folderDrop(e)}
+              aria-selected={isSel || undefined}
+              className={`files-t-${k}${isHidden(e) ? ' is-hid' : ''}${kit.dropFolder === e.path ? ' is-drop' : ''}`}
+            >
               <td className="files-cb">
                 <button
                   type="button"
@@ -470,14 +649,18 @@ function ListView({ rows, kit, sort, onSort, onSelected, onToggle, showDir }: Li
                     <Icon name={e.type === 'symlink' ? 'link' : KIND_ICON[k]} />
                   </span>
                   <span className="files-nm-t">{e.name}</span>
-                  {e.type === 'symlink' && e.target && <small className="files-link">→ {e.target}</small>}
+                  {e.type === 'symlink' && e.target && (
+                    <small className="files-link">→ {e.target}</small>
+                  )}
                   {showDir && e.path && <small className="files-link">{dirname(e.path)}</small>}
                 </div>
               </td>
               <td className="num">{isDirLike(e) ? '' : formatBytes(e.size)}</td>
               <td className="files-c-owner">{e.owner}</td>
               <td className="files-c-perm mono">{e.perm}</td>
-              <td className="files-c-mtime files-muted">{formatWhen(trash && e.deletedAt ? e.deletedAt : e.mtime, lang)}</td>
+              <td className="files-c-mtime files-muted">
+                {formatWhen(trash && e.deletedAt ? e.deletedAt : e.mtime, lang)}
+              </td>
             </tr>
           );
         })}
@@ -486,7 +669,19 @@ function ListView({ rows, kit, sort, onSort, onSelected, onToggle, showDir }: Li
   );
 }
 
-function ErrorView({ err, loc, t, onRetry, onHome }: { err: ApiError; loc: string; t: ReturnType<typeof useT>; onRetry(): void; onHome(): void }) {
+function ErrorView({
+  err,
+  loc,
+  t,
+  onRetry,
+  onHome,
+}: {
+  err: ApiError;
+  loc: string;
+  t: ReturnType<typeof useT>;
+  onRetry(): void;
+  onHome(): void;
+}) {
   let title = t('error.generic');
   let text = err.message;
   if (err.code === 'needs_admin') {
@@ -511,15 +706,33 @@ function ErrorView({ err, loc, t, onRetry, onHome }: { err: ApiError; loc: strin
       text={text}
       action={
         <div className="files-err-act">
-          {err.code === 'needs_admin' && <Button variant="primary" onClick={onRetry}>{t('error.unlock')}</Button>}
-          {err.code === 'not_found' || err.code === 'invalid' ? <Button onClick={onHome}>{t('error.goHome')}</Button> : <Button onClick={onRetry}>{t('error.retry')}</Button>}
+          {err.code === 'needs_admin' && (
+            <Button variant="primary" onClick={onRetry}>
+              {t('error.unlock')}
+            </Button>
+          )}
+          {err.code === 'not_found' || err.code === 'invalid' ? (
+            <Button onClick={onHome}>{t('error.goHome')}</Button>
+          ) : (
+            <Button onClick={onRetry}>{t('error.retry')}</Button>
+          )}
         </div>
       }
     />
   );
 }
 
-function Crumbs({ loc, onNavigate, title, t }: { loc: string; onNavigate(l: string): void; title: string; t: ReturnType<typeof useT> }) {
+function Crumbs({
+  loc,
+  onNavigate,
+  title,
+  t,
+}: {
+  loc: string;
+  onNavigate(l: string): void;
+  title: string;
+  t: ReturnType<typeof useT>;
+}) {
   const [edit, setEdit] = useState(false);
   const [val, setVal] = useState(loc);
   useEffect(() => setVal(loc), [loc]);
@@ -544,25 +757,56 @@ function Crumbs({ loc, onNavigate, title, t }: { loc: string; onNavigate(l: stri
           if (v.startsWith('/')) onNavigate(v.length > 1 ? v.replace(/\/+$/, '') : '/');
         }}
       >
-        <input autoFocus spellCheck={false} aria-label={t('pathLabel')} value={val} onChange={(e) => setVal(e.target.value)} onBlur={() => setEdit(false)} onKeyDown={(e) => e.key === 'Escape' && setEdit(false)} />
+        <input
+          autoFocus
+          spellCheck={false}
+          aria-label={t('pathLabel')}
+          value={val}
+          onChange={(e) => setVal(e.target.value)}
+          onBlur={() => setEdit(false)}
+          onKeyDown={(e) => e.key === 'Escape' && setEdit(false)}
+        />
       </form>
     );
   }
   const cs = crumbs(loc);
   const hiddenCount = cs.length > 4 ? cs.length - 3 : 0;
   const shown = cs.slice(hiddenCount);
-  const hiddenItems: MenuItem[] = cs.slice(0, hiddenCount).map((c) => ({ id: c.path, label: c.name === '/' ? '/' : c.path, onSelect: () => onNavigate(c.path) }));
+  const hiddenItems: MenuItem[] = cs
+    .slice(0, hiddenCount)
+    .map((c) => ({
+      id: c.path,
+      label: c.name === '/' ? '/' : c.path,
+      onSelect: () => onNavigate(c.path),
+    }));
   return (
-    <nav className="files-crumb" aria-label={t('pathLabel')} onDoubleClick={() => setEdit(true)} title={t('editPathHint')}>
+    <nav
+      className="files-crumb"
+      aria-label={t('pathLabel')}
+      onDoubleClick={() => setEdit(true)}
+      title={t('editPathHint')}
+    >
       {hiddenCount > 0 && (
         <span className="files-crumb-i">
-          <DropdownMenu items={hiddenItems} aria-label={t('pathLabel')} trigger={(tp) => <button type="button" aria-label={t('pathLabel')} {...tp}><Icon name="more" /></button>} />
+          <DropdownMenu
+            items={hiddenItems}
+            aria-label={t('pathLabel')}
+            trigger={(tp) => (
+              <button type="button" aria-label={t('pathLabel')} {...tp}>
+                <Icon name="more" />
+              </button>
+            )}
+          />
         </span>
       )}
       {shown.map((c, i) => (
         <span key={c.path} className="files-crumb-i">
           {(i > 0 || hiddenCount > 0) && <Icon name="chevron" className="files-crumb-sep" />}
-          <button type="button" className={i === shown.length - 1 ? 'is-last' : ''} onClick={() => onNavigate(c.path)}>
+          <button
+            type="button"
+            className={i === shown.length - 1 ? 'is-last' : ''}
+            onClick={() => onNavigate(c.path)}
+          >
             {c.name}
           </button>
         </span>

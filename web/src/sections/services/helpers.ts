@@ -27,9 +27,11 @@ export function bootMode(enabled: string): 'on' | 'off' | 'fixed' {
 }
 
 /** Units whose stopping can cut the user off from the machine. */
-const CRITICAL = /^(sshd?|ervisio.*|linuxadmin.*|NetworkManager|systemd-(networkd|resolved|logind|journald|udevd)|dbus.*|polkit|getty.*|systemd-.*)\.(service|socket)$/i;
+const CRITICAL =
+  /^(sshd?|ervisio.*|linuxadmin.*|NetworkManager|systemd-(networkd|resolved|logind|journald|udevd)|dbus.*|polkit|getty.*|systemd-.*)\.(service|socket)$/i;
 
-const WIN_CRITICAL = /^(sshd|ervisio.*|TermService|WinRM|RpcSs|DcomLaunch|Dhcp|Dnscache|EventLog|mpssvc|BFE|LanmanServer|LanmanWorkstation|Winmgmt|Netlogon|SamSs|NlaSvc)$/i;
+const WIN_CRITICAL =
+  /^(sshd|ervisio.*|TermService|WinRM|RpcSs|DcomLaunch|Dhcp|Dnscache|EventLog|mpssvc|BFE|LanmanServer|LanmanWorkstation|Winmgmt|Netlogon|SamSs|NlaSvc)$/i;
 
 export function isCritical(name: string): boolean {
   return CRITICAL.test(name) || WIN_CRITICAL.test(name);

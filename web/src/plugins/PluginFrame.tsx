@@ -1,13 +1,46 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useNavigate, type NavigateFunction } from 'react-router-dom';
-import { ApiError, call, fromBase64, stream, toBase64, useSession, type StreamHandle, errorMessage } from '../api';
+import {
+  ApiError,
+  call,
+  fromBase64,
+  stream,
+  toBase64,
+  useSession,
+  type StreamHandle,
+  errorMessage,
+} from '../api';
 import { apiUrl, consoleOrigin, FETCH_CREDENTIALS } from '../api/base';
-import { saveDownload, sendUpload, startTransfer, watchDownloadEnd, type TransferStart } from '../api/transfer';
+import {
+  saveDownload,
+  sendUpload,
+  startTransfer,
+  watchDownloadEnd,
+  type TransferStart,
+} from '../api/transfer';
 import { useI18n, useT } from '../i18n';
 import { themeVars, useTheme } from '../theme';
 import { EmptyState, Skeleton, toast } from '../ui';
-import { authorize, authorizeHttpStream, authorizePty, authorizeStream, authorizeUpload, SaveLimiter, type BrokerUser, type Plan } from './broker';
-import { isFrameMessage, type FrameError, type FrameHttpResult, type FrameTheme, type FrameToHost, type FrameUploadResult, type FrameView, type HostToFrame } from './protocol';
+import {
+  authorize,
+  authorizeHttpStream,
+  authorizePty,
+  authorizeStream,
+  authorizeUpload,
+  SaveLimiter,
+  type BrokerUser,
+  type Plan,
+} from './broker';
+import {
+  isFrameMessage,
+  type FrameError,
+  type FrameHttpResult,
+  type FrameTheme,
+  type FrameToHost,
+  type FrameUploadResult,
+  type FrameView,
+  type HostToFrame,
+} from './protocol';
 import { askNetwork } from './networkApproval';
 import { usePlugins } from './PluginsProvider';
 import type { PluginManifest } from './types';
@@ -24,22 +57,44 @@ const MAX_PTY_SIZE = 1000;
 const SAVE_URL_TTL_MS = 60_000;
 
 const toFrameError = (e: unknown): FrameError =>
-  e instanceof ApiError ? { code: String(e.code), message: e.message } : { code: 'internal', message: errorMessage(e) };
+  e instanceof ApiError
+    ? { code: String(e.code), message: e.message }
+    : { code: 'internal', message: errorMessage(e) };
 
 const encodeAsset = (p: string) => p.split('/').map(encodeURIComponent).join('/');
 
 /** plugins.http result → what the frame gets: text for UTF-8 bodies, a Uint8Array for binary ones. */
-const toHttpResult = (r: { status: number; headers?: Record<string, string>; body?: string; b64?: boolean }): FrameHttpResult =>
-  r.b64 ? { status: r.status, headers: r.headers ?? {}, bytes: fromBase64(r.body ?? '') } : { status: r.status, headers: r.headers ?? {}, text: r.body ?? '' };
+const toHttpResult = (r: {
+  status: number;
+  headers?: Record<string, string>;
+  body?: string;
+  b64?: boolean;
+}): FrameHttpResult =>
+  r.b64
+    ? { status: r.status, headers: r.headers ?? {}, bytes: fromBase64(r.body ?? '') }
+    : { status: r.status, headers: r.headers ?? {}, text: r.body ?? '' };
 
-type HttpCallResult = { status: number; headers?: Record<string, string>; body?: string; b64?: boolean };
+type HttpCallResult = {
+  status: number;
+  headers?: Record<string, string>;
+  body?: string;
+  b64?: boolean;
+};
 type StreamKind = 'exec' | 'http' | 'pty';
 type StreamOpen = Extract<FrameToHost, { t: 'stream-open' }>;
 
 const clampWidgetHeight = (h: number) => Math.max(WIDGET_MIN, Math.min(WIDGET_MAX, Math.ceil(h)));
 
-const isValidPtySize = (r: { cols: number; rows: number } | undefined): r is { cols: number; rows: number } =>
-  !!r && Number.isInteger(r.cols) && Number.isInteger(r.rows) && r.cols >= 1 && r.rows >= 1 && r.cols <= MAX_PTY_SIZE && r.rows <= MAX_PTY_SIZE;
+const isValidPtySize = (
+  r: { cols: number; rows: number } | undefined,
+): r is { cols: number; rows: number } =>
+  !!r &&
+  Number.isInteger(r.cols) &&
+  Number.isInteger(r.rows) &&
+  r.cols >= 1 &&
+  r.rows >= 1 &&
+  r.cols <= MAX_PTY_SIZE &&
+  r.rows <= MAX_PTY_SIZE;
 
 /** The download id the frame passed to hear when the browser's download ends; 0 when it did not ask. */
 const downloadId = (args: Record<string, unknown> | undefined): number =>
@@ -61,9 +116,18 @@ function saveAsDownload(data: Blob | Uint8Array | string, mime: string, filename
 }
 
 const fetchAsset = (pluginId: string, path: string) =>
-  fetch(apiUrl(`/plugins/${pluginId}/${encodeAsset(path)}`), { credentials: FETCH_CREDENTIALS }).then(async (r) => {
-    if (!r.ok) throw new ApiError(r.status === 404 ? 'not_found' : 'unavailable', `${path}: HTTP ${r.status}`);
-    return { data: await r.arrayBuffer(), type: r.headers.get('Content-Type') ?? 'application/octet-stream' };
+  fetch(apiUrl(`/plugins/${pluginId}/${encodeAsset(path)}`), {
+    credentials: FETCH_CREDENTIALS,
+  }).then(async (r) => {
+    if (!r.ok)
+      throw new ApiError(
+        r.status === 404 ? 'not_found' : 'unavailable',
+        `${path}: HTTP ${r.status}`,
+      );
+    return {
+      data: await r.arrayBuffer(),
+      type: r.headers.get('Content-Type') ?? 'application/octet-stream',
+    };
   });
 
 interface PlanContext {
@@ -92,7 +156,12 @@ const runTransfer = (plan: Extract<Plan, { kind: 'transfer' }>, ctx: PlanContext
 // Data the plugin holds in memory, saved from the app (the sandboxed frame may not download).
 function runSave(plan: Extract<Plan, { kind: 'save' }>, ctx: PlanContext): Promise<unknown> {
   if (!ctx.saves.allow(plan.size)) {
-    return Promise.reject(new ApiError('unavailable', 'Too many files saved at once. Wait a few seconds and try again.'));
+    return Promise.reject(
+      new ApiError(
+        'unavailable',
+        'Too many files saved at once. Wait a few seconds and try again.',
+      ),
+    );
   }
   saveAsDownload(plan.data, plan.mime, plan.filename);
   return Promise.resolve({ filename: plan.filename, size: plan.size });
@@ -137,22 +206,60 @@ function authorizeStreamOpen(m: StreamOpen, p: PluginManifest, user: BrokerUser)
 }
 
 /** One stream event from the daemon → the message the frame gets, or null when the frame does not hear about it. */
-function toStreamMessage(kind: StreamKind, sid: number, d: unknown): { msg: HostToFrame; transfer?: Transferable[] } | null {
+function toStreamMessage(
+  kind: StreamKind,
+  sid: number,
+  d: unknown,
+): { msg: HostToFrame; transfer?: Transferable[] } | null {
   if (!d || typeof d !== 'object') return null;
   if (d instanceof Uint8Array) {
     // httpStream body chunks and pty output arrive as bytes; handed over, not copied.
-    return kind !== 'exec' ? { msg: { la: 'plugin', t: 'stream', sid, ev: 'data', chunk: d }, transfer: [d.buffer] } : null;
+    return kind !== 'exec'
+      ? { msg: { la: 'plugin', t: 'stream', sid, ev: 'data', chunk: d }, transfer: [d.buffer] }
+      : null;
   }
-  const e = d as { stream?: string; line?: string; exit?: number; type?: string; code?: number; status?: number; headers?: Record<string, string> };
+  const e = d as {
+    stream?: string;
+    line?: string;
+    exit?: number;
+    type?: string;
+    code?: number;
+    status?: number;
+    headers?: Record<string, string>;
+  };
   if (kind === 'exec') {
-    if (typeof e.exit === 'number') return { msg: { la: 'plugin', t: 'stream', sid, ev: 'exit', code: e.exit } };
-    if (typeof e.line === 'string') return { msg: { la: 'plugin', t: 'stream', sid, ev: 'line', stream: e.stream === 'stderr' ? 'stderr' : 'stdout', line: e.line } };
+    if (typeof e.exit === 'number')
+      return { msg: { la: 'plugin', t: 'stream', sid, ev: 'exit', code: e.exit } };
+    if (typeof e.line === 'string')
+      return {
+        msg: {
+          la: 'plugin',
+          t: 'stream',
+          sid,
+          ev: 'line',
+          stream: e.stream === 'stderr' ? 'stderr' : 'stdout',
+          line: e.line,
+        },
+      };
     return null;
   }
   if (kind === 'pty') {
-    return e.type === 'exit' && typeof e.code === 'number' ? { msg: { la: 'plugin', t: 'stream', sid, ev: 'exit', code: e.code } } : null;
+    return e.type === 'exit' && typeof e.code === 'number'
+      ? { msg: { la: 'plugin', t: 'stream', sid, ev: 'exit', code: e.code } }
+      : null;
   }
-  return typeof e.status === 'number' ? { msg: { la: 'plugin', t: 'stream', sid, ev: 'start', status: e.status, headers: e.headers ?? {} } } : null;
+  return typeof e.status === 'number'
+    ? {
+        msg: {
+          la: 'plugin',
+          t: 'stream',
+          sid,
+          ev: 'start',
+          status: e.status,
+          headers: e.headers ?? {},
+        },
+      }
+    : null;
 }
 
 /**
@@ -164,7 +271,12 @@ function toStreamMessage(kind: StreamKind, sid: number, d: unknown): { msg: Host
 export function PluginFrame(props: FrameProps) {
   const { generation } = usePlugins();
   // A new frame (fresh sandbox, fresh code) for every plugin/view and every plugin reload.
-  return <FrameSession key={`${props.plugin.id}/${props.view.kind}/${props.view.id}/${generation}`} {...props} />;
+  return (
+    <FrameSession
+      key={`${props.plugin.id}/${props.view.kind}/${props.view.id}/${generation}`}
+      {...props}
+    />
+  );
 }
 
 interface FrameProps {
@@ -200,12 +312,21 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
   live.current = {
     themeSnap,
     lang,
-    user: { groups: session?.groups ?? [], isRoot: !!session?.isRoot, home: session?.home, appOrigin: window.location.origin },
+    user: {
+      groups: session?.groups ?? [],
+      isRoot: !!session?.isRoot,
+      home: session?.home,
+      appOrigin: window.location.origin,
+    },
     plugin,
     nav,
   };
 
-  const post = useCallback((m: HostToFrame, transfer?: Transferable[]) => frameRef.current?.contentWindow?.postMessage(m, '*', transfer ?? []), []);
+  const post = useCallback(
+    (m: HostToFrame, transfer?: Transferable[]) =>
+      frameRef.current?.contentWindow?.postMessage(m, '*', transfer ?? []),
+    [],
+  );
 
   // Runs once: FrameSession is keyed on plugin, view and generation.
   useEffect(() => {
@@ -241,12 +362,25 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
       if (started) return;
       started = true;
       try {
-        const r = await fetch(apiUrl(`/plugins/${plugin.id}/${encodeAsset(plugin.entry)}`), { credentials: FETCH_CREDENTIALS, cache: 'no-cache' });
+        const r = await fetch(apiUrl(`/plugins/${plugin.id}/${encodeAsset(plugin.entry)}`), {
+          credentials: FETCH_CREDENTIALS,
+          cache: 'no-cache',
+        });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const code = await r.text();
         if (dead) return;
         const { themeSnap: snap, lang: l } = live.current;
-        post({ la: 'plugin', t: 'init', plugin: { id: plugin.id, name: plugin.name, version: plugin.version }, view, lang: l, theme: snap(), appOrigin: consoleOrigin(), platform: session?.os ?? 'linux', code });
+        post({
+          la: 'plugin',
+          t: 'init',
+          plugin: { id: plugin.id, name: plugin.name, version: plugin.version },
+          view,
+          lang: l,
+          theme: snap(),
+          appOrigin: consoleOrigin(),
+          platform: session?.os ?? 'linux',
+          code,
+        });
       } catch (e) {
         fail(errorMessage(e));
       }
@@ -258,7 +392,10 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
         (value) => {
           if (dead) return;
           const bytes = (value as FrameHttpResult | null)?.bytes;
-          post({ la: 'plugin', t: 'res', id, ok: true, value }, bytes instanceof Uint8Array ? [bytes.buffer] : undefined);
+          post(
+            { la: 'plugin', t: 'res', id, ok: true, value },
+            bytes instanceof Uint8Array ? [bytes.buffer] : undefined,
+          );
         },
         (e) => !dead && post({ la: 'plugin', t: 'res', id, ok: false, error: toFrameError(e) }),
       ).finally(() => pending--);
@@ -273,7 +410,13 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
     const onRequest = (m: Extract<FrameToHost, { t: 'req' }>) => {
       if (typeof m.id !== 'number') return;
       if (pending >= MAX_PENDING) {
-        post({ la: 'plugin', t: 'res', id: m.id, ok: false, error: { code: 'unavailable', message: 'Too many requests at once.' } });
+        post({
+          la: 'plugin',
+          t: 'res',
+          id: m.id,
+          ok: false,
+          error: { code: 'unavailable', message: 'Too many requests at once.' },
+        });
         return;
       }
       const { user, plugin: p, nav: go } = live.current;
@@ -284,12 +427,19 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
     const onStreamOpen = (m: Extract<FrameToHost, { t: 'stream-open' }>) => {
       const sid = m.sid;
       if (typeof sid !== 'number' || streams.has(sid)) return;
-      const err = (e: FrameError) => post({ la: 'plugin', t: 'stream', sid, ev: 'error', error: e });
-      if (streams.size >= MAX_STREAMS) return err({ code: 'unavailable', message: 'Too many streams open.' });
+      const err = (e: FrameError) =>
+        post({ la: 'plugin', t: 'stream', sid, ev: 'error', error: e });
+      if (streams.size >= MAX_STREAMS)
+        return err({ code: 'unavailable', message: 'Too many streams open.' });
       const { user, plugin: p } = live.current;
       const kind = m.kind === 'http' || m.kind === 'pty' ? m.kind : 'exec';
       const plan = authorizeStreamOpen(m, p, user);
-      if (plan.kind !== 'stream') return err(plan.kind === 'deny' ? { code: plan.code, message: plan.message } : { code: 'invalid', message: 'bad stream' });
+      if (plan.kind !== 'stream')
+        return err(
+          plan.kind === 'deny'
+            ? { code: plan.code, message: plan.message }
+            : { code: 'invalid', message: 'bad stream' },
+        );
       const onData = (d: unknown) => {
         if (dead) return;
         const out = toStreamMessage(kind, sid, d);
@@ -313,7 +463,8 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
     const onStreamInput = (m: Extract<FrameToHost, { t: 'stream-input' }>) => {
       const s = streams.get(m.sid);
       if (!s || s.kind !== 'pty') return;
-      if (m.data instanceof Uint8Array && m.data.length > 0 && m.data.length <= MAX_PTY_INPUT) s.h.send({ type: 'input', data: toBase64(m.data) });
+      if (m.data instanceof Uint8Array && m.data.length > 0 && m.data.length <= MAX_PTY_INPUT)
+        s.h.send({ type: 'input', data: toBase64(m.data) });
       const r = m.resize;
       if (isValidPtySize(r)) s.h.send({ type: 'resize', cols: r.cols, rows: r.rows });
     };
@@ -331,8 +482,10 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
         transfer?: Transferable[],
       ) => !dead && post({ la: 'plugin', t: 'upload', uid, ...msg } as HostToFrame, transfer);
       const fail = (e: unknown) => out({ ev: 'error', error: toFrameError(e) });
-      if (uploads.size >= MAX_UPLOADS) return fail(new ApiError('unavailable', 'Too many uploads at once.'));
-      if (!(m.file instanceof Blob)) return fail(new ApiError('invalid', 'Give a file (a File or Blob).'));
+      if (uploads.size >= MAX_UPLOADS)
+        return fail(new ApiError('unavailable', 'Too many uploads at once.'));
+      if (!(m.file instanceof Blob))
+        return fail(new ApiError('invalid', 'Give a file (a File or Blob).'));
       const { user, plugin: p } = live.current;
       const stream = m.stream === true;
       const plan = authorizeUpload(p, m.req, m.file.size, user, stream);
@@ -342,7 +495,8 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
       uploads.set(uid, ctl);
       const file = m.file;
       startTransfer(plan.body, plan.admin)
-        .then((r) => sendUpload(r, file, {
+        .then((r) =>
+          sendUpload(r, file, {
             signal: ctl.signal,
             onProgress: (loaded, total) => out({ ev: 'progress', loaded, total }),
             ...(stream
@@ -355,7 +509,12 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
               : {}),
           }),
         )
-        .then((result) => out({ ev: 'done', result: { ...toHttpResult(result), ...(result.truncated ? { truncated: true } : {}) } }))
+        .then((result) =>
+          out({
+            ev: 'done',
+            result: { ...toHttpResult(result), ...(result.truncated ? { truncated: true } : {}) },
+          }),
+        )
         .catch(fail)
         .finally(() => uploads.delete(uid));
     };
@@ -376,7 +535,8 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
           fail(String(m.message).slice(0, 500));
           break;
         case 'size':
-          if (view.kind === 'widget' && Number.isFinite(m.height)) setHeight(clampWidgetHeight(m.height));
+          if (view.kind === 'widget' && Number.isFinite(m.height))
+            setHeight(clampWidgetHeight(m.height));
           break;
         case 'req':
           onRequest(m);
@@ -429,11 +589,25 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
   }, [phase, lang, post]);
 
   if (phase === 'failed') {
-    return <EmptyState icon="plugins" hue="plg" title={t('frame.failed', { name: plugin.name })} text={failure} />;
+    return (
+      <EmptyState
+        icon="plugins"
+        hue="plg"
+        title={t('frame.failed', { name: plugin.name })}
+        text={failure}
+      />
+    );
   }
   const page = view.kind === 'page';
   return (
-    <div className={`plugin-frame plugin-frame--${view.kind}`} style={{ position: 'relative', ...(page ? { flex: 1, minHeight: 'min(70vh, 480px)', display: 'flex' } : {}), ...style }}>
+    <div
+      className={`plugin-frame plugin-frame--${view.kind}`}
+      style={{
+        position: 'relative',
+        ...(page ? { flex: 1, minHeight: 'min(70vh, 480px)', display: 'flex' } : {}),
+        ...style,
+      }}
+    >
       <iframe
         ref={frameRef}
         src={apiUrl(`/plugin-frame/${plugin.id}`)}
@@ -451,7 +625,11 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
         }}
       />
       {phase === 'starting' && (
-        <div style={{ position: 'absolute', inset: 0, padding: page ? 28 : 4 }} aria-busy="true" aria-label={t('frame.loading')}>
+        <div
+          style={{ position: 'absolute', inset: 0, padding: page ? 28 : 4 }}
+          aria-busy="true"
+          aria-label={t('frame.loading')}
+        >
           <Skeleton lines={page ? 5 : 2} />
         </div>
       )}

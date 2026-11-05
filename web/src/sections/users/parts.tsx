@@ -5,7 +5,11 @@ import type { GroupInfo, UserInfo } from './types';
 import { hueOf, initial, roleOf, KNOWN_GROUPS } from './util';
 
 export function Avatar({ name, large }: { name: string; large?: boolean }) {
-  return <span className={`usr-av ${large ? 'lg' : ''} ${hueOf(name)}`} aria-hidden="true">{initial(name)}</span>;
+  return (
+    <span className={`usr-av ${large ? 'lg' : ''} ${hueOf(name)}`} aria-hidden="true">
+      {initial(name)}
+    </span>
+  );
 }
 
 export function RoleBadge({ user }: { user: UserInfo }) {
@@ -27,7 +31,8 @@ export function useLastLogin() {
   return (u: UserInfo): string => {
     if (u.lastLogin) {
       const when = relativeTime(u.lastLogin.at * 1000, lang);
-      const via = u.lastLogin.from && u.lastLogin.from !== ':0' ? u.lastLogin.from : u.lastLogin.tty;
+      const via =
+        u.lastLogin.from && u.lastLogin.from !== ':0' ? u.lastLogin.from : u.lastLogin.tty;
       return via ? t('lastLogin.via', { when, via }) : when;
     }
     return u.neverLoggedIn ? t('lastLogin.never') : t('lastLogin.unknown');
@@ -36,5 +41,6 @@ export function useLastLogin() {
 
 export function useGroupDesc() {
   const t = useT('users');
-  return (g: Pick<GroupInfo, 'name' | 'description'>): string => (KNOWN_GROUPS.has(g.name) ? t(`groupDesc.${g.name}`) : g.description);
+  return (g: Pick<GroupInfo, 'name' | 'description'>): string =>
+    KNOWN_GROUPS.has(g.name) ? t(`groupDesc.${g.name}`) : g.description;
 }

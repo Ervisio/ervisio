@@ -35,12 +35,20 @@ const inDocker = { ...user, groups: ['docker'] };
 
 test('only declared commands, through plugins.exec', () => {
   const p = authorize(docker, 'exec', { command: 'version', args: [] }, user);
-  assert.deepEqual(p, { kind: 'call', method: 'plugins.exec', params: { plugin: 'docker', command: 'version', args: [] }, admin: false });
+  assert.deepEqual(p, {
+    kind: 'call',
+    method: 'plugins.exec',
+    params: { plugin: 'docker', command: 'version', args: [] },
+    admin: false,
+  });
   assert.equal(authorize(docker, 'exec', { command: 'rm' }, user).kind, 'deny');
   assert.equal(authorize(docker, 'exec', { command: 'toString' }, user).kind, 'deny');
   assert.equal(authorize(docker, 'exec', { command: 'ps', args: 'x' }, user).kind, 'deny');
   assert.equal(authorize(docker, 'exec', { command: 'ps', args: [1] }, user).kind, 'deny');
-  assert.equal(authorize(docker, 'exec', { command: 'ps', args: new Array(17).fill('a') }, user).kind, 'deny');
+  assert.equal(
+    authorize(docker, 'exec', { command: 'ps', args: new Array(17).fill('a') }, user).kind,
+    'deny',
+  );
 });
 
 test('the plugin id always comes from the manifest, never from the request', () => {
@@ -60,13 +68,22 @@ test('admin only for commands declared admin, and only when needed', () => {
 });
 
 test('no other RPC methods or operations', () => {
-  for (const op of ['call', 'stream', 'files.read', 'plugins.install', 'config.set', 'prefs.set', '__proto__']) {
+  for (const op of [
+    'call',
+    'stream',
+    'files.read',
+    'plugins.install',
+    'config.set',
+    'prefs.set',
+    '__proto__',
+  ]) {
     assert.equal(authorize(docker, op, { method: 'system.power' }, user).kind, 'deny', op);
   }
 });
 
 test('files: only declared folders, write only in write folders', () => {
-  const ok = (op: string, path: string) => authorize(docker, op, { path, data: 'x' }, user).kind === 'call';
+  const ok = (op: string, path: string) =>
+    authorize(docker, op, { path, data: 'x' }, user).kind === 'call';
   assert.ok(ok('readFile', '/srv/a.txt'));
   assert.ok(ok('listDir', '/srv'));
   assert.ok(ok('readFile', '~/projects/x'));
@@ -92,13 +109,27 @@ test('streams: declared commands only', () => {
 
 test('assets: relative paths inside the plugin folder', () => {
   assert.ok(validAsset('img/logo.png'));
-  for (const bad of ['', '/etc/passwd', '../x', 'a/../../x', 'a//b', 'a\\b', '%2e%2e/x', 'a?b', './a']) assert.ok(!validAsset(bad), bad);
+  for (const bad of [
+    '',
+    '/etc/passwd',
+    '../x',
+    'a/../../x',
+    'a//b',
+    'a\\b',
+    '%2e%2e/x',
+    'a?b',
+    './a',
+  ])
+    assert.ok(!validAsset(bad), bad);
 });
 
 test('toast and open', () => {
   assert.equal(authorize(docker, 'toast', { title: 'Hi', tone: 'warn' }, user).kind, 'toast');
   assert.equal(authorize(docker, 'toast', { title: 'x'.repeat(201) }, user).kind, 'deny');
-  assert.deepEqual(authorize(docker, 'open', { page: 'docker' }, user), { kind: 'open', to: '/p/docker/docker' });
+  assert.deepEqual(authorize(docker, 'open', { page: 'docker' }, user), {
+    kind: 'open',
+    to: '/p/docker/docker',
+  });
   assert.equal(authorize(docker, 'open', { page: '../../settings' }, user).kind, 'deny');
 });
 
@@ -135,24 +166,63 @@ const v3: BrokerManifest = {
     ],
     files: {
       read: ['/srv', { path: '/opt/stacks', admin: true, adminUnlessGroup: 'docker' }],
-      write: [{ path: '/opt/stacks', admin: true, adminUnlessGroup: 'docker' }, { path: '~/.config/x', create: true }],
+      write: [
+        { path: '/opt/stacks', admin: true, adminUnlessGroup: 'docker' },
+        { path: '~/.config/x', create: true },
+      ],
     },
   },
 };
 
 test('http: declared APIs, rules, methods and headers only', () => {
-  const ok = authorize(v3, 'http', { name: 'docker', method: 'GET', path: '/v1.41/containers/json', query: 'all=1' }, user);
+  const ok = authorize(
+    v3,
+    'http',
+    { name: 'docker', method: 'GET', path: '/v1.41/containers/json', query: 'all=1' },
+    user,
+  );
   assert.deepEqual(ok, {
     kind: 'call',
     method: 'plugins.http',
-    params: { plugin: 'docker', name: 'docker', method: 'GET', path: '/v1.41/containers/json', query: 'all=1' },
+    params: {
+      plugin: 'docker',
+      name: 'docker',
+      method: 'GET',
+      path: '/v1.41/containers/json',
+      query: 'all=1',
+    },
     admin: true,
   });
-  const member = authorize(v3, 'http', { name: 'docker', method: 'POST', path: '/v1.41/containers/web/start', headers: { 'x-registry-auth': 'e30=' } }, inDocker);
-  assert.equal(member.kind === 'call' && member.admin, false, 'docker group members use the socket as themselves');
-  const plain = authorize(v3, 'http', { name: 'user', method: 'GET', path: '/ping', admin: true }, user);
+  const member = authorize(
+    v3,
+    'http',
+    {
+      name: 'docker',
+      method: 'POST',
+      path: '/v1.41/containers/web/start',
+      headers: { 'x-registry-auth': 'e30=' },
+    },
+    inDocker,
+  );
+  assert.equal(
+    member.kind === 'call' && member.admin,
+    false,
+    'docker group members use the socket as themselves',
+  );
+  const plain = authorize(
+    v3,
+    'http',
+    { name: 'user', method: 'GET', path: '/ping', admin: true },
+    user,
+  );
   assert.equal(plain.kind === 'call' && plain.admin, false, 'a user API never asks for admin');
-  const deny = (req: Record<string, unknown>) => authorize(v3, 'http', { name: 'docker', method: 'GET', path: '/v1.41/containers/json', ...req }, user).kind === 'deny';
+  const deny = (req: Record<string, unknown>) =>
+    authorize(
+      v3,
+      'http',
+      { name: 'docker', method: 'GET', path: '/v1.41/containers/json', ...req },
+      user,
+    ).kind === 'deny';
   assert.ok(deny({ name: 'other' }));
   assert.ok(deny({ method: 'DELETE' }));
   assert.ok(deny({ method: 'get' }));
@@ -170,22 +240,53 @@ test('http: declared APIs, rules, methods and headers only', () => {
 });
 
 test('http: bodies become strings for the daemon', () => {
-  const bin = authorize(v3, 'http', { name: 'docker', method: 'POST', path: '/v1.41/containers/a/stop', body: new Uint8Array([255, 0, 254]) }, user);
+  const bin = authorize(
+    v3,
+    'http',
+    {
+      name: 'docker',
+      method: 'POST',
+      path: '/v1.41/containers/a/stop',
+      body: new Uint8Array([255, 0, 254]),
+    },
+    user,
+  );
   assert.equal(bin.kind === 'call' && bin.params.body, '/wD+');
   assert.equal(bin.kind === 'call' && bin.params.b64, true);
-  const json = authorize(v3, 'http', { name: 'docker', method: 'POST', path: '/v1.41/containers/a/stop', body: '{}', json: true }, user);
+  const json = authorize(
+    v3,
+    'http',
+    { name: 'docker', method: 'POST', path: '/v1.41/containers/a/stop', body: '{}', json: true },
+    user,
+  );
   assert.equal(json.kind === 'call' && json.params.json, true);
 });
 
 test('httpStream and pty', () => {
-  const s = authorizeHttpStream(v3, { name: 'docker', method: 'GET', path: '/v1.41/containers/json' }, inDocker);
+  const s = authorizeHttpStream(
+    v3,
+    { name: 'docker', method: 'GET', path: '/v1.41/containers/json' },
+    inDocker,
+  );
   assert.equal(s.kind === 'stream' && s.method, 'plugins.httpStream');
-  assert.equal(authorizeHttpStream(v3, { name: 'docker', method: 'GET', path: '/events' }, user).kind, 'deny');
+  assert.equal(
+    authorizeHttpStream(v3, { name: 'docker', method: 'GET', path: '/events' }, user).kind,
+    'deny',
+  );
   assert.equal(authorizeHttpStream(v3, null, user).kind, 'deny');
   const p = authorizePty(v3, 'shell', ['abc', '/bin/sh'], 120, 40, user);
-  assert.deepEqual(p, { kind: 'stream', method: 'plugins.pty', params: { plugin: 'docker', command: 'shell', args: ['abc', '/bin/sh'], cols: 120, rows: 40 }, admin: true });
+  assert.deepEqual(p, {
+    kind: 'stream',
+    method: 'plugins.pty',
+    params: { plugin: 'docker', command: 'shell', args: ['abc', '/bin/sh'], cols: 120, rows: 40 },
+    admin: true,
+  });
   assert.equal(authorizePty(v3, 'ps', [], 80, 24, user).kind, 'deny', 'only pty commands');
-  assert.equal(authorize(v3, 'exec', { command: 'shell', args: ['a', 'b'] }, user).kind, 'deny', 'pty commands never through exec');
+  assert.equal(
+    authorize(v3, 'exec', { command: 'shell', args: ['a', 'b'] }, user).kind,
+    'deny',
+    'pty commands never through exec',
+  );
   assert.equal(authorizeStream(v3, 'shell', ['a', 'b'], user).kind, 'deny');
 });
 
@@ -197,10 +298,24 @@ test('admin folders, mkdir and remove', () => {
   const plain = authorize(v3, 'readFile', { path: '/srv/a' }, user);
   assert.equal(plain.kind === 'call' && plain.admin, false);
   const mk = authorize(v3, 'mkdir', { path: '/opt/stacks/new' }, user);
-  assert.deepEqual(mk, { kind: 'call', method: 'plugins.mkdir', params: { plugin: 'docker', path: '/opt/stacks/new' }, admin: true });
+  assert.deepEqual(mk, {
+    kind: 'call',
+    method: 'plugins.mkdir',
+    params: { plugin: 'docker', path: '/opt/stacks/new' },
+    admin: true,
+  });
   const rm = authorize(v3, 'remove', { path: '~/.config/x/a.json' }, user);
-  assert.deepEqual(rm, { kind: 'call', method: 'plugins.remove', params: { plugin: 'docker', path: '~/.config/x/a.json' }, admin: false });
-  assert.equal(authorize(v3, 'mkdir', { path: '/srv/new' }, user).kind, 'deny', 'mkdir only in write folders');
+  assert.deepEqual(rm, {
+    kind: 'call',
+    method: 'plugins.remove',
+    params: { plugin: 'docker', path: '~/.config/x/a.json' },
+    admin: false,
+  });
+  assert.equal(
+    authorize(v3, 'mkdir', { path: '/srv/new' }, user).kind,
+    'deny',
+    'mkdir only in write folders',
+  );
   assert.equal(authorize(v3, 'remove', { path: '/etc/passwd' }, user).kind, 'deny');
   // Longest match wins; on a tie the entry without admin.
   assert.equal(matchFolder('/a/b/c', ['/a', { path: '/a/b', admin: true }])?.admin, true);
@@ -210,23 +325,59 @@ test('admin folders, mkdir and remove', () => {
 test('http path cleaning', () => {
   assert.equal(cleanHttpPath('/a%20b'), '/a b');
   assert.equal(cleanHttpPath('/'), '/');
-  for (const bad of ['', 'x', '//h/x', 'http://h/x', '/a/../b', '/a/./b', '/a//b', '/a/', '/a%2fb', '/%2e%2e', '/a%5cb', '/a%00', '/a\\b', '/a b', '/a?b', '/a#b', '/a%zz']) {
+  for (const bad of [
+    '',
+    'x',
+    '//h/x',
+    'http://h/x',
+    '/a/../b',
+    '/a/./b',
+    '/a//b',
+    '/a/',
+    '/a%2fb',
+    '/%2e%2e',
+    '/a%5cb',
+    '/a%00',
+    '/a\\b',
+    '/a b',
+    '/a?b',
+    '/a#b',
+    '/a%zz',
+  ]) {
     assert.equal(cleanHttpPath(bad), null, bad);
   }
 });
 
 test('openUrl only takes http(s) addresses without credentials', () => {
-  assert.deepEqual(authorize(docker, 'openUrl', { url: 'http://10.0.0.2:8080/x' }, user), { kind: 'openUrl', url: 'http://10.0.0.2:8080/x' });
-  for (const url of ['javascript:alert(1)', 'data:text/html,x', 'file:///etc/passwd', 'https://u:p@example.org/', 'not a url', 42, 'https://a/' + 'x'.repeat(2048)]) {
+  assert.deepEqual(authorize(docker, 'openUrl', { url: 'http://10.0.0.2:8080/x' }, user), {
+    kind: 'openUrl',
+    url: 'http://10.0.0.2:8080/x',
+  });
+  for (const url of [
+    'javascript:alert(1)',
+    'data:text/html,x',
+    'file:///etc/passwd',
+    'https://u:p@example.org/',
+    'not a url',
+    42,
+    'https://a/' + 'x'.repeat(2048),
+  ]) {
     assert.equal(authorize(docker, 'openUrl', { url }, user).kind, 'deny', String(url));
   }
 });
 
 test('openUrl never opens the app itself', () => {
   const me = { ...user, appOrigin: 'https://box.lan:8443' };
-  assert.equal(authorize(docker, 'openUrl', { url: 'https://box.lan:8443/terminal?cmd=id' }, me).kind, 'deny');
+  assert.equal(
+    authorize(docker, 'openUrl', { url: 'https://box.lan:8443/terminal?cmd=id' }, me).kind,
+    'deny',
+  );
   assert.equal(authorize(docker, 'openUrl', { url: 'HTTPS://BOX.lan:8443/' }, me).kind, 'deny');
-  assert.equal(authorize(docker, 'openUrl', { url: 'https://box.lan:9000/' }, me).kind, 'openUrl', 'other ports are other services');
+  assert.equal(
+    authorize(docker, 'openUrl', { url: 'https://box.lan:9000/' }, me).kind,
+    'openUrl',
+    'other ports are other services',
+  );
 });
 
 /* ---------- large transfers and the activity log ---------- */
@@ -254,25 +405,55 @@ const xfer: BrokerManifest = {
           { methods: ['DELETE'], path: '/images/[a-z0-9]+' },
         ],
       },
-      { name: 'plain', socket: '/run/p.sock', rules: [{ methods: ['POST'], path: '/in' }, { methods: ['GET'], path: '/out' }] },
+      {
+        name: 'plain',
+        socket: '/run/p.sock',
+        rules: [
+          { methods: ['POST'], path: '/in' },
+          { methods: ['GET'], path: '/out' },
+        ],
+      },
     ],
   },
 };
 const dl = (req: object, extra: object = {}) => authorizeDownload(xfer, { req, ...extra }, user);
 
 test('download: GET of a declared path, with a file name, admin as for http', () => {
-  const p = dl({ name: 'plain', method: 'GET', path: '/out', query: 'a=1' }, { filename: 'out.tar' });
+  const p = dl(
+    { name: 'plain', method: 'GET', path: '/out', query: 'a=1' },
+    { filename: 'out.tar' },
+  );
   assert.deepEqual(p, {
     kind: 'transfer',
     transfer: 'download',
-    body: { kind: 'download', plugin: 'docker', name: 'plain', method: 'GET', path: '/out', query: 'a=1', headers: undefined, filename: 'out.tar', admin: false },
+    body: {
+      kind: 'download',
+      plugin: 'docker',
+      name: 'plain',
+      method: 'GET',
+      path: '/out',
+      query: 'a=1',
+      headers: undefined,
+      filename: 'out.tar',
+      admin: false,
+    },
     admin: false,
   });
   const a = dl({ name: 'docker', method: 'GET', path: '/images/busybox/get' });
-  assert.ok(a.kind === 'transfer' && a.admin && a.body.admin === true && a.body.filename === 'download');
-  const g = authorizeDownload(xfer, { req: { name: 'docker', method: 'GET', path: '/images/busybox/get' } }, inDocker);
+  assert.ok(
+    a.kind === 'transfer' && a.admin && a.body.admin === true && a.body.filename === 'download',
+  );
+  const g = authorizeDownload(
+    xfer,
+    { req: { name: 'docker', method: 'GET', path: '/images/busybox/get' } },
+    inDocker,
+  );
   assert.ok(g.kind === 'transfer' && !g.admin);
-  const root = authorizeDownload(xfer, { req: { name: 'docker', method: 'GET', path: '/images/busybox/get' } }, { ...user, isRoot: true });
+  const root = authorizeDownload(
+    xfer,
+    { req: { name: 'docker', method: 'GET', path: '/images/busybox/get' } },
+    { ...user, isRoot: true },
+  );
   assert.ok(root.kind === 'transfer' && !root.admin);
 });
 
@@ -290,29 +471,74 @@ test('download: refused when the rules or the method do not allow it', () => {
   denied(dl({ name: 'plain', method: 'GET', path: '/out' }, { filename: 'x'.repeat(300) }));
   denied(dl({ name: 'plain', method: 'GET', path: '/out' }, { filename: 5 }));
   // The plugin id is the manifest's.
-  const p = authorizeDownload(xfer, { req: { name: 'plain', method: 'GET', path: '/out' }, plugin: 'other' }, user);
+  const p = authorizeDownload(
+    xfer,
+    { req: { name: 'plain', method: 'GET', path: '/out' }, plugin: 'other' },
+    user,
+  );
   assert.ok(p.kind === 'transfer' && p.body.plugin === 'docker');
 });
 
 test('download of a command: declared, not pty, argument list checked, admin by level', () => {
   const p = authorizeDownload(xfer, { command: 'dump', args: ['x'], filename: 'd.bin' }, user);
-  assert.deepEqual(p, { kind: 'transfer', transfer: 'download', body: { kind: 'download', plugin: 'docker', command: 'dump', args: ['x'], filename: 'd.bin', admin: false }, admin: false });
+  assert.deepEqual(p, {
+    kind: 'transfer',
+    transfer: 'download',
+    body: {
+      kind: 'download',
+      plugin: 'docker',
+      command: 'dump',
+      args: ['x'],
+      filename: 'd.bin',
+      admin: false,
+    },
+    admin: false,
+  });
   const r = authorizeDownload(xfer, { command: 'rootdump' }, user);
   assert.ok(r.kind === 'transfer' && r.admin);
-  for (const a of [{ command: 'nope' }, { command: 'shell' }, { command: 'dump', args: 'x' }, { command: 'dump', args: new Array(17).fill('a') }, { command: 'dump', args: [1] }]) {
+  for (const a of [
+    { command: 'nope' },
+    { command: 'shell' },
+    { command: 'dump', args: 'x' },
+    { command: 'dump', args: new Array(17).fill('a') },
+    { command: 'dump', args: [1] },
+  ]) {
     assert.equal(authorizeDownload(xfer, a, user).kind, 'deny', JSON.stringify(a));
   }
 });
 
 test('upload: POST or PUT of a declared path, size within maxUpload', () => {
   const up = (req: object, size: unknown = 10) => authorizeUpload(xfer, req, size, user);
-  const p = up({ name: 'docker', method: 'POST', path: '/images/load', query: 'quiet=1', headers: { 'X-Registry-Auth': 'tok' } }, 500);
+  const p = up(
+    {
+      name: 'docker',
+      method: 'POST',
+      path: '/images/load',
+      query: 'quiet=1',
+      headers: { 'X-Registry-Auth': 'tok' },
+    },
+    500,
+  );
   assert.ok(p.kind === 'transfer' && p.transfer === 'upload' && p.admin && p.size === 500);
-  assert.ok(p.kind === 'transfer' && p.body.size === 500 && p.body.kind === 'upload' && p.body.method === 'POST');
-  assert.ok(up({ name: 'docker', method: 'PUT', path: '/containers/abc/archive' }).kind === 'transfer');
+  assert.ok(
+    p.kind === 'transfer' &&
+      p.body.size === 500 &&
+      p.body.kind === 'upload' &&
+      p.body.method === 'POST',
+  );
+  assert.ok(
+    up({ name: 'docker', method: 'PUT', path: '/containers/abc/archive' }).kind === 'transfer',
+  );
   assert.ok(up({ name: 'docker', method: 'POST', path: '/images/load' }, 1000).kind === 'transfer');
-  assert.equal(up({ name: 'docker', method: 'POST', path: '/images/load' }, 1001).kind, 'deny', 'over maxUpload');
-  assert.ok(up({ name: 'plain', method: 'POST', path: '/in' }, 20 * 2 ** 30).kind === 'transfer', 'default 20 GiB');
+  assert.equal(
+    up({ name: 'docker', method: 'POST', path: '/images/load' }, 1001).kind,
+    'deny',
+    'over maxUpload',
+  );
+  assert.ok(
+    up({ name: 'plain', method: 'POST', path: '/in' }, 20 * 2 ** 30).kind === 'transfer',
+    'default 20 GiB',
+  );
   assert.equal(up({ name: 'plain', method: 'POST', path: '/in' }, 20 * 2 ** 30 + 1).kind, 'deny');
   for (const bad of [
     { name: 'docker', method: 'GET', path: '/images/busybox/get' },
@@ -328,20 +554,56 @@ test('upload: POST or PUT of a declared path, size within maxUpload', () => {
     assert.equal(up(bad as object).kind, 'deny', JSON.stringify(bad));
   }
   for (const size of [-1, 1.5, NaN, Infinity, '10', null]) {
-    assert.equal(up({ name: 'plain', method: 'POST', path: '/in' }, size).kind, 'deny', String(size));
+    assert.equal(
+      up({ name: 'plain', method: 'POST', path: '/in' }, size).kind,
+      'deny',
+      String(size),
+    );
   }
 });
 
 test('activity log: only this plugin, with checked parameters', () => {
-  const p = authorize(xfer, 'auditList', { limit: 50, user: 'ann', since: 1700000000000, until: '2026-10-02T00:00:00Z', cursor: '2026-10-01:3', plugin: 'other' }, user);
+  const p = authorize(
+    xfer,
+    'auditList',
+    {
+      limit: 50,
+      user: 'ann',
+      since: 1700000000000,
+      until: '2026-10-02T00:00:00Z',
+      cursor: '2026-10-01:3',
+      plugin: 'other',
+    },
+    user,
+  );
   assert.deepEqual(p, {
     kind: 'call',
     method: 'plugins.audit.list',
-    params: { plugin: 'docker', user: 'ann', cursor: '2026-10-01:3', since: 1700000000000, until: '2026-10-02T00:00:00Z', limit: 50 },
+    params: {
+      plugin: 'docker',
+      user: 'ann',
+      cursor: '2026-10-01:3',
+      since: 1700000000000,
+      until: '2026-10-02T00:00:00Z',
+      limit: 50,
+    },
     admin: false,
   });
-  assert.deepEqual(authorize(xfer, 'auditList', {}, user), { kind: 'call', method: 'plugins.audit.list', params: { plugin: 'docker' }, admin: false });
-  for (const bad of [{ limit: 0 }, { limit: 1001 }, { limit: 1.5 }, { user: 5 }, { since: {} }, { until: 'x'.repeat(41) }, { text: 'x'.repeat(257) }]) {
+  assert.deepEqual(authorize(xfer, 'auditList', {}, user), {
+    kind: 'call',
+    method: 'plugins.audit.list',
+    params: { plugin: 'docker' },
+    admin: false,
+  });
+  for (const bad of [
+    { limit: 0 },
+    { limit: 1001 },
+    { limit: 1.5 },
+    { user: 5 },
+    { since: {} },
+    { until: 'x'.repeat(41) },
+    { text: 'x'.repeat(257) },
+  ]) {
     assert.equal(authorize(xfer, 'auditList', bad, user).kind, 'deny', JSON.stringify(bad));
   }
 });
@@ -349,14 +611,20 @@ test('activity log: only this plugin, with checked parameters', () => {
 test('inline request bodies: up to 8 MiB, base64 for long text, a clear error above', () => {
   const api = { name: 'svc', socket: '/run/s.sock', rules: [{ methods: ['POST'], path: '/in' }] };
   const m: BrokerManifest = { id: 'p', capabilities: { http: [api] } };
-  const call = (body: unknown) => authorize(m, 'http', { name: 'svc', method: 'POST', path: '/in', body }, user);
+  const call = (body: unknown) =>
+    authorize(m, 'http', { name: 'svc', method: 'POST', path: '/in', body }, user);
   const small = call('hello');
-  assert.ok(small.kind === 'call' && small.params.body === 'hello' && small.params.b64 === undefined);
+  assert.ok(
+    small.kind === 'call' && small.params.body === 'hello' && small.params.b64 === undefined,
+  );
   // A long text goes out as base64 (JSON escaping cannot grow it past the frame limit).
   const text = 'é"\n'.repeat(200_000); // 600 k chars
   const long = call(text);
   assert.ok(long.kind === 'call' && long.params.b64 === true);
-  assert.equal(Buffer.from(String((long as { params: { body: string } }).params.body), 'base64').toString(), text);
+  assert.equal(
+    Buffer.from(String((long as { params: { body: string } }).params.body), 'base64').toString(),
+    text,
+  );
   assert.equal(call(new Uint8Array(8 << 20)).kind, 'call', '8 MiB of bytes');
   const tooBig = call(new Uint8Array((8 << 20) + 1));
   assert.ok(tooBig.kind === 'deny' && /sdk\.api\.upload/.test(tooBig.message));
@@ -364,11 +632,19 @@ test('inline request bodies: up to 8 MiB, base64 for long text, a clear error ab
   assert.ok(hugeText.kind === 'deny' && /sdk\.api\.upload/.test(hugeText.message));
   assert.equal(call('é'.repeat(5 << 20)).kind, 'deny', 'text that is over 8 MiB as UTF-8');
   // Streams use the same check.
-  assert.equal(authorizeHttpStream(m, { name: 'svc', method: 'POST', path: '/in', body: new Uint8Array((8 << 20) + 1) }, user).kind, 'deny');
+  assert.equal(
+    authorizeHttpStream(
+      m,
+      { name: 'svc', method: 'POST', path: '/in', body: new Uint8Array((8 << 20) + 1) },
+      user,
+    ).kind,
+    'deny',
+  );
 });
 
 test('upload can ask for the response as a stream', () => {
-  const up = (stream?: boolean) => authorizeUpload(xfer, { name: 'plain', method: 'POST', path: '/in' }, 10, user, stream);
+  const up = (stream?: boolean) =>
+    authorizeUpload(xfer, { name: 'plain', method: 'POST', path: '/in' }, 10, user, stream);
   const a = up();
   assert.ok(a.kind === 'transfer' && !('stream' in a.body));
   const b = up(true);
@@ -380,12 +656,20 @@ test('upload can ask for the response as a stream', () => {
 test('saveFile: a cleaned name, a checked MIME type, the data kinds a plugin may hold', () => {
   const save = (a: Record<string, unknown>) => authorize(docker, 'saveFile', a, user);
   const p = save({ filename: 'export.json', data: '{"a":1}', mime: 'application/json' });
-  assert.ok(p.kind === 'save' && p.filename === 'export.json' && p.mime === 'application/json' && p.size === 7);
+  assert.ok(
+    p.kind === 'save' &&
+      p.filename === 'export.json' &&
+      p.mime === 'application/json' &&
+      p.size === 7,
+  );
   const bytes = save({ filename: 'a.bin', data: new Uint8Array(5) });
   assert.ok(bytes.kind === 'save' && bytes.mime === 'application/octet-stream' && bytes.size === 5);
   const blob = save({ filename: 'a.tar', data: new Blob(['abc']), mime: 'application/x-tar' });
   assert.ok(blob.kind === 'save' && blob.size === 3);
-  assert.ok((save({ filename: 'é.txt', data: 'é' }) as { size: number }).size === 2, 'size is in UTF-8 bytes');
+  assert.ok(
+    (save({ filename: 'é.txt', data: 'é' }) as { size: number }).size === 2,
+    'size is in UTF-8 bytes',
+  );
   for (const bad of [
     {},
     { filename: '', data: 'x' },

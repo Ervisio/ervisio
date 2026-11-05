@@ -17,7 +17,9 @@ const MAX_CHIPS = 12;
 function flatpakSteps(op: TxParams['op'], list: Scoped[]): TxParams[] {
   const steps: TxParams[] = [];
   for (const scope of ['system', 'user'] as const) {
-    const fl = list.filter((u) => u.kind === 'flatpak' && (u.scope ?? 'system') === scope).map((u) => u.name);
+    const fl = list
+      .filter((u) => u.kind === 'flatpak' && (u.scope ?? 'system') === scope)
+      .map((u) => u.name);
     if (fl.length) steps.push({ op, packages: fl, source: 'flatpak', scope });
   }
   return steps;
@@ -40,7 +42,12 @@ function removeSteps(list: Pkg[]): TxParams[] {
 function installStep(r: SearchResult): TxParams {
   const isFlatpak = r.kind === 'flatpak';
   const ref = isFlatpak && r.remote ? `${r.remote}/${r.name}` : r.name;
-  return { op: 'install', packages: [ref], source: isFlatpak ? 'flatpak' : 'repo', scope: isFlatpak ? 'system' : undefined };
+  return {
+    op: 'install',
+    packages: [ref],
+    source: isFlatpak ? 'flatpak' : 'repo',
+    scope: isFlatpak ? 'system' : undefined,
+  };
 }
 
 /** Everything that changes the system goes through here, with its confirmation dialogs. */
@@ -54,20 +61,30 @@ export function useActions() {
   const manager = summary?.manager ?? '';
 
   /** Open the Terminal; with cmd, a new session gets it typed at the prompt (not run). */
-  const openTerminal = useCallback((cmd?: string) => nav(cmd ? `/terminal?cmd=${encodeURIComponent(cmd)}` : '/terminal'), [nav]);
+  const openTerminal = useCallback(
+    (cmd?: string) => nav(cmd ? `/terminal?cmd=${encodeURIComponent(cmd)}` : '/terminal'),
+    [nav],
+  );
   const aurHelper = summary?.aurHelper || 'yay';
 
   /** Upgrade everything (system packages + system Flatpaks, and user Flatpaks). */
   const updateAll = useCallback(() => {
     const steps: TxParams[] = [{ op: 'upgrade', packages: [], source: 'all' }];
-    if ((updates ?? []).some((u) => u.kind === 'flatpak' && u.scope === 'user')) steps.push({ op: 'upgrade', packages: [], source: 'flatpak', scope: 'user' });
+    if ((updates ?? []).some((u) => u.kind === 'flatpak' && u.scope === 'user'))
+      steps.push({ op: 'upgrade', packages: [], source: 'flatpak', scope: 'user' });
     startJob({ title: { key: 'updateAll' }, steps });
   }, [updates]);
 
   const runUpdates = useCallback((list: Update[]) => {
     const steps = updateSteps(list);
     if (!steps.length) return;
-    startJob({ title: list.length === 1 ? { key: 'update', vars: { name: displayName(list[0]) } } : { key: 'updateSelected', vars: { count: list.length } }, steps });
+    startJob({
+      title:
+        list.length === 1
+          ? { key: 'update', vars: { name: displayName(list[0]) } }
+          : { key: 'updateSelected', vars: { count: list.length } },
+      steps,
+    });
   }, []);
 
   /** Update some packages. On Arch a partial upgrade can break the system, so ask first. */
@@ -88,14 +105,23 @@ export function useActions() {
     const r = install;
     setInstall(null);
     if (!r) return;
-    startJob({ title: { key: 'install', vars: { name: displayName(r) } }, steps: [installStep(r)] });
+    startJob({
+      title: { key: 'install', vars: { name: displayName(r) } },
+      steps: [installStep(r)],
+    });
   }, [install]);
 
   const confirmRemove = useCallback(() => {
     const list = remove;
     setRemove(null);
     if (!list?.length) return;
-    startJob({ title: list.length === 1 ? { key: 'remove', vars: { name: displayName(list[0]) } } : { key: 'removeMany', vars: { count: list.length } }, steps: removeSteps(list) });
+    startJob({
+      title:
+        list.length === 1
+          ? { key: 'remove', vars: { name: displayName(list[0]) } }
+          : { key: 'removeMany', vars: { count: list.length } },
+      steps: removeSteps(list),
+    });
   }, [remove]);
 
   const confirmUpdateAll = () => {
@@ -107,16 +133,44 @@ export function useActions() {
 
   const ui: ReactNode = (
     <>
-      <InstallDialog install={install} onClose={() => setInstall(null)} onConfirm={confirmInstall} />
+      <InstallDialog
+        install={install}
+        onClose={() => setInstall(null)}
+        onConfirm={confirmInstall}
+      />
       <RemoveDialog remove={remove} onClose={() => setRemove(null)} onConfirm={confirmRemove} />
-      <PartialDialog open={!!partial} updates={updates ?? []} onClose={() => setPartial(null)} onUpdateAll={confirmUpdateAll} />
+      <PartialDialog
+        open={!!partial}
+        updates={updates ?? []}
+        onClose={() => setPartial(null)}
+        onUpdateAll={confirmUpdateAll}
+      />
     </>
   );
 
-  return { ui, busy, openTerminal, aurHelper, updateAll, updateSome, runUpdates, askInstall: setInstall, askRemove: setRemove, updateKey };
+  return {
+    ui,
+    busy,
+    openTerminal,
+    aurHelper,
+    updateAll,
+    updateSome,
+    runUpdates,
+    askInstall: setInstall,
+    askRemove: setRemove,
+    updateKey,
+  };
 }
 
-function InstallDialog({ install, onClose, onConfirm }: { install: SearchResult | null; onClose(): void; onConfirm(): void }) {
+function InstallDialog({
+  install,
+  onClose,
+  onConfirm,
+}: {
+  install: SearchResult | null;
+  onClose(): void;
+  onConfirm(): void;
+}) {
   const t = useT('software');
   return (
     <Dialog
@@ -128,14 +182,21 @@ function InstallDialog({ install, onClose, onConfirm }: { install: SearchResult 
       footer={
         <>
           <Button onClick={onClose}>{t('cancel')}</Button>
-          <Button variant="primary" icon="download" onClick={onConfirm}>{t('install.confirm')}</Button>
+          <Button variant="primary" icon="download" onClick={onConfirm}>
+            {t('install.confirm')}
+          </Button>
         </>
       }
     >
       {install && (
         <dl className="sw-kv">
           <dt>{t('install.source')}</dt>
-          <dd><SourceBadge kind={install.kind} source={install.source} />{install.kind === 'flatpak' && install.remote ? <span className="sw-muted"> {install.remote}</span> : null}</dd>
+          <dd>
+            <SourceBadge kind={install.kind} source={install.source} />
+            {install.kind === 'flatpak' && install.remote ? (
+              <span className="sw-muted"> {install.remote}</span>
+            ) : null}
+          </dd>
           <dt>{t('install.version')}</dt>
           <dd className="sw-mono">{install.version || '-'}</dd>
           <dt>{t('install.package')}</dt>
@@ -149,7 +210,15 @@ function InstallDialog({ install, onClose, onConfirm }: { install: SearchResult 
   );
 }
 
-function RemoveDialog({ remove, onClose, onConfirm }: { remove: Pkg[] | null; onClose(): void; onConfirm(): void }) {
+function RemoveDialog({
+  remove,
+  onClose,
+  onConfirm,
+}: {
+  remove: Pkg[] | null;
+  onClose(): void;
+  onConfirm(): void;
+}) {
   const t = useT('software');
   const single = remove && remove.length === 1 ? remove[0] : null;
   return (
@@ -157,7 +226,11 @@ function RemoveDialog({ remove, onClose, onConfirm }: { remove: Pkg[] | null; on
       open={!!remove}
       onClose={onClose}
       onConfirm={onConfirm}
-      title={single ? t('remove.title', { name: displayName(single) }) : t('remove.titleMany', { count: remove?.length ?? 0 })}
+      title={
+        single
+          ? t('remove.title', { name: displayName(single) })
+          : t('remove.titleMany', { count: remove?.length ?? 0 })
+      }
       description={t('remove.text')}
       confirmLabel={t('remove.confirm')}
       confirmText={single ? single.name : t('remove.word')}
@@ -166,16 +239,32 @@ function RemoveDialog({ remove, onClose, onConfirm }: { remove: Pkg[] | null; on
       {remove && remove.length > 1 && (
         <div className="sw-chiplist">
           {remove.slice(0, MAX_CHIPS).map((p) => (
-            <Badge key={p.name} tone="neutral" dot={false}>{displayName(p)}</Badge>
+            <Badge key={p.name} tone="neutral" dot={false}>
+              {displayName(p)}
+            </Badge>
           ))}
-          {remove.length > MAX_CHIPS && <Badge tone="neutral" dot={false}>+{remove.length - MAX_CHIPS}</Badge>}
+          {remove.length > MAX_CHIPS && (
+            <Badge tone="neutral" dot={false}>
+              +{remove.length - MAX_CHIPS}
+            </Badge>
+          )}
         </div>
       )}
     </ConfirmDialog>
   );
 }
 
-function PartialDialog({ open, updates, onClose, onUpdateAll }: { open: boolean; updates: Update[]; onClose(): void; onUpdateAll(): void }) {
+function PartialDialog({
+  open,
+  updates,
+  onClose,
+  onUpdateAll,
+}: {
+  open: boolean;
+  updates: Update[];
+  onClose(): void;
+  onUpdateAll(): void;
+}) {
   const t = useT('software');
   const repoUpdates = updates.filter((u) => u.kind === 'repo');
   return (

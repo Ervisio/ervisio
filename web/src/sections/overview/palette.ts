@@ -14,7 +14,15 @@ export default function useOverviewPalette(): PaletteAction[] {
   const dash = prefs.dashboard;
   return useMemo(() => {
     const list: PaletteAction[] = [
-      { id: 'overview.personalize', title: t('palette.personalize'), hint: t('title'), icon: 'edit', hue: 'ov', keywords: [t('palette.kwDashboard'), t('palette.kwWidgets'), t('palette.kwLayout')], run: () => nav('/?personalize=1') },
+      {
+        id: 'overview.personalize',
+        title: t('palette.personalize'),
+        hint: t('title'),
+        icon: 'edit',
+        hue: 'ov',
+        keywords: [t('palette.kwDashboard'), t('palette.kwWidgets'), t('palette.kwLayout')],
+        run: () => nav('/?personalize=1'),
+      },
     ];
     const seen = new Set<string>();
     for (const a of layoutActions(normalizeLayout(dash))) {

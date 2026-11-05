@@ -87,7 +87,13 @@ export async function health(): Promise<Health | null> {
  * as the expected version answers on /api/health, so the browser never keeps running the old bundle.
  */
 
-export type RunPhase = ApplyEvent['phase'] | 'waiting' | 'done' | 'rolled-back' | 'timeout' | 'error';
+export type RunPhase =
+  | ApplyEvent['phase']
+  | 'waiting'
+  | 'done'
+  | 'rolled-back'
+  | 'timeout'
+  | 'error';
 export interface RunState {
   kind: 'update' | 'rollback';
   target: string;
@@ -106,7 +112,10 @@ const subs = new Set<() => void>();
 const set = (patch: Partial<RunState> | null) => {
   if (patch === null) run = null;
   else if (run) {
-    const reached = patch.phase && !run.reached.includes(patch.phase) ? [...run.reached, patch.phase] : run.reached;
+    const reached =
+      patch.phase && !run.reached.includes(patch.phase)
+        ? [...run.reached, patch.phase]
+        : run.reached;
     run = { ...run, ...patch, reached };
   }
   subs.forEach((s) => s());
@@ -128,13 +137,26 @@ async function waitForRestart(target: string, from: string, before: Health | nul
   for (;;) {
     await new Promise((r) => setTimeout(r, 1500));
     const h = await health();
-    if (h && h.version === target && (!before || h.startedAt !== before.startedAt || before.version !== target)) {
+    if (
+      h &&
+      h.version === target &&
+      (!before || h.startedAt !== before.startedAt || before.version !== target)
+    ) {
       set({ phase: 'done' });
-      window.setTimeout(() => window.location.replace(window.location.pathname + window.location.hash), 800);
+      window.setTimeout(
+        () => window.location.replace(window.location.pathname + window.location.hash),
+        800,
+      );
       return;
     }
     // The old version came back with a new start time: the new one failed and was rolled back.
-    if (h && before && h.version === from && h.startedAt !== before.startedAt && Date.now() - t0 > 5000) {
+    if (
+      h &&
+      before &&
+      h.version === from &&
+      h.startedAt !== before.startedAt &&
+      Date.now() - t0 > 5000
+    ) {
       set({ phase: 'rolled-back' });
       return;
     }
@@ -152,23 +174,28 @@ export async function startUpdate(target: string, from: string): Promise<void> {
   set({});
   const before = await health();
   let restarting = false;
-  stream<ApplyEvent>('updates.apply', { version: target }, {
-    admin: true,
-    onData: (e) => {
-      if (e.phase === 'restart') restarting = true;
-      set({ phase: e.phase, percent: e.percent, done: e.done, total: e.total });
+  stream<ApplyEvent>(
+    'updates.apply',
+    { version: target },
+    {
+      admin: true,
+      onData: (e) => {
+        if (e.phase === 'restart') restarting = true;
+        set({ phase: e.phase, percent: e.percent, done: e.done, total: e.total });
+      },
+      onEnd: () => {
+        if (restarting) void waitForRestart(target, from, before);
+        else set({ phase: 'error', error: 'The update ended without restarting.' });
+      },
+      onError: (err: ApiError) => {
+        // After the hand-off the daemon restarts and the connection drops ("unavailable"): wait for it. Any other
+        // error (e.g. systemd-run failed) means the switch never started.
+        if (restarting && (err.code === 'unavailable' || err.code === 'unauthenticated'))
+          void waitForRestart(target, from, before);
+        else set({ phase: 'error', error: err.message });
+      },
     },
-    onEnd: () => {
-      if (restarting) void waitForRestart(target, from, before);
-      else set({ phase: 'error', error: 'The update ended without restarting.' });
-    },
-    onError: (err: ApiError) => {
-      // After the hand-off the daemon restarts and the connection drops ("unavailable"): wait for it. Any other
-      // error (e.g. systemd-run failed) means the switch never started.
-      if (restarting && (err.code === 'unavailable' || err.code === 'unauthenticated')) void waitForRestart(target, from, before);
-      else set({ phase: 'error', error: err.message });
-    },
-  });
+  );
 }
 
 /** Starts updates.rollback (admin call) and waits for the previous version. */

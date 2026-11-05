@@ -11,7 +11,13 @@ interface Group {
   entries: HistoryEntry[];
 }
 
-const ICON: Record<string, IconName> = { installed: 'plus', upgraded: 'download', removed: 'trash', downgraded: 'sort', reinstalled: 'refresh' };
+const ICON: Record<string, IconName> = {
+  installed: 'plus',
+  upgraded: 'download',
+  removed: 'trash',
+  downgraded: 'sort',
+  reinstalled: 'refresh',
+};
 
 export function HistoryTab({ reloadKey }: { reloadKey: number }) {
   const t = useT('software');
@@ -40,19 +46,44 @@ export function HistoryTab({ reloadKey }: { reloadKey: number }) {
     return [...m.values()].sort((a, b) => b.time - a.time);
   }, [entries]);
 
-  const day = useMemo(() => new Intl.DateTimeFormat(lang, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }), [lang]);
+  const day = useMemo(
+    () =>
+      new Intl.DateTimeFormat(lang, {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      }),
+    [lang],
+  );
   const hour12 = getRegion().hour12;
   const clock = useMemo(() => new Intl.DateTimeFormat(lang, clockOptions()), [lang, hour12]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!entries) return <div className="sw-body"><Skeleton lines={6} height={54} /></div>;
+  if (!entries)
+    return (
+      <div className="sw-body">
+        <Skeleton lines={6} height={54} />
+      </div>
+    );
   if (groups.length === 0) {
-    return <div className="sw-body"><EmptyState icon="clock" hue="sw" title={error ? t('error.load') : t('history.none')} text={error || t('history.noneText')} /></div>;
+    return (
+      <div className="sw-body">
+        <EmptyState
+          icon="clock"
+          hue="sw"
+          title={error ? t('error.load') : t('history.none')}
+          text={error || t('history.noneText')}
+        />
+      </div>
+    );
   }
 
   const summarize = (g: Group) => {
     const c: Record<string, number> = {};
     for (const e of g.entries) c[e.action] = (c[e.action] ?? 0) + 1;
-    return Object.entries(c).map(([a, n]) => t(`history.${a}`, { count: n })).join(', ');
+    return Object.entries(c)
+      .map(([a, n]) => t(`history.${a}`, { count: n }))
+      .join(', ');
   };
   const main = (g: Group): string => {
     const c: Record<string, number> = {};
@@ -65,7 +96,12 @@ export function HistoryTab({ reloadKey }: { reloadKey: number }) {
     <div className="sw-body">
       {groups.slice(0, limit).map((g) => {
         const d = day.format(new Date(g.time));
-        const head = d !== lastDay ? <div key={`d${g.tx}`} className="sw-day">{d}</div> : null;
+        const head =
+          d !== lastDay ? (
+            <div key={`d${g.tx}`} className="sw-day">
+              {d}
+            </div>
+          ) : null;
         lastDay = d;
         const isOpen = open.has(g.tx);
         const kind = main(g);
@@ -77,12 +113,27 @@ export function HistoryTab({ reloadKey }: { reloadKey: number }) {
                 type="button"
                 className="sw-hx-hd"
                 aria-expanded={isOpen}
-                onClick={() => setOpen((s) => { const n = new Set(s); if (n.has(g.tx)) n.delete(g.tx); else n.add(g.tx); return n; })}
+                onClick={() =>
+                  setOpen((s) => {
+                    const n = new Set(s);
+                    if (n.has(g.tx)) n.delete(g.tx);
+                    else n.add(g.tx);
+                    return n;
+                  })
+                }
               >
-                <span className="sw-hx-ic"><Icon name={ICON[kind]} /></span>
+                <span className="sw-hx-ic">
+                  <Icon name={ICON[kind]} />
+                </span>
                 <span className="sw-nm">
                   <b>{summarize(g)}</b>
-                  <small className="sw-muted">{g.entries.slice(0, 4).map((e) => e.name).join(', ')}{g.entries.length > 4 ? ` +${g.entries.length - 4}` : ''}</small>
+                  <small className="sw-muted">
+                    {g.entries
+                      .slice(0, 4)
+                      .map((e) => e.name)
+                      .join(', ')}
+                    {g.entries.length > 4 ? ` +${g.entries.length - 4}` : ''}
+                  </small>
                 </span>
                 <span className="sw-muted">{clock.format(new Date(g.time))}</span>
                 <Icon name={isOpen ? 'chevronup' : 'chevron'} />
@@ -91,9 +142,21 @@ export function HistoryTab({ reloadKey }: { reloadKey: number }) {
                 <div className="sw-hx-list">
                   {g.entries.map((e, i) => (
                     <div key={i} className="sw-hx-row">
-                      <span className={`sw-act sw-act--${e.action}`}>{t(`history.verb.${e.action}`)}</span>
+                      <span className={`sw-act sw-act--${e.action}`}>
+                        {t(`history.verb.${e.action}`)}
+                      </span>
                       <b>{e.name}</b>
-                      <span className="sw-ver">{e.from && e.to ? <>{e.from}<span className="sw-ar">→</span><b>{e.to}</b></> : e.to || e.from}</span>
+                      <span className="sw-ver">
+                        {e.from && e.to ? (
+                          <>
+                            {e.from}
+                            <span className="sw-ar">→</span>
+                            <b>{e.to}</b>
+                          </>
+                        ) : (
+                          e.to || e.from
+                        )}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -102,7 +165,9 @@ export function HistoryTab({ reloadKey }: { reloadKey: number }) {
           </div>
         );
       })}
-      {groups.length > limit && <Button onClick={() => setLimit((l) => l + 40)}>{t('history.more')}</Button>}
+      {groups.length > limit && (
+        <Button onClick={() => setLimit((l) => l + 40)}>{t('history.more')}</Button>
+      )}
     </div>
   );
 }

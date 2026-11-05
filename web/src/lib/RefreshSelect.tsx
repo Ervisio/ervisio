@@ -1,12 +1,27 @@
 import { useState } from 'react';
 import { useT } from '../i18n';
 import { Button, Dialog, Input, Select } from '../ui';
-import { REFRESH_MAX, REFRESH_MIN, REFRESH_OPTIONS, clampRefresh, formatInterval, useRefreshInterval } from './refresh';
+import {
+  REFRESH_MAX,
+  REFRESH_MIN,
+  REFRESH_OPTIONS,
+  clampRefresh,
+  formatInterval,
+  useRefreshInterval,
+} from './refresh';
 
 const CUSTOM = 'custom';
 
 /** Select for the refresh interval with a "Custom…" option. `onPick` receives the new value in ms. */
-export function RefreshSelect({ onPick, compact = true, label }: { onPick(ms: number): void; compact?: boolean; label: string }) {
+export function RefreshSelect({
+  onPick,
+  compact = true,
+  label,
+}: {
+  onPick(ms: number): void;
+  compact?: boolean;
+  label: string;
+}) {
   const t = useT('common');
   const value = useRefreshInterval();
   const preset = (REFRESH_OPTIONS as readonly number[]).includes(value);
@@ -20,7 +35,14 @@ export function RefreshSelect({ onPick, compact = true, label }: { onPick(ms: nu
 
   const options = [
     ...REFRESH_OPTIONS.map((o) => ({ value: String(o), label: formatInterval(o) })),
-    ...(preset ? [] : [{ value: String(value), label: t('refreshRate.customValue', { value: formatInterval(value) }) }]),
+    ...(preset
+      ? []
+      : [
+          {
+            value: String(value),
+            label: t('refreshRate.customValue', { value: formatInterval(value) }),
+          },
+        ]),
     { value: CUSTOM, label: t('refreshRate.custom') },
   ];
   const change = (v: string) => {
@@ -33,7 +55,13 @@ export function RefreshSelect({ onPick, compact = true, label }: { onPick(ms: nu
   };
   return (
     <>
-      <Select compact={compact} aria-label={label} value={String(value)} options={options} onChange={change} />
+      <Select
+        compact={compact}
+        aria-label={label}
+        value={String(value)}
+        options={options}
+        onChange={change}
+      />
       <Dialog
         open={open}
         onClose={() => setOpen(false)}
@@ -48,8 +76,12 @@ export function RefreshSelect({ onPick, compact = true, label }: { onPick(ms: nu
         }}
         footer={
           <>
-            <Button variant="ghost" type="button" onClick={() => setOpen(false)}>{t('cancel')}</Button>
-            <Button variant="primary" type="submit" disabled={!valid}>{t('save')}</Button>
+            <Button variant="ghost" type="button" onClick={() => setOpen(false)}>
+              {t('cancel')}
+            </Button>
+            <Button variant="primary" type="submit" disabled={!valid}>
+              {t('save')}
+            </Button>
           </>
         }
       >
@@ -66,7 +98,15 @@ export function RefreshSelect({ onPick, compact = true, label }: { onPick(ms: nu
             onChange={(e) => setNum(e.target.value)}
             error={num !== '' && !valid ? t('refreshRate.invalid') : undefined}
           />
-          <Select label={t('refreshRate.unit')} value={unit} onChange={(v) => setUnit(v as 's' | 'min')} options={[{ value: 's', label: t('refreshRate.seconds') }, { value: 'min', label: t('refreshRate.minutes') }]} />
+          <Select
+            label={t('refreshRate.unit')}
+            value={unit}
+            onChange={(v) => setUnit(v as 's' | 'min')}
+            options={[
+              { value: 's', label: t('refreshRate.seconds') },
+              { value: 'min', label: t('refreshRate.minutes') },
+            ]}
+          />
         </div>
       </Dialog>
     </>

@@ -36,14 +36,17 @@ export default function Palette({ items, onClose }: { items: PaletteItem[]; onCl
     const out: PaletteItem[] = [];
     for (const g of ORDER) {
       let n = 0;
-      for (const it of items) if (it.group === g && match(it) && n++ < (needle ? 8 : 6)) out.push(it);
+      for (const it of items)
+        if (it.group === g && match(it) && n++ < (needle ? 8 : 6)) out.push(it);
     }
     return out;
   }, [items, q]);
 
   useEffect(() => setSel(0), [q]);
   useEffect(() => {
-    list.current?.querySelector<HTMLElement>('[data-sel="true"]')?.scrollIntoView({ block: 'nearest' });
+    list.current
+      ?.querySelector<HTMLElement>('[data-sel="true"]')
+      ?.scrollIntoView({ block: 'nearest' });
   }, [sel, shown]);
 
   const choose = (it: PaletteItem | undefined, paste: boolean) => {
@@ -54,7 +57,10 @@ export default function Palette({ items, onClose }: { items: PaletteItem[]; onCl
   };
 
   return (
-    <div className="terminal-palscrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div
+      className="terminal-palscrim"
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
       <div className="terminal-pal" role="dialog" aria-label={t('palette.title')}>
         <div className="terminal-pal-in">
           <Icon name="search" />
@@ -93,15 +99,33 @@ export default function Palette({ items, onClose }: { items: PaletteItem[]; onCl
                 {rows.map((it) => {
                   const idx = shown.indexOf(it);
                   return (
-                    <div key={it.id} className={`terminal-snip${idx === sel ? ' on' : ''}`} data-sel={idx === sel} role="option" aria-selected={idx === sel} onMouseMove={() => setSel(idx)} onClick={() => choose(it, false)}>
-                      <span className="terminal-ic" style={{ ['--h' as string]: `var(--h-${it.hue})`, ['--s' as string]: `var(--h-${it.hue}-s)` }}>
+                    <div
+                      key={it.id}
+                      className={`terminal-snip${idx === sel ? ' on' : ''}`}
+                      data-sel={idx === sel}
+                      role="option"
+                      aria-selected={idx === sel}
+                      onMouseMove={() => setSel(idx)}
+                      onClick={() => choose(it, false)}
+                    >
+                      <span
+                        className="terminal-ic"
+                        style={{
+                          ['--h' as string]: `var(--h-${it.hue})`,
+                          ['--s' as string]: `var(--h-${it.hue}-s)`,
+                        }}
+                      >
                         <Icon name={it.icon} />
                       </span>
                       <div>
                         <b>{it.title}</b>
                         {it.sub && <code>{it.sub}</code>}
                       </div>
-                      {idx === sel && g !== 'sessions' && g !== 'actions' && <span className="terminal-run"><Icon name="play" /></span>}
+                      {idx === sel && g !== 'sessions' && g !== 'actions' && (
+                        <span className="terminal-run">
+                          <Icon name="play" />
+                        </span>
+                      )}
                     </div>
                   );
                 })}

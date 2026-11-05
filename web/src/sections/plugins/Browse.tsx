@@ -21,19 +21,39 @@ export function Browse({ catalog, query, busyId, onInstall }: Props) {
   const list = useMemo(
     () =>
       all
-        .filter((e) => (!cat || e.category === cat) && (!q || `${e.name} ${e.description} ${e.category} ${e.author}`.toLowerCase().includes(q)))
+        .filter(
+          (e) =>
+            (!cat || e.category === cat) &&
+            (!q ||
+              `${e.name} ${e.description} ${e.category} ${e.author}`.toLowerCase().includes(q)),
+        )
         .sort((a, b) => b.installs - a.installs),
     [all, cat, q],
   );
 
-  if (!catalog) return <div className="plugins-pad"><EmptyState icon="plugins" hue="plg" title={t('loading')} /></div>;
+  if (!catalog)
+    return (
+      <div className="plugins-pad">
+        <EmptyState icon="plugins" hue="plg" title={t('loading')} />
+      </div>
+    );
   return (
     <div className="plugins-browse">
       {catalog.warning && <div className="plugins-note is-warn">{catalog.warning}</div>}
       <div className="plugins-cats" role="group" aria-label={t('categories')}>
-        <Chip pressed={!cat} onClick={() => setCat('')}>{t('allCategories')}</Chip>
+        <Chip pressed={!cat} onClick={() => setCat('')}>
+          {t('allCategories')}
+        </Chip>
         {catalog.categories.map((c) => (
-          <Chip key={c.id} pressed={cat === c.id} icon={c.icon} hue={hueOf(c.color)} onClick={() => setCat(cat === c.id ? '' : c.id)}>{c.name}</Chip>
+          <Chip
+            key={c.id}
+            pressed={cat === c.id}
+            icon={c.icon}
+            hue={hueOf(c.color)}
+            onClick={() => setCat(cat === c.id ? '' : c.id)}
+          >
+            {c.name}
+          </Chip>
         ))}
       </div>
       <H4>{t('popular')}</H4>
@@ -47,24 +67,48 @@ export function Browse({ catalog, query, busyId, onInstall }: Props) {
                 <Tile icon={e.icon} logo={e.logo} color={e.color} />
                 <div className="plugins-bc-name">
                   <b>{e.name}</b>
-                  {e.verified && <span className="ui-badge ui-badge--ok plugins-verified" role="img" aria-label={t('verified')} title={t('verified')}><Icon name="check" size={14} /></span>}
+                  {e.verified && (
+                    <span
+                      className="ui-badge ui-badge--ok plugins-verified"
+                      role="img"
+                      aria-label={t('verified')}
+                      title={t('verified')}
+                    >
+                      <Icon name="check" size={14} />
+                    </span>
+                  )}
                 </div>
               </div>
               <p className="plugins-bc-desc">{e.description}</p>
               {(!e.verified || e.installs > 0) && (
                 <div className="plugins-bc-m">
                   {!e.verified && <TrustBadge p={{ verified: e.verified }} />}
-                  {e.installs > 0 && <span className="plugins-muted">{t('installs', { count: fmtInstalls(e.installs) })}</span>}
+                  {e.installs > 0 && (
+                    <span className="plugins-muted">
+                      {t('installs', { count: fmtInstalls(e.installs) })}
+                    </span>
+                  )}
                 </div>
               )}
               <div className="plugins-bc-footer">
                 <PlatformIcons platforms={e.platforms} />
                 {e.installed ? (
-                  <span className="plugins-installed"><Icon name="check" size={14} /> {t('installed')}</span>
+                  <span className="plugins-installed">
+                    <Icon name="check" size={14} /> {t('installed')}
+                  </span>
                 ) : e.incompatible ? (
-                  <span className="plugins-muted" title={e.incompatible}>{t('incompatible')}</span>
+                  <span className="plugins-muted" title={e.incompatible}>
+                    {t('incompatible')}
+                  </span>
                 ) : (
-                  <Button variant="primary" size="sm" loading={busyId === e.id} onClick={() => onInstall(e)}>{t('install')}</Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    loading={busyId === e.id}
+                    onClick={() => onInstall(e)}
+                  >
+                    {t('install')}
+                  </Button>
                 )}
               </div>
             </div>
