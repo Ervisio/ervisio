@@ -267,13 +267,13 @@ func Undo(p Paths, r *Result) {
 		}
 		if fi.IsDir() {
 			if exists(filepath.Join(c, importMarker)) {
-				os.RemoveAll(c)
+				_ = os.RemoveAll(c)
 			}
 			continue
 		}
-		os.Remove(c)
+		_ = os.Remove(c)
 	}
-	os.Remove(p.At(newDropInDir)) // only when empty
+	_ = os.Remove(p.At(newDropInDir)) // only when empty
 }
 
 // Pending reports whether a marked import has not been finalized.

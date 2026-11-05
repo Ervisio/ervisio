@@ -149,7 +149,7 @@ func (s *Server) handlePairBridge(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	s.env.m.NotePairUse(p.ID, via, ip)
 	s.log.Printf("pairing: %s connected via pairing %s, running as %s", via, p.ID, acc.Name)
 
@@ -206,7 +206,7 @@ func (s *Server) upgradePairBridge(w http.ResponseWriter, acc *account.Account, 
 	_ = conn.SetDeadline(time.Time{})
 	if _, err := io.WriteString(conn, "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: "+envs.UpgradeProto+"\r\n\r\n"); err != nil {
 		raw.Stop()
-		conn.Close()
+		_ = conn.Close()
 		return nil, nil, nil, false
 	}
 	return conn, brw.Reader, raw, true
@@ -235,7 +235,7 @@ func (pr *pairRelay) writeLine(b []byte) error {
 }
 
 func (pr *pairRelay) stop() {
-	pr.once.Do(func() { close(pr.done); pr.conn.Close(); pr.raw.Stop() })
+	pr.once.Do(func() { close(pr.done); _ = pr.conn.Close(); pr.raw.Stop() })
 }
 
 func (pr *pairRelay) closeRecords() {

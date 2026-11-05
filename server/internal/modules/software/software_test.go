@@ -390,10 +390,10 @@ func TestIcons(t *testing.T) {
 	dir := t.TempDir()
 	png := filepath.Join(dir, "hicolor/48x48/apps")
 	svg := filepath.Join(dir, "hicolor/scalable/apps")
-	os.MkdirAll(png, 0o755)
-	os.MkdirAll(svg, 0o755)
-	os.WriteFile(filepath.Join(png, "foo.png"), []byte("\x89PNG"), 0o644)
-	os.WriteFile(filepath.Join(svg, "bar.svg"), []byte("<svg/>"), 0o644)
+	_ = os.MkdirAll(png, 0o755)
+	_ = os.MkdirAll(svg, 0o755)
+	_ = os.WriteFile(filepath.Join(png, "foo.png"), []byte("\x89PNG"), 0o644)
+	_ = os.WriteFile(filepath.Join(svg, "bar.svg"), []byte("<svg/>"), 0o644)
 	if got := searchIconIn([]string{dir}, "foo", 64); !strings.HasSuffix(filepath.ToSlash(got), "48x48/apps/foo.png") {
 		t.Errorf("png: %q", got)
 	}
@@ -543,7 +543,7 @@ func TestCache(t *testing.T) {
 	var c ttlCache
 	n := 0
 	f := func() (any, error) { n++; return n, nil }
-	c.get("k", time.Minute, false, f)
+	_, _, _ = c.get("k", time.Minute, false, f)
 	v, _, _ := c.get("k", time.Minute, false, f)
 	if v.(int) != 1 || n != 1 {
 		t.Error("second get must hit the cache")

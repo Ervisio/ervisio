@@ -26,7 +26,7 @@ func mountPoints() []string {
 	if err != nil {
 		return nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	var out []string
 	for _, m := range parseMounts(f) {
 		out = append(out, m.point)
@@ -40,7 +40,7 @@ func swapKB() (total, free uint64, ok bool) {
 	if err != nil {
 		return 0, 0, false
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
 		k, v, found := strings.Cut(sc.Text(), ":")

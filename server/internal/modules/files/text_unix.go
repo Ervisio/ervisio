@@ -45,14 +45,14 @@ func finalLinkTarget(path string) (target string, isSymlink bool, err error) {
 		return "", false, err
 	}
 	fd, err := unix.Openat(dfd(d), name, unix.O_PATH|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
-	d.Close()
+	_ = d.Close()
 	if errors.Is(err, unix.ENOENT) {
 		return "", false, nil
 	}
 	if err != nil {
 		return "", false, pathErr("open", path, err)
 	}
-	defer unix.Close(fd)
+	defer func() { _ = unix.Close(fd) }()
 	var st unix.Stat_t
 	if err := unix.Fstat(fd, &st); err != nil {
 		return "", false, pathErr("stat", path, err)
@@ -79,7 +79,7 @@ func writeTextFile(path string, data []byte, expected int64) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer d.Close()
+	defer func() { _ = d.Close() }()
 	st, exists, err := statForSave(dfd(d), name, path, expected)
 	if err != nil {
 		return nil, err
@@ -156,7 +156,7 @@ func saveInPlace(d *os.File, name, path string, data []byte) (any, error) {
 	f := os.NewFile(uintptr(fd), path)
 	var now unix.Stat_t
 	if err := unix.Fstat(fd, &now); err != nil || !isReg(&now) {
-		f.Close()
+		_ = f.Close()
 		return nil, errNotRegularText()
 	}
 	return finishInPlaceSave(f, path, data, unix.Ftruncate(fd, 0))

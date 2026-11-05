@@ -487,13 +487,13 @@ func runStep(ctx context.Context, st Step, r *txRun) error {
 	cmd.Stdout, cmd.Stderr = pw, pw
 	r.addLog("$ " + st.Name + " " + strings.Join(st.Args, " "))
 	if err := cmd.Start(); err != nil {
-		pw.Close()
-		pr.Close()
+		_ = pw.Close()
+		_ = pr.Close()
 		return fmt.Errorf("could not start %s: %v", st.Name, err)
 	}
-	pw.Close()
+	_ = pw.Close()
 	tail := r.followOutput(pr, st)
-	pr.Close()
+	_ = pr.Close()
 	werr := cmd.Wait()
 	if werr != nil {
 		msg := strings.TrimSpace(strings.Join(lastErrors(tail), " "))

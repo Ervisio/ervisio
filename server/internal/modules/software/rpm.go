@@ -256,10 +256,6 @@ func (d *dnf) Owners(ctx context.Context, files []string) map[string]string {
 }
 
 func (d *dnf) Lookup(ctx context.Context, names []string) ([]Result, error) {
-	var res []Result
-	for _, n := range names {
-		res = append(res, Result{Name: n, Source: "dnf", Kind: KindRepo})
-	}
 	out, _ := run(ctx, time.Minute, nil, "dnf", append([]string{"-q", "repoquery", "--latest-limit=1", "--qf", `%{name}|%{evr}|%{summary}\n`, "--"}, names...)...)
 	var found []Result
 	for _, l := range strings.Split(out, "\n") {
@@ -335,7 +331,7 @@ func (z *zypper) Available() bool { return have("zypper") && have("rpm") }
 func (z *zypper) ListInstalled(ctx context.Context) ([]Package, error) {
 	auto := map[string]bool{}
 	if f, err := os.Open("/var/lib/zypp/AutoInstalled"); err == nil {
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		sc := bufio.NewScanner(f)
 		for sc.Scan() {
 			auto[strings.TrimSpace(sc.Text())] = true

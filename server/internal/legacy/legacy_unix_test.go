@@ -94,7 +94,7 @@ func legacySystem(t *testing.T) Paths {
 		{"current/bin/linuxadmin-bridge", "/usr/lib/linuxadmin/linuxadmin-bridge"},
 		{"/usr/lib/linuxadmin/current/bin/linuxadmind", "/usr/bin/linuxadmind"},
 	} {
-		os.MkdirAll(filepath.Dir(filepath.Join(root, l[1])), 0o755)
+		_ = os.MkdirAll(filepath.Dir(filepath.Join(root, l[1])), 0o755)
 		if err := os.Symlink(l[0], filepath.Join(root, l[1])); err != nil {
 			t.Fatal(err)
 		}
@@ -115,8 +115,8 @@ func addRelease(t *testing.T, p Paths, v string) {
 		d + "/packaging/ervisio.service":    "[Service]\nExecStart=/usr/bin/ervisiod\n",
 		d + "/VERSION":                      v + "\n",
 	})
-	os.Chmod(filepath.Join(p.Root, d, "bin/linuxadmind"), 0o755)
-	os.Chmod(filepath.Join(p.Root, d, "bin/linuxadmin-bridge"), 0o755)
+	_ = os.Chmod(filepath.Join(p.Root, d, "bin/linuxadmind"), 0o755)
+	_ = os.Chmod(filepath.Join(p.Root, d, "bin/linuxadmin-bridge"), 0o755)
 }
 
 func TestImportCopiesEverything(t *testing.T) {
@@ -187,7 +187,7 @@ func TestImportKeepsErvisioData(t *testing.T) {
 		"/etc/pam.d/ervisio":        "# admin's own\n",
 	})
 	// What a package creates: empty folders.
-	os.MkdirAll(p.At("/var/lib/ervisio/plugins"), 0o755)
+	_ = os.MkdirAll(p.At("/var/lib/ervisio/plugins"), 0o755)
 	res, err := (&Import{Paths: p}).Run()
 	if err != nil {
 		t.Fatal(err)
@@ -291,7 +291,7 @@ func TestMigrateUserDir(t *testing.T) {
 		".config/linuxadmin/plugins/docker/registries.key.json": `{"pw":"x"}`,
 		".config/linuxadmin-signing/team.key":                   "SECRET",
 	})
-	os.Chmod(filepath.Join(home, ".config/linuxadmin"), 0o700)
+	_ = os.Chmod(filepath.Join(home, ".config/linuxadmin"), 0o700)
 	moved, err := MigrateUserDir(home)
 	if err != nil || !moved {
 		t.Fatalf("%v %v", moved, err)
@@ -318,8 +318,8 @@ func TestMigrateUserDir(t *testing.T) {
 	}
 	// A symlinked old folder is not followed.
 	home2 := t.TempDir()
-	os.MkdirAll(filepath.Join(home2, ".config"), 0o755)
-	os.Symlink("/etc", filepath.Join(home2, ".config/linuxadmin"))
+	_ = os.MkdirAll(filepath.Join(home2, ".config"), 0o755)
+	_ = os.Symlink("/etc", filepath.Join(home2, ".config/linuxadmin"))
 	if moved, _ := MigrateUserDir(home2); moved {
 		t.Error("followed a symlink")
 	}
@@ -547,7 +547,7 @@ func TestRemoveLegacy(t *testing.T) {
 	if _, err := RemoveLegacy(ctx, p, sd, false, nil); err == nil || !strings.Contains(err.Error(), "apt") {
 		t.Errorf("packaged LinuxAdmin: %v", err)
 	}
-	os.Remove(p.At("/usr/lib/linuxadmin/managed"))
+	_ = os.Remove(p.At("/usr/lib/linuxadmin/managed"))
 	put(t, p.Root, map[string]string{"/etc/pam.d/linuxadmin": legacyPAM})
 	removed, err := RemoveLegacy(ctx, p, sd, false, nil)
 	if err != nil {

@@ -286,7 +286,7 @@ func copyFile(src, dst string) {
 	if err != nil {
 		return
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()
 	out, err := os.OpenFile(dst, os.O_CREATE|os.O_EXCL|os.O_WRONLY|oNoFollow, 0o600)
 	if err != nil {
 		return
@@ -296,7 +296,7 @@ func copyFile(src, dst string) {
 		cerr = err
 	}
 	if cerr != nil {
-		os.Remove(dst)
+		_ = os.Remove(dst)
 		return
 	}
 	if fi, err := in.Stat(); err == nil {

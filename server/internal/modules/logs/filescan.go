@@ -121,7 +121,7 @@ func scanFile(ctx context.Context, path, label, format string, maxBytes, sinceUs
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	size := st.Size()
 	known := false
 	no := 0
@@ -197,11 +197,11 @@ func openRegular(path string) (*os.File, os.FileInfo, error) {
 	}
 	st, err := f.Stat()
 	if err != nil {
-		f.Close()
+		_ = f.Close()
 		return nil, nil, err
 	}
 	if !st.Mode().IsRegular() {
-		f.Close()
+		_ = f.Close()
 		return nil, nil, rpc.Errorf(rpc.Invalid, "%s is not a regular file", path)
 	}
 	return f, st, nil
@@ -281,7 +281,7 @@ func candidateLog(d os.DirEntry, p string) (LogFile, bool) {
 	}
 	head := make([]byte, 1024)
 	n, _ := fh.Read(head)
-	fh.Close()
+	_ = fh.Close()
 	return lf, bytes.IndexByte(head[:n], 0) < 0
 }
 
@@ -336,7 +336,7 @@ func followFile(ctx context.Context, s spec, f filter, out chan<- Entry) error {
 
 func (ff *fileFollower) close() {
 	if ff.fh != nil {
-		ff.fh.Close()
+		_ = ff.fh.Close()
 		ff.fh = nil
 	}
 }
@@ -350,11 +350,11 @@ func (ff *fileFollower) open(fromStart bool) error {
 	}
 	info, err := h.Stat()
 	if err != nil {
-		h.Close()
+		_ = h.Close()
 		return err
 	}
 	if !info.Mode().IsRegular() {
-		h.Close()
+		_ = h.Close()
 		return rpc.Errorf(rpc.Invalid, "%s is not a regular file", ff.src.Path)
 	}
 	ff.fh = h

@@ -23,7 +23,7 @@ func TestCheckerFollowsMovedRepository(t *testing.T) {
 		case "/repositories/123456/releases/latest":
 			hdr = r.Header.Clone()
 			w.Header().Set("ETag", `"e1"`)
-			json.NewEncoder(w).Encode(Release{Tag: "v0.3.0", Assets: []Asset{{Name: "linuxadmin-0.3.0-linux-amd64.tar.gz", Size: 1,
+			_ = json.NewEncoder(w).Encode(Release{Tag: "v0.3.0", Assets: []Asset{{Name: "linuxadmin-0.3.0-linux-amd64.tar.gz", Size: 1,
 				URL: "https://github.com/ervisio/ervisio/releases/download/v0.3.0/linuxadmin-0.3.0-linux-amd64.tar.gz"}}})
 		default:
 			http.NotFound(w, r)

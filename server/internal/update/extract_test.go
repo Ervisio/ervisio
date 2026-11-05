@@ -17,7 +17,6 @@ type tarEntry struct {
 	typ      byte
 	mode     int64
 	linkname string
-	size     int64 // override header size (0 = len(body))
 }
 
 func writeTarGz(t *testing.T, path string, entries []tarEntry) {
@@ -45,11 +44,11 @@ func writeTarGz(t *testing.T, path string, entries []tarEntry) {
 			t.Fatal(err)
 		}
 		if typ == tar.TypeReg {
-			tw.Write([]byte(e.body))
+			_, _ = tw.Write([]byte(e.body))
 		}
 	}
-	tw.Close()
-	zw.Close()
+	_ = tw.Close()
+	_ = zw.Close()
 	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -150,12 +149,12 @@ func TestExtractLimits(t *testing.T) {
 		t.Fatal("archive over MaxEntries accepted")
 	}
 	// Not a gzip at all.
-	os.WriteFile(arc, []byte("plain text"), 0o644)
+	_ = os.WriteFile(arc, []byte("plain text"), 0o644)
 	if err := ExtractTarGz(arc, filepath.Join(dir, "o4"), pfx, DefaultLimits); err == nil {
 		t.Fatal("non-gzip accepted")
 	}
 	// Existing destination is refused (never extract over something).
-	os.Mkdir(filepath.Join(dir, "o5"), 0o755)
+	_ = os.Mkdir(filepath.Join(dir, "o5"), 0o755)
 	writeTarGz(t, arc, []tarEntry{{name: pfx + "/a", body: "x"}})
 	if err := ExtractTarGz(arc, filepath.Join(dir, "o5"), pfx, DefaultLimits); err == nil {
 		t.Fatal("existing destination accepted")

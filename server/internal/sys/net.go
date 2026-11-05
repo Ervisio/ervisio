@@ -21,7 +21,7 @@ func PrimaryIP() string {
 	for _, target := range []string{"192.0.2.1:9", "[2001:db8::1]:9"} {
 		if c, err := net.Dial("udp", target); err == nil {
 			ip := c.LocalAddr().(*net.UDPAddr).IP
-			c.Close()
+			_ = c.Close()
 			if ip.IsGlobalUnicast() {
 				return ip.String()
 			}

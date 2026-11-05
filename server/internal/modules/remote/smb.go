@@ -34,7 +34,7 @@ func dialSMB(ctx context.Context, spec *Conn) (*smbFS, error) {
 	defer cancel()
 	s, err := d.DialContext(dctx, conn)
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		if strings.Contains(err.Error(), "LOGON_FAILURE") || strings.Contains(err.Error(), "ACCOUNT") || os.IsPermission(err) {
 			return nil, rpc.Errorf(rpc.Forbidden, "The server refused the sign-in of %s. Check the user name, the password and the domain.", user)
 		}
@@ -43,7 +43,7 @@ func dialSMB(ctx context.Context, spec *Conn) (*smbFS, error) {
 	sh, err := s.Mount(spec.Share)
 	if err != nil {
 		_ = s.Logoff()
-		conn.Close()
+		_ = conn.Close()
 		switch {
 		case strings.Contains(err.Error(), "BAD_NETWORK_NAME"), os.IsNotExist(err):
 			return nil, rpc.Errorf(rpc.NotFound, "The server has no shared folder called %q.", spec.Share)

@@ -197,7 +197,7 @@ func (m *module) hTest(ctx context.Context, c *rpc.Call) (any, error) {
 		}
 		return nil, remoteErr(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	sp := startPath(f, spec)
 	if _, err := f.List(ctx, sp); err != nil {
 		return nil, rpc.Errorf(rpc.Invalid, "Signed in, but the folder %s cannot be opened: %v", sp, remoteErr(err).(*rpc.Error).Message)
@@ -538,7 +538,7 @@ func readTextFile(ctx context.Context, h *handle, pth string, max int64) (map[st
 		return nil, err
 	}
 	buf, err := io.ReadAll(io.LimitReader(r, max+1))
-	r.Close()
+	_ = r.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -634,7 +634,7 @@ func readStream(ctx context.Context, h *handle, pth string, s rpc.Stream) error 
 	if err != nil {
 		return err
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 	buf := make([]byte, 64<<10)
 	n, rerr := readChunk(r, buf)
 	if rerr != nil && rerr != io.EOF {

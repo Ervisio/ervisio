@@ -80,8 +80,8 @@ func TestList(t *testing.T) {
 	d := t.TempDir()
 	write(t, d+"/b.txt", "hi")
 	write(t, d+"/.hidden", "x")
-	os.Mkdir(d+"/Adir", 0o755)
-	os.Symlink(d+"/Adir", d+"/link")
+	_ = os.Mkdir(d+"/Adir", 0o755)
+	_ = os.Symlink(d+"/Adir", d+"/link")
 	es, _, err := listDir(d, false)
 	if err != nil {
 		t.Fatal(err)
@@ -111,7 +111,7 @@ func TestMoveNoOverwrite(t *testing.T) {
 	if err := movePath(d+"/a", d+"/b"); !rpc.IsCode(err, rpc.Conflict) {
 		t.Error(err)
 	}
-	os.Mkdir(d+"/dir", 0o755)
+	_ = os.Mkdir(d+"/dir", 0o755)
 	if err := movePath(d+"/dir", d+"/dir/sub"); !rpc.IsCode(err, rpc.Invalid) {
 		t.Error(err)
 	}
@@ -124,8 +124,8 @@ func TestCopyStream(t *testing.T) {
 	d := t.TempDir()
 	write(t, d+"/src/a.txt", "hello")
 	write(t, d+"/src/sub/b.txt", "world!")
-	os.Symlink("a.txt", d+"/src/ln")
-	os.Mkdir(d+"/dst", 0o755)
+	_ = os.Symlink("a.txt", d+"/src/ln")
+	_ = os.Mkdir(d+"/dst", 0o755)
 	s := newStream()
 	if err := doCopy(context.Background(), copyParams{From: []string{d + "/src"}, To: d + "/dst"}, s); err != nil {
 		t.Fatal(err)
@@ -176,7 +176,7 @@ func TestDeleteDoesNotFollowSymlinks(t *testing.T) {
 	d := t.TempDir()
 	write(t, d+"/outside/keep.txt", "keep")
 	write(t, d+"/victim/x", "x")
-	os.Symlink(d+"/outside", d+"/victim/escape")
+	_ = os.Symlink(d+"/outside", d+"/victim/escape")
 	res, err := doDelete([]string{d + "/victim"}, false)
 	if err != nil {
 		t.Fatal(err)
@@ -215,7 +215,7 @@ func TestTrashRoundTrip(t *testing.T) {
 	}
 	// same name again
 	write(t, d+"/my file #1.txt", "data2")
-	doDelete([]string{d + "/my file #1.txt"}, true)
+	_, _ = doDelete([]string{d + "/my file #1.txt"}, true)
 	r, err := hTrashList(context.Background(), &rpc.Call{})
 	if err != nil {
 		t.Fatal(err)
@@ -245,7 +245,7 @@ func TestTrashRoundTrip(t *testing.T) {
 func TestChmodRecursive(t *testing.T) {
 	d := t.TempDir()
 	write(t, d+"/t/a", "")
-	os.Symlink("/etc/passwd", d+"/t/l")
+	_ = os.Symlink("/etc/passwd", d+"/t/l")
 	call := func(m map[string]any) (any, error) {
 		raw, _ := json.Marshal(m)
 		return hChmod(context.Background(), &rpc.Call{Params: raw})
@@ -301,11 +301,11 @@ func TestText(t *testing.T) {
 		t.Error(err)
 	}
 	// binary and latin1
-	os.WriteFile(d+"/bin", []byte{1, 2, 0, 3}, 0o644)
+	_ = os.WriteFile(d+"/bin", []byte{1, 2, 0, 3}, 0o644)
 	if _, err := call("r", map[string]any{"path": d + "/bin"}); !rpc.IsCode(err, rpc.Invalid) {
 		t.Error(err)
 	}
-	os.WriteFile(d+"/lat", []byte{'c', 'a', 'f', 0xE9}, 0o644)
+	_ = os.WriteFile(d+"/lat", []byte{'c', 'a', 'f', 0xE9}, 0o644)
 	r, _ = call("r", map[string]any{"path": d + "/lat"})
 	if r.(map[string]any)["encoding"] != "latin1" || r.(map[string]any)["content"] != "café" {
 		t.Errorf("%v", r)
@@ -316,7 +316,7 @@ func TestText(t *testing.T) {
 	if b, _ := os.ReadFile(d + "/lat"); !bytes.Equal(b, []byte{'c', 'a', 'f', 0xE9}) {
 		t.Error(b)
 	}
-	os.Mkdir(d+"/dir", 0o755)
+	_ = os.Mkdir(d+"/dir", 0o755)
 	if _, err := call("r", map[string]any{"path": d + "/dir"}); !rpc.IsCode(err, rpc.Invalid) {
 		t.Error(err)
 	}
@@ -338,7 +338,7 @@ func TestSearch(t *testing.T) {
 			Done    bool
 			Count   int
 		}
-		json.Unmarshal(e, &m)
+		_ = json.Unmarshal(e, &m)
 		n += len(m.Entries)
 		if m.Done && m.Count != 2 {
 			t.Error(string(e))
@@ -348,7 +348,7 @@ func TestSearch(t *testing.T) {
 		t.Error(n)
 	}
 	s = newStream()
-	doSearch(context.Background(), searchParams{Root: d, Query: "*.txt", MaxResults: 1}, s)
+	_ = doSearch(context.Background(), searchParams{Root: d, Query: "*.txt", MaxResults: 1}, s)
 	if !strings.Contains(string(s.events[len(s.events)-1]), `"truncated":true`) {
 		t.Error(string(s.events[len(s.events)-1]))
 	}
@@ -363,8 +363,8 @@ func TestThumbnail(t *testing.T) {
 		}
 	}
 	var buf bytes.Buffer
-	png.Encode(&buf, img)
-	os.WriteFile(d+"/i.png", buf.Bytes(), 0o644)
+	_ = png.Encode(&buf, img)
+	_ = os.WriteFile(d+"/i.png", buf.Bytes(), 0o644)
 	raw, _ := json.Marshal(map[string]any{"path": d + "/i.png", "size": 100})
 	r, err := hThumbnail(context.Background(), &rpc.Call{Params: raw})
 	if err != nil {
@@ -382,7 +382,7 @@ func TestThumbnail(t *testing.T) {
 	if c := color.RGBAModel.Convert(out.At(10, 10)).(color.RGBA); c.R < 190 || c.G > 20 {
 		t.Error(c)
 	}
-	os.WriteFile(d+"/x.png", []byte("nope"), 0o644)
+	_ = os.WriteFile(d+"/x.png", []byte("nope"), 0o644)
 	raw, _ = json.Marshal(map[string]any{"path": d + "/x.png"})
 	if _, err := hThumbnail(context.Background(), &rpc.Call{Params: raw}); !rpc.IsCode(err, rpc.Invalid) {
 		t.Error(err)

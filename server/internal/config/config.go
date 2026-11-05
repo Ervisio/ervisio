@@ -231,7 +231,7 @@ func Load(path string) (cfg *Config, exists bool, warnings []string, err error) 
 	if err != nil {
 		return nil, false, nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	data, err := readLimited(f, MaxFileSize)
 	if err != nil {
 		return nil, true, nil, fmt.Errorf("read %s: %w", path, err)
@@ -305,17 +305,17 @@ func WriteAtomic(path string, data []byte, mode os.FileMode) error {
 		return err
 	}
 	name := tmp.Name()
-	defer os.Remove(name) // no-op after a successful rename
+	defer func() { _ = os.Remove(name) }() // no-op after a successful rename
 	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return err
 	}
 	if err := tmp.Chmod(mode); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return err
 	}
 	if err := tmp.Sync(); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return err
 	}
 	if err := tmp.Close(); err != nil {

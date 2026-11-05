@@ -20,7 +20,7 @@ func testLayout(t *testing.T) *Layout {
 		FlatWeb:     filepath.Join(root, "usr/share/ervisio/web"),
 		FlatPlugins: filepath.Join(root, "usr/share/ervisio/plugins"),
 	}
-	os.MkdirAll(l.LibDir, 0o755)
+	_ = os.MkdirAll(l.LibDir, 0o755)
 	return l
 }
 
@@ -29,12 +29,12 @@ func testLayout(t *testing.T) *Layout {
 func addVersion(t *testing.T, l *Layout, v string) {
 	t.Helper()
 	d := l.VersionDir(v)
-	os.MkdirAll(filepath.Join(d, "bin"), 0o755)
-	os.MkdirAll(filepath.Join(d, "web"), 0o755)
-	os.WriteFile(filepath.Join(d, "bin", "ervisiod"), []byte("daemon "+v), 0o755)
-	os.WriteFile(filepath.Join(d, "bin", "ervisio-bridge"), []byte("bridge "+v), 0o755)
-	os.WriteFile(filepath.Join(d, "web", "index.html"), []byte("<html>"), 0o644)
-	os.WriteFile(filepath.Join(d, "VERSION"), []byte(v+"\n"), 0o644)
+	_ = os.MkdirAll(filepath.Join(d, "bin"), 0o755)
+	_ = os.MkdirAll(filepath.Join(d, "web"), 0o755)
+	_ = os.WriteFile(filepath.Join(d, "bin", "ervisiod"), []byte("daemon "+v), 0o755)
+	_ = os.WriteFile(filepath.Join(d, "bin", "ervisio-bridge"), []byte("bridge "+v), 0o755)
+	_ = os.WriteFile(filepath.Join(d, "web", "index.html"), []byte("<html>"), 0o644)
+	_ = os.WriteFile(filepath.Join(d, "VERSION"), []byte(v+"\n"), 0o644)
 }
 
 // fakeProbe reports the VERSION file of the binary's version folder;

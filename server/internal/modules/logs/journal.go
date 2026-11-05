@@ -145,7 +145,7 @@ func journalDirReadable(dir string) (ok, denied bool) {
 		}
 		fh, err := os.Open(filepath.Join(dir, f.Name()))
 		if err == nil {
-			fh.Close()
+			_ = fh.Close()
 			return true, denied
 		}
 		if os.IsPermission(err) {

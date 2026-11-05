@@ -96,14 +96,14 @@ func dialSFTP(ctx context.Context, spec *Conn) (*sftpFS, error) {
 	_ = conn.SetDeadline(time.Now().Add(dialTimeout))
 	cc, chans, reqs, err := ssh.NewClientConn(conn, addr, cfg)
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, handshakeError(spec, addr, err)
 	}
 	_ = conn.SetDeadline(time.Time{})
 	client := ssh.NewClient(cc, chans, reqs)
 	sc, err := sftp.NewClient(client, sftp.UseConcurrentWrites(true))
 	if err != nil {
-		client.Close()
+		_ = client.Close()
 		return nil, rpc.Errorf(rpc.Unavailable, "The server does not offer SFTP: %v", err)
 	}
 	f := &sftpFS{ssh: client, c: sc, stop: make(chan struct{})}
@@ -189,11 +189,11 @@ func (f *sftpFS) keepalive() {
 			select {
 			case err := <-done:
 				if err != nil {
-					f.ssh.Close()
+					_ = f.ssh.Close()
 					return
 				}
 			case <-time.After(20 * time.Second):
-				f.ssh.Close()
+				_ = f.ssh.Close()
 				return
 			case <-f.stop:
 				return

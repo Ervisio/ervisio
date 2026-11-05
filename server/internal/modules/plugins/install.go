@@ -36,7 +36,7 @@ func ExtractTarGz(r io.Reader, dest string) error {
 	if err != nil {
 		return fmt.Errorf("the file is not a .tar.gz archive")
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 
 	entries, err := readArchiveEntries(tar.NewReader(gz))
 	if err != nil {
@@ -181,7 +181,7 @@ func writeArchiveEntry(dest, name string, e archiveEntry) error {
 		return fmt.Errorf("could not unpack %q: %v", e.name, cleanErr(err))
 	}
 	if _, err := f.Write(e.data); err != nil {
-		f.Close()
+		_ = f.Close()
 		return err
 	}
 	return f.Close()
@@ -211,7 +211,7 @@ func install(ctx context.Context, req installRequest) (*Info, error) {
 	if err != nil {
 		return nil, rpc.Errorf(rpc.Unavailable, "Cannot write to %s: %v", InstalledDir, cleanErr(err))
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 
 	stage, m, err := stagePlugin(ctx, req, tmp, p)
 	if err != nil {
@@ -251,7 +251,7 @@ func stagePlugin(ctx context.Context, req installRequest, tmp string, p policy) 
 	if err != nil {
 		return "", nil, err
 	}
-	defer archive.Close()
+	defer func() { _ = archive.Close() }()
 	stage := filepath.Join(tmp, "stage")
 	if err := os.Mkdir(stage, 0o755); err != nil {
 		return "", nil, err
@@ -324,7 +324,7 @@ func fetchArchive(ctx context.Context, source, wantSHA string) (io.ReadCloser, e
 	}
 	if wantSHA != "" {
 		if err := verifyChecksum(f, wantSHA); err != nil {
-			f.Close()
+			_ = f.Close()
 			return nil, err
 		}
 	}
@@ -340,7 +340,7 @@ func downloadArchive(ctx context.Context, u *url.URL) (*os.File, error) {
 	if err != nil {
 		return nil, rpc.Errorf(rpc.Unavailable, "Download failed: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, rpc.Errorf(rpc.Unavailable, "The download server answered %s.", resp.Status)
 	}
@@ -350,8 +350,8 @@ func downloadArchive(ctx context.Context, u *url.URL) (*os.File, error) {
 	}
 	n, err := io.Copy(tmp, io.LimitReader(resp.Body, maxArchiveBytes+1))
 	if err != nil || n > maxArchiveBytes {
-		tmp.Close()
-		os.Remove(tmp.Name())
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
 		return nil, rpc.Errorf(rpc.Invalid, "The download is interrupted or larger than %d MiB.", maxArchiveBytes>>20)
 	}
 	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
@@ -397,7 +397,7 @@ type tempFile struct{ *os.File }
 func (t *tempFile) Close() error {
 	err := t.File.Close()
 	if strings.HasPrefix(filepath.Base(t.Name()), ".download-") {
-		os.Remove(t.Name())
+		_ = os.Remove(t.Name())
 	}
 	return err
 }

@@ -260,8 +260,8 @@ func readPluginFile(_ context.Context, c *rpc.Call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer root.Close()
-	defer fh.Close()
+	defer func() { _ = root.Close() }()
+	defer func() { _ = fh.Close() }()
 	b, err := readRegular(fh, p.Path)
 	if err != nil {
 		return nil, err
@@ -316,7 +316,7 @@ func writeAtomic(root *os.Root, rel, path string, data []byte, mode fs.FileMode)
 	if err != nil {
 		return fileErr(err, path)
 	}
-	defer dh.Close()
+	defer func() { _ = dh.Close() }()
 	if fi, err := dh.Stat(); err != nil || !fi.IsDir() {
 		return rpc.Errorf(rpc.Invalid, "%s is not inside a folder.", path)
 	}
@@ -362,7 +362,7 @@ func writePluginFile(_ context.Context, c *rpc.Call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	mode, err := writeMode(root, r, p.Path)
 	if err != nil {
 		return nil, err
@@ -400,8 +400,8 @@ func listPluginDir(_ context.Context, c *rpc.Call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer root.Close()
-	defer dh.Close()
+	defer func() { _ = root.Close() }()
+	defer func() { _ = dh.Close() }()
 	ents, err := dh.ReadDir(maxPluginListing)
 	if err != nil && !errors.Is(err, io.EOF) {
 		return nil, rpc.Errorf(rpc.Invalid, "%s is not a folder.", p.Path)
@@ -447,7 +447,7 @@ func mkdirPlugin(_ context.Context, c *rpc.Call) (any, error) {
 	if err != nil {
 		return nil, fileErr(err, p.Path)
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	// One component at a time through os.Root (no MkdirAll before Go 1.25),
 	// so a symlink on the way cannot lead out of the folder.
 	cur := ""
@@ -481,7 +481,7 @@ func removePlugin(_ context.Context, c *rpc.Call) (any, error) {
 	if err != nil {
 		return nil, fileErr(err, p.Path)
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	if err := root.Remove(r.rel); err != nil {
 		if errors.Is(err, syscall.ENOTEMPTY) || errors.Is(err, syscall.EEXIST) {
 			return nil, rpc.Errorf(rpc.Invalid, "%s is a folder that is not empty.", p.Path)

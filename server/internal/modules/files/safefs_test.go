@@ -69,7 +69,7 @@ func raceLayout(t *testing.T) (tree, outside string) {
 	write(t, outside+"/f", "secret")
 	write(t, outside+"/a/f", "secret")
 	for _, p := range []string{tree + "/a/f", outside + "/f", outside + "/a/f"} {
-		os.Chmod(p, 0o644)
+		_ = os.Chmod(p, 0o644)
 	}
 	return
 }
@@ -166,7 +166,7 @@ func TestCopySwapDoesNotLeak(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tree, outside := raceLayout(t)
 			dst := filepath.Dir(tree) + "/dst"
-			os.Mkdir(dst, 0o755)
+			_ = os.Mkdir(dst, 0o755)
 			swapped := false
 			setHook(t, func(st, full string) {
 				if st == tc.stage && full == tree+tc.swap && !swapped {
@@ -198,8 +198,8 @@ func TestStrictRefusesUserLinksInPaths(t *testing.T) {
 	strict(t)
 	d := t.TempDir()
 	write(t, d+"/outside/f", "secret")
-	os.Chmod(d+"/outside/f", 0o644)
-	os.Mkdir(d+"/home", 0o755)
+	_ = os.Chmod(d+"/outside/f", 0o644)
+	_ = os.Mkdir(d+"/home", 0o755)
 	if err := os.Symlink(d+"/outside", d+"/home/link"); err != nil {
 		t.Fatal(err)
 	}
@@ -260,14 +260,14 @@ func TestStrictRefusesUserLinksInPaths(t *testing.T) {
 func TestChmodNoFollowRefusesLink(t *testing.T) {
 	d := t.TempDir()
 	write(t, d+"/outside/f", "secret")
-	os.Chmod(d+"/outside/f", 0o644)
-	os.Mkdir(d+"/home", 0o755)
-	os.Symlink(d+"/outside/f", d+"/home/notes")
+	_ = os.Chmod(d+"/outside/f", 0o644)
+	_ = os.Mkdir(d+"/home", 0o755)
+	_ = os.Symlink(d+"/outside/f", d+"/home/notes")
 	f, name, err := openParent(d + "/home/notes")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if err := chmodNoFollow(dfd(f), name, 0o600); err != errIsLink {
 		t.Errorf("chmod must refuse a link, got %v", err)
 	}
@@ -298,7 +298,7 @@ func TestMkdirAllAndCreateStayPut(t *testing.T) {
 		t.Errorf("create over an existing file: %v", err)
 	}
 	// A dangling link in place of the new name is never followed by create.
-	os.Symlink(d+"/elsewhere", d+"/a/dangling")
+	_ = os.Symlink(d+"/elsewhere", d+"/a/dangling")
 	raw, _ = json.Marshal(map[string]any{"path": d + "/a/dangling"})
 	if _, err := hCreate(context.Background(), &rpc.Call{Params: raw}); err == nil {
 		t.Error("create followed a dangling link")
@@ -312,7 +312,7 @@ func TestMoveAcrossDevicesFallback(t *testing.T) {
 	// Copy+remove path of movePath, exercised directly through the copier.
 	d := t.TempDir()
 	write(t, d+"/src/x/y", "data")
-	os.Symlink("y", d+"/src/x/ln")
+	_ = os.Symlink("y", d+"/src/x/ln")
 	if err := copyPath(context.Background(), d+"/src", d+"/dst", nil); err != nil {
 		t.Fatal(err)
 	}

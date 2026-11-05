@@ -21,11 +21,11 @@ const frameTestManifest = `{"id":"%ID%","name":"Demo","version":"1.0.0","entry":
 func writeFramePlugin(t *testing.T, dir, id, groups string) {
 	t.Helper()
 	p := filepath.Join(dir, id)
-	os.MkdirAll(p, 0o755)
+	_ = os.MkdirAll(p, 0o755)
 	m := strings.ReplaceAll(strings.ReplaceAll(frameTestManifest, "%ID%", id), "%GROUPS%", groups)
-	os.WriteFile(filepath.Join(p, "manifest.json"), []byte(m), 0o644)
-	os.WriteFile(filepath.Join(p, "index.js"), []byte("export default () => {}"), 0o644)
-	os.WriteFile(filepath.Join(p, "page.html"), []byte("<script>alert(1)</script>"), 0o644)
+	_ = os.WriteFile(filepath.Join(p, "manifest.json"), []byte(m), 0o644)
+	_ = os.WriteFile(filepath.Join(p, "index.js"), []byte("export default () => {}"), 0o644)
+	_ = os.WriteFile(filepath.Join(p, "page.html"), []byte("<script>alert(1)</script>"), 0o644)
 }
 
 // The plugin frame and plugin assets are served only for plugins the
@@ -35,7 +35,7 @@ func TestPluginFrameAndAssets(t *testing.T) {
 	writeFramePlugin(t, plugins, "demo", "")
 	writeFramePlugin(t, plugins, "hidden", `"no-such-group-xyz"`)
 	web := t.TempDir()
-	os.WriteFile(filepath.Join(web, "index.html"), []byte("<!doctype html>app"), 0o644)
+	_ = os.WriteFile(filepath.Join(web, "index.html"), []byte("<!doctype html>app"), 0o644)
 	srv, err := New(Options{
 		ConfigPath:    filepath.Join(t.TempDir(), "ervisio.conf"),
 		Dev:           true,
@@ -63,8 +63,8 @@ func TestPluginFrameAndAssets(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		io.Copy(io.Discard, resp.Body)
-		resp.Body.Close()
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
 		return resp
 	}
 
@@ -116,7 +116,7 @@ func TestPluginFrameAndAssets(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if resp.StatusCode != 401 {
 			t.Errorf("%s without session: %d", p, resp.StatusCode)
 		}

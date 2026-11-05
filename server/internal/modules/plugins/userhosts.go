@@ -85,7 +85,7 @@ func approvedFor(plugin string) []ApprovedHost {
 func NormaliseHost(raw, scheme string) (string, error) {
 	h := strings.ToLower(strings.TrimSpace(raw))
 	if h == "" || strings.ContainsAny(h, "*/@?# \t") || strings.Contains(h, "://") {
-		return "", fmt.Errorf("Give a host name with an optional port, like registry.example.org or registry.example.org:5000.")
+		return "", fmt.Errorf("Give a host name with an optional port, like registry.example.org or registry.example.org:5000.") //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	host, port, err := splitHostPort(h, scheme)
 	if err != nil {
@@ -93,7 +93,7 @@ func NormaliseHost(raw, scheme string) (string, error) {
 	}
 	full := host + ":" + port
 	if len(full) > 253 || !NetworkHostRe.MatchString(full) {
-		return "", fmt.Errorf("%q is not a valid host name.", raw)
+		return "", fmt.Errorf("%q is not a valid host name.", raw) //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	return full, nil
 }
@@ -109,7 +109,7 @@ func splitHostPort(h, scheme string) (host, port string, err error) {
 	if i := strings.LastIndex(h, ":"); i >= 0 {
 		host, port = h[:i], h[i+1:]
 		if n, err := strconv.Atoi(port); err != nil || n < 1 || n > 65535 {
-			return "", "", fmt.Errorf("The port must be a number from 1 to 65535.")
+			return "", "", fmt.Errorf("The port must be a number from 1 to 65535.") //nolint:staticcheck // user-facing message, wording is part of the API
 		}
 	}
 	return host, port, nil

@@ -121,7 +121,7 @@ func tailFile(path string, n int) (any, error) {
 	if err != nil {
 		return nil, err // permission and not-found map to codes automatically
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	fi, err := f.Stat()
 	if err != nil {
 		return nil, err

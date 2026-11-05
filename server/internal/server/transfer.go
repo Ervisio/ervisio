@@ -980,7 +980,7 @@ func uploadStreamErr(streamErr, sendErr error, done bool) error {
 		return sendErr
 	}
 	if !done {
-		return errors.New("The upload did not complete.")
+		return errors.New("The upload did not complete.") //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	return nil
 }

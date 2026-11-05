@@ -25,7 +25,7 @@ func movePath(from, to string) error {
 	if err != nil {
 		return err
 	}
-	defer sd.Close()
+	defer func() { _ = sd.Close() }()
 	st, err := lstatAt(dfd(sd), sname)
 	if err != nil {
 		return pathErr("lstat", from, err)
@@ -34,7 +34,7 @@ func movePath(from, to string) error {
 	if err != nil {
 		return err
 	}
-	defer dd.Close()
+	defer func() { _ = dd.Close() }()
 	if _, err := lstatAt(dfd(dd), dname); err == nil {
 		return errAlreadyExists(to)
 	}
@@ -72,7 +72,7 @@ func doCopy(ctx context.Context, p copyParams, s rpc.Stream) error {
 	if err != nil {
 		return err
 	}
-	defer toDir.Close()
+	defer func() { _ = toDir.Close() }()
 	jobs, total, err := planCopy(ctx, p, from, to)
 	if err != nil {
 		return err
@@ -123,7 +123,7 @@ func copyJobTo(ctx context.Context, move bool, toFd int, j copyJob, r *copyRepor
 	if err != nil {
 		return err
 	}
-	defer sd.Close()
+	defer func() { _ = sd.Close() }()
 	dname := filepath.Base(j.dst)
 	if move {
 		err := renameNoReplace(dfd(sd), sname, toFd, dname, j.dst)
@@ -161,7 +161,7 @@ func openParentStat(path string) (*os.File, string, unix.Stat_t, error) {
 	}
 	st, err := lstatAt(dfd(d), name)
 	if err != nil {
-		d.Close()
+		_ = d.Close()
 		return nil, "", unix.Stat_t{}, pathErr("lstat", path, err)
 	}
 	return d, name, st, nil
@@ -176,7 +176,7 @@ func hChmod(ctx context.Context, c *rpc.Call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer d.Close()
+	defer func() { _ = d.Close() }()
 	if isLink(&st) {
 		return nil, errChmodOnLink()
 	}
@@ -249,7 +249,7 @@ func hChown(ctx context.Context, c *rpc.Call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer d.Close()
+	defer func() { _ = d.Close() }()
 	if !p.Recursive || !isDir(&st) {
 		if err := unix.Fchownat(dfd(d), name, uid, gid, unix.AT_SYMLINK_NOFOLLOW); err != nil {
 			return nil, pathErr("chown", path, err)

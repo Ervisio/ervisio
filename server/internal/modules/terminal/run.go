@@ -26,7 +26,7 @@ func RunPTY(ctx context.Context, cmd *exec.Cmd, cols, rows int, st rpc.Stream) e
 	if err != nil {
 		return rpc.Errorf(rpc.Unavailable, "Could not start %s: %v", cmd.Path, err)
 	}
-	defer ptmx.Close()
+	defer func() { _ = ptmx.Close() }()
 	pid := cmd.Process.Pid
 
 	stop := make(chan struct{})

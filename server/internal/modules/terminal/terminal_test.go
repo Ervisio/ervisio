@@ -14,19 +14,19 @@ import (
 
 func TestRingKeepsLatest(t *testing.T) {
 	r := newRing(8)
-	r.Write([]byte("abc"))
+	_, _ = r.Write([]byte("abc"))
 	if got := string(r.Snapshot()); got != "abc" {
 		t.Fatalf("got %q", got)
 	}
-	r.Write([]byte("defgh"))
+	_, _ = r.Write([]byte("defgh"))
 	if got := string(r.Snapshot()); got != "abcdefgh" {
 		t.Fatalf("exactly full: got %q", got)
 	}
-	r.Write([]byte("ij"))
+	_, _ = r.Write([]byte("ij"))
 	if got := string(r.Snapshot()); got != "cdefghij" {
 		t.Fatalf("wrapped: got %q", got)
 	}
-	r.Write([]byte("0123456789ABCDEF"))
+	_, _ = r.Write([]byte("0123456789ABCDEF"))
 	if got := string(r.Snapshot()); got != "89ABCDEF" {
 		t.Fatalf("oversized write: got %q", got)
 	}
@@ -36,7 +36,7 @@ func TestRingScrollbackSize(t *testing.T) {
 	r := newRing(ScrollbackSize)
 	chunk := bytes.Repeat([]byte("x"), 100000)
 	for i := 0; i < 5; i++ {
-		r.Write(chunk)
+		_, _ = r.Write(chunk)
 	}
 	if n := len(r.Snapshot()); n != ScrollbackSize {
 		t.Fatalf("len %d, want %d", n, ScrollbackSize)

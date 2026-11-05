@@ -38,7 +38,7 @@ func testRegistry() (*Registry, chan struct{}) {
 	})
 	r.Handle("t.panic", User, func(ctx context.Context, c *Call) (any, error) {
 		var m map[string]int
-		m["x"] = 1
+		m["x"] = 1 //nolint:staticcheck // the nil-map panic is the test
 		return nil, nil
 	})
 	r.Handle("t.root", Admin, func(ctx context.Context, c *Call) (any, error) { return "ok", nil })
@@ -92,11 +92,11 @@ func newPair(t *testing.T, reg *Registry, admin bool) *pair {
 	p := &pair{cancel: cancel, served: make(chan error, 1), toSrv: toSrv}
 	go func() {
 		err := Serve(ctx, reg, srvIn, srvOut, ServeOptions{Admin: admin, UID: 1000, Version: "test", Logger: log.New(io.Discard, "", 0)})
-		srvOut.Close()
+		_ = srvOut.Close()
 		p.served <- err
 	}()
 	p.client = NewClient(fromSrv, toSrv, log.New(io.Discard, "", 0))
-	t.Cleanup(func() { p.client.Close(); cancel() })
+	t.Cleanup(func() { _ = p.client.Close(); cancel() })
 	return p
 }
 
@@ -202,7 +202,7 @@ func TestStreamFlowControl(t *testing.T) {
 	i := 0
 	for ev := range st.Events() {
 		var v int
-		json.Unmarshal(ev.Data, &v)
+		_ = json.Unmarshal(ev.Data, &v)
 		if v != i {
 			t.Fatalf("event %d: got %d", i, v)
 		}
@@ -230,7 +230,7 @@ func TestStreamInputAndCancel(t *testing.T) {
 			t.Fatalf("event %+v", ev)
 		}
 	}
-	st.Send(ctx, json.RawMessage(`"quit"`))
+	_ = st.Send(ctx, json.RawMessage(`"quit"`))
 	if _, ok := <-st.Events(); ok {
 		t.Fatal("expected end")
 	}
@@ -251,7 +251,7 @@ func TestStreamInputAndCancel(t *testing.T) {
 	// Stream errors propagate.
 	st3, _ := p.client.Stream(ctx, "t.echoStream", nil)
 	defer st3.Close()
-	st3.Send(ctx, json.RawMessage(`5`))
+	_ = st3.Send(ctx, json.RawMessage(`5`))
 	for range st3.Events() {
 	}
 	if !IsCode(st3.Err(), Invalid) {
@@ -289,8 +289,8 @@ func TestBridgeDeath(t *testing.T) {
 func TestServerEOF(t *testing.T) {
 	reg, _ := testRegistry()
 	p := newPair(t, reg, false)
-	p.client.Hello(ctxT(t))
-	p.client.Close()
+	_, _ = p.client.Hello(ctxT(t))
+	_ = p.client.Close()
 	select {
 	case err := <-p.served:
 		if err != nil {
@@ -304,14 +304,14 @@ func TestServerEOF(t *testing.T) {
 func TestLineReader(t *testing.T) {
 	r, w := io.Pipe()
 	go func() {
-		w.Write([]byte("short\n"))
+		_, _ = w.Write([]byte("short\n"))
 		big := make([]byte, 300)
 		for i := range big {
 			big[i] = 'x'
 		}
-		w.Write(append(big, '\n'))
-		w.Write([]byte("after"))
-		w.Close()
+		_, _ = w.Write(append(big, '\n'))
+		_, _ = w.Write([]byte("after"))
+		_ = w.Close()
 	}()
 	lr := newLineReader(r, 100)
 	if l, err := lr.next(); err != nil || string(l) != "short\n" {

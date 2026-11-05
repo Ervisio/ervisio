@@ -56,7 +56,7 @@ func writePlugin(t *testing.T, dir, manifest string, files map[string]string) {
 	}
 	for n, c := range files {
 		p := filepath.Join(dir, n)
-		os.MkdirAll(filepath.Dir(p), 0o755)
+		_ = os.MkdirAll(filepath.Dir(p), 0o755)
 		if err := os.WriteFile(p, []byte(c), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -114,13 +114,13 @@ func TestLoadManifestEntryInside(t *testing.T) {
 		t.Fatalf("missing entry: %v", err)
 	}
 	outside := filepath.Join(root, "outside.js")
-	os.WriteFile(outside, []byte("x"), 0o644)
-	os.Symlink(outside, filepath.Join(dir, "index.js"))
+	_ = os.WriteFile(outside, []byte("x"), 0o644)
+	_ = os.Symlink(outside, filepath.Join(dir, "index.js"))
 	if _, err := LoadManifest(dir); err == nil || !strings.Contains(err.Error(), "outside") {
 		t.Fatalf("symlinked entry must be refused: %v", err)
 	}
-	os.Remove(filepath.Join(dir, "index.js"))
-	os.WriteFile(filepath.Join(dir, "index.js"), []byte("export default () => {}"), 0o644)
+	_ = os.Remove(filepath.Join(dir, "index.js"))
+	_ = os.WriteFile(filepath.Join(dir, "index.js"), []byte("export default () => {}"), 0o644)
 	if _, err := LoadManifest(dir); err != nil {
 		t.Fatal(err)
 	}
@@ -147,20 +147,20 @@ func TestSignatureRoundTrip(t *testing.T) {
 	}
 
 	// Changed file.
-	os.WriteFile(filepath.Join(dir, "lib/a.js"), []byte("2"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "lib/a.js"), []byte("2"), 0o644)
 	if s := CheckSignature(dir, keys); s.Verified || !strings.Contains(s.Err, "changed after signing") {
 		t.Fatalf("tampered file: %+v", s)
 	}
-	os.WriteFile(filepath.Join(dir, "lib/a.js"), []byte("1"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "lib/a.js"), []byte("1"), 0o644)
 	// Extra unlisted file.
-	os.WriteFile(filepath.Join(dir, "evil.js"), []byte("1"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "evil.js"), []byte("1"), 0o644)
 	if s := CheckSignature(dir, keys); s.Verified || !strings.Contains(s.Err, "not listed") {
 		t.Fatalf("extra file: %+v", s)
 	}
-	os.Remove(filepath.Join(dir, "evil.js"))
+	_ = os.Remove(filepath.Join(dir, "evil.js"))
 	// Tampered manifest (capabilities widened).
 	b, _ := os.ReadFile(filepath.Join(dir, "manifest.json"))
-	os.WriteFile(filepath.Join(dir, "manifest.json"), bytes.Replace(b, []byte(`"admin": false`), []byte(`"admin": true`), 1), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "manifest.json"), bytes.Replace(b, []byte(`"admin": false`), []byte(`"admin": true`), 1), 0o644)
 	if s := CheckSignature(dir, keys); s.Verified {
 		t.Fatalf("tampered manifest verified: %+v", s)
 	}
@@ -212,11 +212,11 @@ func makeTar(t *testing.T, ents []tent) []byte {
 			t.Fatal(err)
 		}
 		if typ == tar.TypeReg {
-			tw.Write([]byte(e.body))
+			_, _ = tw.Write([]byte(e.body))
 		}
 	}
-	tw.Close()
-	gz.Close()
+	_ = tw.Close()
+	_ = gz.Close()
 	return buf.Bytes()
 }
 
@@ -332,10 +332,10 @@ func setup(t *testing.T) (system, installed string) {
 	MovedStatePath = filepath.Join(root, "moved.json")
 	noRemoteCatalog = true
 	configmod.Path = filepath.Join(root, "ervisio.conf")
-	os.MkdirAll(SystemDir, 0o755)
-	os.MkdirAll(InstalledDir, 0o755)
+	_ = os.MkdirAll(SystemDir, 0o755)
+	_ = os.MkdirAll(InstalledDir, 0o755)
 	// Most tests use unsigned fixtures; the default (signed only) is tested in TestTrustPolicy.
-	os.WriteFile(configmod.Path, []byte("[plugins]\nallow_unsigned = true\n"), 0o644)
+	_ = os.WriteFile(configmod.Path, []byte("[plugins]\nallow_unsigned = true\n"), 0o644)
 	t.Cleanup(func() { DevDirs = nil; noRemoteCatalog = false })
 	return SystemDir, InstalledDir
 }
@@ -370,7 +370,7 @@ func TestListAndEnable(t *testing.T) {
 		}
 	}
 	// unsigned not allowed
-	os.WriteFile(configmod.Path, []byte("[plugins]\nallow_unsigned = false\n"), 0o644)
+	_ = os.WriteFile(configmod.Path, []byte("[plugins]\nallow_unsigned = false\n"), 0o644)
 	for _, in := range list(true) {
 		if in.ID == "demo" && (!in.Blocked || in.Enabled) {
 			t.Fatalf("unsigned plugin should be blocked: %+v", in)
@@ -422,7 +422,7 @@ func TestResolveLevels(t *testing.T) {
 	}
 	st := readState()
 	st.Enabled["demo"] = false
-	writeState(st)
+	_ = writeState(st)
 	if _, err := resolve(user, ExecParams{Plugin: "demo", Command: "ps"}, false); !rpc.IsCode(err, rpc.Forbidden) {
 		t.Fatalf("disabled plugin must not run: %v", err)
 	}
@@ -454,7 +454,7 @@ func TestInstallUninstall(t *testing.T) {
 		{name: "demo/index.js", body: "export default () => {}"},
 	}
 	arch := filepath.Join(t.TempDir(), "demo.tar.gz")
-	os.WriteFile(arch, makeTar(t, files), 0o644)
+	_ = os.WriteFile(arch, makeTar(t, files), 0o644)
 	var consent Capabilities
 	m, _ := ParseManifest([]byte(goodManifest))
 	consent = m.Capabilities
@@ -478,12 +478,12 @@ func TestInstallUninstall(t *testing.T) {
 		t.Fatalf("temp files left in %s: %v", installed, ents)
 	}
 	// strict mode refuses unsigned
-	os.WriteFile(configmod.Path, []byte("[plugins]\nallow_unsigned = false\n"), 0o644)
-	os.RemoveAll(filepath.Join(installed, "demo"))
+	_ = os.WriteFile(configmod.Path, []byte("[plugins]\nallow_unsigned = false\n"), 0o644)
+	_ = os.RemoveAll(filepath.Join(installed, "demo"))
 	if _, err := install(context.Background(), installRequest{Source: arch}); !rpc.IsCode(err, rpc.Forbidden) {
 		t.Fatalf("unsigned install must be refused: %v", err)
 	}
-	os.WriteFile(configmod.Path, []byte("[plugins]\nallow_unsigned = true\n"), 0o644)
+	_ = os.WriteFile(configmod.Path, []byte("[plugins]\nallow_unsigned = true\n"), 0o644)
 	// bad checksum
 	if _, err := install(context.Background(), installRequest{Source: arch, SHA256: strings.Repeat("0", 64)}); !rpc.IsCode(err, rpc.Invalid) {
 		t.Fatalf("checksum: %v", err)
@@ -531,15 +531,15 @@ func TestInstallSignedVerified(t *testing.T) {
 			ents = append(ents, tent{name: n, body: string(b)})
 		}
 		p := filepath.Join(t.TempDir(), "p.tar.gz")
-		os.WriteFile(p, makeTar(t, ents), 0o644)
+		_ = os.WriteFile(p, makeTar(t, ents), 0o644)
 		return p
 	}
-	os.WriteFile(configmod.Path, []byte("[plugins]\nallow_unsigned = false\n"), 0o644)
+	_ = os.WriteFile(configmod.Path, []byte("[plugins]\nallow_unsigned = false\n"), 0o644)
 	in, err := install(context.Background(), installRequest{Source: pack(false)})
 	if err != nil || !in.Verified || !in.Signed {
 		t.Fatalf("%+v %v", in, err)
 	}
-	os.RemoveAll(filepath.Join(installed, "demo"))
+	_ = os.RemoveAll(filepath.Join(installed, "demo"))
 	if _, err := install(context.Background(), installRequest{Source: pack(true)}); !rpc.IsCode(err, rpc.Forbidden) {
 		t.Fatalf("tampered package must be refused: %v", err)
 	}
@@ -573,7 +573,7 @@ func TestLoadDevNeedsDevMode(t *testing.T) {
 	if _, err := loadDev(dir); !rpc.IsCode(err, rpc.Forbidden) {
 		t.Fatalf("dev off: %v", err)
 	}
-	os.WriteFile(configmod.Path, []byte("[plugins]\nallow_unsigned = true\ndev = true\n"), 0o644)
+	_ = os.WriteFile(configmod.Path, []byte("[plugins]\nallow_unsigned = true\ndev = true\n"), 0o644)
 	info, err := loadDev(dir)
 	if err != nil || info.ID != "demo" {
 		t.Fatalf("%+v %v", info, err)
@@ -621,7 +621,7 @@ func TestSampleCatalog(t *testing.T) {
 		t.Fatal(err)
 	}
 	var raw struct{ Plugins []json.RawMessage }
-	json.Unmarshal(b, &raw)
+	_ = json.Unmarshal(b, &raw)
 	c, err := parseCatalog(b)
 	if err != nil || len(c.Plugins) != len(raw.Plugins) || len(c.Plugins) != 5 {
 		t.Fatalf("%d of %d entries valid: %v", len(c.Plugins), len(raw.Plugins), err)
@@ -653,10 +653,10 @@ func TestDevAsset(t *testing.T) {
 	DevDirs = nil
 	t.Setenv("HOME", t.TempDir())
 	outside := filepath.Join(t.TempDir(), "secret.txt")
-	os.WriteFile(outside, []byte("secret"), 0o644)
+	_ = os.WriteFile(outside, []byte("secret"), 0o644)
 	dir := filepath.Join(t.TempDir(), "demo")
 	writePlugin(t, dir, goodManifest, map[string]string{"index.js": "export default 1", "assets/a.css": "body{}"})
-	os.Symlink(outside, filepath.Join(dir, "link.txt"))
+	_ = os.Symlink(outside, filepath.Join(dir, "link.txt"))
 
 	get := func(id, file string) (*assetStream, error) {
 		raw, _ := json.Marshal(map[string]string{"id": id, "file": file})

@@ -37,7 +37,7 @@ func TestStore(t *testing.T) {
 	if len(m) != 1 {
 		t.Fatalf("replace: %v", m)
 	}
-	os.WriteFile(p, []byte("{corrupt"), 0o600)
+	_ = os.WriteFile(p, []byte("{corrupt"), 0o600)
 	if m, err := s.Get(); err != nil || len(m) != 0 {
 		t.Fatal(m, err)
 	}

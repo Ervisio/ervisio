@@ -232,9 +232,9 @@ func buildBridge(t *testing.T) string {
 func newTestServer(t *testing.T, noAuth bool) (*httptest.Server, *Server) {
 	t.Helper()
 	web := t.TempDir()
-	os.WriteFile(filepath.Join(web, "index.html"), []byte("<!doctype html>app"), 0o644)
-	os.MkdirAll(filepath.Join(web, "assets"), 0o755)
-	os.WriteFile(filepath.Join(web, "assets", "app.js"), []byte("console.log(1)"), 0o644)
+	_ = os.WriteFile(filepath.Join(web, "index.html"), []byte("<!doctype html>app"), 0o644)
+	_ = os.MkdirAll(filepath.Join(web, "assets"), 0o755)
+	_ = os.WriteFile(filepath.Join(web, "assets", "app.js"), []byte("console.log(1)"), 0o644)
 	srv, err := New(Options{
 		ConfigPath: filepath.Join(t.TempDir(), "ervisio.conf"),
 		Dev:        true,
@@ -270,7 +270,7 @@ func noAuthClient(t *testing.T, srv *Server, ts *httptest.Server) *http.Client {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusSeeOther { // redirected to the app
 		t.Fatalf("noauth sign-in: %d", resp.StatusCode)
 	}
@@ -279,7 +279,7 @@ func noAuthClient(t *testing.T, srv *Server, ts *httptest.Server) *http.Client {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("reused token: %d", resp.StatusCode)
 	}
@@ -313,7 +313,7 @@ func doc(t *testing.T, client *http.Client, method, url, body string, csrf bool)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(resp.Body)
 	return resp.StatusCode, string(b)
 }
@@ -386,27 +386,27 @@ func TestRPCAndStream(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer c.CloseNow()
-	c.Write(ctx, websocket.MessageText, []byte(`{"ch":3,"op":"open","method":"system.metricsStream","params":{"interval":250}}`))
+	defer func() { _ = c.CloseNow() }()
+	_ = c.Write(ctx, websocket.MessageText, []byte(`{"ch":3,"op":"open","method":"system.metricsStream","params":{"interval":250}}`))
 	for i := 0; i < 2; i++ {
 		_, data, err := c.Read(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
 		var f wsFrame
-		json.Unmarshal(data, &f)
+		_ = json.Unmarshal(data, &f)
 		if f.Ch != 3 || f.Op != "data" || !strings.Contains(string(f.Data), `"cpu"`) {
 			t.Fatalf("frame %s", data)
 		}
 	}
-	c.Write(ctx, websocket.MessageText, []byte(`{"ch":3,"op":"close"}`))
+	_ = c.Write(ctx, websocket.MessageText, []byte(`{"ch":3,"op":"close"}`))
 	for {
 		_, data, err := c.Read(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
 		var f wsFrame
-		json.Unmarshal(data, &f)
+		_ = json.Unmarshal(data, &f)
 		if f.Op == "end" {
 			break
 		}
@@ -414,7 +414,7 @@ func TestRPCAndStream(t *testing.T) {
 			t.Fatalf("frame %s", data)
 		}
 	}
-	c.Write(ctx, websocket.MessageText, []byte(`{"ch":4,"op":"open","method":"system.power"}`))
+	_ = c.Write(ctx, websocket.MessageText, []byte(`{"ch":4,"op":"open","method":"system.power"}`))
 	_, data, _ := c.Read(ctx)
 	if !strings.Contains(string(data), `"needs_admin"`) {
 		t.Fatalf("frame %s", data)

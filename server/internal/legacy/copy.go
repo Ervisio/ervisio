@@ -93,17 +93,17 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()
 	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL|oNoFollow, mode)
 	if err != nil {
 		return err
 	}
 	if _, err := io.Copy(out, in); err != nil {
-		out.Close()
+		_ = out.Close()
 		return err
 	}
 	if err := out.Sync(); err != nil {
-		out.Close()
+		_ = out.Close()
 		return err
 	}
 	return out.Close()
@@ -133,7 +133,7 @@ func installTree(src, dst string, skip func(rel string) bool, edit func(tmp stri
 			if err := os.Rename(dst, old); err != nil {
 				return err
 			}
-			defer os.RemoveAll(old)
+			defer func() { _ = os.RemoveAll(old) }()
 		}
 		if err := os.Rename(tmp, dst); err != nil {
 			return err
@@ -141,7 +141,7 @@ func installTree(src, dst string, skip func(rel string) bool, edit func(tmp stri
 		return sys.SyncDir(parent)
 	}()
 	if err != nil {
-		os.RemoveAll(tmp)
+		_ = os.RemoveAll(tmp)
 		return fmt.Errorf("copy %s to %s: %w", src, dst, err)
 	}
 	return nil
@@ -152,7 +152,7 @@ func removeStale(dst string) {
 	matches, _ := filepath.Glob(filepath.Join(filepath.Dir(dst), "."+filepath.Base(dst)+".import-*"))
 	more, _ := filepath.Glob(filepath.Join(filepath.Dir(dst), "."+filepath.Base(dst)+".replaced-*"))
 	for _, m := range append(matches, more...) {
-		os.RemoveAll(m)
+		_ = os.RemoveAll(m)
 	}
 }
 
@@ -183,11 +183,11 @@ func writeFileAtomic(path string, data []byte, mode os.FileMode) error {
 		return err
 	}
 	if err := os.Chmod(tmp, mode); err != nil {
-		os.Remove(tmp)
+		_ = os.Remove(tmp)
 		return err
 	}
 	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
+		_ = os.Remove(tmp)
 		return err
 	}
 	return nil

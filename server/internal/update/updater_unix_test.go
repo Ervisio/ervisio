@@ -88,10 +88,10 @@ func TestApplyRefusals(t *testing.T) {
 		"newer installed":   {current: "2.0.0", errIs: ErrUpToDate},
 		"package busy": {before: func(h *harness) {
 			b, _ := json.Marshal(map[string]any{"running": true, "pid": os.Getpid()})
-			os.WriteFile(h.u.State.TxFile, b, 0o644)
+			_ = os.WriteFile(h.u.State.TxFile, b, 0o644)
 		}, errIs: ErrPackages},
 		"update running": {before: func(h *harness) {
-			h.u.State.WriteLast(Result{State: StateRunning, To: "1.1.0", PID: os.Getpid()})
+			_ = h.u.State.WriteLast(Result{State: StateRunning, To: "1.1.0", PID: os.Getpid()})
 		}, errIs: ErrBusy},
 		"binary does not run": {before: func(h *harness) {
 			h.u.Probe = func(context.Context, string) (string, error) { return "", errors.New("exec format error") }
@@ -145,11 +145,11 @@ func TestApplyMigratesFlatInstall(t *testing.T) {
 	h := newHarness(t, "1.0.0")
 	l := h.u.Layout
 	// Turn the harness layout into a flat install.
-	os.RemoveAll(l.VersionsDir())
-	os.Remove(filepath.Join(l.LibDir, "current"))
-	os.MkdirAll(filepath.Dir(l.BinLink), 0o755)
-	os.WriteFile(l.BinLink, []byte("daemon 1.0.0"), 0o755)
-	os.WriteFile(filepath.Join(l.LibDir, "ervisio-bridge"), []byte("bridge 1.0.0"), 0o755)
+	_ = os.RemoveAll(l.VersionsDir())
+	_ = os.Remove(filepath.Join(l.LibDir, "current"))
+	_ = os.MkdirAll(filepath.Dir(l.BinLink), 0o755)
+	_ = os.WriteFile(l.BinLink, []byte("daemon 1.0.0"), 0o755)
+	_ = os.WriteFile(filepath.Join(l.LibDir, "ervisio-bridge"), []byte("bridge 1.0.0"), 0o755)
 	if l.Kind() != KindFlat {
 		t.Fatal("not flat")
 	}
@@ -170,7 +170,7 @@ func TestRollbackLaunch(t *testing.T) {
 		t.Fatalf("rollback without previous: %v", err)
 	}
 	addVersion(t, l, "1.0.0")
-	l.SetPrevious("1.0.0")
+	_ = l.SetPrevious("1.0.0")
 	if _, _, err := h.u.Rollback(context.Background(), "0.9.0"); !errors.Is(err, ErrChanged) {
 		t.Fatalf("rollback to another version: %v", err)
 	}
@@ -214,7 +214,7 @@ func TestAutoInstallWindow(t *testing.T) {
 	h2 := newHarness(t, "1.0.0")
 	h2.gh.publish("1.1.0", h2.sk, nil)
 	b, _ := json.Marshal(map[string]any{"running": true, "pid": os.Getpid()})
-	os.WriteFile(h2.u.State.TxFile, b, 0o644)
+	_ = os.WriteFile(h2.u.State.TxFile, b, 0o644)
 	a2 := &Auto{Updater: h2.u, Config: func() *config.Config { return cfg }, Now: func() time.Time { return now.Add(-time.Minute) }}
 	a2.Tick(ctx)
 	if len(h2.launched) != 0 {

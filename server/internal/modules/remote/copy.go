@@ -307,7 +307,7 @@ func (c *copier) copyFile(sp string, e Entry, dp string, depth int) error {
 		size = -1
 	}
 	_, err = writeFile(c.ctx, c.dst.fs, c.dst.ops, dp, r, size, false, c.progress)
-	r.Close()
+	_ = r.Close()
 	if err == nil && depth == 0 {
 		c.madeTop = true
 	}

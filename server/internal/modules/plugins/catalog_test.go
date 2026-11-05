@@ -96,7 +96,7 @@ func newMarket(t *testing.T) *market {
 			http.NotFound(w, r)
 			return
 		}
-		w.Write(b)
+		_, _ = w.Write(b)
 	}))
 	t.Cleanup(m.srv.Close)
 	oldC, oldD := catalogClient, downloadClient
@@ -166,7 +166,7 @@ func TestRemoteCatalogSigned(t *testing.T) {
 		t.Fatalf("%+v %v", v, err)
 	}
 	// Cached: no second fetch within 5 minutes.
-	catalogView(context.Background())
+	_, _ = catalogView(context.Background())
 	if m.hits["/catalog.json"] != 1 {
 		t.Errorf("fetched %d times", m.hits["/catalog.json"])
 	}
@@ -206,20 +206,20 @@ func TestRemoteCatalogSigned(t *testing.T) {
 	}
 
 	// catalog_url = "" turns the remote catalog off; the override file still works.
-	os.WriteFile(configmod.Path, []byte("[plugins]\ncatalog_url = \"\"\n"), 0o644)
+	_ = os.WriteFile(configmod.Path, []byte("[plugins]\ncatalog_url = \"\"\n"), 0o644)
 	remoteLast = nil
 	v, _ = catalogView(context.Background())
 	if len(v.Plugins) != 0 || v.Warning != "" {
 		t.Fatalf("disabled: %+v", v)
 	}
 	m.publish(t, cat, priv)
-	os.WriteFile(CatalogURLFile, []byte(m.url("/catalog.json")+"\n"), 0o644)
+	_ = os.WriteFile(CatalogURLFile, []byte(m.url("/catalog.json")+"\n"), 0o644)
 	remoteLast = nil
 	v, _ = catalogView(context.Background())
 	if len(v.Plugins) != 1 {
 		t.Fatalf("override file: %+v", v)
 	}
-	os.Remove(CatalogURLFile)
+	_ = os.Remove(CatalogURLFile)
 }
 
 // signedPackage builds a signed .tar.gz of a demo plugin with id.
@@ -263,7 +263,7 @@ func fakeDocker(t *testing.T, present bool) {
 		if err != nil {
 			t.Skip("unix sockets unavailable:", err)
 		}
-		t.Cleanup(func() { l.Close() })
+		t.Cleanup(func() { _ = l.Close() })
 	}
 }
 
@@ -290,7 +290,7 @@ func TestMovedDockerInstalledFromMarketplace(t *testing.T) {
 	}
 
 	// Docker present (a machine updated from 0.3.0): installed once, from the signed catalog.
-	os.Remove(MovedStatePath)
+	_ = os.Remove(MovedStatePath)
 	fakeDocker(t, true)
 	if v, _ := catalogView(context.Background()); len(v.Moved) != 1 || v.Moved[0].ID != "docker" {
 		t.Fatalf("card expected before the install: %+v", v.Moved)
@@ -318,10 +318,10 @@ func TestMovedDockerInstalledFromMarketplace(t *testing.T) {
 	}
 
 	// Switched off before the update: skipped, no card.
-	os.Remove(MovedStatePath)
+	_ = os.Remove(MovedStatePath)
 	st := readState()
 	st.Enabled["docker"] = false
-	writeState(st)
+	_ = writeState(st)
 	migrateMovedOnce(context.Background(), logf)
 	if ReadMoved()["docker"] != MovedSkipped {
 		t.Fatalf("%v", ReadMoved())
@@ -330,10 +330,10 @@ func TestMovedDockerInstalledFromMarketplace(t *testing.T) {
 		t.Fatalf("card for a disabled plugin: %+v", v.Moved)
 	}
 	delete(st.Enabled, "docker")
-	writeState(st)
+	_ = writeState(st)
 
 	// The catalog is unreachable or unsigned: pending, retried, card shown.
-	os.Remove(MovedStatePath)
+	_ = os.Remove(MovedStatePath)
 	delete(m.files, "/catalog.sig")
 	useRemote(t, m, "")
 	if !migrateMovedOnce(context.Background(), logf) || ReadMoved()["docker"] != MovedPending {

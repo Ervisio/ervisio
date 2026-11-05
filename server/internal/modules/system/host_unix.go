@@ -40,7 +40,7 @@ func fillPlatform(h *Host) {
 	}
 	if f, err := os.Open("/proc/cpuinfo"); err == nil {
 		h.CPU = parseCPUInfo(io.LimitReader(f, 4<<20))
-		f.Close()
+		_ = f.Close()
 	}
 	if h.CPU.Threads == 0 {
 		h.CPU.Threads = runtime.NumCPU()

@@ -21,7 +21,7 @@ func TestCheck(t *testing.T) {
 	var path string
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path = r.URL.Path
-		json.NewEncoder(w).Encode([]map[string]any{
+		_ = json.NewEncoder(w).Encode([]map[string]any{
 			{"tag_name": "v99.0.0-rc.1", "prerelease": true, "body": "# RC", "published_at": "2026-09-30T10:00:00Z",
 				"assets": []map[string]any{{"name": update.ArchiveName("99.0.0-rc.1", update.Arch), "size": 1234, "browser_download_url": "https://github.com/x"}}},
 		})
@@ -31,7 +31,7 @@ func TestCheck(t *testing.T) {
 	checker = &update.Checker{API: srv.URL, Repo: brand.GitHubRepo, Client: srv.Client()}
 	defer func() { checker = old }()
 	cfgPath := filepath.Join(t.TempDir(), "c.conf")
-	os.WriteFile(cfgPath, []byte("[updates]\nchannel = \"prerelease\"\n"), 0o644)
+	_ = os.WriteFile(cfgPath, []byte("[updates]\nchannel = \"prerelease\"\n"), 0o644)
 	oldPath := configmod.Path
 	configmod.Path = cfgPath
 	defer func() { configmod.Path = oldPath }()
@@ -71,7 +71,7 @@ func TestStatusDevAndErrors(t *testing.T) {
 
 func TestManagedInstall(t *testing.T) {
 	marker := filepath.Join(t.TempDir(), "managed")
-	os.WriteFile(marker, []byte("pacman\n"), 0o644)
+	_ = os.WriteFile(marker, []byte("pacman\n"), 0o644)
 	old := newUpdater
 	newUpdater = func() *update.Updater {
 		u := update.New(checker)

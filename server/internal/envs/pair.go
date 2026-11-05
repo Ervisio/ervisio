@@ -232,7 +232,7 @@ func probeServer(ctx context.Context, base string) (*ProbeResult, error) {
 	if err != nil {
 		return nil, errf("Could not connect to %s: %v", base, cleanNetErr(unwrapURLErr(err)))
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var info struct {
 		Service string `json:"service"`
 		Name    string `json:"name"`
@@ -256,7 +256,7 @@ func (m *Manager) redeemRemote(ctx context.Context, e *Env, token, by string) (*
 	if err != nil {
 		return nil, wrapPairErr(e.Address, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 	if resp.StatusCode != 200 {
 		return nil, errf("%s", remoteMessage(b, "The other server refused the pairing ("+resp.Status+")."))
@@ -283,7 +283,7 @@ func (m *Manager) revokeRemote(ctx context.Context, e *Env) {
 	req.Header.Set("Authorization", "Bearer "+cred)
 	req.Header.Set("Content-Type", "application/json")
 	if resp, err := (&http.Client{Transport: tr}).Do(req); err == nil {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 	}
 }
 
@@ -345,7 +345,7 @@ func (m *Manager) DialPair(ctx context.Context, e *Env, user string) (net.Conn, 
 	if err != nil {
 		return nil, wrapPairErr(e.Address, err)
 	}
-	fail := func(err error) (net.Conn, error) { c.Close(); return nil, err }
+	fail := func(err error) (net.Conn, error) { _ = c.Close(); return nil, err }
 	_ = c.SetDeadline(time.Now().Add(20 * time.Second))
 	req := fmt.Sprintf("GET %s HTTP/1.1\r\nHost: %s\r\nConnection: Upgrade\r\nUpgrade: %s\r\nAuthorization: Bearer %s\r\n%s: %s\r\n%s: %s\r\n\r\n",
 		PathBridge, hp, UpgradeProto, e.Secret(SecretCredential), HeaderViaSrv, headerSafe(m.opts.ServerName), HeaderViaUsr, headerSafe(user))
@@ -386,7 +386,7 @@ func (m *Manager) pairCheck(ctx context.Context, e *Env) (version, engine, api s
 	if err != nil {
 		return "", "", "", err
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	_ = c.SetDeadline(time.Now().Add(15 * time.Second))
 	br := bufio.NewReader(c)
 	line, err := br.ReadBytes('\n')
@@ -444,7 +444,7 @@ func (m *Manager) pairPing(ctx context.Context, e *Env) (string, error) {
 	if err != nil {
 		return "", wrapPairErr(e.Address, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
 		return "", errf("The other server no longer accepts this pairing. It may have been revoked there; remove this environment and pair again.")

@@ -65,7 +65,7 @@ func dialWebDAV(ctx context.Context, spec *Conn) (*davFS, error) {
 	}
 	// Check the address and the credentials (and learn a Digest realm).
 	if _, err := f.Stat(ctx, "/"); err != nil {
-		f.Close()
+		_ = f.Close()
 		var cert *tls.CertificateVerificationError
 		if errors.As(err, &cert) {
 			return nil, rpc.Errorf(rpc.Unavailable, "The TLS certificate of %s cannot be verified (%v). If you trust this server, allow unverified certificates in the connection.", u.Hostname(), cert.Err)
@@ -211,7 +211,7 @@ func rewindBody(body io.Reader) bool {
 
 func drain(res *http.Response) {
 	_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, 64<<10))
-	res.Body.Close()
+	_ = res.Body.Close()
 }
 
 func (f *davFS) authorize(req *http.Request) {
@@ -367,7 +367,7 @@ func (f *davFS) propfind(ctx context.Context, p string, depth string, dir bool) 
 	if err != nil {
 		return nil, err
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusMultiStatus {
 		if res.StatusCode == http.StatusOK || res.StatusCode == http.StatusMethodNotAllowed {
 			return nil, rpc.Errorf(rpc.Invalid, "This address does not answer WebDAV requests. Check the URL (for Nextcloud: https://server/remote.php/dav/files/USER).")
@@ -416,7 +416,7 @@ func davEntry(dir, name string, pr davProp) Entry {
 		return e
 	}
 	e.Type, e.Mode, e.Perm = "file", "0644", "rw-r--r--"
-	fmt.Sscan(pr.Length, &e.Size)
+	_, _ = fmt.Sscan(pr.Length, &e.Size)
 	e.Mime = mimeOf(name)
 	if e.Mime == "" && pr.ContentType != "" {
 		e.Mime = strings.TrimSpace(strings.Split(pr.ContentType, ";")[0])

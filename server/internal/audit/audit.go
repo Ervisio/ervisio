@@ -227,7 +227,7 @@ func (l *Log) appendLocked(t time.Time, line []byte) (prune bool, err error) {
 // openDay closes the current file and opens the one of day.
 func (l *Log) openDay(day string) error {
 	if l.f != nil {
-		l.f.Close()
+		_ = l.f.Close()
 		l.f = nil
 	}
 	if err := os.MkdirAll(l.dir, 0o700); err != nil {
@@ -246,7 +246,7 @@ func (l *Log) Close() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.f != nil {
-		l.f.Close()
+		_ = l.f.Close()
 		l.f = nil
 	}
 }
@@ -435,7 +435,7 @@ func (l *Log) scan(f logFile, q *Query, before, need int) ([]pos, bool, error) {
 		}
 		return nil, false, err
 	}
-	defer fh.Close()
+	defer func() { _ = fh.Close() }()
 	sc := newLineScanner(fh)
 	ring := make([]pos, 0, need+1)
 	n := -1
@@ -499,7 +499,7 @@ func (l *Log) eachInFile(f logFile, q *Query, fn func(Entry) error) error {
 		}
 		return err
 	}
-	defer fh.Close()
+	defer func() { _ = fh.Close() }()
 	sc := newLineScanner(fh)
 	for sc.Scan() {
 		var e Entry

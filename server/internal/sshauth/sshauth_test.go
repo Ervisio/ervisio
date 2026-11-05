@@ -103,9 +103,9 @@ func TestChallengeBounds(t *testing.T) {
 	if _, err := s.Take(first.Nonce, "alice", "10.0.0.1"); err == nil {
 		t.Fatal("oldest challenge of the key should have been dropped")
 	}
-	s.Issue("bob", "10.0.0.2", "10.0.0.2", "h")
-	s.Issue("bob", "10.0.0.2", "10.0.0.2", "h")
-	s.Issue("bob", "10.0.0.2", "10.0.0.2", "h")
+	_, _ = s.Issue("bob", "10.0.0.2", "10.0.0.2", "h")
+	_, _ = s.Issue("bob", "10.0.0.2", "10.0.0.2", "h")
+	_, _ = s.Issue("bob", "10.0.0.2", "10.0.0.2", "h")
 	if _, err := s.Issue("carol", "10.0.0.3", "10.0.0.3", "h"); !errors.Is(err, ErrFull) {
 		t.Fatalf("store over Max: %v (len %d)", err, s.Len())
 	}
@@ -243,7 +243,7 @@ func TestFindKeyOptions(t *testing.T) {
 		ok   bool
 	}{
 		{"plain", line + " me@host", true},
-		{"other key only", authLine(other.(ssh.Signer)), false},
+		{"other key only", authLine(other), false},
 		{"comment and blank", "# keys\n\n" + line, true},
 		{"restrict ok", "restrict,no-pty " + line, true},
 		{"from match", `from="192.168.1.*" ` + line, true},
@@ -302,20 +302,20 @@ func TestAuthorizedKeysFilesConfig(t *testing.T) {
 	if strings.Join(got, " ") != native("/home/alice/.ssh/authorized_keys")+" "+native("/home/alice/.ssh/authorized_keys2") {
 		t.Fatal(got)
 	}
-	os.MkdirAll(filepath.Join(dir, "sshd_config.d"), 0o755)
-	os.WriteFile(filepath.Join(dir, "sshd_config.d", "10-keys.conf"), []byte("AuthorizedKeysFile "+drive+"/etc/ssh/keys/%u \"%h/.ssh/my keys\" .ssh/k_%U %%x\n"), 0o644)
-	os.WriteFile(SSHDConfig, []byte("# test\nInclude sshd_config.d/*.conf\nAuthorizedKeysFile .ssh/ignored\nMatch User bob\n  AuthorizedKeysFile none\n"), 0o644)
+	_ = os.MkdirAll(filepath.Join(dir, "sshd_config.d"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "sshd_config.d", "10-keys.conf"), []byte("AuthorizedKeysFile "+drive+"/etc/ssh/keys/%u \"%h/.ssh/my keys\" .ssh/k_%U %%x\n"), 0o644)
+	_ = os.WriteFile(SSHDConfig, []byte("# test\nInclude sshd_config.d/*.conf\nAuthorizedKeysFile .ssh/ignored\nMatch User bob\n  AuthorizedKeysFile none\n"), 0o644)
 	got = AuthorizedKeysFiles(u)
 	want := native("/etc/ssh/keys/alice") + "|" + native("/home/alice/.ssh/my keys") + "|" + native("/home/alice/.ssh/k_1000") + "|" + native("/home/alice/%x")
 	if strings.Join(got, "|") != want {
 		t.Fatalf("got %q", strings.Join(got, "|"))
 	}
 	// Match blocks are not applied; "none" outside Match disables keys.
-	os.WriteFile(SSHDConfig, []byte("Match User alice\nAuthorizedKeysFile /x\n"), 0o644)
+	_ = os.WriteFile(SSHDConfig, []byte("Match User alice\nAuthorizedKeysFile /x\n"), 0o644)
 	if got := AuthorizedKeysFiles(u); len(got) != 2 {
 		t.Fatal("Match block applied", got)
 	}
-	os.WriteFile(SSHDConfig, []byte("AuthorizedKeysFile=none\n"), 0o644)
+	_ = os.WriteFile(SSHDConfig, []byte("AuthorizedKeysFile=none\n"), 0o644)
 	if got := AuthorizedKeysFiles(u); len(got) != 0 {
 		t.Fatal("none", got)
 	}

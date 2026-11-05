@@ -20,7 +20,7 @@ func TestJobsRecordToTheActivityLog(t *testing.T) {
 	// A job that needs administrator rights: the approval is recorded.
 	f := newFixture(t)
 	v := f.approved("alice", "rooty", nil, nil)
-	f.m.RunNow(f.caller("alice"), "jt", v.ID)
+	_, _ = f.m.RunNow(f.caller("alice"), "jt", v.ID)
 	f.m.Wait()
 
 	// A webhook call.

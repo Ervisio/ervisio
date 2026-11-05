@@ -19,13 +19,13 @@ import (
 func TestManagedInstallRefusesSelfUpdate(t *testing.T) {
 	h := newHarness(t, "1.0.0")
 	l := h.u.Layout
-	os.RemoveAll(l.VersionsDir())
-	os.Remove(filepath.Join(l.LibDir, "current"))
-	os.MkdirAll(filepath.Dir(l.BinLink), 0o755)
-	os.WriteFile(l.BinLink, []byte("daemon 1.0.0"), 0o755)
-	os.WriteFile(filepath.Join(l.LibDir, "ervisio-bridge"), []byte("bridge 1.0.0"), 0o755)
+	_ = os.RemoveAll(l.VersionsDir())
+	_ = os.Remove(filepath.Join(l.LibDir, "current"))
+	_ = os.MkdirAll(filepath.Dir(l.BinLink), 0o755)
+	_ = os.WriteFile(l.BinLink, []byte("daemon 1.0.0"), 0o755)
+	_ = os.WriteFile(filepath.Join(l.LibDir, "ervisio-bridge"), []byte("bridge 1.0.0"), 0o755)
 	l.Managed = filepath.Join(l.LibDir, "managed")
-	os.WriteFile(l.Managed, []byte("apt\n"), 0o644)
+	_ = os.WriteFile(l.Managed, []byte("apt\n"), 0o644)
 	h.gh.publish("1.1.0", h.sk, nil)
 
 	ok, why := h.u.Supported(l.BinLink, false)

@@ -153,7 +153,7 @@ func runHTTPUpload(ctx context.Context, c *rpc.Call, s rpc.Stream, p UploadParam
 	}
 
 	pr, pw := io.Pipe()
-	defer pr.Close()
+	defer func() { _ = pr.Close() }()
 	// The request to the service ends with the stream: when the daemon
 	// cancels it (the browser went away, the session ended) or no data
 	// came for uploadIdle, the pipe fails, so the HTTP client aborts the
@@ -201,7 +201,7 @@ func runHTTPUpload(ctx context.Context, c *rpc.Call, s rpc.Stream, p UploadParam
 		}
 		return httpErr(ctx, err, pl)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if p.Stream {
 		return streamUploadResponse(ctx, s, resp, pl)
 	}
@@ -251,7 +251,7 @@ func writeUploadInput(pw *io.PipeWriter, in json.RawMessage, got, size int64) (i
 			pw.CloseWithError(rpc.Errorf(rpc.Invalid, "The upload ended early (%d of %d bytes). Try again.", got, size))
 			return got, true
 		}
-		pw.Close()
+		_ = pw.Close()
 		return got, true
 	}
 	b, err := base64.StdEncoding.DecodeString(msg.Data)

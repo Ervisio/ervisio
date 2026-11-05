@@ -134,7 +134,7 @@ func validServiceName(name string) bool {
 	return true
 }
 
-func checkServiceName(name string) error {
+func checkServiceName(name string) error { //nolint:unused // used by the windows build
 	if !validServiceName(name) {
 		return rpc.Errorf(rpc.Invalid, "%q is not a valid service name.", name)
 	}

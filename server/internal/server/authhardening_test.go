@@ -145,7 +145,7 @@ func keyLoginHdr(t *testing.T, c *http.Client, url, user string, signer ssh.Sign
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(resp.Body)
 	return resp.StatusCode, string(b)
 }
@@ -157,7 +157,7 @@ func TestKeyLoginFromBehindProxy(t *testing.T) {
 	_, edk, _ := ed25519.GenerateKey(rand.Reader)
 	signer, _ := ssh.NewSignerFromKey(edk)
 	keys := filepath.Join(t.TempDir(), "authorized_keys")
-	os.WriteFile(keys, []byte(`from="127.0.0.1" `+string(ssh.MarshalAuthorizedKey(signer.PublicKey()))), 0o600)
+	_ = os.WriteFile(keys, []byte(`from="127.0.0.1" `+string(ssh.MarshalAuthorizedKey(signer.PublicKey()))), 0o600)
 	ts, srv := newKeyTestServer(t, keys)
 	me := srv.devUser.Name
 	jar, _ := cookiejar.New(nil)
@@ -175,7 +175,7 @@ func TestKeyLoginFromBehindProxy(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		var ch challengeResp
 		if resp.StatusCode != 200 || json.NewDecoder(resp.Body).Decode(&ch) != nil {
 			t.Fatalf("challenge: %d", resp.StatusCode)
@@ -194,7 +194,7 @@ func TestKeyLoginFromBehindProxy(t *testing.T) {
 		t.Fatalf("from= mismatch accepted: %d %s", code, body)
 	}
 	// ...one inside it is accepted.
-	os.WriteFile(keys, []byte(`from="198.51.100.0/24" `+string(ssh.MarshalAuthorizedKey(signer.PublicKey()))), 0o600)
+	_ = os.WriteFile(keys, []byte(`from="198.51.100.0/24" `+string(ssh.MarshalAuthorizedKey(signer.PublicKey()))), 0o600)
 	if code, body := keyLoginHdr(t, cl, ts.URL, me, signer, challenge("198.51.100.7"), xff("198.51.100.7")); code != 200 {
 		t.Fatalf("from= match refused: %d %s", code, body)
 	}
@@ -213,18 +213,18 @@ func TestKeyLoginFromBehindProxy(t *testing.T) {
 func TestDevAuthorizedKeysChecks(t *testing.T) {
 	dir := t.TempDir()
 	good := filepath.Join(dir, "good")
-	os.WriteFile(good, []byte("\n"), 0o600)
+	_ = os.WriteFile(good, []byte("\n"), 0o600)
 	if _, err := readDevAuthorizedKeys(good); err != nil {
 		t.Fatal(err)
 	}
 	loose := filepath.Join(dir, "loose")
-	os.WriteFile(loose, []byte("\n"), 0o600)
+	_ = os.WriteFile(loose, []byte("\n"), 0o600)
 	makeWorldWritable(t, loose)
 	if _, err := readDevAuthorizedKeys(loose); err == nil || !strings.Contains(err.Error(), "writable") {
 		t.Fatalf("world-writable file accepted: %v", err)
 	}
 	link := filepath.Join(dir, "link")
-	os.Symlink(good, link)
+	_ = os.Symlink(good, link)
 	if _, err := readDevAuthorizedKeys(link); err == nil {
 		t.Fatal("symlink accepted")
 	}

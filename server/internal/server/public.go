@@ -77,7 +77,7 @@ func (s *Server) handlePublicLogo(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errNotFound)
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	fi, err := f.Stat()
 	if err != nil || fi.Size() > 4<<20 {
 		writeError(w, errNotFound)

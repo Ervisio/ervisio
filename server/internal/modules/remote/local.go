@@ -82,7 +82,7 @@ func (localFS) Open(ctx context.Context, p string) (io.ReadCloser, error) {
 		return nil, err
 	}
 	if fi, err := f.Stat(); err != nil || !fi.Mode().IsRegular() {
-		f.Close()
+		_ = f.Close()
 		return nil, rpc.Errorf(rpc.Invalid, "%s is not a regular file.", p)
 	}
 	return f, nil

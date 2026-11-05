@@ -36,7 +36,7 @@ func hThumbnail(ctx context.Context, c *rpc.Call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if err := checkThumbSource(f); err != nil {
 		return nil, err
 	}

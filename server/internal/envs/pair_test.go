@@ -18,18 +18,18 @@ func TestPairingOverPinnedTLS(t *testing.T) {
 	var gotName string
 	mux := http.NewServeMux()
 	mux.HandleFunc(PathInfo, func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{"service": "ervisio", "name": "other"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"service": "ervisio", "name": "other"})
 	})
 	mux.HandleFunc(PathRedeem, func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Token, Name string }
-		json.NewDecoder(r.Body).Decode(&req)
+		_ = json.NewDecoder(r.Body).Decode(&req)
 		gotName = req.Name
 		if req.Token != "ept_good" {
 			w.WriteHeader(403)
-			json.NewEncoder(w).Encode(map[string]any{"error": map[string]string{"message": "This pairing token is not valid."}})
+			_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]string{"message": "This pairing token is not valid."}})
 			return
 		}
-		json.NewEncoder(w).Encode(RedeemResult{Credential: "epc_xyz", PairID: "pair-1", Server: "other", User: "alice"})
+		_ = json.NewEncoder(w).Encode(RedeemResult{Credential: "epc_xyz", PairID: "pair-1", Server: "other", User: "alice"})
 	})
 	ts := httptest.NewUnstartedServer(mux)
 	ts.TLS = &tls.Config{Certificates: []tls.Certificate{kp}, NextProtos: []string{"http/1.1"}}

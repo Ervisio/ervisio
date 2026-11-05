@@ -132,7 +132,7 @@ func readCapped(path string, max int64) ([]byte, bool, error) {
 	if err != nil {
 		return nil, false, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	buf, err := io.ReadAll(io.LimitReader(f, max+1))
 	if err != nil {
 		return nil, false, err

@@ -657,7 +657,7 @@ func fileContext(ctx context.Context, path string, line, before, after int, watc
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	from, to := line-before, line+after
 	if from < 1 {
 		from = 1

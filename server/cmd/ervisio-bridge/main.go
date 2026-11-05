@@ -65,7 +65,7 @@ func main() {
 
 	// Commands are resolved in a fixed PATH; the environment we were given
 	// (possibly by sudo) is not trusted for that.
-	os.Setenv("PATH", sys.SafePath)
+	_ = os.Setenv("PATH", sys.SafePath)
 
 	proto, err := protocolStdout()
 	if err != nil {
@@ -136,8 +136,8 @@ func rootEnv() {
 		}
 		name = u.Username
 	}
-	os.Setenv("HOME", home)
-	os.Setenv("USER", name)
-	os.Setenv("LOGNAME", name)
-	os.Unsetenv("XDG_RUNTIME_DIR") // the user's runtime dir, if sudo kept it
+	_ = os.Setenv("HOME", home)
+	_ = os.Setenv("USER", name)
+	_ = os.Setenv("LOGNAME", name)
+	_ = os.Unsetenv("XDG_RUNTIME_DIR") // the user's runtime dir, if sudo kept it
 }

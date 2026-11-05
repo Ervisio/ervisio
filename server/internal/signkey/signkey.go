@@ -82,12 +82,12 @@ func GenerateFile(path string) (ed25519.PublicKey, error) {
 		return nil, err
 	}
 	if _, err := f.WriteString(base64.StdEncoding.EncodeToString(sk) + "\n"); err != nil {
-		f.Close()
-		os.Remove(path)
+		_ = f.Close()
+		_ = os.Remove(path)
 		return nil, err
 	}
 	if err := f.Close(); err != nil {
-		os.Remove(path)
+		_ = os.Remove(path)
 		return nil, err
 	}
 	return pk, nil

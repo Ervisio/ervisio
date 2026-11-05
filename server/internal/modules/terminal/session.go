@@ -208,7 +208,7 @@ func (s *Session) pump() {
 func (s *Session) broadcast(chunk []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.ring.Write(chunk)
+	_, _ = s.ring.Write(chunk)
 	if t, ok := s.osc.feed(chunk); ok {
 		s.title = t
 	}

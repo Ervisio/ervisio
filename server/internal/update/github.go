@@ -147,7 +147,7 @@ func (c *Checker) Latest(ctx context.Context, channel string, force bool) (*Rele
 	if err != nil {
 		return nil, time.Time{}, fmt.Errorf("cannot reach GitHub: %v", cleanNetErr(err))
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	store := func(rel *Release, etag string) {
 		c.mu.Lock()
 		c.cache[channel] = &cached{at: c.now(), etag: etag, release: rel}

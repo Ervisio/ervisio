@@ -36,20 +36,20 @@ func ExtractTarGz(archive, dst, prefix string, lim Limits) (err error) {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if err := os.Mkdir(dst, 0o755); err != nil {
 		return err
 	}
 	defer func() {
 		if err != nil {
-			os.RemoveAll(dst)
+			_ = os.RemoveAll(dst)
 		}
 	}()
 	zr, err := gzip.NewReader(f)
 	if err != nil {
 		return fmt.Errorf("archive: %v", err)
 	}
-	defer zr.Close()
+	defer func() { _ = zr.Close() }()
 	tr := tar.NewReader(zr)
 	x := &extraction{dst: dst, prefix: strings.TrimSuffix(prefix, "/") + "/", lim: lim, seen: map[string]bool{}}
 	for {

@@ -58,7 +58,7 @@ func newXferEnv(t *testing.T) *xferEnv {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.RemoveAll(sockDir) })
+	t.Cleanup(func() { _ = os.RemoveAll(sockDir) })
 	sock := filepath.Join(sockDir, "s.sock")
 	ln, err := net.Listen("unix", sock)
 	if err != nil {
@@ -67,7 +67,7 @@ func newXferEnv(t *testing.T) *xferEnv {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/dl/{n}", func(w http.ResponseWriter, r *http.Request) {
 		var n int
-		fmt.Sscanf(r.PathValue("n"), "%d", &n)
+		_, _ = fmt.Sscanf(r.PathValue("n"), "%d", &n)
 		if r.PathValue("n") == "gone" {
 			http.Error(w, `{"message":"No such image: x"}`, http.StatusNotFound)
 			return
@@ -89,34 +89,34 @@ func newXferEnv(t *testing.T) *xferEnv {
 	})
 	mux.HandleFunc("/up", func(w http.ResponseWriter, r *http.Request) {
 		n, _ := io.Copy(io.Discard, r.Body)
-		fmt.Fprintf(w, `{"n":%d,"auth":%q}`, n, r.Header.Get("X-Registry-Auth"))
+		_, _ = fmt.Fprintf(w, `{"n":%d,"auth":%q}`, n, r.Header.Get("X-Registry-Auth"))
 	})
 	mux.HandleFunc("/len", func(w http.ResponseWriter, r *http.Request) {
 		n, _ := io.Copy(io.Discard, r.Body)
-		fmt.Fprintf(w, `{"n":%d}`, n)
+		_, _ = fmt.Fprintf(w, `{"n":%d}`, n)
 	})
 	mux.HandleFunc("/build", func(w http.ResponseWriter, r *http.Request) {
 		// Reads the whole context, then streams progress lines back.
 		n, _ := io.Copy(io.Discard, r.Body)
 		fl := w.(http.Flusher)
 		for i := 1; i <= 3; i++ {
-			fmt.Fprintf(w, "{\"stream\":\"Step %d/3 (%d bytes)\"}\n", i, n)
+			_, _ = fmt.Fprintf(w, "{\"stream\":\"Step %d/3 (%d bytes)\"}\n", i, n)
 			fl.Flush()
 			time.Sleep(20 * time.Millisecond)
 		}
 	})
 	mux.HandleFunc("/act", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusConflict) })
 	hs := &http.Server{Handler: mux}
-	go hs.Serve(ln)
-	t.Cleanup(func() { hs.Close() })
+	go func() { _ = hs.Serve(ln) }()
+	t.Cleanup(func() { _ = hs.Close() })
 
 	plugins := t.TempDir()
 	p := filepath.Join(plugins, "xfer")
-	os.MkdirAll(p, 0o755)
-	os.WriteFile(filepath.Join(p, "manifest.json"), []byte(strings.ReplaceAll(strings.ReplaceAll(xferManifest, "%SEQ%", seqArgv()), "%SOCK%", strings.ReplaceAll(sock, `\`, `\\`))), 0o644)
-	os.WriteFile(filepath.Join(p, "index.js"), []byte("export default () => {}"), 0o644)
+	_ = os.MkdirAll(p, 0o755)
+	_ = os.WriteFile(filepath.Join(p, "manifest.json"), []byte(strings.ReplaceAll(strings.ReplaceAll(xferManifest, "%SEQ%", seqArgv()), "%SOCK%", strings.ReplaceAll(sock, `\`, `\\`))), 0o644)
+	_ = os.WriteFile(filepath.Join(p, "index.js"), []byte("export default () => {}"), 0o644)
 	web := t.TempDir()
-	os.WriteFile(filepath.Join(web, "index.html"), []byte("<!doctype html>app"), 0o644)
+	_ = os.WriteFile(filepath.Join(web, "index.html"), []byte("<!doctype html>app"), 0o644)
 	srv, err := New(Options{
 		ConfigPath:    filepath.Join(t.TempDir(), "ervisio.conf"),
 		Dev:           true,
@@ -155,9 +155,9 @@ func (e *xferEnv) post(t *testing.T, cl *http.Client, path string, body any, csr
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var out map[string]any
-	json.NewDecoder(resp.Body).Decode(&out)
+	_ = json.NewDecoder(resp.Body).Decode(&out)
 	return resp.StatusCode, out
 }
 
@@ -208,7 +208,7 @@ func TestPluginDownload(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ := io.Copy(io.Discard, resp.Body)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != 200 || got != n {
 		t.Fatalf("download: %d, %d bytes", resp.StatusCode, got)
 	}
@@ -217,7 +217,7 @@ func TestPluginDownload(t *testing.T) {
 	}
 	// Single use.
 	resp, _ = e.cl.Get(url)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("second use: %d", resp.StatusCode)
 	}
@@ -236,7 +236,7 @@ func TestPluginDownloadCommandAndChunked(t *testing.T) {
 	}
 	resp, _ := e.cl.Get(e.ts.URL + r["url"].(string))
 	b, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	b = []byte(strings.ReplaceAll(string(b), "\r\n", "\n")) // cmd.exe ends lines with CRLF
 	if !strings.HasPrefix(string(b), "1\n2\n3\n") || !strings.HasSuffix(string(b), "999\n1000\n") {
 		t.Fatalf("command output: %d bytes", len(b))
@@ -248,7 +248,7 @@ func TestPluginDownloadCommandAndChunked(t *testing.T) {
 	}
 	resp, _ = e.cl.Get(e.ts.URL + r["url"].(string))
 	got, _ := io.Copy(io.Discard, resp.Body)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if got != 3<<20 {
 		t.Fatalf("%d bytes", got)
 	}
@@ -289,7 +289,7 @@ func TestPluginTransferRulesAndErrors(t *testing.T) {
 		t.Fatalf("no csrf: %d", st)
 	}
 	resp, _ := e.cl.Get(e.ts.URL + "/api/plugins/transfer")
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode == 200 {
 		t.Fatal("GET started a transfer")
 	}
@@ -300,14 +300,14 @@ func TestPluginTransferRulesAndErrors(t *testing.T) {
 	}
 	_, r := e.start(t, map[string]any{"kind": "download", "name": "svc", "method": "GET", "path": "/dl/10", "filename": "x"})
 	resp, _ = http.Get(e.ts.URL + r["url"].(string))
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != 401 {
 		t.Fatalf("anonymous link: %d", resp.StatusCode)
 	}
 	// ...and the link still works for its owner (the anonymous try did not use it up).
 	resp, _ = e.cl.Get(e.ts.URL + r["url"].(string))
 	got, _ := io.Copy(io.Discard, resp.Body)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != 200 || got != 10 {
 		t.Fatalf("owner after anonymous try: %d %d", resp.StatusCode, got)
 	}
@@ -331,13 +331,13 @@ func TestPluginTransferBoundToSession(t *testing.T) {
 	// Another signed-in session may not use it, and does not use it up.
 	other := noAuthClient(t, e.srv, e.ts)
 	resp, _ := other.Get(url)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("other session: %d", resp.StatusCode)
 	}
 	resp, _ = e.cl.Get(url)
 	got, _ := io.Copy(io.Discard, resp.Body)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != 200 || got != 100 {
 		t.Fatalf("owner: %d %d", resp.StatusCode, got)
 	}
@@ -349,7 +349,7 @@ func TestPluginTransferExpires(t *testing.T) {
 	_, r := e.start(t, map[string]any{"kind": "download", "name": "svc", "method": "GET", "path": "/dl/chunked", "filename": "x"})
 	time.Sleep(500 * time.Millisecond)
 	resp, _ := e.cl.Get(e.ts.URL + r["url"].(string))
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("expired link: %d", resp.StatusCode)
 	}
@@ -410,9 +410,9 @@ func (e *xferEnv) upload(t *testing.T, size int, body io.Reader, contentLength i
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var out map[string]any
-	json.NewDecoder(resp.Body).Decode(&out)
+	_ = json.NewDecoder(resp.Body).Decode(&out)
 	if res, ok := out["result"].(map[string]any); ok {
 		return resp.StatusCode, res
 	}
@@ -462,7 +462,7 @@ func TestPluginUpload(t *testing.T) {
 		hr, _ := http.NewRequest("POST", e.ts.URL+start["url"].(string), strings.NewReader("hi"))
 		hr.Header.Set("X-Requested-With", "ervisio")
 		resp, _ := e.cl.Do(hr)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if resp.StatusCode != want {
 			t.Fatalf("use %d: %d", i, resp.StatusCode)
 		}
@@ -471,7 +471,7 @@ func TestPluginUpload(t *testing.T) {
 	_, start = e.start(t, map[string]any{"kind": "upload", "name": "svc", "method": "PUT", "path": "/up", "size": 2})
 	hr, _ := http.NewRequest("POST", e.ts.URL+start["url"].(string), strings.NewReader("hi"))
 	resp, _ := e.cl.Do(hr)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != 403 {
 		t.Fatalf("upload without csrf header: %d", resp.StatusCode)
 	}
@@ -494,7 +494,7 @@ func TestPluginDownloadMemoryFlat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	buf := make([]byte, 256<<10)
 	var got int64
 	for {
@@ -675,7 +675,7 @@ func TestPluginUploadStreamedResponse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "application/x-ndjson" {
 		t.Fatalf("%d %v", resp.StatusCode, resp.Header)
 	}
@@ -713,7 +713,7 @@ func TestPluginUploadStreamedResponse(t *testing.T) {
 	hr.Header.Set("X-Requested-With", "ervisio")
 	resp2, _ := e.cl.Do(hr)
 	b2, _ := io.ReadAll(resp2.Body)
-	resp2.Body.Close()
+	_ = resp2.Body.Close()
 	if resp2.StatusCode < 400 && !strings.Contains(string(b2), `"error"`) {
 		t.Fatalf("short streamed upload: %d %s", resp2.StatusCode, b2)
 	}
@@ -735,7 +735,7 @@ func TestPluginInlineBodyLimits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer c.CloseNow()
+	defer func() { _ = c.CloseNow() }()
 	c.SetReadLimit(1 << 20)
 	open, _ := json.Marshal(map[string]any{"ch": 1, "op": "open", "method": "plugins.httpStream", "params": map[string]any{"plugin": "xfer", "name": "inline", "method": "POST", "path": "/len", "body": body, "b64": true}})
 	if err := c.Write(ctx, websocket.MessageText, open); err != nil {
@@ -748,13 +748,13 @@ func TestPluginInlineBodyLimits(t *testing.T) {
 			t.Fatalf("stream: %v (%s)", err, got.String())
 		}
 		var f wsFrame
-		json.Unmarshal(data, &f)
+		_ = json.Unmarshal(data, &f)
 		if f.Op == "error" {
 			t.Fatalf("%s", data)
 		}
 		if f.Op == "data" && f.B64 {
 			var s string
-			json.Unmarshal(f.Data, &s)
+			_ = json.Unmarshal(f.Data, &s)
 			b, _ := base64.StdEncoding.DecodeString(s)
 			got.Write(b)
 		}
@@ -781,11 +781,11 @@ func (e *xferEnv) status(t *testing.T, cl *http.Client, link string, wait int) (
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var out struct {
 		Result map[string]any `json:"result"`
 	}
-	json.NewDecoder(resp.Body).Decode(&out)
+	_ = json.NewDecoder(resp.Body).Decode(&out)
 	return resp.StatusCode, out.Result
 }
 
@@ -810,8 +810,8 @@ func TestDownloadStatusReportsTheEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	io.Copy(io.Discard, resp.Body)
-	resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
 	select {
 	case res := <-got:
 		if res["done"] != true || res["ok"] != true || res["bytes"] != float64(n) || res["error"] != nil {
@@ -838,8 +838,8 @@ func TestDownloadStatusReportsFailures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Read(make([]byte, 10))
-	resp.Body.Close()
+	_, _ = resp.Body.Read(make([]byte, 10))
+	_ = resp.Body.Close()
 	_, res := e.status(t, e.cl, link, 10)
 	if res["done"] != true || res["ok"] != false || res["error"] == nil {
 		t.Fatalf("cut short: %v", res)

@@ -74,8 +74,8 @@ func MigrateSchedule(ctx context.Context, p Paths, sd Systemd, logf func(string,
 		}
 	}
 	_ = sd.Systemctl(ctx, "disable", "--now", legacyTimer)
-	os.Remove(oldT)
-	os.Remove(oldS)
+	_ = os.Remove(oldT)
+	_ = os.Remove(oldS)
 	if err := sd.Systemctl(ctx, "daemon-reload"); err != nil {
 		return err
 	}

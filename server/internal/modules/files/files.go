@@ -4,7 +4,6 @@ package files
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -99,25 +98,11 @@ func checkNotProtected(p string) error {
 	return nil
 }
 
-func ctxErr(ctx context.Context) error {
+func ctxErr(ctx context.Context) error { //nolint:unused // used by the windows build
 	if err := ctx.Err(); err != nil {
 		return rpc.Errorf(rpc.Unavailable, "The operation was cancelled.")
 	}
 	return nil
-}
-
-func human(n int64) string {
-	const u = "KMGT"
-	if n < 1024 {
-		return fmt.Sprintf("%d B", n)
-	}
-	f := float64(n)
-	i := -1
-	for f >= 1024 && i < len(u)-1 {
-		f /= 1024
-		i++
-	}
-	return fmt.Sprintf("%.1f %ciB", f, u[i])
 }
 
 // windowsSystemDirs lists the system folders named by the environment.

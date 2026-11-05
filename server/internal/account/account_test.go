@@ -13,7 +13,7 @@ import (
 func TestShellAllowed(t *testing.T) {
 	dir := t.TempDir()
 	shells := filepath.Join(dir, "shells")
-	os.WriteFile(shells, []byte("# comment\n/bin/sh\n/usr/bin/bash\n/usr/bin/zsh\n/usr/bin/git-shell\n/usr/bin/rbash\n/usr/sbin/nologin\n"), 0o644)
+	_ = os.WriteFile(shells, []byte("# comment\n/bin/sh\n/usr/bin/bash\n/usr/bin/zsh\n/usr/bin/git-shell\n/usr/bin/rbash\n/usr/sbin/nologin\n"), 0o644)
 	old := ShellsFile
 	ShellsFile = shells
 	defer func() { ShellsFile = old }()
@@ -44,7 +44,7 @@ func TestShellAllowed(t *testing.T) {
 func TestReadShadow(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "shadow")
-	os.WriteFile(p, []byte("root:!*:19000::::::\nalice:$6$abc$def:19500:0:99999:7:::\nbob:!$6$abc$def:19500:0:99999:7::100:\nalicex:$6$zzz:1:::::\n"), 0o600)
+	_ = os.WriteFile(p, []byte("root:!*:19000::::::\nalice:$6$abc$def:19500:0:99999:7:::\nbob:!$6$abc$def:19500:0:99999:7::100:\nalicex:$6$zzz:1:::::\n"), 0o600)
 	old := ShadowFile
 	ShadowFile = p
 	defer func() { ShadowFile = old }()

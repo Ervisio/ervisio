@@ -34,7 +34,7 @@ func TestFileTransfer(t *testing.T) {
 	cl := noAuthClient(t, srv, ts)
 	dir := t.TempDir()
 	payload := make([]byte, 1<<20+12345) // several chunks, more than the window
-	rand.Read(payload)
+	_, _ = rand.Read(payload)
 	dst := filepath.Join(dir, "up.bin")
 
 	upload := func(overwrite string) (int, string) {
@@ -44,7 +44,7 @@ func TestFileTransfer(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		b, _ := io.ReadAll(resp.Body)
 		return resp.StatusCode, string(b)
 	}
@@ -64,7 +64,7 @@ func TestFileTransfer(t *testing.T) {
 		t.Fatal(err)
 	}
 	body, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != 200 || !bytes.Equal(body, payload) {
 		t.Fatalf("download: %d, %d bytes", resp.StatusCode, len(body))
 	}
@@ -72,7 +72,7 @@ func TestFileTransfer(t *testing.T) {
 		t.Fatalf("disposition %q", cd)
 	}
 	resp, _ = cl.Get(ts.URL + "/api/files/download?path=" + url.QueryEscape(filepath.Join(dir, "missing")))
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != 404 {
 		t.Fatalf("missing file: %d", resp.StatusCode)
 	}

@@ -100,7 +100,7 @@ func ProbeTLS(ctx context.Context, addr string) (string, error) {
 	if err != nil {
 		return "", errf("Could not connect to %s: %v", addr, cleanNetErr(err))
 	}
-	c.Close()
+	_ = c.Close()
 	return seen, nil
 }
 

@@ -20,7 +20,7 @@ func TestDefaultsWhenMissing(t *testing.T) {
 
 func TestLoadPartialAndUnknown(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "c.conf")
-	os.WriteFile(p, []byte("allow_root = true\nbogus = 1\n[session]\ntimeout = \"1h\"\n"), 0o644)
+	_ = os.WriteFile(p, []byte("allow_root = true\nbogus = 1\n[session]\ntimeout = \"1h\"\n"), 0o644)
 	cfg, exists, warn, err := Load(p)
 	if err != nil || !exists {
 		t.Fatal(err)
@@ -35,7 +35,7 @@ func TestLoadPartialAndUnknown(t *testing.T) {
 
 func TestLoadInvalid(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "c.conf")
-	os.WriteFile(p, []byte("[tls]\nmode = \"weird\"\n"), 0o644)
+	_ = os.WriteFile(p, []byte("[tls]\nmode = \"weird\"\n"), 0o644)
 	if _, _, _, err := Load(p); err == nil {
 		t.Fatal("expected error")
 	}
@@ -137,11 +137,11 @@ func TestUpdatesKeys(t *testing.T) {
 		t.Fatalf("ParseClock = %d, %v", m, err)
 	}
 	p := filepath.Join(t.TempDir(), "c.conf")
-	os.WriteFile(p, []byte("[updates]\nchannel = \"beta\"\n"), 0o644)
+	_ = os.WriteFile(p, []byte("[updates]\nchannel = \"beta\"\n"), 0o644)
 	if _, _, _, err := Load(p); err == nil {
 		t.Fatal("invalid channel in file accepted")
 	}
-	os.WriteFile(p, []byte("[updates]\nauto_install = true\nauto_install_at = \"04:15\"\n"), 0o644)
+	_ = os.WriteFile(p, []byte("[updates]\nauto_install = true\nauto_install_at = \"04:15\"\n"), 0o644)
 	c, _, _, err := Load(p)
 	if err != nil || !c.Updates.AutoInstall || c.Updates.AutoInstallAt != "04:15" || c.Updates.Channel != "stable" || !c.Updates.AutoCheck {
 		t.Fatalf("load updates: %+v %v", c.Updates, err)
@@ -214,7 +214,7 @@ func TestPlainHTTPMode(t *testing.T) {
 	}
 	// Loading a file applies the same rule.
 	p := filepath.Join(t.TempDir(), "c.conf")
-	os.WriteFile(p, []byte("[tls]\nmode = \"http\"\n"), 0o644)
+	_ = os.WriteFile(p, []byte("[tls]\nmode = \"http\"\n"), 0o644)
 	if _, _, _, err := Load(p); err == nil {
 		t.Fatal("default listen 0.0.0.0 with plain http must be rejected")
 	}
@@ -224,7 +224,7 @@ func TestCheck(t *testing.T) {
 	dir := t.TempDir()
 	write := func(s string) string {
 		p := filepath.Join(dir, "c.conf")
-		os.WriteFile(p, []byte(s), 0o644)
+		_ = os.WriteFile(p, []byte(s), 0o644)
 		return p
 	}
 	if _, err := Check(filepath.Join(dir, "missing.conf")); err == nil {

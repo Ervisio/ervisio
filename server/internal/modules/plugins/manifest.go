@@ -327,7 +327,7 @@ func LoadManifest(dir string) (*Manifest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("manifest.json: %v", cleanErr(err))
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	buf := make([]byte, maxManifestBytes+1)
 	n, _ := readFull(f, buf)
 	m, err := ParseManifest(buf[:n])

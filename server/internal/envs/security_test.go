@@ -74,7 +74,7 @@ func TestTunnelFolderIsTheDaemonsAndReplacesAnOldOne(t *testing.T) {
 	}
 	// A symlink in place of the base folder is refused.
 	link := filepath.Join(dir, "tunlink")
-	os.Symlink(filepath.Join(dir, "state"), link)
+	_ = os.Symlink(filepath.Join(dir, "state"), link)
 	if err := prepareTunnelDir(link, filepath.Join(link, "1")); err == nil {
 		t.Fatal("a symlinked base was accepted")
 	}

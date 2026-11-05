@@ -71,15 +71,6 @@ type Conn struct {
 
 func (c *Conn) secret(k string) string { return c.secrets[k] }
 
-func (c *Conn) clone() *Conn {
-	cp := *c
-	cp.secrets = make(map[string]string, len(c.secrets))
-	for k, v := range c.secrets {
-		cp.secrets[k] = v
-	}
-	return &cp
-}
-
 // View is what the browser sees of a connection.
 type View struct {
 	Conn

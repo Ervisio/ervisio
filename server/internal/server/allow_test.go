@@ -106,7 +106,7 @@ func TestKeyLoginAllowlist(t *testing.T) {
 	_, edk, _ := ed25519.GenerateKey(rand.Reader)
 	signer, _ := ssh.NewSignerFromKey(edk)
 	keys := filepath.Join(t.TempDir(), "authorized_keys")
-	os.WriteFile(keys, ssh.MarshalAuthorizedKey(signer.PublicKey()), 0o600)
+	_ = os.WriteFile(keys, ssh.MarshalAuthorizedKey(signer.PublicKey()), 0o600)
 	ts, srv := newKeyTestServer(t, keys)
 	me := srv.devUser.Name
 	cl := &http.Client{}

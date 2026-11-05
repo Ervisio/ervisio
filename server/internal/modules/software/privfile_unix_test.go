@@ -14,10 +14,10 @@ import (
 func fakePacman(t *testing.T) (*pacman, string) {
 	t.Helper()
 	d := t.TempDir()
-	os.MkdirAll(d+"/sysdb/local", 0o755)
-	os.MkdirAll(d+"/sysdb/sync", 0o755)
-	os.WriteFile(d+"/sysdb/sync/core.db", []byte("core"), 0o644)
-	os.WriteFile(d+"/sysdb/sync/extra.db", []byte("extra"), 0o644)
+	_ = os.MkdirAll(d+"/sysdb/local", 0o755)
+	_ = os.MkdirAll(d+"/sysdb/sync", 0o755)
+	_ = os.WriteFile(d+"/sysdb/sync/core.db", []byte("core"), 0o644)
+	_ = os.WriteFile(d+"/sysdb/sync/extra.db", []byte("extra"), 0o644)
 	p := newPacman()
 	p.dbOnce.Do(func() {})
 	p.dbPath = d + "/sysdb"
@@ -57,9 +57,9 @@ func TestCheckDBFreshAndReused(t *testing.T) {
 func TestCheckDBRefusesPlantedPaths(t *testing.T) {
 	t.Run("symlinked dir", func(t *testing.T) {
 		p, d := fakePacman(t)
-		os.MkdirAll(d+"/cache/ervisio", 0o700)
-		os.Mkdir(d+"/attacker", 0o755)
-		os.Symlink(d+"/attacker", d+"/cache/ervisio/checkdb")
+		_ = os.MkdirAll(d+"/cache/ervisio", 0o700)
+		_ = os.Mkdir(d+"/attacker", 0o755)
+		_ = os.Symlink(d+"/attacker", d+"/cache/ervisio/checkdb")
 		if _, err := p.prepareCheckDB(); err == nil {
 			t.Error("a link in place of the folder was used")
 		}
@@ -72,17 +72,17 @@ func TestCheckDBRefusesPlantedPaths(t *testing.T) {
 	})
 	t.Run("shared parent", func(t *testing.T) {
 		p, d := fakePacman(t)
-		os.MkdirAll(d+"/cache/ervisio", 0o700)
-		os.Chmod(d+"/cache/ervisio", 0o1777)
+		_ = os.MkdirAll(d+"/cache/ervisio", 0o700)
+		_ = os.Chmod(d+"/cache/ervisio", 0o1777)
 		if _, err := p.prepareCheckDB(); err == nil {
 			t.Error("a folder in a world-writable parent was used")
 		}
 	})
 	t.Run("open mode", func(t *testing.T) {
 		p, d := fakePacman(t)
-		os.MkdirAll(d+"/cache/ervisio/checkdb/sync", 0o755)
-		os.WriteFile(d+"/cache/ervisio/checkdb/sync/core.db", []byte("core"), 0o644)
-		os.Chmod(d+"/cache/ervisio/checkdb", 0o755)
+		_ = os.MkdirAll(d+"/cache/ervisio/checkdb/sync", 0o755)
+		_ = os.WriteFile(d+"/cache/ervisio/checkdb/sync/core.db", []byte("core"), 0o644)
+		_ = os.Chmod(d+"/cache/ervisio/checkdb", 0o755)
 		if p.dbArgs() != nil {
 			t.Error("dbArgs trusted a 0755 folder")
 		}
@@ -97,10 +97,10 @@ func TestCheckDBRefusesPlantedPaths(t *testing.T) {
 	t.Run("planted entries", func(t *testing.T) {
 		p, d := fakePacman(t)
 		tmp := d + "/cache/ervisio/checkdb"
-		os.MkdirAll(tmp+"/local", 0o700) // a folder instead of the link
-		os.MkdirAll(tmp+"/sync", 0o700)
-		os.WriteFile(d+"/victim", []byte("keep"), 0o600)
-		os.Symlink(d+"/victim", tmp+"/sync/core.db")
+		_ = os.MkdirAll(tmp+"/local", 0o700) // a folder instead of the link
+		_ = os.MkdirAll(tmp+"/sync", 0o700)
+		_ = os.WriteFile(d+"/victim", []byte("keep"), 0o600)
+		_ = os.Symlink(d+"/victim", tmp+"/sync/core.db")
 		if _, err := p.prepareCheckDB(); err != nil {
 			t.Fatal(err)
 		}

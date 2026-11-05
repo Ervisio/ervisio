@@ -460,7 +460,7 @@ func (m *Manager) checkJob(in *Instance, a *account.Account) (*plugins.Manifest,
 	man, err := m.env.Manifest(in.Plugin)
 	if err != nil || man == nil {
 		if err == nil {
-			err = fmt.Errorf("The plugin %s is not available.", in.Plugin)
+			err = fmt.Errorf("The plugin %s is not available.", in.Plugin) //nolint:staticcheck // user-facing message, wording is part of the API
 		}
 		return nil, nil, err.Error()
 	}
@@ -527,16 +527,6 @@ func (m *Manager) find(id string) (*Instance, bool) {
 	}
 	c := *in
 	return &c, true
-}
-
-// nextRun returns the next scheduled start (zero if none).
-func (m *Manager) nextRun(id string) time.Time {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if lv := m.live[id]; lv != nil {
-		return lv.next
-	}
-	return time.Time{}
 }
 
 func (m *Manager) removeRuns(id string) { _ = os.Remove(m.runsPath(id)) }

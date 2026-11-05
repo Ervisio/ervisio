@@ -226,12 +226,12 @@ func parseFlags() daemonFlags {
 }
 
 func printUsage() {
-	fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [flags]\n", brand.DaemonBinary)
+	_, _ = fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [flags]\n", brand.DaemonBinary)
 	flag.VisitAll(func(f *flag.Flag) {
 		if hiddenFlags[f.Name] {
 			return
 		}
-		fmt.Fprintf(flag.CommandLine.Output(), "  -%s\n    \t%s\n", f.Name, f.Usage)
+		_, _ = fmt.Fprintf(flag.CommandLine.Output(), "  -%s\n    \t%s\n", f.Name, f.Usage)
 	})
 }
 

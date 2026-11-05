@@ -25,7 +25,7 @@ func hWriteStream(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
 	if err != nil {
 		return err
 	}
-	defer d.Close()
+	defer func() { _ = d.Close() }()
 	perm, err := uploadPerm(dfd(d), name, p.Overwrite)
 	if err != nil {
 		return err
@@ -37,7 +37,7 @@ func hWriteStream(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
 	ok := false
 	defer func() {
 		if !ok {
-			tmp.Close()
+			_ = tmp.Close()
 			_ = unix.Unlinkat(dfd(d), tname, 0)
 		}
 	}()

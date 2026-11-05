@@ -22,7 +22,7 @@ func rpcOK(t *testing.T, e *xferEnv, method string, params any) map[string]any {
 	b, _ := json.Marshal(map[string]any{"method": method, "params": params})
 	code, body := doc(t, e.cl, "POST", e.ts.URL+"/api/rpc", string(b), true)
 	var out map[string]any
-	json.Unmarshal([]byte(body), &out)
+	_ = json.Unmarshal([]byte(body), &out)
 	if code != 200 {
 		t.Fatalf("%s: %d %s", method, code, body)
 	}
@@ -89,8 +89,8 @@ func TestAuditPluginCalls(t *testing.T) {
 		t.Fatalf("second page: %v", r2)
 	}
 	// A plugin cannot read the core entries or another plugin's.
-	e.srv.audit.Add(audit.Entry{User: "x", Source: audit.SourcePlugin, Plugin: "other", Action: "command", Target: "rm"})
-	e.srv.audit.Add(audit.Entry{User: "x", Source: audit.SourceCore, Action: "login"})
+	_ = e.srv.audit.Add(audit.Entry{User: "x", Source: audit.SourcePlugin, Plugin: "other", Action: "command", Target: "rm"})
+	_ = e.srv.audit.Add(audit.Entry{User: "x", Source: audit.SourceCore, Action: "login"})
 	r = rpcOK(t, e, "plugins.audit.list", map[string]any{"plugin": "xfer", "limit": 100})
 	for _, x := range r["entries"].([]any) {
 		if x.(map[string]any)["plugin"] != "xfer" {
@@ -144,15 +144,15 @@ func TestAuditStream(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer c.CloseNow()
-	c.Write(ctx, websocket.MessageText, []byte(`{"ch":1,"op":"open","method":"plugins.execStream","params":{"plugin":"xfer","command":"seq","args":["4"]}}`))
+	defer func() { _ = c.CloseNow() }()
+	_ = c.Write(ctx, websocket.MessageText, []byte(`{"ch":1,"op":"open","method":"plugins.execStream","params":{"plugin":"xfer","command":"seq","args":["4"]}}`))
 	for {
 		_, data, err := c.Read(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
 		var f wsFrame
-		json.Unmarshal(data, &f)
+		_ = json.Unmarshal(data, &f)
 		if f.Op == "end" {
 			break
 		}

@@ -302,13 +302,13 @@ func TestHistogramAndContext(t *testing.T) {
 
 func TestListLogFiles(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "pacman.log"), []byte("x\n"), 0o644)
-	os.WriteFile(filepath.Join(dir, "pacman.log.1"), []byte("x\n"), 0o644)
-	os.WriteFile(filepath.Join(dir, "old.log-20240101"), []byte("x\n"), 0o644)
-	os.WriteFile(filepath.Join(dir, "wtmp"), []byte("x\n"), 0o644)
-	os.WriteFile(filepath.Join(dir, "bin.log"), []byte("a\x00b"), 0o644)
-	os.MkdirAll(filepath.Join(dir, "nginx"), 0o755)
-	os.WriteFile(filepath.Join(dir, "nginx", "error.log"), []byte("x\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "pacman.log"), []byte("x\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "pacman.log.1"), []byte("x\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "old.log-20240101"), []byte("x\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "wtmp"), []byte("x\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "bin.log"), []byte("a\x00b"), 0o644)
+	_ = os.MkdirAll(filepath.Join(dir, "nginx"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "nginx", "error.log"), []byte("x\n"), 0o644)
 	var names []string
 	for _, f := range listLogFiles(dir, 50) {
 		names = append(names, strings.TrimPrefix(f.Path, dir+"/"))
@@ -340,11 +340,13 @@ func TestFollowFile(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	out := make(chan Entry, 10)
-	go followFile(ctx, spec{ID: "file:" + p, Kind: "file", Path: p, Label: "app", Format: "auto"}, filter{untilUs: noLimit}, out)
+	go func() {
+		_ = followFile(ctx, spec{ID: "file:" + p, Kind: "file", Path: p, Label: "app", Format: "auto"}, filter{untilUs: noLimit}, out)
+	}()
 	time.Sleep(600 * time.Millisecond)
 	fh, _ := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0)
-	fh.WriteString("2026-10-01 10:00:01 [error] after\n  trace line\n")
-	fh.Close()
+	_, _ = fh.WriteString("2026-10-01 10:00:01 [error] after\n  trace line\n")
+	_ = fh.Close()
 	var got []Entry
 	deadline := time.After(3 * time.Second)
 	for len(got) < 2 {
@@ -359,8 +361,8 @@ func TestFollowFile(t *testing.T) {
 		t.Errorf("%+v", got)
 	}
 	// rotation: replace the file
-	os.Rename(p, p+".1")
-	os.WriteFile(p, []byte("2026-10-01 10:05:00 [warn] fresh\n"), 0o644)
+	_ = os.Rename(p, p+".1")
+	_ = os.WriteFile(p, []byte("2026-10-01 10:05:00 [warn] fresh\n"), 0o644)
 	select {
 	case e := <-out:
 		if e.Message != "[warn] fresh" {

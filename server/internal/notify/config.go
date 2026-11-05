@@ -65,7 +65,6 @@ var (
 	tgChatRe     = regexp.MustCompile(`^(-?[0-9]{1,20}|@[A-Za-z0-9_]{4,64})$`)
 	topicRe      = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 	headerNameRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9-]{0,63}$`)
-	idRe         = regexp.MustCompile(`^[a-f0-9]{8}$`)
 	forbiddenHdr = map[string]bool{"host": true, "content-length": true, "transfer-encoding": true, "connection": true, "content-type": true, "cookie": true}
 )
 
@@ -324,20 +323,20 @@ func (s *Spec) Validate() error {
 	case TypeGotify:
 		return s.validateGotify()
 	default:
-		return fmt.Errorf("%q is not a channel type.", s.Type)
+		return fmt.Errorf("%q is not a channel type.", s.Type) //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 }
 
 func (s *Spec) validateCommon() error {
 	if n := s.Name; n == "" || len(n) > 60 {
-		return errors.New("Give the channel a name of up to 60 characters.")
+		return errors.New("Give the channel a name of up to 60 characters.") //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	if _, ok := levelRank[s.MinLevel]; !ok || s.MinLevel == "success" {
-		return errors.New("The minimum level must be info, warn or error.")
+		return errors.New("The minimum level must be info, warn or error.") //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	for _, e := range s.Events {
 		if !isKnownEvent(e) {
-			return fmt.Errorf("%q is not an event a channel can send.", e)
+			return fmt.Errorf("%q is not an event a channel can send.", e) //nolint:staticcheck // user-facing message, wording is part of the API
 		}
 	}
 	return nil
@@ -364,37 +363,37 @@ func (s *Spec) validateEmail() error {
 
 func (s *Spec) validateSMTP() error {
 	if !hostRe.MatchString(s.Host) {
-		return errors.New("Give the SMTP server's host name.")
+		return errors.New("Give the SMTP server's host name.") //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	if s.Port < 1 || s.Port > 65535 {
-		return errors.New("The SMTP port must be between 1 and 65535.")
+		return errors.New("The SMTP port must be between 1 and 65535.") //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	if s.Security != "none" && s.Security != "starttls" && s.Security != "tls" {
-		return errors.New("Security must be none, starttls or tls.")
+		return errors.New("Security must be none, starttls or tls.") //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	return nil
 }
 
 func (s *Spec) validateCredentials() error {
 	if strings.ContainsAny(s.Username, "\r\n\x00") || strings.ContainsAny(s.Password, "\r\n\x00") || len(s.Username) > 256 || len(s.Password) > 512 {
-		return errors.New("The user name or password is not valid.")
+		return errors.New("The user name or password is not valid.") //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	if (s.Username == "") != (s.Password == "") {
-		return errors.New("Give both the user name and the password, or neither.")
+		return errors.New("Give both the user name and the password, or neither.") //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	return nil
 }
 
 func (s *Spec) validateAddresses() error {
 	if !validAddress(s.From) {
-		return errors.New("The From address is not valid.")
+		return errors.New("The From address is not valid.") //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	if len(s.To) < 1 || len(s.To) > 10 {
-		return errors.New("Give between 1 and 10 recipient addresses.")
+		return errors.New("Give between 1 and 10 recipient addresses.") //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	for _, a := range s.To {
 		if !validAddress(a) {
-			return fmt.Errorf("%q is not a valid email address.", a)
+			return fmt.Errorf("%q is not a valid email address.", a) //nolint:staticcheck // user-facing message, wording is part of the API
 		}
 	}
 	return nil
@@ -407,27 +406,27 @@ func validAddress(a string) bool {
 
 func (s *Spec) validateTelegram() error {
 	if !tgTokenRe.MatchString(s.BotToken) {
-		return errors.New("The bot token looks like 123456789:AA... (from @BotFather).")
+		return errors.New("The bot token looks like 123456789:AA... (from @BotFather).") //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	if !tgChatRe.MatchString(s.ChatID) {
-		return errors.New("The chat id is a number (negative for groups) or @channelname.")
+		return errors.New("The chat id is a number (negative for groups) or @channelname.") //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	return nil
 }
 
 func (s *Spec) validateWebhook() error {
 	if _, err := httpURL(s.URL); err != nil {
-		return fmt.Errorf("The webhook URL %v.", err)
+		return fmt.Errorf("The webhook URL %v.", err) //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	if s.Method != "POST" && s.Method != "PUT" && s.Method != "PATCH" {
-		return errors.New("The method must be POST, PUT or PATCH.")
+		return errors.New("The method must be POST, PUT or PATCH.") //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	if len(s.Template) > maxTemplate {
-		return errors.New("The template is too long.")
+		return errors.New("The template is too long.") //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	body, err := renderWebhook(s.Template, sampleVars())
 	if err != nil || !json.Valid([]byte(body)) {
-		return errors.New("The template must be JSON once {title}, {body}, {level}, {link}, {source} and {time} are replaced.")
+		return errors.New("The template must be JSON once {title}, {body}, {level}, {link}, {source} and {time} are replaced.") //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	return s.validateWebhookHeader()
 }
@@ -435,38 +434,38 @@ func (s *Spec) validateWebhook() error {
 func (s *Spec) validateWebhookHeader() error {
 	if s.HeaderName == "" {
 		if s.HeaderValue != "" {
-			return errors.New("Give the header's name.")
+			return errors.New("Give the header's name.") //nolint:staticcheck // user-facing message, wording is part of the API
 		}
 		return nil
 	}
 	if !headerNameRe.MatchString(s.HeaderName) || forbiddenHdr[strings.ToLower(s.HeaderName)] {
-		return errors.New("That header name cannot be used.")
+		return errors.New("That header name cannot be used.") //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	if s.HeaderValue == "" || len(s.HeaderValue) > 2048 || strings.ContainsAny(s.HeaderValue, "\r\n\x00") {
-		return errors.New("Give the header's value (up to 2048 characters, one line).")
+		return errors.New("Give the header's value (up to 2048 characters, one line).") //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	return nil
 }
 
 func (s *Spec) validateNtfy() error {
 	if _, err := httpURL(s.Server); err != nil {
-		return fmt.Errorf("The ntfy server %v.", err)
+		return fmt.Errorf("The ntfy server %v.", err) //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	if !topicRe.MatchString(s.Topic) {
-		return errors.New("The topic is letters, digits, - or _ (up to 64).")
+		return errors.New("The topic is letters, digits, - or _ (up to 64).") //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	if strings.ContainsAny(s.Token, "\r\n\x00 ") {
-		return errors.New("The access token is not valid.")
+		return errors.New("The access token is not valid.") //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	return nil
 }
 
 func (s *Spec) validateGotify() error {
 	if _, err := httpURL(s.Server); err != nil {
-		return fmt.Errorf("The Gotify server %v.", err)
+		return fmt.Errorf("The Gotify server %v.", err) //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	if s.Token == "" || strings.ContainsAny(s.Token, "\r\n\x00 ") {
-		return errors.New("Give the Gotify application token.")
+		return errors.New("Give the Gotify application token.") //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	return nil
 }
@@ -517,12 +516,12 @@ func WriteFileAtomic(path string, data []byte) error {
 		return err
 	}
 	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		os.Remove(tmp.Name())
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
 		return err
 	}
 	if err := tmp.Close(); err != nil {
-		os.Remove(tmp.Name())
+		_ = os.Remove(tmp.Name())
 		return err
 	}
 	return os.Rename(tmp.Name(), path)
@@ -551,7 +550,7 @@ func (st *Store) Save(spec Spec) (Spec, error) {
 	}
 	if idx < 0 {
 		if len(list) >= maxChannels {
-			return Spec{}, fmt.Errorf("At most %d channels.", maxChannels)
+			return Spec{}, fmt.Errorf("At most %d channels.", maxChannels) //nolint:staticcheck // user-facing message, wording is part of the API
 		}
 		spec.ID = newID(list)
 		list = append(list, spec)
@@ -607,7 +606,7 @@ func (st *Store) Get(id string) (*Spec, error) {
 }
 
 // ErrNotFound: no channel has that id.
-var ErrNotFound = errors.New("There is no such channel.")
+var ErrNotFound = errors.New("There is no such channel.") //nolint:staticcheck // user-facing message, wording is part of the API
 
 // hostPort is for tests and logs.
 func hostPort(host string, port int) string {

@@ -192,7 +192,7 @@ func do(req *http.Request) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return fmt.Errorf("the server answered %d %s", resp.StatusCode, strings.TrimSpace(string(b)))
@@ -390,7 +390,7 @@ func sendEmail(ctx context.Context, s *Spec, m Message) error {
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	if dl, ok := ctx.Deadline(); ok {
 		_ = conn.SetDeadline(dl)
 	}
@@ -398,7 +398,7 @@ func sendEmail(ctx context.Context, s *Spec, m Message) error {
 	if err != nil {
 		return err
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	if err := secureAndAuth(c, s, host); err != nil {
 		return err
 	}

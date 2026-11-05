@@ -54,7 +54,7 @@ func devAsset(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if err := s.Send(DevAssetMeta{Name: fi.Name(), Size: fi.Size(), Mime: mime.TypeByExtension(filepath.Ext(fi.Name()))}); err != nil {
 		return err
 	}
@@ -79,14 +79,14 @@ func openDevAsset(id, file string) (*os.File, os.FileInfo, error) {
 	if err != nil {
 		return nil, nil, notFound
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	f, err := root.Open(file)
 	if err != nil {
 		return nil, nil, notFound
 	}
 	fi, err := f.Stat()
 	if err != nil || !fi.Mode().IsRegular() || fi.Size() > MaxDevAsset {
-		f.Close()
+		_ = f.Close()
 		return nil, nil, notFound
 	}
 	return f, fi, nil

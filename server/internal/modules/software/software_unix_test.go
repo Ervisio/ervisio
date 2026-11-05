@@ -22,7 +22,7 @@ func TestSchedule(t *testing.T) {
 	if currentSchedule() != "" {
 		t.Error("no timer yet")
 	}
-	os.WriteFile(filepath.Join(systemdDir, timerName), []byte(renderTimer("03:00")), 0o644)
+	_ = os.WriteFile(filepath.Join(systemdDir, timerName), []byte(renderTimer("03:00")), 0o644)
 	if got := currentSchedule(); got != "03:00" {
 		t.Errorf("got %q", got)
 	}

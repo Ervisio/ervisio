@@ -55,7 +55,7 @@ func TestReadStatusRejectsSpoofedFiles(t *testing.T) {
 	useTempState(t)
 	good, _ := json.Marshal(txState{Running: true, PID: os.Getpid(), Op: "upgrade", StartedAt: 1})
 	// A file of the wrong owner is ignored (stateRootOwner is root in production).
-	os.WriteFile(stateRootPublic, good, 0o644)
+	_ = os.WriteFile(stateRootPublic, good, 0o644)
 	if runtime.GOOS != "windows" { // owners are uids; Windows trusts SYSTEM, Administrators and this user
 		stateRootOwner = os.Geteuid() + 1
 		if busy, tx := readStatus(); busy || tx != nil {
@@ -64,9 +64,9 @@ func TestReadStatusRejectsSpoofedFiles(t *testing.T) {
 		stateRootOwner = os.Geteuid()
 	}
 	// A link planted under the state name is never followed.
-	os.Remove(stateRootPublic)
+	_ = os.Remove(stateRootPublic)
 	real := filepath.Join(filepath.Dir(stateRootPublic), "elsewhere.json")
-	os.WriteFile(real, good, 0o644)
+	_ = os.WriteFile(real, good, 0o644)
 	if err := os.Symlink(real, stateRootPublic); err != nil {
 		if runtime.GOOS == "windows" {
 			return // creating a symlink needs a privilege the runner may lack
@@ -88,7 +88,7 @@ func TestUserStatePathNeedsPrivateRuntimeDir(t *testing.T) {
 	}
 	if runtime.GOOS != "windows" { // a world-writable mode is a Unix notion
 		shared := t.TempDir()
-		os.Chmod(shared, 0o1777)
+		_ = os.Chmod(shared, 0o1777)
 		t.Setenv("XDG_RUNTIME_DIR", shared)
 		if p := userStatePath(); p != "" {
 			t.Errorf("shared folder accepted: %q", p)
@@ -104,8 +104,8 @@ func TestUserStatePathNeedsPrivateRuntimeDir(t *testing.T) {
 func TestStateSaveNeverWritesThroughLinks(t *testing.T) {
 	d := t.TempDir()
 	victim := d + "/victim"
-	os.WriteFile(victim, []byte("keep"), 0o600)
-	os.Mkdir(d+"/state", 0o755)
+	_ = os.WriteFile(victim, []byte("keep"), 0o600)
+	_ = os.Mkdir(d+"/state", 0o755)
 	path := d + "/state/tx.json"
 	linked := os.Symlink(victim, path) == nil
 	if !linked && runtime.GOOS != "windows" { // Windows needs a privilege to link
@@ -125,8 +125,8 @@ func TestStateSaveNeverWritesThroughLinks(t *testing.T) {
 	}
 	// A folder others can write to is refused altogether.
 	shared := d + "/shared"
-	os.Mkdir(shared, 0o777)
-	os.Chmod(shared, 0o777)
+	_ = os.Mkdir(shared, 0o777)
+	_ = os.Chmod(shared, 0o777)
 	r = &txRun{path: shared + "/tx.json"}
 	r.save(true)
 	if _, err := os.Lstat(shared + "/tx.json"); err == nil {

@@ -157,7 +157,7 @@ func readKeyFile(path string) (string, error) {
 		}
 		return "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	b, err := io.ReadAll(io.LimitReader(f, maxKeyFile+1))
 	if err != nil {
 		return "", err
@@ -184,7 +184,7 @@ func writeKeyFile(path, content string) error {
 	ok := false
 	defer func() {
 		if !ok {
-			os.Remove(name)
+			_ = os.Remove(name)
 		}
 	}()
 	if err := fillKeyTemp(tmp, content); err != nil {
@@ -215,11 +215,11 @@ func ensureSSHDir(dir string) error {
 // fillKeyTemp writes content to tmp, sets mode 0600 and closes it.
 func fillKeyTemp(tmp *os.File, content string) error {
 	if _, err := tmp.WriteString(content); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return err
 	}
 	if err := tmp.Chmod(0o600); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return err
 	}
 	return tmp.Close()

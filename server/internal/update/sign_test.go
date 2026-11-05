@@ -98,12 +98,12 @@ func TestParseSums(t *testing.T) {
 func TestVerifyFile(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "f")
-	os.WriteFile(p, []byte("payload"), 0o644)
+	_ = os.WriteFile(p, []byte("payload"), 0o644)
 	sums, _ := ParseSums([]byte(sumLine([]byte("payload"), "f")))
 	if err := VerifyFile(sums, "f", p); err != nil {
 		t.Fatal(err)
 	}
-	os.WriteFile(p, []byte("payloaD"), 0o644)
+	_ = os.WriteFile(p, []byte("payloaD"), 0o644)
 	if err := VerifyFile(sums, "f", p); err == nil {
 		t.Fatal("modified file accepted")
 	}
@@ -138,7 +138,7 @@ func TestKeyFileRoundTrip(t *testing.T) {
 		t.Fatalf("seed form: %v", err)
 	}
 	if runtime.GOOS != "windows" {
-		os.Chmod(p, 0o644)
+		_ = os.Chmod(p, 0o644)
 		if _, err := signkey.Load(p); err == nil {
 			t.Fatal("world-readable key accepted")
 		}

@@ -67,11 +67,11 @@ func TestAddWritesJSONLinesAndRotatesDaily(t *testing.T) {
 
 func TestAppendOnlyAcrossReopen(t *testing.T) {
 	l, cfg, _ := newLog(t, day(2026, 10, 1, 12))
-	l.Add(Entry{User: "a", Source: SourceCore, Action: "login"})
+	_ = l.Add(Entry{User: "a", Source: SourceCore, Action: "login"})
 	l.Close()
 	l2 := New(l.Dir(), cfg)
 	l2.now = l.now
-	l2.Add(Entry{User: "b", Source: SourceCore, Action: "login"})
+	_ = l2.Add(Entry{User: "b", Source: SourceCore, Action: "login"})
 	got, _, _ := l2.List(Query{})
 	if len(got) != 2 || got[0].User != "b" || got[1].User != "a" {
 		t.Fatalf("%+v", got)
@@ -88,7 +88,7 @@ func TestDisabledWritesNothing(t *testing.T) {
 		t.Fatal("the folder was created while disabled")
 	}
 	cfg.on = true
-	l.Add(Entry{User: "a", Source: SourceCore, Action: "login"})
+	_ = l.Add(Entry{User: "a", Source: SourceCore, Action: "login"})
 	if got, _, _ := l.List(Query{}); len(got) != 1 {
 		t.Fatalf("%+v", got)
 	}
@@ -96,12 +96,12 @@ func TestDisabledWritesNothing(t *testing.T) {
 
 func TestRetention(t *testing.T) {
 	l, cfg, cur := newLog(t, day(2026, 10, 2, 12))
-	os.MkdirAll(l.Dir(), 0o700)
+	_ = os.MkdirAll(l.Dir(), 0o700)
 	for _, d := range []string{"2026-06-01", "2026-07-01", "2026-07-04", "2026-09-30", "2026-10-02"} {
-		os.WriteFile(filepath.Join(l.Dir(), "audit-"+d+".jsonl"), []byte("{}\n"), 0o600)
+		_ = os.WriteFile(filepath.Join(l.Dir(), "audit-"+d+".jsonl"), []byte("{}\n"), 0o600)
 	}
-	os.WriteFile(filepath.Join(l.Dir(), "notes.txt"), []byte("x"), 0o600)
-	os.WriteFile(filepath.Join(l.Dir(), "audit-bad.jsonl"), []byte("x"), 0o600)
+	_ = os.WriteFile(filepath.Join(l.Dir(), "notes.txt"), []byte("x"), 0o600)
+	_ = os.WriteFile(filepath.Join(l.Dir(), "audit-bad.jsonl"), []byte("x"), 0o600)
 	cfg.days = 90 // keeps from 2026-07-04 on
 	l.Prune()
 	names := func() string {
@@ -218,12 +218,12 @@ func TestListFiltersNewestFirstAndPages(t *testing.T) {
 
 func TestListSurvivesDamagedLines(t *testing.T) {
 	l, _, _ := newLog(t, day(2026, 10, 1, 12))
-	l.Add(Entry{User: "a", Source: SourceCore, Action: "login"})
+	_ = l.Add(Entry{User: "a", Source: SourceCore, Action: "login"})
 	f := filepath.Join(l.Dir(), "audit-2026-10-01.jsonl")
 	fh, _ := os.OpenFile(f, os.O_APPEND|os.O_WRONLY, 0)
-	fh.WriteString("not json\n{\"time\":\n")
-	fh.Close()
-	l.Add(Entry{User: "b", Source: SourceCore, Action: "login"})
+	_, _ = fh.WriteString("not json\n{\"time\":\n")
+	_ = fh.Close()
+	_ = l.Add(Entry{User: "b", Source: SourceCore, Action: "login"})
 	if got, _, err := l.List(Query{}); err != nil || len(got) != 2 {
 		t.Fatalf("%v %+v", err, got)
 	}
@@ -243,7 +243,7 @@ func TestEachOldestFirst(t *testing.T) {
 
 func TestNewlinesAndLengthsCannotBreakTheFormat(t *testing.T) {
 	l, _, _ := newLog(t, day(2026, 10, 1, 12))
-	l.Add(Entry{User: "a\nb", Source: SourcePlugin, Plugin: "p", Action: "command", Target: "x\n{\"fake\":1}\r\n" + strings.Repeat("é", 5000), Detail: strings.Repeat("d", 5000)})
+	_ = l.Add(Entry{User: "a\nb", Source: SourcePlugin, Plugin: "p", Action: "command", Target: "x\n{\"fake\":1}\r\n" + strings.Repeat("é", 5000), Detail: strings.Repeat("d", 5000)})
 	b, _ := os.ReadFile(filepath.Join(l.Dir(), "audit-2026-10-01.jsonl"))
 	if strings.Count(string(b), "\n") != 1 {
 		t.Fatalf("a line break got in: %q", b)
@@ -309,8 +309,8 @@ func TestRecordUsesTheDefaultLog(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 	// A write error goes to Errorf, not to the caller.
-	os.RemoveAll(l.Dir())
-	os.WriteFile(l.Dir(), []byte("a file where the folder should be"), 0o600)
+	_ = os.RemoveAll(l.Dir())
+	_ = os.WriteFile(l.Dir(), []byte("a file where the folder should be"), 0o600)
 	l.Close()
 	Record(Entry{User: "ann", Source: SourceCore, Action: "login"})
 	if len(logged) != 1 || !strings.Contains(logged[0], "activity log") {

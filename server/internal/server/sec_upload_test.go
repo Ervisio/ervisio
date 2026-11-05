@@ -31,13 +31,13 @@ func hangService(t *testing.T) (sock string, closed chan struct{}, got chan int6
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.RemoveAll(dir) })
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	sock = filepath.Join(dir, "s.sock")
 	ln, err := net.Listen("unix", sock)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { ln.Close() })
+	t.Cleanup(func() { _ = ln.Close() })
 	closed, got = make(chan struct{}, 4), make(chan int64, 64)
 	go func() {
 		for {
@@ -46,7 +46,7 @@ func hangService(t *testing.T) (sock string, closed chan struct{}, got chan int6
 				return
 			}
 			go func() {
-				defer c.Close()
+				defer func() { _ = c.Close() }()
 				buf := make([]byte, 64<<10)
 				var n int64
 				for {
@@ -72,11 +72,11 @@ func hangService(t *testing.T) (sock string, closed chan struct{}, got chan int6
 func newHangEnv(t *testing.T, sock string) (*Server, *httptest.Server, *http.Client) {
 	plugins := t.TempDir()
 	p := filepath.Join(plugins, "hang")
-	os.MkdirAll(p, 0o755)
-	os.WriteFile(filepath.Join(p, "manifest.json"), []byte(strings.ReplaceAll(hangManifest, "%SOCK%", strings.ReplaceAll(sock, `\`, `\\`))), 0o644)
-	os.WriteFile(filepath.Join(p, "index.js"), []byte("export default () => {}"), 0o644)
+	_ = os.MkdirAll(p, 0o755)
+	_ = os.WriteFile(filepath.Join(p, "manifest.json"), []byte(strings.ReplaceAll(hangManifest, "%SOCK%", strings.ReplaceAll(sock, `\`, `\\`))), 0o644)
+	_ = os.WriteFile(filepath.Join(p, "index.js"), []byte("export default () => {}"), 0o644)
 	web := t.TempDir()
-	os.WriteFile(filepath.Join(web, "index.html"), []byte("<!doctype html>app"), 0o644)
+	_ = os.WriteFile(filepath.Join(web, "index.html"), []byte("<!doctype html>app"), 0o644)
 	srv, err := New(Options{ConfigPath: filepath.Join(t.TempDir(), "ervisio.conf"), Dev: true, NoAuth: true, WebDir: web,
 		Bridge: buildBridge(t), PluginDirs: []string{plugins}, DevPluginsDir: plugins, StateDir: t.TempDir(), Logger: log.New(io.Discard, "", 0)})
 	if err != nil {
@@ -102,13 +102,13 @@ func startHangUpload(t *testing.T, ts *httptest.Server, cl *http.Client, size in
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var out struct {
 		Result struct {
 			URL string `json:"url"`
 		} `json:"result"`
 	}
-	json.NewDecoder(resp.Body).Decode(&out)
+	_ = json.NewDecoder(resp.Body).Decode(&out)
 	if out.Result.URL == "" {
 		t.Fatalf("start: %d", resp.StatusCode)
 	}
@@ -150,7 +150,7 @@ func TestAbandonedUploadClosesTheServiceConnection(t *testing.T) {
 		done := make(chan struct{})
 		go func() {
 			if resp, err := cl.Do(req); err == nil {
-				resp.Body.Close()
+				_ = resp.Body.Close()
 			}
 			close(done)
 		}()

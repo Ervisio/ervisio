@@ -192,7 +192,7 @@ func serveRaw(ln net.Listener, dial func(context.Context) (net.Conn, error), lg 
 			cancel()
 			if err != nil {
 				writeBadGateway(c, err)
-				c.Close()
+				_ = c.Close()
 				return
 			}
 			pipe(c, up)
@@ -204,7 +204,7 @@ func serveRaw(ln net.Listener, dial func(context.Context) (net.Conn, error), lg 
 // carried on, so the Docker CLI and the plugin see why, not just EOF.
 func writeBadGateway(w io.Writer, err error) {
 	body, _ := json.Marshal(map[string]string{"message": err.Error()})
-	fmt.Fprintf(w, "HTTP/1.1 502 Bad Gateway\r\nContent-Type: application/json\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s", len(body), body)
+	_, _ = fmt.Fprintf(w, "HTTP/1.1 502 Bad Gateway\r\nContent-Type: application/json\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s", len(body), body)
 }
 
 // pipe copies both ways until both sides are done, then closes both.
@@ -216,15 +216,15 @@ func pipe(a, b net.Conn) {
 		if cw, ok := dst.(interface{ CloseWrite() error }); ok {
 			_ = cw.CloseWrite()
 		} else {
-			dst.Close()
+			_ = dst.Close()
 		}
 	}
 	wg.Add(2)
 	go cp(a, b)
 	go cp(b, a)
 	wg.Wait()
-	a.Close()
-	b.Close()
+	_ = a.Close()
+	_ = b.Close()
 }
 
 // agentProxy is the handler of a portainer-agent tunnel: every request is
@@ -292,7 +292,7 @@ func listenStaged(tmp string) (*stagedSocket, error) {
 
 // fail closes the listener and passes err on.
 func (s *stagedSocket) fail(err error) (net.Listener, error) {
-	s.ln.Close()
+	_ = s.ln.Close()
 	return nil, err
 }
 

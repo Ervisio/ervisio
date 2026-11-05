@@ -20,7 +20,7 @@ func TestWSLargeInputFrameIsNotBuffered(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer c.CloseNow()
+	defer func() { _ = c.CloseNow() }()
 	big := []byte(`{"ch":1,"op":"input","data":"` + strings.Repeat("a", 10<<20) + `"}`)
 	runtime.GC()
 	var before, after runtime.MemStats
@@ -88,7 +88,7 @@ func TestLargeBodySlotsPerSession(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Requested-With", "ervisio")
 	if resp, err := cl.Do(req); err == nil {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		t.Fatalf("a large call ran without a slot: %d", resp.StatusCode)
 	}
 }

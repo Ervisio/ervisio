@@ -126,18 +126,18 @@ func TestEnvSocketOK(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	sock := filepath.Join(dir, "a.sock")
 	ln, err := net.Listen("unix", sock)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 	if err := envSocketOK(sock); err != nil {
 		t.Fatal(err)
 	}
 	reg := filepath.Join(dir, "file")
-	os.WriteFile(reg, nil, 0o600)
+	_ = os.WriteFile(reg, nil, 0o600)
 	for _, bad := range []string{"", "rel.sock", dir + "/../" + filepath.Base(dir) + "/a.sock", reg, filepath.Join(dir, "none.sock"), "/" + strings.Repeat("a", 120)} {
 		if envSocketOK(bad) == nil {
 			t.Errorf("%q accepted", bad)
@@ -149,15 +149,15 @@ func envSetup(t *testing.T) string {
 	system, _ := setup(t)
 	HostsPath = filepath.Join(t.TempDir(), "hosts.json")
 	dir, _ := os.MkdirTemp(shortTempBase(), "ervs")
-	t.Cleanup(func() { os.RemoveAll(dir) })
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	sock := filepath.Join(dir, "api.sock")
 	ln, err := net.Listen("unix", sock)
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, `{"via":"`+r.URL.Path+`"}`) })}
-	go srv.Serve(ln)
-	t.Cleanup(func() { srv.Close() })
+	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, `{"via":"`+r.URL.Path+`"}`) })}
+	go func() { _ = srv.Serve(ln) }()
+	t.Cleanup(func() { _ = srv.Close() })
 	writePlugin(t, filepath.Join(system, "envp"), strings.ReplaceAll(envManifest, "%SOCK%", jsonPath(filepath.Join(dir, "none.sock"))), map[string]string{"index.js": "x"})
 	return sock
 }
@@ -214,7 +214,7 @@ func TestEnvCheckAndSocketOverride(t *testing.T) {
 	}
 	// A socket that is not the user's tunnel (a regular file) is refused.
 	p.Name, p.EnvSocket = "docker", filepath.Join(filepath.Dir(tunnel), "x")
-	os.WriteFile(p.EnvSocket, nil, 0o600)
+	_ = os.WriteFile(p.EnvSocket, nil, 0o600)
 	if _, err := runHTTP(ctx, &rpc.Call{}, p); err == nil {
 		t.Fatal("a regular file accepted as a tunnel")
 	}

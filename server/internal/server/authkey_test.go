@@ -23,7 +23,7 @@ import (
 func newKeyTestServer(t *testing.T, keysFile string) (*httptest.Server, *Server) {
 	t.Helper()
 	web := t.TempDir()
-	os.WriteFile(filepath.Join(web, "index.html"), []byte("<!doctype html>app"), 0o644)
+	_ = os.WriteFile(filepath.Join(web, "index.html"), []byte("<!doctype html>app"), 0o644)
 	srv, err := New(Options{
 		ConfigPath:        filepath.Join(t.TempDir(), "ervisio.conf"),
 		Dev:               true,
@@ -69,7 +69,7 @@ func getChallenge(t *testing.T, c *http.Client, ts *httptest.Server, user string
 		t.Fatalf("challenge: %d %s", code, body)
 	}
 	var r challengeResp
-	json.Unmarshal([]byte(body), &r)
+	_ = json.Unmarshal([]byte(body), &r)
 	return r
 }
 
@@ -95,7 +95,7 @@ func TestKeyLogin(t *testing.T) {
 	_, otherk, _ := ed25519.GenerateKey(rand.Reader)
 	other, _ := ssh.NewSignerFromKey(otherk)
 	keys := filepath.Join(t.TempDir(), "authorized_keys")
-	os.WriteFile(keys, ssh.MarshalAuthorizedKey(signer.PublicKey()), 0o600)
+	_ = os.WriteFile(keys, ssh.MarshalAuthorizedKey(signer.PublicKey()), 0o600)
 	ts, srv := newKeyTestServer(t, keys)
 	me := srv.devUser.Name
 	jar, _ := cookiejar.New(nil)
@@ -144,7 +144,7 @@ func TestKeyLogin(t *testing.T) {
 	if r := srv.revalidate(sess, false); r != "" {
 		t.Fatal("revalidate:", r)
 	}
-	os.WriteFile(keys, ssh.MarshalAuthorizedKey(other.PublicKey()), 0o600)
+	_ = os.WriteFile(keys, ssh.MarshalAuthorizedKey(other.PublicKey()), 0o600)
 	if r := srv.revalidate(sess, false); !strings.Contains(r, "no longer authorized") {
 		t.Fatalf("revalidate after removal: %q", r)
 	}

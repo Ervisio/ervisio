@@ -125,7 +125,7 @@ func (t *Transition) Run(ctx context.Context) update.Result {
 		// Like LinuxAdmin's own rollback, drop the version that failed (unless
 		// LinuxAdmin's layout runs it: an install made by its install.sh).
 		if cur, _ := t.legacyLayout().Current(); cur != v {
-			os.RemoveAll(src)
+			_ = os.RemoveAll(src)
 		}
 		return finish(update.StateRolledBack, fmt.Errorf("%s %s did not start (%v); %s is running again", brand.Name, v, err, brand.LegacyName))
 	}
@@ -156,7 +156,7 @@ func (t *Transition) finish(r *update.Result, state string, err error) update.Re
 	if state != update.StateOK {
 		writeFailure(t.Paths, v, r.Error)
 	} else {
-		os.Remove(failurePath(t.Paths))
+		_ = os.Remove(failurePath(t.Paths))
 	}
 	return *r
 }
@@ -242,20 +242,20 @@ func (t *Transition) installVersion(src string, u *undo) error {
 		return err
 	}
 	if err := copyTree(src, partial, nil); err != nil {
-		os.RemoveAll(partial)
+		_ = os.RemoveAll(partial)
 		return fmt.Errorf("copy %s: %w", src, err)
 	}
 	if err := renameBinaries(src, partial); err != nil {
-		os.RemoveAll(partial)
+		_ = os.RemoveAll(partial)
 		return err
 	}
 	u.versionNew = !exists(nl.VersionDir(v))
 	if u.prevCurrent == v {
 		// A damaged copy of the active version: replace it in place.
-		os.RemoveAll(nl.VersionDir(v))
+		_ = os.RemoveAll(nl.VersionDir(v))
 	}
 	if err := nl.InstallFrom(partial, v); err != nil {
-		os.RemoveAll(partial)
+		_ = os.RemoveAll(partial)
 		return fmt.Errorf("install %s: %w", v, err)
 	}
 	return nil
@@ -289,15 +289,15 @@ func (t *Transition) rollback(ctx context.Context, u *undo, started bool) {
 	Undo(t.Paths, u.imported)
 	nl := t.newLayout()
 	if u.unitNew {
-		os.Remove(t.Paths.At(newUnitFile))
+		_ = os.Remove(t.Paths.At(newUnitFile))
 	}
 	if u.libCreated {
-		os.RemoveAll(nl.LibDir)
+		_ = os.RemoveAll(nl.LibDir)
 	} else {
 		t.undoLayout(nl, u)
 	}
 	if u.binLinkNew {
-		os.Remove(nl.BinLink)
+		_ = os.Remove(nl.BinLink)
 	}
 	_ = t.Systemd.Systemctl(ctx, "daemon-reload")
 }
@@ -319,13 +319,13 @@ func (t *Transition) undoLayout(nl *update.Layout, u *undo) {
 	if u.prevCurrent != "" {
 		_ = nl.SetCurrent(u.prevCurrent)
 	} else {
-		os.Remove(filepath.Join(nl.LibDir, "current"))
+		_ = os.Remove(filepath.Join(nl.LibDir, "current"))
 	}
 	if u.versionNew && u.prevCurrent != t.Version {
-		os.RemoveAll(nl.VersionDir(t.Version))
+		_ = os.RemoveAll(nl.VersionDir(t.Version))
 	}
 	if u.bridgeLink {
-		os.Remove(filepath.Join(nl.LibDir, brand.BridgeBinary))
+		_ = os.Remove(filepath.Join(nl.LibDir, brand.BridgeBinary))
 	}
 }
 

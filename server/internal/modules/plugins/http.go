@@ -451,7 +451,7 @@ func runHTTP(ctx context.Context, c *rpc.Call, p HTTPParams) (*HTTPResult, error
 	if err != nil {
 		return nil, httpErr(tctx, err, pl)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	limit := min(pl.maxBody, maxHTTPResult)
 	b, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil {
@@ -504,7 +504,7 @@ func runHTTPStream(ctx context.Context, c *rpc.Call, s rpc.Stream, p HTTPParams)
 	if err != nil {
 		return httpErr(ctx, err, pl)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if err := s.Send(map[string]any{"status": resp.StatusCode, "headers": flatHeaders(resp.Header)}); err != nil {
 		return nil
 	}

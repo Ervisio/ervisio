@@ -16,7 +16,7 @@ func ReadOSRelease() OSRelease {
 		if err != nil {
 			continue
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		return ParseOSRelease(io.LimitReader(f, 64<<10))
 	}
 	return ParseOSRelease(strings.NewReader(""))

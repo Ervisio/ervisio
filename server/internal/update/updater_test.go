@@ -56,17 +56,17 @@ func (f *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 				http.NotFound(w, r)
 				return
 			}
-			json.NewEncoder(w).Encode(f.releases[0])
+			_ = json.NewEncoder(w).Encode(f.releases[0])
 			return
 		}
-		json.NewEncoder(w).Encode(f.releases)
+		_ = json.NewEncoder(w).Encode(f.releases)
 	case strings.HasPrefix(r.URL.Path, "/dl/"):
 		b, ok := f.files[strings.TrimPrefix(r.URL.Path, "/dl/")]
 		if !ok {
 			http.NotFound(w, r)
 			return
 		}
-		w.Write(b)
+		_, _ = w.Write(b)
 	default:
 		http.NotFound(w, r)
 	}
@@ -116,7 +116,7 @@ func newHarness(t *testing.T, current string) *harness {
 	pk, sk := testKey(t)
 	gh := newFakeGitHub(t)
 	l, st := setup(t, current)
-	l.SetCurrent(current)
+	_ = l.SetCurrent(current)
 	st.TxFile = filepath.Join(t.TempDir(), "tx.json")
 	host := strings.TrimPrefix(gh.srv.URL, "https://")
 	h := &harness{gh: gh, sk: sk}
@@ -163,7 +163,7 @@ func TestCheckerCacheAndETag(t *testing.T) {
 	if err != nil || rel.Version() != "1.1.0" {
 		t.Fatal(rel, err)
 	}
-	c.Latest(ctx, ChannelStable, false)
+	_, _, _ = c.Latest(ctx, ChannelStable, false)
 	if h.gh.hits[api] != 1 {
 		t.Fatalf("cached answer not used: %d hits", h.gh.hits[api])
 	}
@@ -245,9 +245,9 @@ func TestHTTPHealth(t *testing.T) {
 		defer mu.Unlock()
 		switch r.URL.Path {
 		case "/api/health":
-			json.NewEncoder(w).Encode(HealthInfo{Status: "ok", Version: version})
+			_ = json.NewEncoder(w).Encode(HealthInfo{Status: "ok", Version: version})
 		case "/api/public/host":
-			w.Write([]byte("{}"))
+			_, _ = w.Write([]byte("{}"))
 		default:
 			http.NotFound(w, r)
 		}

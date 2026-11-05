@@ -106,7 +106,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request, sess *Session)
 	go func() {
 		select {
 		case <-sess.Done():
-			c.Close(websocket.StatusPolicyViolation, "session ended")
+			_ = c.Close(websocket.StatusPolicyViolation, "session ended")
 		case <-ctx.Done():
 		}
 	}()
@@ -115,10 +115,10 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request, sess *Session)
 	cancel()
 	wc.closeAll()
 	if err != nil && websocket.CloseStatus(err) == -1 && !errors.Is(err, context.Canceled) {
-		c.Close(websocket.StatusInternalError, "")
+		_ = c.Close(websocket.StatusInternalError, "")
 		return
 	}
-	c.Close(websocket.StatusNormalClosure, "")
+	_ = c.Close(websocket.StatusNormalClosure, "")
 }
 
 func (wc *wsConn) keepalive() {
@@ -133,7 +133,7 @@ func (wc *wsConn) keepalive() {
 			err := wc.c.Ping(ctx)
 			cancel()
 			if err != nil {
-				wc.c.CloseNow()
+				_ = wc.c.CloseNow()
 				return
 			}
 		}
@@ -148,7 +148,7 @@ func (wc *wsConn) send(f *wsFrame) {
 	ctx, cancel := context.WithTimeout(wc.ctx, 30*time.Second)
 	defer cancel()
 	if err := wc.c.Write(ctx, websocket.MessageText, b); err != nil {
-		wc.c.CloseNow()
+		_ = wc.c.CloseNow()
 	}
 }
 
@@ -173,11 +173,11 @@ func (wc *wsConn) readLoop() error {
 			continue
 		}
 		large := len(data) > wsReadLimit
-		data = nil
+		data = nil //nolint:ineffassign // drops the frame buffer while the loop blocks
 		if f.Op != "open" {
 			release()
 			if large { // a frame that repeated "op" to pass opensStream
-				wc.c.Close(websocket.StatusMessageTooBig, "frame too large")
+				_ = wc.c.Close(websocket.StatusMessageTooBig, "frame too large")
 				return errFrameTooBig
 			}
 		}
@@ -226,12 +226,12 @@ func (wc *wsConn) readFrame() (websocket.MessageType, []byte, func(), error) {
 		return typ, head, noop, nil
 	}
 	if typ != websocket.MessageText || !opensStream(head) {
-		wc.c.Close(websocket.StatusMessageTooBig, "frame too large")
+		_ = wc.c.Close(websocket.StatusMessageTooBig, "frame too large")
 		return 0, nil, noop, errFrameTooBig
 	}
 	release, e := wc.sess.acquireBig(wc.ctx)
 	if e != nil {
-		wc.c.Close(websocket.StatusTryAgainLater, "too many large requests")
+		_ = wc.c.Close(websocket.StatusTryAgainLater, "too many large requests")
 		return 0, nil, noop, errors.New(e.Message)
 	}
 	rest, err := io.ReadAll(io.LimitReader(r, wsOpenLimit-int64(len(head))+1))
@@ -241,7 +241,7 @@ func (wc *wsConn) readFrame() (websocket.MessageType, []byte, func(), error) {
 	}
 	if len(head)+len(rest) > wsOpenLimit {
 		release()
-		wc.c.Close(websocket.StatusMessageTooBig, "frame too large")
+		_ = wc.c.Close(websocket.StatusMessageTooBig, "frame too large")
 		return 0, nil, noop, errFrameTooBig
 	}
 	return typ, append(head, rest...), release, nil

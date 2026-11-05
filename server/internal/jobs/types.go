@@ -16,7 +16,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"sort"
 
 	"github.com/ervisio/ervisio/server/internal/modules/plugins"
 )
@@ -157,13 +156,4 @@ func approvalSig(m *plugins.Manifest, j *plugins.JobDef, params map[string]strin
 	b, _ := json.Marshal(used)
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])
-}
-
-func sortedKeys(m map[string]string) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
 }

@@ -38,12 +38,12 @@ type Event struct {
 var (
 	ErrBusy         = errors.New("an update is already in progress")
 	ErrPackages     = errors.New("a package transaction is running; try again when it has finished")
-	ErrUpToDate     = errors.New("Ervisio is already up to date")
+	ErrUpToDate     = errors.New("Ervisio is already up to date") //nolint:staticcheck // user-facing message, wording is part of the API
 	ErrChanged      = errors.New("the latest release changed since it was shown; check again")
 	ErrNoPrevious   = errors.New("there is no previous version to roll back to")
 	ErrNotInstalled = errors.New("this copy of Ervisio was not installed in " + brand.LibDir + "; update it the way it was installed")
 	ErrNoBuild      = errors.New("the release has no build for this architecture")
-	ErrManaged      = errors.New("Ervisio was installed by a package manager, which installs its updates")
+	ErrManaged      = errors.New("Ervisio was installed by a package manager, which installs its updates") //nolint:staticcheck // user-facing message, wording is part of the API
 	// ErrWindows: the self-update swaps symlinks of a versioned folder under a
 	// systemd unit, none of which exist on Windows.
 	ErrWindows = errors.New("on Windows Ervisio is updated by running install.ps1 again; it cannot update itself")
@@ -182,7 +182,7 @@ func (u *Updater) Apply(ctx context.Context, channel, want string, auto bool, pr
 	if err != nil {
 		return "", "", err
 	}
-	defer os.RemoveAll(stage)
+	defer func() { _ = os.RemoveAll(stage) }()
 
 	progress(Event{Phase: "download", File: SumsFile})
 	arcPath := filepath.Join(stage, plan.archive)
@@ -202,7 +202,7 @@ func (u *Updater) Apply(ctx context.Context, channel, want string, auto bool, pr
 	installed := false
 	defer func() {
 		if !installed {
-			os.RemoveAll(partial)
+			_ = os.RemoveAll(partial)
 		}
 	}()
 	if err := u.extractRelease(arcPath, partial, v); err != nil {

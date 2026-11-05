@@ -114,8 +114,8 @@ func RunSessionHelper(args []string) int {
 		return fail("start bridge: %v", err)
 	}
 	// The bridge owns stdio now; drop our copies so EOF reaches it alone.
-	os.Stdin.Close()
-	os.Stdout.Close()
+	_ = os.Stdin.Close()
+	_ = os.Stdout.Close()
 	go func() {
 		for sig := range sigs {
 			_ = cmd.Process.Signal(sig)

@@ -476,14 +476,14 @@ func TestChangedCondition(t *testing.T) {
 func TestFailureStopsUnlessContinued(t *testing.T) {
 	f := newFixture(t)
 	bad := f.create("alice", "failing", nil, nil)
-	f.m.RunNow(f.caller("alice"), "jt", bad.ID)
+	_, _ = f.m.RunNow(f.caller("alice"), "jt", bad.ID)
 	f.m.Wait()
 	r := lastRun(f, bad.ID)
 	if r.Status != "failed" || stepStatuses(r) != "a:failed" || !strings.Contains(r.Error, "Step a failed") {
 		t.Fatalf("%s %s %q", r.Status, stepStatuses(r), r.Error)
 	}
 	ok := f.create("alice", "handled", nil, nil)
-	f.m.RunNow(f.caller("alice"), "jt", ok.ID)
+	_, _ = f.m.RunNow(f.caller("alice"), "jt", ok.ID)
 	f.m.Wait()
 	r = lastRun(f, ok.ID)
 	if r.Status != "ok" || stepStatuses(r) != "a:failed b:ok c:skipped" || !r.Steps[0].Handled {
@@ -498,7 +498,7 @@ func TestAlertsOnFailureAndRecoveryOnly(t *testing.T) {
 	f := newFixture(t)
 	in := f.create("alice", "failing", nil, nil)
 	run := func() {
-		f.m.RunNow(f.caller("alice"), "jt", in.ID)
+		_, _ = f.m.RunNow(f.caller("alice"), "jt", in.ID)
 		f.m.Wait()
 	}
 	run()
@@ -569,7 +569,7 @@ loop:
 func TestTimeout(t *testing.T) {
 	f := newFixture(t)
 	in := f.create("alice", "limited", nil, nil)
-	f.m.RunNow(f.caller("alice"), "jt", in.ID)
+	_, _ = f.m.RunNow(f.caller("alice"), "jt", in.ID)
 	start := time.Now()
 	f.m.Wait()
 	if time.Since(start) > 10*time.Second {
@@ -586,7 +586,7 @@ func TestHistoryKeepsLastRunsAndIsPrivate(t *testing.T) {
 	in := f.create("alice", "simple", nil, nil)
 	for i := 0; i < KeepRuns+5; i++ {
 		f.advance(time.Second)
-		f.m.RunNow(f.caller("alice"), "jt", in.ID)
+		_, _ = f.m.RunNow(f.caller("alice"), "jt", in.ID)
 		f.m.Wait()
 	}
 	if n := len(f.m.History(in.ID, 100)); n != KeepRuns {
@@ -626,7 +626,7 @@ func TestLogsAreCapped(t *testing.T) {
 	f := newFixture(t)
 	f.exec.out = func(cmd string, args []string) (string, int) { return strings.Repeat("x", 100<<10), 0 }
 	in := f.create("alice", "simple", nil, nil)
-	f.m.RunNow(f.caller("alice"), "jt", in.ID)
+	_, _ = f.m.RunNow(f.caller("alice"), "jt", in.ID)
 	f.m.Wait()
 	s := lastRun(f, in.ID).Steps[0]
 	if len(s.Stdout) > stdoutKeep+8 || !s.Truncated {
@@ -646,7 +646,7 @@ func TestParamsAreValidatedAndEscaped(t *testing.T) {
 	}
 	// A JSON-hostile value cannot break out of the body, and a path value is escaped.
 	in := f.create("alice", "http", map[string]string{"img": `a"b/c`}, nil)
-	f.m.RunNow(f.caller("alice"), "jt", in.ID)
+	_, _ = f.m.RunNow(f.caller("alice"), "jt", in.ID)
 	f.m.Wait()
 	r := lastRun(f, in.ID)
 	// "/" is escaped as %2F, which the HTTP layer refuses: the step fails safely.
@@ -766,7 +766,7 @@ func TestRunRefusedWhenAdminLostBetweenReconciles(t *testing.T) {
 	f.accts["alice"].GroupNames = []string{"alice"}
 	f.accts["alice"].GroupSIDs = nil // Windows: admin is the Administrators SID
 	f.mu.Unlock()
-	f.m.RunNow(f.caller("alice"), "jt", v.ID)
+	_, _ = f.m.RunNow(f.caller("alice"), "jt", v.ID)
 	f.m.Wait()
 	r := lastRun(f, v.ID)
 	if r.Status != "failed" || len(f.exec.calls) != 0 {
@@ -811,7 +811,7 @@ func TestAdminUnlessGroupMembersRunAsThemselves(t *testing.T) {
 	if err != nil || v.NeedsAdmin {
 		t.Fatalf("%v %+v", err, v)
 	}
-	f.m.RunNow(f.caller("dave"), "jt", v.ID)
+	_, _ = f.m.RunNow(f.caller("dave"), "jt", v.ID)
 	f.m.Wait()
 	if f.exec.calls[0].admin {
 		t.Fatal("a docker-group member runs the step as themselves")
@@ -910,7 +910,7 @@ func TestWebhookTokenHandling(t *testing.T) {
 	}
 	// A disabled instance answers like an unknown token.
 	off := false
-	f.m.Update(f.caller("alice"), UpdateReq{ID: v.ID, Enabled: &off})
+	_, _ = f.m.Update(f.caller("alice"), UpdateReq{ID: v.ID, Enabled: &off})
 	if r := f.m.HandleHook("jt", token, "3.3.3.3", nil, nil); r.Status != 404 {
 		t.Fatalf("disabled: %+v", r)
 	}

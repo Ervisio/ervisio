@@ -280,7 +280,7 @@ func (s *Server) Run(ctx context.Context) error {
 		return err
 	}
 	if err := s.checkDevListener(ln); err != nil {
-		ln.Close()
+		_ = ln.Close()
 		return err
 	}
 
@@ -381,7 +381,7 @@ func (s *Server) serve(ln net.Listener, srv *http.Server, plain bool, errCh chan
 	}
 	tlsCfg, err := s.tlsConfig()
 	if err != nil {
-		ln.Close()
+		_ = ln.Close()
 		return nil, err
 	}
 	srv.TLSConfig = tlsCfg

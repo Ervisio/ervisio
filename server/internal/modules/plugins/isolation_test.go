@@ -44,13 +44,13 @@ func setupFiles(t *testing.T) (readDir, writeDir, outside string) {
 	writeDir = filepath.Join(base, "rw")
 	outside = filepath.Join(base, "outside")
 	for _, d := range []string{readDir, writeDir, outside, filepath.Join(readDir, "sub")} {
-		os.MkdirAll(d, 0o755)
+		_ = os.MkdirAll(d, 0o755)
 	}
-	os.WriteFile(filepath.Join(readDir, "a.txt"), []byte("hello"), 0o644)
-	os.WriteFile(filepath.Join(readDir, "bin.dat"), []byte{0xff, 0x00, 0xfe}, 0o644)
-	os.WriteFile(filepath.Join(outside, "secret.txt"), []byte("secret"), 0o644)
-	os.Symlink(filepath.Join(outside, "secret.txt"), filepath.Join(readDir, "link.txt"))
-	os.Symlink(outside, filepath.Join(writeDir, "escape"))
+	_ = os.WriteFile(filepath.Join(readDir, "a.txt"), []byte("hello"), 0o644)
+	_ = os.WriteFile(filepath.Join(readDir, "bin.dat"), []byte{0xff, 0x00, 0xfe}, 0o644)
+	_ = os.WriteFile(filepath.Join(outside, "secret.txt"), []byte("secret"), 0o644)
+	_ = os.Symlink(filepath.Join(outside, "secret.txt"), filepath.Join(readDir, "link.txt"))
+	_ = os.Symlink(outside, filepath.Join(writeDir, "escape"))
 	m := strings.ReplaceAll(strings.ReplaceAll(filesManifest, "%READ%", jsonPath(readDir)), "%WRITE%", jsonPath(writeDir))
 	writePlugin(t, filepath.Join(system, "files"), m, map[string]string{"index.js": "x"})
 	return
@@ -71,7 +71,7 @@ func TestPluginReadFile(t *testing.T) {
 	if r, err := read(filepath.Join(ro, "bin.dat")); err != nil || !r.B64 || r.Data != "/wD+" {
 		t.Fatalf("binary read: %+v %v", r, err)
 	}
-	os.WriteFile(filepath.Join(rw, "w.txt"), []byte("w"), 0o644)
+	_ = os.WriteFile(filepath.Join(rw, "w.txt"), []byte("w"), 0o644)
 	if _, err := read(filepath.Join(rw, "w.txt")); err != nil {
 		t.Fatalf("write folders are readable too: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestPluginReadFile(t *testing.T) {
 	// Disabled plugin: nothing.
 	st := readState()
 	st.Enabled["files"] = false
-	writeState(st)
+	_ = writeState(st)
 	if _, err := read(filepath.Join(ro, "a.txt")); !rpc.IsCode(err, rpc.Forbidden) {
 		t.Errorf("disabled plugin read a file: %v", err)
 	}
@@ -127,7 +127,7 @@ func TestPluginWriteAndList(t *testing.T) {
 		t.Fatalf("temporary files left: %v", left)
 	}
 	// A symlink at the target is replaced, never followed.
-	os.Symlink(filepath.Join(outside, "secret.txt"), filepath.Join(rw, "victim"))
+	_ = os.Symlink(filepath.Join(outside, "secret.txt"), filepath.Join(rw, "victim"))
 	_ = write(filepath.Join(rw, "victim"), "pwned")
 	if b, _ := os.ReadFile(filepath.Join(outside, "secret.txt")); string(b) != "secret" {
 		t.Fatal("write followed a symlink out of the folder")
@@ -210,7 +210,7 @@ func TestUserCommandNotOnAdminBridge(t *testing.T) {
 // developer mode and are marked.
 func TestTrustPolicy(t *testing.T) {
 	system, _ := setup(t)
-	os.Remove(configmod.Path) // built-in defaults
+	_ = os.Remove(configmod.Path) // built-in defaults
 	dev := t.TempDir()
 	DevDirs = []string{dev}
 	visible := strings.Replace(goodManifest, `"visibleTo": {"groups": ["docker"]}`, `"visibleTo": {"groups": []}`, 1)

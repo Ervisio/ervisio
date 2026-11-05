@@ -194,7 +194,7 @@ func readMeminfo() (map[string]uint64, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	return parseMeminfo(f), nil
 }
 

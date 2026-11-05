@@ -57,14 +57,14 @@ func moveToTrash(p string) error {
 	}
 	content := "[Trash Info]\nPath=" + encodeTrashPath(p) + "\nDeletionDate=" + time.Now().Format(trashDateLayout) + "\n"
 	_, werr := infoFile.WriteString(content)
-	infoFile.Close()
+	_ = infoFile.Close()
 	infoPath := filepath.Join(infoDir, name+".trashinfo")
 	if werr != nil {
-		os.Remove(infoPath)
+		_ = os.Remove(infoPath)
 		return werr
 	}
 	if err := movePath(p, filepath.Join(filesDir, name)); err != nil {
-		os.Remove(infoPath)
+		_ = os.Remove(infoPath)
 		return err
 	}
 	return nil
@@ -227,7 +227,7 @@ func restoreOne(filesDir, infoDir, id string) (string, error) {
 	if err := movePath(filepath.Join(filesDir, id), dest); err != nil {
 		return "", err
 	}
-	os.Remove(filepath.Join(infoDir, id+".trashinfo"))
+	_ = os.Remove(filepath.Join(infoDir, id+".trashinfo"))
 	return dest, nil
 }
 
@@ -250,7 +250,7 @@ func hTrashDelete(ctx context.Context, c *rpc.Call) (any, error) {
 		if err := removePath(filepath.Join(filesDir, id)); err != nil {
 			return nil, err
 		}
-		os.Remove(filepath.Join(infoDir, id+".trashinfo"))
+		_ = os.Remove(filepath.Join(infoDir, id+".trashinfo"))
 		n++
 	}
 	return map[string]any{"deleted": n}, nil

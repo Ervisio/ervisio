@@ -353,7 +353,7 @@ func fetchSmall(ctx context.Context, src string, limit int64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("the server answered %s", resp.Status)
 	}

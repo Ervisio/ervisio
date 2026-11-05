@@ -72,7 +72,7 @@ func ProbeSSH(ctx context.Context, addr, user string) (fingerprint, hostKey stri
 	if derr != nil {
 		return "", "", errf("Could not connect to %s: %v", addr, cleanNetErr(derr))
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	_ = conn.SetDeadline(time.Now().Add(dialTimeout))
 	_, _, _, herr := ssh.NewClientConn(conn, addr, cfg)
 	if seen == nil {
@@ -148,7 +148,7 @@ func (p *sshPool) get(ctx context.Context) (*ssh.Client, error) {
 	_ = conn.SetDeadline(time.Now().Add(dialTimeout))
 	sc, chans, reqs, err := ssh.NewClientConn(conn, p.env.Address, cfg)
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		var e *Error
 		if errors.As(err, &e) {
 			return nil, e
@@ -180,7 +180,7 @@ func (p *sshPool) keepAlive(c *ssh.Client) {
 		case <-t.C:
 			if _, _, err := c.SendRequest("keepalive@openssh.com", true, nil); err != nil {
 				p.drop(c)
-				c.Close()
+				_ = c.Close()
 				return
 			}
 		}
@@ -202,7 +202,7 @@ func (p *sshPool) Close() {
 	p.client = nil
 	p.mu.Unlock()
 	if c != nil {
-		c.Close()
+		_ = c.Close()
 	}
 }
 
@@ -241,7 +241,7 @@ func (p *sshPool) Dial(ctx context.Context) (net.Conn, error) {
 		}
 		// The connection is gone: drop it and retry once with a fresh one.
 		p.drop(c)
-		c.Close()
+		_ = c.Close()
 		if attempt >= 1 {
 			return nil, errf("The SSH connection to %s broke: %v", p.env.Address, err)
 		}

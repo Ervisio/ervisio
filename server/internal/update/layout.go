@@ -169,7 +169,7 @@ func setLink(link, target string) error {
 		return err
 	}
 	if err := os.Rename(tmp, link); err != nil {
-		os.Remove(tmp)
+		_ = os.Remove(tmp)
 		return err
 	}
 	return sys.SyncDir(filepath.Dir(link))
@@ -241,11 +241,11 @@ func (l *Layout) Migrate(name string) (string, error) {
 	}
 	if _, err := os.Lstat(l.VersionDir(name)); err == nil {
 		name += "-flat"
-		os.RemoveAll(l.VersionDir(name))
+		_ = os.RemoveAll(l.VersionDir(name))
 	}
 	tmp := filepath.Join(l.VersionsDir(), "."+name+".partial-"+sys.RandHex(6))
 	if err := l.stageFlatCopy(tmp, name); err != nil {
-		os.RemoveAll(tmp)
+		_ = os.RemoveAll(tmp)
 		return "", fmt.Errorf("migrate flat install: %w", err)
 	}
 	if err := l.SetCurrent(name); err != nil {
@@ -298,7 +298,7 @@ func (l *Layout) InstallFrom(dir, v string) error {
 		if err := os.Rename(dst, old); err != nil {
 			return err
 		}
-		defer os.RemoveAll(old)
+		defer func() { _ = os.RemoveAll(old) }()
 	}
 	if err := os.Rename(dir, dst); err != nil {
 		return err
@@ -383,7 +383,7 @@ func readSmall(p string, max int64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	b, err := io.ReadAll(io.LimitReader(f, max+1))
 	if err != nil {
 		return nil, err
@@ -399,17 +399,17 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()
 	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
 	if err != nil {
 		return err
 	}
 	if _, err := io.Copy(out, in); err != nil {
-		out.Close()
+		_ = out.Close()
 		return err
 	}
 	if err := out.Chmod(mode); err != nil {
-		out.Close()
+		_ = out.Close()
 		return err
 	}
 	return out.Close()

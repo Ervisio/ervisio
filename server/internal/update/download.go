@@ -82,7 +82,7 @@ func (d *Downloader) Fetch(ctx context.Context, rawURL, dst string, max int64, p
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	total := resp.ContentLength
 	if total > max {
 		return fmt.Errorf("download is %d bytes, more than the %d allowed", total, max)
@@ -93,9 +93,9 @@ func (d *Downloader) Fetch(ctx context.Context, rawURL, dst string, max int64, p
 	}
 	ok := false
 	defer func() {
-		f.Close()
+		_ = f.Close()
 		if !ok {
-			os.Remove(dst)
+			_ = os.Remove(dst)
 		}
 	}()
 	stall := time.AfterFunc(stallTimeout, cancel)
@@ -130,7 +130,7 @@ func (d *Downloader) get(ctx context.Context, u *url.URL) (*http.Response, error
 		return nil, fmt.Errorf("download: %v", cleanNetErr(err))
 	}
 	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		return nil, fmt.Errorf("download: server answered %s", resp.Status)
 	}
 	return resp, nil

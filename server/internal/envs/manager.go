@@ -228,8 +228,6 @@ func (m *Manager) agentTransport(e *Env) (http.RoundTripper, error) {
 type signingRT struct {
 	rt     http.RoundTripper
 	signer *AgentSigner
-	sigMu  sync.Mutex
-	poolMu sync.Mutex
 	secret string
 }
 
@@ -326,7 +324,7 @@ func (m *Manager) checkDocker(ctx context.Context, e *Env, st *Status) error {
 	if err != nil {
 		return friendlyTLS(unwrapURLErr(err))
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode != 200 {
 		msg := "The Docker API answered " + resp.Status + "."

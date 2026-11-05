@@ -308,14 +308,3 @@ func (c *ttlCache) clear() {
 		it.mu.Unlock()
 	}
 }
-
-// when returns the time a key was last computed (zero if never).
-func (c *ttlCache) when(key string) time.Time {
-	it := c.item(key)
-	it.mu.Lock()
-	defer it.mu.Unlock()
-	if it.val == nil {
-		return time.Time{}
-	}
-	return it.at
-}

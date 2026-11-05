@@ -30,7 +30,7 @@ func TestKeyFileRoundTrip(t *testing.T) {
 	}
 	// a symlink must not be followed when reading
 	link := filepath.Join(dir, "link")
-	os.Symlink(path, link)
+	_ = os.Symlink(path, link)
 	if _, err := readKeyFile(link); err == nil {
 		t.Error("symlink followed")
 	}

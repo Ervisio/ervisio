@@ -41,7 +41,7 @@ func shellListed(path string) bool {
 	if err != nil {
 		return false
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
 		if strings.TrimSpace(sc.Text()) == path {
@@ -57,7 +57,7 @@ func passwdShell(username string) string {
 	if err != nil {
 		return ""
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	return parsePasswdShell(f, username)
 }
 
@@ -67,7 +67,7 @@ func systemLang() string {
 		return v
 	}
 	if f, err := os.Open("/etc/locale.conf"); err == nil {
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		sc := bufio.NewScanner(f)
 		for sc.Scan() {
 			if v, ok := strings.CutPrefix(strings.TrimSpace(sc.Text()), "LANG="); ok {

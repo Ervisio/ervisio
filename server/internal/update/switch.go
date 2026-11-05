@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -247,7 +246,7 @@ func (h *HTTPHealth) Wait(ctx context.Context, want string, timeout time.Duratio
 	if every <= 0 {
 		every = time.Second
 	}
-	var last = errors.New("no answer")
+	var last error
 	for {
 		if err := h.once(ctx, want); err == nil {
 			return nil
@@ -275,7 +274,7 @@ func (h *HTTPHealth) once(ctx context.Context, want string) error {
 	if err != nil {
 		return cleanNetErr(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("%s answered %s", path, resp.Status)

@@ -14,11 +14,11 @@ func TestFindLogo(t *testing.T) {
 	if got := findLogo(dir, m); got != "" {
 		t.Fatalf("no logo file: got %q", got)
 	}
-	os.WriteFile(filepath.Join(dir, "logo.png"), []byte("png"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "logo.png"), []byte("png"), 0o644)
 	if got := findLogo(dir, m); got != "logo.png" {
 		t.Fatalf("png only: got %q", got)
 	}
-	os.WriteFile(filepath.Join(dir, "logo.svg"), []byte("<svg/>"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "logo.svg"), []byte("<svg/>"), 0o644)
 	if got := findLogo(dir, m); got != "logo.svg" {
 		t.Fatalf("svg is preferred: got %q", got)
 	}
@@ -29,13 +29,13 @@ func TestFindLogo(t *testing.T) {
 	}
 	// Too large, empty or a symlink: no logo.
 	big := t.TempDir()
-	os.WriteFile(filepath.Join(big, "logo.svg"), make([]byte, MaxLogoSize+1), 0o644)
-	os.WriteFile(filepath.Join(big, "logo.png"), nil, 0o644)
+	_ = os.WriteFile(filepath.Join(big, "logo.svg"), make([]byte, MaxLogoSize+1), 0o644)
+	_ = os.WriteFile(filepath.Join(big, "logo.png"), nil, 0o644)
 	if got := findLogo(big, m); got != "" {
 		t.Fatalf("oversized/empty: got %q", got)
 	}
 	link := t.TempDir()
-	os.Symlink(filepath.Join(dir, "logo.svg"), filepath.Join(link, "logo.svg"))
+	_ = os.Symlink(filepath.Join(dir, "logo.svg"), filepath.Join(link, "logo.svg"))
 	if got := findLogo(link, m); got != "" {
 		t.Fatalf("symlink: got %q", got)
 	}

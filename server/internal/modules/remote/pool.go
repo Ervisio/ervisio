@@ -228,7 +228,7 @@ func (p *pool) put(id string, s *slot, err error) {
 			p.removeSlotLocked(e, s)
 		}
 		if s.inUse <= 0 {
-			go s.fs.Close()
+			go func() { _ = s.fs.Close() }()
 			p.open--
 		}
 	}
@@ -256,7 +256,7 @@ func (p *pool) dropLocked(id string) {
 	delete(p.entries, id)
 	for _, s := range e.slots {
 		if s.inUse <= 0 {
-			go s.fs.Close()
+			go func() { _ = s.fs.Close() }()
 			p.open--
 		}
 	}
@@ -277,7 +277,7 @@ func (p *pool) closeIdleLocked(age time.Duration) {
 		keep := e.slots[:0]
 		for _, s := range e.slots {
 			if s.inUse <= 0 && now.Sub(s.last) >= age {
-				go s.fs.Close()
+				go func() { _ = s.fs.Close() }()
 				p.open--
 				continue
 			}

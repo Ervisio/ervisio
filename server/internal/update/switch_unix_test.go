@@ -14,8 +14,8 @@ import (
 
 func TestSwitchSuccessKeepsTwo(t *testing.T) {
 	l, st := setup(t, "0.8.0", "0.9.0", "1.0.0", "1.1.0")
-	l.SetCurrent("1.0.0")
-	l.SetPrevious("0.9.0")
+	_ = l.SetCurrent("1.0.0")
+	_ = l.SetPrevious("0.9.0")
 	svc := &fakeService{}
 	h := &fakeHealth{l: l}
 	sw := &Switcher{Layout: l, State: st, Service: svc, Health: h, Probe: fakeProbe()}
@@ -45,8 +45,8 @@ func TestSwitchSuccessKeepsTwo(t *testing.T) {
 
 func TestSwitchUnhealthyRollsBack(t *testing.T) {
 	l, st := setup(t, "0.9.0", "1.0.0", "1.1.0")
-	l.SetCurrent("1.0.0")
-	l.SetPrevious("0.9.0")
+	_ = l.SetCurrent("1.0.0")
+	_ = l.SetPrevious("0.9.0")
 	svc := &fakeService{}
 	h := &fakeHealth{l: l, broken: map[string]bool{"1.1.0": true}}
 	sw := &Switcher{Layout: l, State: st, Service: svc, Health: h, Probe: fakeProbe()}
@@ -73,7 +73,7 @@ func TestSwitchUnhealthyRollsBack(t *testing.T) {
 
 func TestSwitchRestartFailureRollsBack(t *testing.T) {
 	l, st := setup(t, "1.0.0", "1.1.0")
-	l.SetCurrent("1.0.0")
+	_ = l.SetCurrent("1.0.0")
 	var seen []string
 	svc := &fakeService{fail: map[int]error{1: errors.New("unit failed")}}
 	svc.onRestart = func() { c, _ := l.Current(); seen = append(seen, c) }
@@ -90,8 +90,8 @@ func TestSwitchRestartFailureRollsBack(t *testing.T) {
 
 func TestRollbackKindSwapsVersions(t *testing.T) {
 	l, st := setup(t, "1.0.0", "1.1.0")
-	l.SetCurrent("1.1.0")
-	l.SetPrevious("1.0.0")
+	_ = l.SetCurrent("1.1.0")
+	_ = l.SetPrevious("1.0.0")
 	sw := &Switcher{Layout: l, State: st, Service: &fakeService{}, Health: &fakeHealth{l: l}, Probe: fakeProbe()}
 	r := sw.Switch(context.Background(), "1.0.0", KindRollback, false)
 	if r.State != StateOK || r.Kind != KindRollback {
@@ -108,8 +108,8 @@ func TestRollbackKindSwapsVersions(t *testing.T) {
 
 func TestSwitchToOldBuildWithoutVersionFlag(t *testing.T) {
 	l, st := setup(t, "legacy", "1.1.0")
-	l.SetCurrent("1.1.0")
-	l.SetPrevious("legacy")
+	_ = l.SetCurrent("1.1.0")
+	_ = l.SetPrevious("legacy")
 	h := &fakeHealth{l: l}
 	sw := &Switcher{Layout: l, State: st, Service: &fakeService{}, Health: h, Probe: fakeProbe("legacy")}
 	r := sw.Switch(context.Background(), "legacy", KindRollback, false)
@@ -123,7 +123,7 @@ func TestSwitchToOldBuildWithoutVersionFlag(t *testing.T) {
 
 func TestSwitchRefusesMissingOrSame(t *testing.T) {
 	l, st := setup(t, "1.0.0")
-	l.SetCurrent("1.0.0")
+	_ = l.SetCurrent("1.0.0")
 	svc := &fakeService{}
 	sw := &Switcher{Layout: l, State: st, Service: svc, Health: &fakeHealth{l: l}, Probe: fakeProbe()}
 	for _, target := range []string{"1.0.0", "2.0.0", "../../etc", ""} {
@@ -140,13 +140,13 @@ func TestSwitchRefusesMissingOrSame(t *testing.T) {
 
 func TestMigrateFlat(t *testing.T) {
 	l := testLayout(t)
-	os.MkdirAll(filepath.Dir(l.BinLink), 0o755)
-	os.WriteFile(l.BinLink, []byte("old daemon"), 0o755)
-	os.WriteFile(filepath.Join(l.LibDir, "ervisio-bridge"), []byte("old bridge"), 0o755)
-	os.MkdirAll(filepath.Join(l.FlatWeb, "assets"), 0o755)
-	os.WriteFile(filepath.Join(l.FlatWeb, "index.html"), []byte("<old>"), 0o644)
-	os.MkdirAll(filepath.Join(l.FlatPlugins, "docker"), 0o755)
-	os.WriteFile(filepath.Join(l.FlatPlugins, "docker", "manifest.json"), []byte("{}"), 0o644)
+	_ = os.MkdirAll(filepath.Dir(l.BinLink), 0o755)
+	_ = os.WriteFile(l.BinLink, []byte("old daemon"), 0o755)
+	_ = os.WriteFile(filepath.Join(l.LibDir, "ervisio-bridge"), []byte("old bridge"), 0o755)
+	_ = os.MkdirAll(filepath.Join(l.FlatWeb, "assets"), 0o755)
+	_ = os.WriteFile(filepath.Join(l.FlatWeb, "index.html"), []byte("<old>"), 0o644)
+	_ = os.MkdirAll(filepath.Join(l.FlatPlugins, "docker"), 0o755)
+	_ = os.WriteFile(filepath.Join(l.FlatPlugins, "docker", "manifest.json"), []byte("{}"), 0o644)
 	if k := l.Kind(); k != KindFlat {
 		t.Fatalf("kind = %s", k)
 	}
@@ -185,7 +185,7 @@ func TestMigrateFlat(t *testing.T) {
 	}
 	// Following an update, the entry points follow `current`.
 	addVersion(t, l, "0.2.0")
-	l.SetCurrent("0.2.0")
+	_ = l.SetCurrent("0.2.0")
 	if b, _ := os.ReadFile(l.BinLink); string(b) != "daemon 0.2.0" {
 		t.Fatalf("BinLink resolves to %q", b)
 	}
@@ -200,7 +200,7 @@ func TestLayoutKindNone(t *testing.T) {
 		t.Fatal("migrated nothing")
 	}
 	// A current link pointing outside versions/ is not trusted.
-	os.Symlink("/etc", filepath.Join(l.LibDir, "current"))
+	_ = os.Symlink("/etc", filepath.Join(l.LibDir, "current"))
 	if _, err := l.Current(); err == nil {
 		t.Fatal("current -> /etc accepted")
 	}
@@ -222,11 +222,11 @@ func TestStateFiles(t *testing.T) {
 	if st.ReadLast() != nil || st.Running() {
 		t.Fatal("empty state")
 	}
-	st.WriteLast(Result{State: StateRunning, Kind: KindUpdate, To: "1.1.0", PID: os.Getpid()})
+	_ = st.WriteLast(Result{State: StateRunning, Kind: KindUpdate, To: "1.1.0", PID: os.Getpid()})
 	if !st.Running() {
 		t.Fatal("running update not seen")
 	}
-	st.WriteLast(Result{State: StateRunning, Kind: KindUpdate, To: "1.1.0", PID: 1 << 30})
+	_ = st.WriteLast(Result{State: StateRunning, Kind: KindUpdate, To: "1.1.0", PID: 1 << 30})
 	if r := st.ReadLast(); r.State != StateFailed || r.Error != "interrupted" {
 		t.Fatalf("dead helper reported as %+v", r)
 	}
@@ -246,12 +246,12 @@ func TestStateFiles(t *testing.T) {
 		t.Fatal("no file means no transaction")
 	}
 	b, _ := json.Marshal(map[string]any{"running": true, "pid": os.Getpid()})
-	os.WriteFile(st.TxFile, b, 0o644)
+	_ = os.WriteFile(st.TxFile, b, 0o644)
 	if !st.PackageTransactionRunning() {
 		t.Fatal("running transaction not seen")
 	}
 	b, _ = json.Marshal(map[string]any{"running": true, "pid": 1 << 30})
-	os.WriteFile(st.TxFile, b, 0o644)
+	_ = os.WriteFile(st.TxFile, b, 0o644)
 	if st.PackageTransactionRunning() {
 		t.Fatal("dead transaction reported as running")
 	}

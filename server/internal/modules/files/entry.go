@@ -230,7 +230,7 @@ func listDir(path string, showHidden bool) ([]Entry, bool, error) {
 	if err != nil {
 		return nil, false, err
 	}
-	defer d.Close()
+	defer func() { _ = d.Close() }()
 	out, truncated := readEntries(d, path, showHidden)
 	sortEntries(out)
 	return out, truncated, nil

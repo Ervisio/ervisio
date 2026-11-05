@@ -83,7 +83,7 @@ func doRPC(ctx context.Context, hdr http.Header, base, method string, params jso
 	if err != nil {
 		fail(err.Error())
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	out, _ := io.ReadAll(resp.Body)
 	fmt.Printf("HTTP %d\n%s", resp.StatusCode, out)
 }
@@ -98,7 +98,7 @@ func doStream(ctx context.Context, hdr http.Header, base, method string, params 
 	if err != nil {
 		fail(err.Error())
 	}
-	defer c.CloseNow()
+	defer func() { _ = c.CloseNow() }()
 	open, _ := json.Marshal(map[string]any{"ch": 1, "op": "open", "method": method, "params": params, "admin": admin})
 	if err := c.Write(ctx, websocket.MessageText, open); err != nil {
 		fail(err.Error())
@@ -132,7 +132,7 @@ func login(u string) {
 	if err != nil {
 		fail(err.Error())
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	for _, ck := range resp.Cookies() {
 		if ck.Name == "ervisio_session" && ck.Value != "" {
 			fmt.Println(ck.Value)

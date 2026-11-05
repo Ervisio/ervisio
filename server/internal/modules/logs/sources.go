@@ -164,7 +164,7 @@ func watcherSource(w Watcher) (s Source, readable bool) {
 		s.NeedsAdmin = os.IsPermission(err)
 		return s, false
 	}
-	fh.Close()
+	_ = fh.Close()
 	return s, true
 }
 

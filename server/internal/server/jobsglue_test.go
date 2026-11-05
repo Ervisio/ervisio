@@ -16,7 +16,7 @@ import (
 func newJobsServer(t *testing.T, noAuth bool) (*httptest.Server, *Server, string) {
 	t.Helper()
 	web := t.TempDir()
-	os.WriteFile(filepath.Join(web, "index.html"), []byte("<!doctype html>app"), 0o644)
+	_ = os.WriteFile(filepath.Join(web, "index.html"), []byte("<!doctype html>app"), 0o644)
 	state := t.TempDir()
 	srv, err := New(Options{
 		ConfigPath: filepath.Join(t.TempDir(), "ervisio.conf"),
@@ -50,7 +50,7 @@ func TestWebhookEndpointNeedsNoSessionAndSaysLittle(t *testing.T) {
 		t.Fatal(err)
 	}
 	b, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != 404 || strings.TrimSpace(string(b)) != `{"error":"not found"}` {
 		t.Fatalf("%d %s", resp.StatusCode, b)
 	}
@@ -64,7 +64,7 @@ func TestWebhookEndpointNeedsNoSessionAndSaysLittle(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		last = resp.StatusCode
 	}
 	if last != 429 {

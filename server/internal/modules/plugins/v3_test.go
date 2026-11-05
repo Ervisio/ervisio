@@ -105,9 +105,9 @@ func setupV3(t *testing.T) *v3env {
 		streamDone: make(chan struct{}, 1),
 	}
 	for _, d := range []string{e.ro, e.rw, e.admin, e.gadmin} {
-		os.MkdirAll(d, 0o755)
+		_ = os.MkdirAll(d, 0o755)
 	}
-	os.WriteFile(filepath.Join(e.admin, "a.txt"), []byte("admin"), 0o644)
+	_ = os.WriteFile(filepath.Join(e.admin, "a.txt"), []byte("admin"), 0o644)
 	r := strings.NewReplacer("%SOCK%", jsonPath(e.sock), "%RO%", jsonPath(e.ro), "%RW%", `"`+jsonPath(e.rw)+`"`, "%ADMIN%", jsonPath(e.admin), "%GADMIN%", jsonPath(e.gadmin), "%AUTO%", jsonPath(e.auto), "%GROUP%", e.group)
 	writePlugin(t, filepath.Join(system, "v3"), r.Replace(v3Manifest), map[string]string{"index.js": "x"})
 
@@ -121,7 +121,7 @@ func setupV3(t *testing.T) *v3env {
 		case strings.HasPrefix(r.URL.Path, "/dl"):
 			// A body of n bytes (n after /dl/, default 1 MiB) without buffering it.
 			n := 1 << 20
-			fmt.Sscanf(strings.TrimPrefix(r.URL.Path, "/dl/"), "%d", &n)
+			_, _ = fmt.Sscanf(strings.TrimPrefix(r.URL.Path, "/dl/"), "%d", &n)
 			if r.URL.Path == "/dl/404" {
 				http.Error(w, `{"message":"no such thing"}`, http.StatusNotFound)
 				return
@@ -140,10 +140,10 @@ func setupV3(t *testing.T) *v3env {
 			// Answers at once with a first line, reads the body, then reports.
 			w.Header().Set("X-Kind", "build")
 			fl := w.(http.Flusher)
-			fmt.Fprintln(w, "Step 1: receiving")
+			_, _ = fmt.Fprintln(w, "Step 1: receiving")
 			fl.Flush()
 			n, _ := io.Copy(io.Discard, r.Body)
-			fmt.Fprintf(w, "Step 2: got %d bytes\n", n)
+			_, _ = fmt.Fprintf(w, "Step 2: got %d bytes\n", n)
 			return
 		case r.URL.Path == "/count" || r.URL.Path == "/count-fail":
 			var sum int64
@@ -164,7 +164,7 @@ func setupV3(t *testing.T) *v3env {
 				return
 			}
 			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprintf(w, `{"n":%d,"x":%d,"cl":%d,"method":%q}`, sum, h, r.ContentLength, r.Method)
+			_, _ = fmt.Fprintf(w, `{"n":%d,"x":%d,"cl":%d,"method":%q}`, sum, h, r.ContentLength, r.Method)
 			return
 		}
 		body, _ := io.ReadAll(r.Body)
@@ -177,9 +177,9 @@ func setupV3(t *testing.T) *v3env {
 		case "/redirect":
 			http.Redirect(w, r, "/echo", http.StatusFound)
 		case "/big":
-			w.Write(bytes.Repeat([]byte("x"), 2048))
+			_, _ = w.Write(bytes.Repeat([]byte("x"), 2048))
 		case "/bin":
-			w.Write([]byte{0xff, 0x00, 0xfe})
+			_, _ = w.Write([]byte{0xff, 0x00, 0xfe})
 		case "/slow":
 			time.Sleep(3 * time.Second)
 		case "/stream":
@@ -200,15 +200,15 @@ func setupV3(t *testing.T) *v3env {
 			}
 		default:
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"method": r.Method, "path": r.URL.Path, "query": r.URL.RawQuery, "host": r.Host,
 				"ct": r.Header.Get("Content-Type"), "auth": r.Header.Get("X-Registry-Auth"), "body": string(body),
 			})
 		}
 	})
 	e.srv = &http.Server{Handler: mux}
-	go e.srv.Serve(ln)
-	t.Cleanup(func() { e.srv.Close() })
+	go func() { _ = e.srv.Serve(ln) }()
+	t.Cleanup(func() { _ = e.srv.Close() })
 	return e
 }
 
@@ -408,7 +408,7 @@ func TestHTTPAdminGating(t *testing.T) {
 	// Disabled plugin: nothing.
 	st := readState()
 	st.Enabled["v3"] = false
-	writeState(st)
+	_ = writeState(st)
 	if err := do(false, "group-api"); !rpc.IsCode(err, rpc.Forbidden) {
 		t.Errorf("disabled plugin: %v", err)
 	}
@@ -426,7 +426,7 @@ func TestHTTPCall(t *testing.T) {
 		t.Fatalf("%+v %v", res, err)
 	}
 	var got map[string]string
-	json.Unmarshal([]byte(res.Body), &got)
+	_ = json.Unmarshal([]byte(res.Body), &got)
 	want := map[string]string{"method": "POST", "path": "/v1.41/containers/web/start", "query": "t=5", "host": "localhost",
 		"ct": "application/json", "auth": "e30=", "body": `{"a":1}`}
 	for k, v := range want {
@@ -456,8 +456,8 @@ func TestHTTPCall(t *testing.T) {
 		t.Fatalf("slow: %v", err)
 	}
 	// A missing socket is unavailable.
-	e.srv.Close()
-	os.Remove(e.sock)
+	_ = e.srv.Close()
+	_ = os.Remove(e.sock)
 	if _, err := do(HTTPParams{Method: "GET", Path: "/echo"}); !rpc.IsCode(err, rpc.Unavailable) {
 		t.Fatalf("no socket: %v", err)
 	}
@@ -538,7 +538,7 @@ func TestHTTPStream(t *testing.T) {
 		Status  int
 		Headers map[string]string
 	}
-	json.Unmarshal(s.events[0], &start)
+	_ = json.Unmarshal(s.events[0], &start)
 	if start.Status != 200 || start.Headers["X-Kind"] != "stream" || start.Headers["Set-Cookie"] != "" {
 		t.Fatalf("start event %s", s.events[0])
 	}
@@ -658,7 +658,7 @@ func TestAdminFoldersAndMkdirRemove(t *testing.T) {
 		}
 	}
 	// Plain folders still never on the root bridge.
-	os.WriteFile(filepath.Join(e.ro, "r.txt"), []byte("r"), 0o644)
+	_ = os.WriteFile(filepath.Join(e.ro, "r.txt"), []byte("r"), 0o644)
 	if err := read(true, filepath.Join(e.ro, "r.txt")); !rpc.IsCode(err, rpc.Forbidden) {
 		t.Errorf("plain folder on the root bridge: %v", err)
 	}
@@ -675,11 +675,11 @@ func TestAdminFoldersAndMkdirRemove(t *testing.T) {
 		t.Fatalf("content %q", b)
 	}
 	// Without create, a missing folder stays missing.
-	os.RemoveAll(e.rw)
+	_ = os.RemoveAll(e.rw)
 	if err := fcall(writePluginFile, false, filepath.Join(e.rw, "a")); err == nil {
 		t.Error("wrote into a missing folder without create")
 	}
-	os.MkdirAll(e.rw, 0o755)
+	_ = os.MkdirAll(e.rw, 0o755)
 
 	// mkdir / remove, only in write folders.
 	nested := filepath.Join(e.rw, "a", "b", "c")
@@ -696,7 +696,7 @@ func TestAdminFoldersAndMkdirRemove(t *testing.T) {
 		t.Errorf("mkdir in a read folder: %v", err)
 	}
 	outside := t.TempDir()
-	os.Symlink(outside, filepath.Join(e.rw, "escape"))
+	_ = os.Symlink(outside, filepath.Join(e.rw, "escape"))
 	if err := fcall(mkdirPlugin, false, filepath.Join(e.rw, "escape", "x")); err == nil {
 		t.Error("mkdir through a symlink out of the folder")
 	}
@@ -709,7 +709,7 @@ func TestAdminFoldersAndMkdirRemove(t *testing.T) {
 	if err := fcall(removePlugin, false, nested); err != nil {
 		t.Errorf("remove empty folder: %v", err)
 	}
-	os.WriteFile(filepath.Join(e.rw, "f.txt"), []byte("f"), 0o644)
+	_ = os.WriteFile(filepath.Join(e.rw, "f.txt"), []byte("f"), 0o644)
 	if err := fcall(removePlugin, false, filepath.Join(e.rw, "f.txt")); err != nil {
 		t.Errorf("remove file: %v", err)
 	}
@@ -794,7 +794,7 @@ func TestFilesFIFOAndPrivateMode(t *testing.T) {
 	if fi, err := os.Stat(priv); err != nil || fi.Mode().Perm() != 0o600 {
 		t.Errorf("private file mode: %v %v", fi.Mode(), err)
 	}
-	os.Chmod(priv, 0o644)
+	_ = os.Chmod(priv, 0o644)
 	if err := run(writePluginFile, "~/.config/la-v3-test/secrets.json"); err != nil {
 		t.Fatal(err)
 	}
@@ -805,7 +805,7 @@ func TestFilesFIFOAndPrivateMode(t *testing.T) {
 	if err := run(writePluginFile, filepath.Join(e.rw, "pub.txt")); err != nil {
 		t.Fatal(err)
 	}
-	os.WriteFile(filepath.Join(e.rw, "ref.txt"), nil, 0o644) // same umask
+	_ = os.WriteFile(filepath.Join(e.rw, "ref.txt"), nil, 0o644) // same umask
 	pub, _ := os.Stat(filepath.Join(e.rw, "pub.txt"))
 	ref, _ := os.Stat(filepath.Join(e.rw, "ref.txt"))
 	if pub.Mode().Perm() != ref.Mode().Perm() {

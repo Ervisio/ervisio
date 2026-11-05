@@ -351,7 +351,7 @@ func shortTemp(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.RemoveAll(d) })
+	t.Cleanup(func() { _ = os.RemoveAll(d) })
 	return d
 }
 
@@ -370,10 +370,10 @@ func fakeDocker(t *testing.T, certPEM, keyPEM string, requireClient bool) (addr 
 	}
 	ts := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/version" {
-			io.WriteString(w, `{"Version":"27.1.1","ApiVersion":"1.46"}`)
+			_, _ = io.WriteString(w, `{"Version":"27.1.1","ApiVersion":"1.46"}`)
 			return
 		}
-		io.WriteString(w, "pong "+r.URL.Path)
+		_, _ = io.WriteString(w, "pong "+r.URL.Path)
 	}))
 	ts.TLS = cfg
 	ts.StartTLS()
@@ -423,7 +423,7 @@ func TestTunnelLifecycleTCPTLS(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer r.Body.Close()
+		defer func() { _ = r.Body.Close() }()
 		b, _ := io.ReadAll(r.Body)
 		return string(b)
 	}
@@ -462,7 +462,7 @@ func TestTunnelLifecycleTCPTLS(t *testing.T) {
 		t.Fatal("socket file of an idle tunnel survived")
 	}
 	// Delete.
-	m.Tunnel(m.Get(v.ID), uid, gid)
+	_, _ = m.Tunnel(m.Get(v.ID), uid, gid)
 	if err := m.Delete(ctx, v.ID); err != nil || m.TunnelCount() != 0 || len(m.List()) != 0 {
 		t.Fatalf("delete: %v", err)
 	}
@@ -520,15 +520,15 @@ func fakeAgent(t *testing.T, cert, key, secret string) (string, func()) {
 			if err != nil {
 				return
 			}
-			defer c.Close()
-			io.WriteString(brw, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n100000\r\n"+strings.Repeat("x", 4096))
-			brw.Flush()
+			defer func() { _ = c.Close() }()
+			_, _ = io.WriteString(brw, "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n100000\r\n"+strings.Repeat("x", 4096))
+			_ = brw.Flush()
 			time.Sleep(3 * time.Second)
-			io.WriteString(brw, "two\n")
-			brw.Flush()
+			_, _ = io.WriteString(brw, "two\n")
+			_ = brw.Flush()
 			return
 		}
-		io.WriteString(w, `{"Version":"26.0.0","ApiVersion":"1.45"}`)
+		_, _ = io.WriteString(w, `{"Version":"26.0.0","ApiVersion":"1.45"}`)
 	}))
 	ts.TLS = &tls.Config{Certificates: []tls.Certificate{kp}}
 	ts.StartTLS()
@@ -560,7 +560,7 @@ func TestAgentTunnelFlushesEachChunk(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 	first := make([]byte, 4096)
 	if _, err := io.ReadFull(r.Body, first); err != nil || time.Since(start) > time.Second {
 		t.Fatalf("first 4 KiB after %v: %v", time.Since(start), err)
@@ -592,7 +592,7 @@ func TestPortainerAgentEnv(t *testing.T) {
 		if err != nil || r.StatusCode != 200 {
 			t.Fatalf("tunnel to agent: %v %v", r, err)
 		}
-		r.Body.Close()
+		_ = r.Body.Close()
 		// A secret mismatch is explained.
 		if secret != "" {
 			in.AgentSecret = "wrong"

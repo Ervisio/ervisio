@@ -39,7 +39,7 @@ func TestDownloadStreamsWithoutLimit(t *testing.T) {
 		Status  int
 		Headers map[string]string
 	}
-	if json.Unmarshal(s.events[0], &start); start.Status != 200 || start.Headers["Content-Length"] != fmt.Sprint(n) {
+	if _ = json.Unmarshal(s.events[0], &start); start.Status != 200 || start.Headers["Content-Length"] != fmt.Sprint(n) {
 		t.Fatalf("start event %s", s.events[0])
 	}
 }
@@ -85,7 +85,7 @@ func TestDownloadServiceStatusIsReported(t *testing.T) {
 		t.Fatal(err)
 	}
 	var start struct{ Status int }
-	json.Unmarshal(s.events[0], &start)
+	_ = json.Unmarshal(s.events[0], &start)
 	if start.Status != 404 || !strings.Contains(s.data.String(), "no such thing") {
 		t.Fatalf("%s %q", s.events[0], s.data.String())
 	}
@@ -141,7 +141,7 @@ func upload(t *testing.T, p UploadParams, body []byte, chunk int) (map[string]an
 	// {"ready":true} comes before any input is read.
 	s.waitFor(t, "ready", func(_ string, ev []json.RawMessage) bool { return len(ev) >= 1 })
 	var ready struct{ Ready bool }
-	json.Unmarshal(s.event(0), &ready)
+	_ = json.Unmarshal(s.event(0), &ready)
 	if !ready.Ready {
 		t.Fatalf("first event %s", s.events[0])
 	}
@@ -192,7 +192,7 @@ func TestUploadStreamsBody(t *testing.T) {
 		CL int64  `json:"cl"`
 		M  string `json:"method"`
 	}
-	json.Unmarshal([]byte(last["body"].(string)), &res)
+	_ = json.Unmarshal([]byte(last["body"].(string)), &res)
 	if res.N != int64(len(body)) || res.CL != int64(len(body)) || res.M != "POST" {
 		t.Fatalf("service saw %+v", res)
 	}
@@ -296,7 +296,7 @@ func TestUploadStreamedResponse(t *testing.T) {
 		Status  int
 		Headers map[string]string
 	}
-	json.Unmarshal(s.event(1), &start)
+	_ = json.Unmarshal(s.event(1), &start)
 	if start.Status != 200 || start.Headers["X-Kind"] != "build" {
 		t.Fatalf("start event %s", s.event(1))
 	}
@@ -311,7 +311,7 @@ func TestUploadStreamedResponse(t *testing.T) {
 		t.Fatalf("response %q", got)
 	}
 	var last map[string]any
-	json.Unmarshal(s.event(-1), &last)
+	_ = json.Unmarshal(s.event(-1), &last)
 	if last["done"] != true || last["status"] != float64(200) || last["body"] != nil {
 		t.Fatalf("last event %s", s.event(-1))
 	}

@@ -103,7 +103,7 @@ func authorizedKeysDirective(file string, depth int) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	sc := bufio.NewScanner(io.LimitReader(f, 1<<20))
 	sc.Buffer(make([]byte, 4096), 64<<10)
 	for sc.Scan() {

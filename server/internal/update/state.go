@@ -151,12 +151,12 @@ func (s *State) Lock() (func(), error) {
 		return nil, err
 	}
 	if err := lockFile(f); err != nil {
-		f.Close()
+		_ = f.Close()
 		return nil, errors.New("another update is in progress")
 	}
 	return func() {
 		unlockFile(f)
-		f.Close()
+		_ = f.Close()
 	}, nil
 }
 
@@ -174,7 +174,7 @@ func readOwned(path string, owner int, max int64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	fi, err := f.Stat()
 	if err != nil {
 		return nil, err

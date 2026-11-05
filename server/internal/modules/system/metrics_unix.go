@@ -17,10 +17,10 @@ func takeSample() (*sample, error) {
 		return nil, err
 	}
 	s.cpu = parseProcStat(f)
-	f.Close()
+	_ = f.Close()
 	if f, err := os.Open("/proc/net/dev"); err == nil {
 		s.net = parseNetDev(f)
-		f.Close()
+		_ = f.Close()
 	}
 	return s, nil
 }
@@ -62,7 +62,7 @@ func readDisks() []Disk {
 		return []Disk{}
 	}
 	entries := parseMountinfo(f)
-	f.Close()
+	_ = f.Close()
 	out := []Disk{}
 	for _, e := range entries {
 		total, used, avail, err := diskUsage(e.mount)

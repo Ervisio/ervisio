@@ -252,14 +252,14 @@ func fakeSMTP(t *testing.T, wantAuth bool) (addr string, got chan string) {
 	}
 	got = make(chan string, 1)
 	go func() {
-		defer ln.Close()
+		defer func() { _ = ln.Close() }()
 		c, err := ln.Accept()
 		if err != nil {
 			return
 		}
-		defer c.Close()
+		defer func() { _ = c.Close() }()
 		r := bufio.NewReader(c)
-		w := func(s string) { io.WriteString(c, s+"\r\n") }
+		w := func(s string) { _, _ = io.WriteString(c, s+"\r\n") }
 		w("220 fake ESMTP")
 		var data strings.Builder
 		var auth string
@@ -281,7 +281,7 @@ func fakeSMTP(t *testing.T, wantAuth bool) (addr string, got chan string) {
 			}
 			switch {
 			case strings.HasPrefix(line, "EHLO"):
-				io.WriteString(c, "250-fake\r\n250 AUTH PLAIN\r\n")
+				_, _ = io.WriteString(c, "250-fake\r\n250 AUTH PLAIN\r\n")
 			case strings.HasPrefix(line, "AUTH"):
 				auth = line
 				w("235 ok")
@@ -335,7 +335,7 @@ func TestTelegramNtfyGotify(t *testing.T) {
 		seen = append(seen, req{r.URL.Path, r.Header.Get("Authorization"), r.Header.Get("X-Gotify-Key"), r.Header.Get("Title")})
 		bodies = append(bodies, string(b))
 		mu.Unlock()
-		io.WriteString(w, `{"ok":true}`)
+		_, _ = io.WriteString(w, `{"ok":true}`)
 	}))
 	defer ts.Close()
 	old := telegramBase

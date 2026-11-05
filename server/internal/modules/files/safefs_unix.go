@@ -78,7 +78,7 @@ func openDir(path string) (*os.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer unix.Close(fd)
+	defer func() { _ = unix.Close(fd) }()
 	dfd, err := unix.Openat(fd, ".", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return nil, pathErr("open", path, err)
@@ -108,7 +108,7 @@ func resolveStrict(path string) (int, error) {
 		}
 		nfd, st, err := openComponent(fd, c, path)
 		if err != nil {
-			unix.Close(fd)
+			_ = unix.Close(fd)
 			return -1, err
 		}
 		switch {
@@ -116,22 +116,22 @@ func resolveStrict(path string) (int, error) {
 			hops++
 			target, err := readTrustedLink(nfd, &st, path, hops)
 			if err != nil {
-				unix.Close(fd)
+				_ = unix.Close(fd)
 				return -1, err
 			}
 			if strings.HasPrefix(target, "/") {
-				unix.Close(fd)
+				_ = unix.Close(fd)
 				if fd, err = openRoot(); err != nil {
 					return -1, err
 				}
 			}
 			comps = append(strings.Split(target, "/"), comps...)
 		case isDir(&st):
-			unix.Close(fd)
+			_ = unix.Close(fd)
 			fd = nfd
 		default:
-			unix.Close(nfd)
-			unix.Close(fd)
+			_ = unix.Close(nfd)
+			_ = unix.Close(fd)
 			return -1, pathErr("open", path, unix.ENOTDIR)
 		}
 	}
@@ -155,7 +155,7 @@ func openComponent(dirfd int, name, path string) (int, unix.Stat_t, error) {
 		return -1, st, pathErr("open", path, err)
 	}
 	if err := unix.Fstat(fd, &st); err != nil {
-		unix.Close(fd)
+		_ = unix.Close(fd)
 		return -1, st, pathErr("stat", path, err)
 	}
 	return fd, st, nil
@@ -164,7 +164,7 @@ func openComponent(dirfd int, name, path string) (int, unix.Stat_t, error) {
 // readTrustedLink reads the link on fd (always closing fd) after checking that
 // it belongs to the trusted user and that hops is still within the limit.
 func readTrustedLink(fd int, st *unix.Stat_t, path string, hops int) (string, error) {
-	defer unix.Close(fd)
+	defer func() { _ = unix.Close(fd) }()
 	if st.Uid != trustedLinkUID {
 		return "", errUntrustedLink(path)
 	}
@@ -222,7 +222,7 @@ func lstatPath(path string) (unix.Stat_t, error) {
 	if err != nil {
 		return unix.Stat_t{}, err
 	}
-	defer d.Close()
+	defer func() { _ = d.Close() }()
 	st, err := lstatAt(dfd(d), name)
 	return st, pathErr("lstat", path, err)
 }
@@ -252,7 +252,7 @@ func chmodNoFollow(dirfd int, name string, mode uint32) error {
 	if err != nil {
 		return err
 	}
-	defer unix.Close(fd)
+	defer func() { _ = unix.Close(fd) }()
 	var st unix.Stat_t
 	if err := unix.Fstat(fd, &st); err != nil {
 		return err
@@ -301,7 +301,7 @@ func walkDir(ctx context.Context, e entryRef, visit visitFunc, onErr func(error)
 		onErr(err)
 		return nil
 	}
-	defer d.Close()
+	defer func() { _ = d.Close() }()
 	var st unix.Stat_t
 	if err := unix.Fstat(dfd(d), &st); err != nil {
 		onErr(pathErr("stat", e.full, err))
@@ -341,7 +341,7 @@ func removeAllAt(dirfd int, name, full string) error {
 		return pathErr("unlink", full, err)
 	}
 	first := removeChildren(d, full)
-	d.Close()
+	_ = d.Close()
 	return removeEmptyDir(dirfd, name, full, first)
 }
 
@@ -382,7 +382,7 @@ func removePath(path string) error {
 		}
 		return err
 	}
-	defer d.Close()
+	defer func() { _ = d.Close() }()
 	return removeAllAt(dfd(d), name, path)
 }
 
@@ -412,7 +412,7 @@ func createTempAt(dirfd int, prefix, dir string) (*os.File, string, error) {
 // created with mkdirat in the descriptor of the level above.
 func mkdirAll(path string, perm uint32) error {
 	if d, err := openDir(path); err == nil {
-		d.Close()
+		_ = d.Close()
 		return nil
 	} else if !errors.Is(err, unix.ENOENT) {
 		return err
@@ -427,7 +427,7 @@ func mkdirAll(path string, perm uint32) error {
 	if err != nil {
 		return err
 	}
-	defer d.Close()
+	defer func() { _ = d.Close() }()
 	if err := unix.Mkdirat(dfd(d), name, perm); err != nil {
 		if errors.Is(err, unix.EEXIST) {
 			if st, e := lstatAt(dfd(d), name); e == nil && isDir(&st) {
@@ -527,7 +527,7 @@ func (c *copier) copyDir(src, dst entryRef) error {
 	if err != nil {
 		return err
 	}
-	defer sf.Close()
+	defer func() { _ = sf.Close() }()
 	var st unix.Stat_t
 	if err := unix.Fstat(dfd(sf), &st); err != nil {
 		return pathErr("stat", src.full, err)
@@ -539,7 +539,7 @@ func (c *copier) copyDir(src, dst entryRef) error {
 	if err != nil {
 		return err
 	}
-	defer df.Close()
+	defer func() { _ = df.Close() }()
 	if err := c.copyChildren(sf, df, src, dst); err != nil {
 		return err
 	}
@@ -562,11 +562,11 @@ func (c *copier) makeDir(dst entryRef, mode uint32) (*os.File, error) {
 	}
 	var st unix.Stat_t
 	if err := unix.Fstat(dfd(df), &st); err != nil {
-		df.Close()
+		_ = df.Close()
 		return nil, pathErr("stat", dst.full, err)
 	}
 	if st.Uid != uint32(os.Geteuid()) {
-		df.Close()
+		_ = df.Close()
 		return nil, rpc.Errorf(rpc.Conflict, "%s was replaced while it was being copied.", dst.full)
 	}
 	c.made[devIno{st.Dev, st.Ino}] = true
@@ -594,7 +594,7 @@ func (c *copier) copyFile(src, dst entryRef) error {
 	if err != nil {
 		return pathErr("open", src.full, err)
 	}
-	defer unix.Close(ifd)
+	defer func() { _ = unix.Close(ifd) }()
 	var st unix.Stat_t
 	if err := unix.Fstat(ifd, &st); err != nil {
 		return pathErr("stat", src.full, err)
@@ -609,7 +609,7 @@ func (c *copier) copyFile(src, dst entryRef) error {
 	c.created()
 	out := os.NewFile(uintptr(ofd), dst.full)
 	fail := func(err error) error {
-		out.Close()
+		_ = out.Close()
 		_ = unix.Unlinkat(dst.dirfd, dst.name, 0)
 		return err
 	}
@@ -660,12 +660,12 @@ func copyPath(ctx context.Context, src, dst string, progress func(int64)) error 
 	if err != nil {
 		return err
 	}
-	defer sd.Close()
+	defer func() { _ = sd.Close() }()
 	dd, dname, err := openParent(dst)
 	if err != nil {
 		return err
 	}
-	defer dd.Close()
+	defer func() { _ = dd.Close() }()
 	c := newCopier(ctx, progress)
 	if err := c.copyAt(entryRef{dfd(sd), sname, src}, entryRef{dfd(dd), dname, dst}); err != nil {
 		if c.madeTop {
@@ -689,7 +689,7 @@ func mkdirOne(path string, perm uint32) error {
 		return err
 	}
 	err = unix.Mkdirat(dfd(d), name, perm)
-	d.Close()
+	_ = d.Close()
 	return pathErr("mkdir", path, err)
 }
 
@@ -700,10 +700,10 @@ func createFile(path string, perm uint32) error {
 		return err
 	}
 	fd, err := unix.Openat(dfd(d), name, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, perm)
-	d.Close()
+	_ = d.Close()
 	if err != nil {
 		return pathErr("create", path, err)
 	}
-	unix.Close(fd)
+	_ = unix.Close(fd)
 	return nil
 }

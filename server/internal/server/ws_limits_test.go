@@ -65,7 +65,7 @@ func TestWSLimits(t *testing.T) {
 	if _, _, err := c.Read(ctx); websocket.CloseStatus(err) != websocket.StatusMessageTooBig {
 		t.Fatalf("oversized frame: %v", err)
 	}
-	c.CloseNow()
+	_ = c.CloseNow()
 
 	// Inputs to a stream that never reads them: the bounded queues fill and
 	// the channel ends with an error instead of buffering without limit.
@@ -73,8 +73,8 @@ func TestWSLimits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer c.CloseNow()
-	c.Write(ctx, websocket.MessageText, []byte(`{"ch":5,"op":"open","method":"system.metricsStream","params":{"interval":60000}}`))
+	defer func() { _ = c.CloseNow() }()
+	_ = c.Write(ctx, websocket.MessageText, []byte(`{"ch":5,"op":"open","method":"system.metricsStream","params":{"interval":60000}}`))
 	in := []byte(`{"ch":5,"op":"input","data":"` + strings.Repeat("x", 1000) + `"}`)
 	for i := 0; i < 4*inputQueueLen; i++ {
 		if err := c.Write(ctx, websocket.MessageText, in); err != nil {
@@ -87,7 +87,7 @@ func TestWSLimits(t *testing.T) {
 			t.Fatal(err)
 		}
 		var f wsFrame
-		json.Unmarshal(data, &f)
+		_ = json.Unmarshal(data, &f)
 		if f.Ch == 5 && f.Op == "error" {
 			if f.Error == nil || f.Error.Code != "unavailable" {
 				t.Fatalf("frame %s", data)
@@ -121,7 +121,7 @@ func TestWSLimits(t *testing.T) {
 	var conns []*websocket.Conn
 	defer func() {
 		for _, x := range conns {
-			x.CloseNow()
+			_ = x.CloseNow()
 		}
 	}()
 	for i := 0; i < maxSessionConns-1; i++ { // c is still open
@@ -132,7 +132,7 @@ func TestWSLimits(t *testing.T) {
 		conns = append(conns, x)
 	}
 	if x, err := dialWS(t, ctx, ts.URL, h); err == nil {
-		x.CloseNow()
+		_ = x.CloseNow()
 		t.Fatal("connection over the per-session limit accepted")
 	}
 }
@@ -145,7 +145,7 @@ func TestDevHostCheck(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusMisdirectedRequest {
 		t.Fatalf("non-loopback Host: %d", resp.StatusCode)
 	}
@@ -154,7 +154,7 @@ func TestDevHostCheck(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != 200 {
 		t.Fatalf("localhost Host: %d", resp.StatusCode)
 	}

@@ -24,29 +24,29 @@ func (s *Schedule) Validate() (*Schedule, error) {
 	}
 	switch {
 	case s.Every != 0 && len(s.At) > 0:
-		return nil, fmt.Errorf("A schedule is either an interval (every) or times of the day (at), not both.")
+		return nil, fmt.Errorf("A schedule is either an interval (every) or times of the day (at), not both.") //nolint:staticcheck // user-facing message, wording is part of the API
 	case s.Every != 0:
 		return s.validateInterval()
 	case len(s.At) > 0:
 		return s.validateClockTimes()
 	default:
-		return nil, fmt.Errorf("Give an interval (every) or times of the day (at).")
+		return nil, fmt.Errorf("Give an interval (every) or times of the day (at).") //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 }
 
 func (s *Schedule) validateInterval() (*Schedule, error) {
 	if s.Every < MinInterval || s.Every > 366*24*3600 {
-		return nil, fmt.Errorf("The interval must be at least %d seconds and at most a year.", MinInterval)
+		return nil, fmt.Errorf("The interval must be at least %d seconds and at most a year.", MinInterval) //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	if len(s.Days) > 0 {
-		return nil, fmt.Errorf("days only goes with times of the day (at).")
+		return nil, fmt.Errorf("days only goes with times of the day (at).") //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	return &Schedule{Every: s.Every}, nil
 }
 
 func (s *Schedule) validateClockTimes() (*Schedule, error) {
 	if len(s.At) > 24 {
-		return nil, fmt.Errorf("At most 24 times of day.")
+		return nil, fmt.Errorf("At most 24 times of day.") //nolint:staticcheck // user-facing message, wording is part of the API
 	}
 	at, err := uniqueClockTimes(s.At)
 	if err != nil {
@@ -64,7 +64,7 @@ func uniqueClockTimes(times []string) ([]string, error) {
 	seen := map[string]bool{}
 	for _, a := range times {
 		if _, _, ok := parseClock(a); !ok {
-			return nil, fmt.Errorf("%q is not a time of day (use HH:MM, 24 hours).", a)
+			return nil, fmt.Errorf("%q is not a time of day (use HH:MM, 24 hours).", a) //nolint:staticcheck // user-facing message, wording is part of the API
 		}
 		if !seen[a] {
 			seen[a] = true
@@ -81,7 +81,7 @@ func uniqueDays(days []int) ([]int, error) {
 	seen := map[int]bool{}
 	for _, d := range days {
 		if d < 0 || d > 6 {
-			return nil, fmt.Errorf("days are numbers from 0 (Sunday) to 6 (Saturday).")
+			return nil, fmt.Errorf("days are numbers from 0 (Sunday) to 6 (Saturday).") //nolint:staticcheck // user-facing message, wording is part of the API
 		}
 		if !seen[d] {
 			seen[d] = true

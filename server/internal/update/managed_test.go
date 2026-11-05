@@ -25,7 +25,7 @@ func TestManagedBy(t *testing.T) {
 		"Pacman":                "unknown",
 		strings.Repeat("a", 40): "unknown",
 	} {
-		os.WriteFile(l.Managed, []byte(content), 0o644)
+		_ = os.WriteFile(l.Managed, []byte(content), 0o644)
 		if got := l.ManagedBy(); got != want {
 			t.Errorf("marker %q: got %q, want %q", content, got, want)
 		}

@@ -8,9 +8,9 @@ import (
 // winProc is one process as sampled from the Windows toolhelp snapshot.
 // It is platform neutral so the CPU math can be tested anywhere.
 type winProc struct {
-	pid, ppid int
+	pid, ppid int //nolint:unused // used by the windows build
 	name      string
-	threads   uint32
+	threads   uint32 //nolint:unused // used by the windows build
 	cpu100ns  uint64 // kernel + user time, 100ns units
 	rss       uint64 // working set bytes
 }
@@ -42,7 +42,7 @@ func winProcesses(prev map[int]uint64, elapsed time.Duration, cur []winProc, tot
 	return list
 }
 
-func cpuMap(l []winProc) map[int]uint64 {
+func cpuMap(l []winProc) map[int]uint64 { //nolint:unused // used by the windows build
 	m := make(map[int]uint64, len(l))
 	for _, p := range l {
 		m[p.pid] = p.cpu100ns
@@ -51,7 +51,7 @@ func cpuMap(l []winProc) map[int]uint64 {
 }
 
 // winPrev is the previous sample kept between calls.
-var winPrev struct {
+var winPrev struct { //nolint:unused // used by the windows build
 	sync.Mutex
 	at  time.Time
 	cpu map[int]uint64

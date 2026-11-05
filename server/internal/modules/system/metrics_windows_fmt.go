@@ -2,7 +2,7 @@ package system
 
 import "errors"
 
-var errNoCPU = errors.New("cpu times are not available")
+var errNoCPU = errors.New("cpu times are not available") //nolint:unused // used by the windows build
 
 // windowsMemory maps GlobalMemoryStatusEx figures to the API shapes. The page
 // file figures there are the commit limit (RAM + page files), so swap is the

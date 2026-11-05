@@ -43,7 +43,7 @@ func ReadShadow(name string) (*ShadowEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 4096), 1<<20)
 	for sc.Scan() {

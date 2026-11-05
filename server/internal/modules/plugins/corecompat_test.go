@@ -92,7 +92,7 @@ func TestInstallRefusesAPluginForANewerCore(t *testing.T) {
 	brand.Version, DaemonDev = "0.4.0", false
 	doc := strings.Replace(goodManifest, `"entry": "index.js",`, `"entry": "index.js", "minCore": "0.5.0",`, 1)
 	arch := filepath.Join(t.TempDir(), "demo.tar.gz")
-	os.WriteFile(arch, makeTar(t, []tent{{name: "demo/manifest.json", body: doc}, {name: "demo/index.js", body: "export default () => {}"}}), 0o644)
+	_ = os.WriteFile(arch, makeTar(t, []tent{{name: "demo/manifest.json", body: doc}, {name: "demo/index.js", body: "export default () => {}"}}), 0o644)
 	_, err := install(context.Background(), installRequest{Source: arch})
 	if !rpc.IsCode(err, rpc.Conflict) || !strings.Contains(err.Error(), "needs Ervisio 0.5.0 or newer") {
 		t.Fatalf("%v", err)

@@ -43,7 +43,7 @@ func (s *Server) webHandler() http.Handler {
 			http.Error(w, "web app not installed", http.StatusServiceUnavailable)
 			return
 		}
-		defer root.Close()
+		defer func() { _ = root.Close() }()
 		w.Header().Set("Content-Security-Policy", appCSP)
 		name := strings.TrimPrefix(path.Clean("/"+r.URL.Path), "/")
 		if name != "" && serveFile(w, r, root, name, strings.HasPrefix(name, "assets/")) {
@@ -67,7 +67,7 @@ func serveFile(w http.ResponseWriter, r *http.Request, root *os.Root, name strin
 	if err != nil {
 		return false
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	fi, err := f.Stat()
 	if err != nil || !fi.Mode().IsRegular() {
 		return false
@@ -132,7 +132,7 @@ func servePluginFile(w http.ResponseWriter, r *http.Request, pluginDir, file str
 	if err != nil {
 		return pluginFileMissing
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	f, err := root.Open(file)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -141,7 +141,7 @@ func servePluginFile(w http.ResponseWriter, r *http.Request, pluginDir, file str
 		writeError(w, errNotFound)
 		return pluginFileDenied
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	fi, err := f.Stat()
 	if err != nil || !fi.Mode().IsRegular() {
 		return pluginFileMissing

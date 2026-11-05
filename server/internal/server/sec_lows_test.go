@@ -13,11 +13,13 @@ func TestBridgePoolStartsOutsideItsLock(t *testing.T) {
 	bp := newBridgePool()
 	unblock := make(chan struct{})
 	started := make(chan struct{})
-	go bp.acquire("u:1", func() (*bridge.Proc, error) {
-		close(started)
-		<-unblock
-		return nil, errors.New("slow failed")
-	})
+	go func() {
+		_, _ = bp.acquire("u:1", func() (*bridge.Proc, error) {
+			close(started)
+			<-unblock
+			return nil, errors.New("slow failed")
+		})
+	}()
 	<-started
 	done := make(chan error, 1)
 	go func() {

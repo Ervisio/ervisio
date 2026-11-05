@@ -143,7 +143,7 @@ func splitTLS(ln net.Listener, lg *log.Logger) (net.Listener, net.Listener) {
 					time.Sleep(50 * time.Millisecond)
 					continue
 				}
-				tlsL.Close()
+				_ = tlsL.Close()
 				return
 			}
 			go func() {
@@ -151,7 +151,7 @@ func splitTLS(ln net.Listener, lg *log.Logger) (net.Listener, net.Listener) {
 				br := bufio.NewReader(c)
 				b, err := br.Peek(1)
 				if err != nil {
-					c.Close()
+					_ = c.Close()
 					return
 				}
 				_ = c.SetReadDeadline(time.Time{})
@@ -163,7 +163,7 @@ func splitTLS(ln net.Listener, lg *log.Logger) (net.Listener, net.Listener) {
 				select {
 				case target.ch <- pc:
 				case <-tlsL.closed:
-					c.Close()
+					_ = c.Close()
 				}
 			}()
 		}
@@ -199,7 +199,7 @@ func (l *chanListener) Accept() (net.Conn, error) {
 func (l *chanListener) Close() error {
 	l.once.Do(func() {
 		close(l.closed)
-		l.parent.Close()
+		_ = l.parent.Close()
 	})
 	return nil
 }

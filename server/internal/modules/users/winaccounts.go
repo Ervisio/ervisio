@@ -217,16 +217,16 @@ func (s *winSnapshot) groupsResult() []groupInfo {
 	return out
 }
 
-func (s *winSnapshot) user(name string) *winUser {
+func (s *winSnapshot) user(name string) *winUser { //nolint:unused // used by the windows build
 	return findByName(s.Users, name, func(u *winUser) string { return u.Name })
 }
 
-func (s *winSnapshot) group(name string) *winGroup {
+func (s *winSnapshot) group(name string) *winGroup { //nolint:unused // used by the windows build
 	return findByName(s.Groups, name, func(g *winGroup) string { return g.Name })
 }
 
 // findByName returns the element whose name matches case-insensitively, or nil.
-func findByName[T any](items []T, name string, nameOf func(*T) string) *T {
+func findByName[T any](items []T, name string, nameOf func(*T) string) *T { //nolint:unused // used by the windows build
 	for i := range items {
 		if strings.EqualFold(nameOf(&items[i]), name) {
 			return &items[i]
@@ -267,9 +267,9 @@ func validWinName(kind, n string, max int) error {
 }
 
 func validWinUser(n string) error  { return validWinName("User", n, 20) }
-func validWinGroup(n string) error { return validWinName("Group", n, 256) }
+func validWinGroup(n string) error { return validWinName("Group", n, 256) } //nolint:unused // used by the windows build
 
-func validWinText(what, s string, max int) error {
+func validWinText(what, s string, max int) error { //nolint:unused // used by the windows build
 	if len([]rune(s)) > max {
 		return rpc.Errorf(rpc.Invalid, "The %s is too long (%d characters at most)", what, max)
 	}
@@ -351,6 +351,6 @@ func psErrorCode(has func(...string) bool) rpc.Code {
 	return rpc.Internal
 }
 
-func winUnavailable(what string) error {
+func winUnavailable(what string) error { //nolint:unused // used by the windows build
 	return rpc.Errorf(rpc.Unavailable, "%s is not available on Windows", what)
 }
