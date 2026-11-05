@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"context"
 	"crypto/subtle"
 	"errors"
@@ -433,60 +434,15 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	release, e := s.pamSlot(r.Context())
-	if e != nil {
-		result = attemptNeutral
-		writeError(w, e)
+	res, ok := s.verifyPassword(w, r, req, ip)
+	if !ok {
+		result = res
 		return
 	}
-	err := pam.Authenticate(pam.Service(), req.User, req.Password, ip)
-	release()
-	if err != nil {
-		switch {
-		case errors.Is(err, pam.ErrAccount):
-			// The password was right but the account may not sign in. The
-			// client gets the generic answer (no password oracle for
-			// locked or expired accounts); the reason goes to the log.
-			s.log.Printf("login %q from %s refused by the PAM account check: %v", req.User, ip, err)
-			s.auditCore(req.User, ip, "login.failed", "password", audit.Denied, "account refused")
-			writeError(w, errBadCredentials)
-		case errors.Is(err, pam.ErrAuth):
-			s.log.Printf("login %q from %s failed", req.User, ip)
-			s.auditCore(req.User, ip, "login.failed", "password", audit.Denied, "wrong password")
-			writeError(w, errBadCredentials)
-		default:
-			result = attemptNeutral
-			s.log.Printf("login %q: %v", req.User, err)
-			writeError(w, rpc.Errorf(rpc.Internal, "authentication service error"))
-		}
-		return
-	}
-
 	authed = true
-	a, err := account.Lookup(req.User)
-	if err != nil {
-		result = attemptNeutral
-		s.log.Printf("login %q: lookup: %v", req.User, err)
-		writeError(w, rpc.Errorf(rpc.Internal, "cannot resolve the account"))
-		return
-	}
-	// Same generic answer as a wrong password for the refusals below: they
-	// come after PAM accepted the password.
-	if a.IsRoot() && !cfg.AllowRoot {
-		s.log.Printf("login %q from %s refused: uid 0 and allow_root = false", req.User, ip)
-		writeError(w, errBadCredentials)
-		return
-	}
-	if !account.ShellAllowed(a.Shell) {
-		s.log.Printf("login %q from %s refused: login shell %q is not allowed (nologin, restricted or not in /etc/shells)", req.User, ip, a.Shell)
-		writeError(w, errBadCredentials)
-		return
-	}
-	// Same generic answer as the refusals above: an explicit "not allowed"
-	// would tell whoever guesses passwords that this one is right.
-	if !signInAllowed(cfg, a) {
-		s.log.Printf("login %q from %s refused: not allowed by auth.allow_users / auth.allow_groups / auth.admins_only", req.User, ip)
-		writeError(w, errBadCredentials)
+	a, res, ok := s.loginAccount(w, cfg, req.User, ip)
+	if !ok {
+		result = res
 		return
 	}
 	result = attemptOK
@@ -496,14 +452,82 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, rpc.Errorf(rpc.Unavailable, "could not start the session"))
 		return
 	}
-	maxAge := 0
-	if req.Remember {
-		maxAge = int(cfg.Session.Timeout.Seconds())
-	}
-	s.setCookie(w, r, token, maxAge)
+	s.setSessionCookie(w, r, token, req.Remember, cfg)
 	s.log.Printf("login %q from %s method=password", a.Name, ip)
 	s.auditCore(a.Name, ip, "login", "password", audit.OK, "")
 	writeJSON(w, http.StatusOK, s.info(sess))
+}
+
+// setSessionCookie sets the session cookie; a remembered sign-in outlives the
+// browser session.
+func (s *Server) setSessionCookie(w http.ResponseWriter, r *http.Request, token string, remember bool, cfg *config.Config) {
+	maxAge := 0
+	if remember {
+		maxAge = int(cfg.Session.Timeout.Seconds())
+	}
+	s.setCookie(w, r, token, maxAge)
+}
+
+// verifyPassword checks the password with PAM. On failure it writes the
+// answer and returns the outcome to record for the attempt.
+func (s *Server) verifyPassword(w http.ResponseWriter, r *http.Request, req loginRequest, ip string) (outcome, bool) {
+	release, e := s.pamSlot(r.Context())
+	if e != nil {
+		writeError(w, e)
+		return attemptNeutral, false
+	}
+	err := pam.Authenticate(pam.Service(), req.User, req.Password, ip)
+	release()
+	if err == nil {
+		return attemptFailed, true
+	}
+	switch {
+	case errors.Is(err, pam.ErrAccount):
+		// The password was right but the account may not sign in. The
+		// client gets the generic answer (no password oracle for
+		// locked or expired accounts); the reason goes to the log.
+		s.log.Printf("login %q from %s refused by the PAM account check: %v", req.User, ip, err)
+		s.auditCore(req.User, ip, "login.failed", "password", audit.Denied, "account refused")
+		writeError(w, errBadCredentials)
+	case errors.Is(err, pam.ErrAuth):
+		s.log.Printf("login %q from %s failed", req.User, ip)
+		s.auditCore(req.User, ip, "login.failed", "password", audit.Denied, "wrong password")
+		writeError(w, errBadCredentials)
+	default:
+		s.log.Printf("login %q: %v", req.User, err)
+		writeError(w, rpc.Errorf(rpc.Internal, "authentication service error"))
+		return attemptNeutral, false
+	}
+	return attemptFailed, false
+}
+
+// loginAccount resolves the account after PAM accepted the password and
+// applies the sign-in policy. Every refusal gives the same generic answer as
+// a wrong password.
+func (s *Server) loginAccount(w http.ResponseWriter, cfg *config.Config, user, ip string) (*account.Account, outcome, bool) {
+	a, err := account.Lookup(user)
+	if err != nil {
+		s.log.Printf("login %q: lookup: %v", user, err)
+		writeError(w, rpc.Errorf(rpc.Internal, "cannot resolve the account"))
+		return nil, attemptNeutral, false
+	}
+	var why string
+	switch {
+	case a.IsRoot() && !cfg.AllowRoot:
+		why = "uid 0 and allow_root = false"
+	case !account.ShellAllowed(a.Shell):
+		why = fmt.Sprintf("login shell %q is not allowed (nologin, restricted or not in /etc/shells)", a.Shell)
+	case !signInAllowed(cfg, a):
+		// An explicit "not allowed" would tell whoever guesses passwords
+		// that this one is right.
+		why = "not allowed by auth.allow_users / auth.allow_groups / auth.admins_only"
+	}
+	if why != "" {
+		s.log.Printf("login %q from %s refused: %s", user, ip, why)
+		writeError(w, errBadCredentials)
+		return nil, attemptFailed, false
+	}
+	return a, attemptFailed, true
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -549,29 +573,19 @@ func (s *Server) handleUnlock(w http.ResponseWriter, r *http.Request, sess *Sess
 		writeError(w, errUnauthenticated)
 		return
 	}
-	sess.mu.Lock()
-	if sess.unlocking {
-		sess.mu.Unlock()
+	if !sess.beginUnlock() {
 		writeError(w, rpc.Errorf(rpc.Conflict, "unlock already in progress"))
 		return
 	}
-	sess.unlocking = true
-	sess.mu.Unlock()
-	defer func() {
-		sess.mu.Lock()
-		sess.unlocking = false
-		sess.mu.Unlock()
-	}()
+	defer sess.endUnlock()
 
 	// An empty password tries sudo without one (NOPASSWD rules): useful
 	// for sessions signed in with an SSH key. sudo -n never runs PAM
 	// authentication, so a refusal is not counted as a failed attempt.
 	p, err := bridge.StartAdmin(r.Context(), s.spec(sess.Account, ip), req.Password)
 	if err != nil {
-		e := rpc.ToError(err, false)
-		if e.Code == rpc.Invalid && req.Password == "" {
-			e = rpc.Errorf(rpc.Invalid, "sudo needs this account's password").WithData(map[string]string{"reason": "password_required"})
-		} else if e.Code == rpc.Invalid {
+		e := unlockError(err, req.Password == "")
+		if e.Code == rpc.Invalid && req.Password != "" {
 			result = attemptFailed
 		}
 		s.log.Printf("unlock for %q from %s failed: %v", sess.Account.Name, ip, e)
@@ -579,21 +593,11 @@ func (s *Server) handleUnlock(w http.ResponseWriter, r *http.Request, sess *Sess
 		writeError(w, e)
 		return
 	}
-	sess.mu.Lock()
-	if sess.closed {
-		sess.mu.Unlock()
-		p.Stop()
+	if !sess.installRoot(p) {
 		writeError(w, errUnauthenticated)
 		return
 	}
-	old := sess.root
-	sess.root = p
-	sess.rootUsed = time.Now()
-	sess.mu.Unlock()
 	result = attemptOK
-	if old != nil {
-		go old.Stop()
-	}
 	s.log.Printf("admin rights unlocked for %q from %s", sess.Account.Name, ip)
 	s.auditCore(sess.Account.Name, ip, "unlock", "", audit.OK, "")
 	idle := cfg.Session.AdminUnlock.Duration
@@ -601,6 +605,51 @@ func (s *Server) handleUnlock(w http.ResponseWriter, r *http.Request, sess *Sess
 		"unlockedUntil":   sess.unlockedUntil(idle).UnixMilli(),
 		"unlockedForever": idle == 0,
 	})
+}
+
+// unlockError maps a failed admin bridge start to the client error.
+func unlockError(err error, emptyPassword bool) *rpc.Error {
+	e := rpc.ToError(err, false)
+	if e.Code == rpc.Invalid && emptyPassword {
+		return rpc.Errorf(rpc.Invalid, "sudo needs this account's password").WithData(map[string]string{"reason": "password_required"})
+	}
+	return e
+}
+
+// beginUnlock marks an unlock as running; false when one already is.
+func (sess *Session) beginUnlock() bool {
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+	if sess.unlocking {
+		return false
+	}
+	sess.unlocking = true
+	return true
+}
+
+func (sess *Session) endUnlock() {
+	sess.mu.Lock()
+	sess.unlocking = false
+	sess.mu.Unlock()
+}
+
+// installRoot stores the admin bridge and stops the one it replaces. A closed
+// session refuses it and the bridge is stopped.
+func (sess *Session) installRoot(p *bridge.Proc) bool {
+	sess.mu.Lock()
+	if sess.closed {
+		sess.mu.Unlock()
+		p.Stop()
+		return false
+	}
+	old := sess.root
+	sess.root = p
+	sess.rootUsed = time.Now()
+	sess.mu.Unlock()
+	if old != nil {
+		go old.Stop()
+	}
+	return true
 }
 
 func (s *Server) handleLock(w http.ResponseWriter, r *http.Request, sess *Session) {

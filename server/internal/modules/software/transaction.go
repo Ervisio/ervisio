@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -181,62 +182,67 @@ func lockedByOther(m *manager) bool {
 	return false
 }
 
-// buildPlans turns the request into backend plans.
-func (m *manager) buildPlans(p TxParams, admin bool) ([]Plan, error) {
+// checkTxParams validates the request and returns the effective source.
+func checkTxParams(p TxParams, admin bool) (string, error) {
 	if err := validNames(p.Packages); err != nil {
-		return nil, err
+		return "", err
 	}
 	switch p.Op {
 	case "upgrade", "install", "remove":
 	default:
-		return nil, rpc.Errorf(rpc.Invalid, "Unknown operation %q (use upgrade, install or remove).", p.Op)
+		return "", rpc.Errorf(rpc.Invalid, "Unknown operation %q (use upgrade, install or remove).", p.Op)
 	}
 	if p.Scope != "" && p.Scope != "system" && p.Scope != "user" {
-		return nil, rpc.Errorf(rpc.Invalid, "Unknown Flatpak scope %q.", p.Scope)
+		return "", rpc.Errorf(rpc.Invalid, "Unknown Flatpak scope %q.", p.Scope)
 	}
 	source := p.Source
 	if source == "" {
 		source = KindRepo
 	}
-	if !admin && !(source == KindFlatpak && p.Scope == "user") {
-		return nil, rpc.Errorf(rpc.NeedsAdmin, "Changing system software needs administrator rights.")
+	userFlatpak := source == KindFlatpak && p.Scope == "user"
+	if !admin && !userFlatpak {
+		return "", rpc.Errorf(rpc.NeedsAdmin, "Changing system software needs administrator rights.")
 	}
-	if admin && source == KindFlatpak && p.Scope == "user" {
-		return nil, rpc.Errorf(rpc.Invalid, "Flatpak apps in the user installation are managed without administrator rights.")
+	if admin && userFlatpak {
+		return "", rpc.Errorf(rpc.Invalid, "Flatpak apps in the user installation are managed without administrator rights.")
 	}
-	do := func(b Backend, pkgs []string) (Plan, error) {
-		switch p.Op {
-		case "install":
-			return b.Install(pkgs)
-		case "remove":
-			return b.Remove(pkgs)
-		}
-		return b.Upgrade(pkgs)
+	return source, nil
+}
+
+// planFor builds the plan for one operation on one backend.
+func planFor(op string, b Backend, pkgs []string) (Plan, error) {
+	switch op {
+	case "install":
+		return b.Install(pkgs)
+	case "remove":
+		return b.Remove(pkgs)
+	}
+	return b.Upgrade(pkgs)
+}
+
+func errNoPrimary() error {
+	return rpc.Errorf(rpc.Unavailable, "No supported system package manager was found.")
+}
+
+// buildPlans turns the request into backend plans.
+func (m *manager) buildPlans(p TxParams, admin bool) ([]Plan, error) {
+	source, err := checkTxParams(p, admin)
+	if err != nil {
+		return nil, err
 	}
 	var plans []Plan
 	add := func(b Backend, pkgs []string) error {
-		pl, err := do(b, pkgs)
+		pl, err := planFor(p.Op, b, pkgs)
 		if err != nil {
 			return err
 		}
 		plans = append(plans, pl)
 		return nil
 	}
+	needsPackages := p.Op != "upgrade" && len(p.Packages) == 0
 	switch source {
 	case "all":
-		if p.Op != "upgrade" || len(p.Packages) > 0 {
-			return nil, rpc.Errorf(rpc.Invalid, "Source \"all\" only works for upgrading everything.")
-		}
-		if m.primary != nil {
-			if err := add(m.primary, nil); err != nil {
-				return nil, err
-			}
-		}
-		if m.flatpak != nil {
-			if err := add(m.flatpak.(scoped).WithScope("system"), nil); err != nil {
-				return nil, err
-			}
-		}
+		err = m.planAll(p, add)
 	case KindFlatpak:
 		if m.flatpak == nil {
 			return nil, rpc.Errorf(rpc.Unavailable, "Flatpak is not installed.")
@@ -245,38 +251,50 @@ func (m *manager) buildPlans(p TxParams, admin bool) ([]Plan, error) {
 		if scope == "" {
 			scope = "system"
 		}
-		if p.Op != "upgrade" && len(p.Packages) == 0 {
+		if needsPackages {
 			return nil, orInvalid(nil)
 		}
-		if err := add(m.flatpak.(scoped).WithScope(scope), p.Packages); err != nil {
-			return nil, err
-		}
+		err = add(m.flatpak.(scoped).WithScope(scope), p.Packages)
 	case KindAUR:
-		if p.Op == "remove" {
-			if m.primary == nil {
-				return nil, rpc.Errorf(rpc.Unavailable, "No supported system package manager was found.")
-			}
-			if err := add(m.primary, p.Packages); err != nil {
-				return nil, err
-			}
-			break
+		if p.Op != "remove" {
+			return nil, errAURUnsupported
 		}
-		return nil, errAURUnsupported
+		if m.primary == nil {
+			return nil, errNoPrimary()
+		}
+		err = add(m.primary, p.Packages)
 	default: // repo, or a repository name such as "core"
 		if m.primary == nil {
-			return nil, rpc.Errorf(rpc.Unavailable, "No supported system package manager was found.")
+			return nil, errNoPrimary()
 		}
-		if p.Op != "upgrade" && len(p.Packages) == 0 {
+		if needsPackages {
 			return nil, orInvalid(nil)
 		}
-		if err := add(m.primary, p.Packages); err != nil {
-			return nil, err
-		}
+		err = add(m.primary, p.Packages)
+	}
+	if err != nil {
+		return nil, err
 	}
 	if len(plans) == 0 {
 		return nil, rpc.Errorf(rpc.Unavailable, "Nothing to do: no package manager is available for this request.")
 	}
 	return plans, nil
+}
+
+// planAll upgrades every backend.
+func (m *manager) planAll(p TxParams, add func(Backend, []string) error) error {
+	if p.Op != "upgrade" || len(p.Packages) > 0 {
+		return rpc.Errorf(rpc.Invalid, "Source \"all\" only works for upgrading everything.")
+	}
+	if m.primary != nil {
+		if err := add(m.primary, nil); err != nil {
+			return err
+		}
+	}
+	if m.flatpak != nil {
+		return add(m.flatpak.(scoped).WithScope("system"), nil)
+	}
+	return nil
 }
 
 // runTransaction executes a request and streams its progress. The command
@@ -474,6 +492,22 @@ func runStep(ctx context.Context, st Step, r *txRun) error {
 		return fmt.Errorf("could not start %s: %v", st.Name, err)
 	}
 	pw.Close()
+	tail := r.followOutput(pr, st)
+	pr.Close()
+	werr := cmd.Wait()
+	if werr != nil {
+		msg := strings.TrimSpace(strings.Join(lastErrors(tail), " "))
+		if msg == "" {
+			msg = fmt.Sprintf("%s exited with an error (%v)", st.Name, werr)
+		}
+		return fmt.Errorf("%s", msg)
+	}
+	return nil
+}
+
+// followOutput logs each output line of a step, reports the progress its
+// parser finds and returns the last few lines.
+func (r *txRun) followOutput(pr io.Reader, st Step) []string {
 	var prog Progress
 	sc := bufio.NewScanner(pr)
 	sc.Buffer(make([]byte, 64<<10), 1<<20)
@@ -497,16 +531,7 @@ func runStep(ctx context.Context, st Step, r *txRun) error {
 			r.send(map[string]any{"type": "progress", "done": prog.Done, "total": prog.Total, "current": prog.Current})
 		}
 	}
-	pr.Close()
-	werr := cmd.Wait()
-	if werr != nil {
-		msg := strings.TrimSpace(strings.Join(lastErrors(tail), " "))
-		if msg == "" {
-			msg = fmt.Sprintf("%s exited with an error (%v)", st.Name, werr)
-		}
-		return fmt.Errorf("%s", msg)
-	}
-	return nil
+	return tail
 }
 
 // lastErrors prefers lines that look like errors from the tail of the output.
@@ -532,47 +557,55 @@ func lastErrors(tail []string) []string {
 // user bridge reads the root's summary (no log) and its own file. A file is
 // trusted only when it is a regular file of the expected owner.
 func readStatus() (busy bool, tx *txState) {
-	type src struct {
-		path  string
-		owner int
-	}
-	var srcs []src
-	if isRoot() {
-		srcs = []src{{stateRoot, stateRootOwner}}
-	} else {
-		srcs = []src{{stateRootPublic, stateRootOwner}}
-		if p := userStatePath(); p != "" {
-			srcs = append(srcs, src{p, os.Geteuid()})
-		}
-	}
 	var best *txState
-	for _, sf := range srcs {
-		b, err := readOwnedFile(sf.path, sf.owner)
-		if err != nil {
+	for _, sf := range statusSources() {
+		st := readStateFile(sf)
+		if st == nil {
 			continue
-		}
-		var st txState
-		if json.Unmarshal(b, &st) != nil {
-			continue
-		}
-		if st.Log == nil {
-			st.Log = []string{}
-		}
-		if st.Running {
-			if st.PID <= 0 || !pidRunning(st.PID) {
-				st.Running, st.OK, st.Message = false, false, "interrupted"
-			}
 		}
 		if best == nil || (st.Running && !best.Running) || (st.Running == best.Running && st.StartedAt > best.StartedAt) {
-			cp := st
-			best = &cp
+			best = st
 		}
 	}
 	if best != nil && !best.Running && best.FinishedAt > 0 && time.Since(time.UnixMilli(best.FinishedAt)) > time.Hour {
 		best = nil
 	}
-	if best != nil && best.Running {
-		busy = true
+	return best != nil && best.Running, best
+}
+
+type stateSource struct {
+	path  string
+	owner int
+}
+
+// statusSources lists the state files this bridge may read.
+func statusSources() []stateSource {
+	if isRoot() {
+		return []stateSource{{stateRoot, stateRootOwner}}
 	}
-	return busy, best
+	srcs := []stateSource{{stateRootPublic, stateRootOwner}}
+	if p := userStatePath(); p != "" {
+		srcs = append(srcs, stateSource{p, os.Geteuid()})
+	}
+	return srcs
+}
+
+// readStateFile parses one state file; a run whose process is gone counts as
+// interrupted. Nil when the file is missing, untrusted or unreadable.
+func readStateFile(sf stateSource) *txState {
+	b, err := readOwnedFile(sf.path, sf.owner)
+	if err != nil {
+		return nil
+	}
+	var st txState
+	if json.Unmarshal(b, &st) != nil {
+		return nil
+	}
+	if st.Log == nil {
+		st.Log = []string{}
+	}
+	if st.Running && (st.PID <= 0 || !pidRunning(st.PID)) {
+		st.Running, st.OK, st.Message = false, false, "interrupted"
+	}
+	return &st
 }

@@ -228,11 +228,7 @@ func (s *Server) handleLoginKey(w http.ResponseWriter, r *http.Request) {
 		writeError(w, rpc.Errorf(rpc.Unavailable, "could not start the session"))
 		return
 	}
-	maxAge := 0
-	if req.Remember {
-		maxAge = int(cfg.Session.Timeout.Seconds())
-	}
-	s.setCookie(w, r, token, maxAge)
+	s.setSessionCookie(w, r, token, req.Remember, cfg)
 	s.log.Printf("login %q from %s method=ssh-key key=%s", a.Name, ip, fp)
 	s.auditCore(a.Name, ip, "login", "ssh-key "+fp, audit.OK, "")
 	writeJSON(w, http.StatusOK, s.info(sess))
