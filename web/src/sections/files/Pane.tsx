@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react';
 import { ApiError } from '../../api';
-import { useI18n, useT } from '../../i18n';
+import { useI18n, useT, type TFn } from '../../i18n';
 import { formatBytes } from '../../lib/format';
 import { Badge, Button, DropdownMenu, EmptyState, Icon, IconButton, Segmented, Skeleton, type IconName, type MenuItem } from '../../ui';
 import { DRAG_TYPE } from './dropfiles';
@@ -40,6 +40,42 @@ export interface PaneProps {
 }
 
 const VIRTUAL_ICON: Record<string, IconName> = { 'trash:': 'trash', 'recent:': 'clock', 'starred:': 'star' };
+const ARROW_STEP: Record<string, number> = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 };
+
+type PickKeys = { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean };
+
+/** Per-item wiring shared by the grid and list views. */
+interface ItemKit {
+  wire(e: FEntry): { 'data-path': string; draggable: boolean; onDragStart(ev: DragEvent): void; onClick(ev: MouseEvent): void; onDoubleClick(): void; onContextMenu(ev: MouseEvent): void };
+  folderDrop(e: FEntry): { onDragOver?(ev: DragEvent): void; onDragLeave?(): void; onDrop?(ev: DragEvent): void };
+  moreButton(e: FEntry): JSX.Element;
+  subtitle(e: FEntry): string;
+  isSelected(e: FEntry): boolean;
+  dropFolder: string | null;
+  trash: boolean;
+  lang: string;
+  t: TFn;
+}
+
+const isHidden = (e: FEntry) => e.name.startsWith('.');
+const hasFiles = (dt: DataTransfer) => Array.from(dt.types).includes('Files');
+const hasInternal = (dt: DataTransfer) => Array.from(dt.types).includes(DRAG_TYPE);
+const nextSort = (sort: SortState, key: SortKey): SortState => ({ key, dir: sort.key === key && sort.dir === 'asc' ? 'desc' : 'asc' });
+
+function keyShortcut(ev: KeyboardEvent, mod: boolean): Shortcut | null {
+  const k = ev.key;
+  const lower = k.toLowerCase();
+  if (k === 'Delete') return ev.shiftKey ? 'permDelete' : 'delete';
+  if (k === 'F2') return 'rename';
+  if (k === 'F5') return 'refresh';
+  if (k === 'Enter' && !mod) return 'open';
+  if (k === 'Backspace' || (ev.altKey && k === 'ArrowUp')) return 'up';
+  if (mod && lower === 'c') return 'copy';
+  if (mod && lower === 'x') return 'cut';
+  if (mod && lower === 'v') return 'paste';
+  if (mod && ev.shiftKey && lower === 'n') return 'newFolder';
+  return null;
+}
 
 export function Pane(p: PaneProps) {
   const t = useT('files');
@@ -51,17 +87,11 @@ export function Pane(p: PaneProps) {
   const root = useRef<HTMLDivElement>(null);
   const [drop, setDrop] = useState(false);
   const [dropFolder, setDropFolder] = useState<string | null>(null);
-  const [searchOpen, setSearchOpen] = useState(false);
   const virtual = isVirtual(loc);
   const trash = loc === 'trash:';
   const canUp = !virtual && loc !== '/';
 
-  useEffect(() => {
-    if (!p.query) setSearchOpen(false);
-  }, [p.query]);
-
-  /* ---------- selection ---------- */
-  const pick = (e: FEntry, ev: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) => {
+  const pick = (e: FEntry, ev: PickKeys) => {
     p.onFocus();
     const next = new Set(ev.ctrlKey || ev.metaKey ? p.selected : []);
     if (ev.shiftKey && anchor.current) {
@@ -82,24 +112,24 @@ export function Pane(p: PaneProps) {
     p.onSelected(next);
   };
 
+  const moveSelection = (step: number, ev: PickKeys) => {
+    const cur = anchor.current ? rows.findIndex((r) => r.path === anchor.current) : -1;
+    const n = Math.min(rows.length - 1, Math.max(0, cur < 0 ? 0 : cur + step));
+    pick(rows[n], ev);
+    root.current?.querySelector(`[data-path="${CSS.escape(rows[n].path)}"]`)?.scrollIntoView({ block: 'nearest' });
+  };
+
   const onKeyDown = (ev: KeyboardEvent<HTMLDivElement>) => {
     const tag = (ev.target as HTMLElement).tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
     const mod = ev.ctrlKey || ev.metaKey;
     const k = ev.key;
-    const go = (s: Shortcut) => {
+    const shortcut = keyShortcut(ev, mod);
+    if (shortcut) {
       ev.preventDefault();
-      p.onShortcut(s);
-    };
-    if (k === 'Delete') return go(ev.shiftKey ? 'permDelete' : 'delete');
-    if (k === 'F2') return go('rename');
-    if (k === 'F5') return go('refresh');
-    if (k === 'Enter' && !mod) return go('open');
-    if (k === 'Backspace' || (ev.altKey && k === 'ArrowUp')) return go('up');
-    if (mod && k.toLowerCase() === 'c') return go('copy');
-    if (mod && k.toLowerCase() === 'x') return go('cut');
-    if (mod && k.toLowerCase() === 'v') return go('paste');
-    if (mod && ev.shiftKey && k.toLowerCase() === 'n') return go('newFolder');
+      p.onShortcut(shortcut);
+      return;
+    }
     if (mod && k.toLowerCase() === 'a') {
       ev.preventDefault();
       p.onSelected(new Set(rows.map((r) => r.path)));
@@ -110,19 +140,13 @@ export function Pane(p: PaneProps) {
       else if (p.query) p.onQuery('');
       return;
     }
-    if (['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(k) && rows.length) {
+    const step = ARROW_STEP[k];
+    if (step && rows.length) {
       ev.preventDefault();
-      const cur = anchor.current ? rows.findIndex((r) => r.path === anchor.current) : -1;
-      const step = k === 'ArrowDown' || k === 'ArrowRight' ? 1 : -1;
-      const n = Math.min(rows.length - 1, Math.max(0, cur < 0 ? 0 : cur + step));
-      pick(rows[n], ev);
-      root.current?.querySelector(`[data-path="${CSS.escape(rows[n].path)}"]`)?.scrollIntoView({ block: 'nearest' });
+      moveSelection(step, ev);
     }
   };
 
-  /* ---------- drag and drop ---------- */
-  const hasFiles = (dt: DataTransfer) => Array.from(dt.types).includes('Files');
-  const hasInternal = (dt: DataTransfer) => Array.from(dt.types).includes(DRAG_TYPE);
   const canDropHere = !virtual;
   const onDragOver = (ev: DragEvent) => {
     if (!canDropHere || !(hasFiles(ev.dataTransfer) || hasInternal(ev.dataTransfer))) return;
@@ -165,15 +189,6 @@ export function Pane(p: PaneProps) {
         }
       : {};
 
-  /* ---------- header ---------- */
-  const sortItems: MenuItem[] = (['name', 'mtime', 'size'] as SortKey[]).map((k) => ({
-    id: k,
-    label: (p.sort.key === k ? (p.sort.dir === 'asc' ? '↑ ' : '↓ ') : '') + t(`sort.${k}`),
-    onSelect: () => p.onSort({ key: k, dir: p.sort.key === k && p.sort.dir === 'asc' ? 'desc' : 'asc' }),
-  }));
-
-  const folders = rows.filter(isDirLike);
-  const files = rows.filter((r) => !isDirLike(r));
   const wireItem = (e: FEntry) => ({
     'data-path': e.path,
     draggable: !trash,
@@ -208,143 +223,27 @@ export function Pane(p: PaneProps) {
     </button>
   );
   const sub = (e: FEntry) => (trash && e.deletedAt ? t('deletedAt', { when: formatWhen(e.deletedAt, lang) }) : `${isDirLike(e) ? '' : formatBytes(e.size) + ', '}${formatWhen(e.mtime, lang)}`);
-  const hidden = (e: FEntry) => e.name.startsWith('.');
   const sel = (e: FEntry) => p.selected.has(e.path);
+  const kit: ItemKit = { wire: wireItem, folderDrop, moreButton: moreBtn, subtitle: sub, isSelected: sel, dropFolder, trash, lang, t };
 
   const title = virtual ? t(`place.${loc.replace(':', '')}`) : basename(loc) || '/';
 
   let body;
   if (data.error) body = <ErrorView err={data.error} loc={loc} t={t} onRetry={p.onRetryAdmin} onHome={() => p.onNavigate('home:')} />;
-  else if (data.loading && rows.length === 0) {
+  else if (data.loading && rows.length === 0) body = <LoadingView grid={state.view === 'grid'} />;
+  else if (rows.length === 0) body = <EmptyView loc={loc} query={p.query} searching={data.searching} t={t} />;
+  else if (state.view === 'grid') body = <GridView rows={rows} admin={state.admin} kit={kit} />;
+  else {
     body = (
-      <div className={p.state.view === 'grid' ? 'files-grid' : 'files-skel'}>
-        {Array.from({ length: 8 }, (_, i) => (p.state.view === 'grid' ? <Skeleton key={i} height={150} style={{ borderRadius: 18 }} /> : <Skeleton key={i} height={38} style={{ borderRadius: 12 }} />))}
-      </div>
-    );
-  } else if (rows.length === 0) {
-    body = (
-      <EmptyState
-        hue="file"
-        icon={trash ? 'trash' : loc === 'starred:' ? 'star' : loc === 'recent:' ? 'clock' : p.query ? 'search' : 'files'}
-        title={p.query ? t('empty.search', { q: p.query }) : trash ? t('empty.trash') : loc === 'starred:' ? t('empty.starred') : loc === 'recent:' ? t('empty.recent') : t('empty.folder')}
-        text={p.query ? (data.searching ? t('searching') : t('empty.searchHint')) : trash ? t('empty.trashHint') : loc === 'starred:' ? t('empty.starredHint') : loc === 'recent:' ? t('empty.recentHint') : t('empty.folderHint')}
+      <ListView
+        rows={rows}
+        kit={kit}
+        sort={p.sort}
+        onSort={p.onSort}
+        onSelected={p.onSelected}
+        onToggle={(e, shiftKey) => pick(e, { ctrlKey: true, metaKey: false, shiftKey })}
+        showDir={data.entries !== rows && !trash && !!p.query}
       />
-    );
-  } else if (p.state.view === 'grid') {
-    body = (
-      <>
-        {folders.length > 0 && (
-          <>
-            <div className="files-sec">
-              {t('folders')} <span>{folders.length}</span>
-            </div>
-            <div className="files-folds">
-              {folders.map((e) => (
-                <div key={e.path} {...wireItem(e)} {...folderDrop(e)} className={`files-fold files-t-dir${sel(e) ? ' is-sel' : ''}${hidden(e) ? ' is-hid' : ''}${dropFolder === e.path ? ' is-drop' : ''}`}>
-                  <span className="files-ic">
-                    <Icon name={e.type === 'symlink' ? 'link' : 'files'} />
-                  </span>
-                  <div className="files-fold-t">
-                    <b>{e.name}</b>
-                    <small>{trash ? sub(e) : formatWhen(e.mtime, lang)}</small>
-                  </div>
-                  {moreBtn(e)}
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-        {files.length > 0 && (
-          <>
-            <div className="files-sec">
-              {t('files')} <span>{files.length}</span>
-            </div>
-            <div className="files-grid">
-              {files.map((e) => {
-                const k = kindOf(e);
-                return (
-                  <div key={e.path} {...wireItem(e)} className={`files-fc files-t-${k}${sel(e) ? ' is-sel' : ''}${hidden(e) ? ' is-hid' : ''}`}>
-                    <Thumb e={e} admin={state.admin} />
-                    <div className="files-meta">
-                      <span className="files-ic files-ic--sm">
-                        <Icon name={e.type === 'symlink' ? 'link' : KIND_ICON[k]} />
-                      </span>
-                      <b title={e.name}>{e.name}</b>
-                      {moreBtn(e)}
-                    </div>
-                    <div className="files-sub">{sub(e)}</div>
-                  </div>
-                );
-              })}
-            </div>
-          </>
-        )}
-      </>
-    );
-  } else {
-    const allOn = rows.length > 0 && rows.every((r) => sel(r));
-    const th = (key: SortKey, label: string, cls?: string) => (
-      <th className={cls} aria-sort={p.sort.key === key ? (p.sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
-        <button type="button" onClick={() => p.onSort({ key, dir: p.sort.key === key && p.sort.dir === 'asc' ? 'desc' : 'asc' })}>
-          {label}
-          {p.sort.key === key && <Icon name={p.sort.dir === 'asc' ? 'chevronup' : 'chevron'} />}
-        </button>
-      </th>
-    );
-    body = (
-      <table className="ui-table files-lv">
-        <thead>
-          <tr>
-            <th className="files-cb">
-              <button type="button" className={`files-box${allOn ? ' on' : ''}`} aria-label={t('selectAll')} aria-pressed={allOn} onClick={() => p.onSelected(allOn ? new Set() : new Set(rows.map((r) => r.path)))}>
-                {allOn && <Icon name="check" />}
-              </button>
-            </th>
-            {th('name', t('col.name'))}
-            {th('size', t('col.size'), 'num')}
-            {th('owner', t('col.owner'), 'files-c-owner')}
-            {th('perm', t('col.permissions'), 'files-c-perm')}
-            {th('mtime', trash ? t('col.deleted') : t('col.modified'), 'files-c-mtime')}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((e) => {
-            const k = kindOf(e);
-            return (
-              <tr key={e.path} {...wireItem(e)} {...folderDrop(e)} aria-selected={sel(e) || undefined} className={`files-t-${k}${hidden(e) ? ' is-hid' : ''}${dropFolder === e.path ? ' is-drop' : ''}`}>
-                <td className="files-cb">
-                  <button
-                    type="button"
-                    className={`files-box${sel(e) ? ' on' : ''}`}
-                    aria-label={t('selectRow', { name: e.name })}
-                    aria-pressed={sel(e)}
-                    onClick={(ev) => {
-                      ev.stopPropagation();
-                      pick(e, { ctrlKey: true, metaKey: false, shiftKey: ev.shiftKey });
-                    }}
-                  >
-                    {sel(e) && <Icon name="check" />}
-                  </button>
-                </td>
-                <td>
-                  <div className="files-nm">
-                    <span className="files-ic files-ic--sm">
-                      <Icon name={e.type === 'symlink' ? 'link' : KIND_ICON[k]} />
-                    </span>
-                    <span className="files-nm-t">{e.name}</span>
-                    {e.type === 'symlink' && e.target && <small className="files-link">→ {e.target}</small>}
-                    {data.entries !== rows && e.path && !trash && p.query && <small className="files-link">{dirname(e.path)}</small>}
-                  </div>
-                </td>
-                <td className="num">{isDirLike(e) ? '' : formatBytes(e.size)}</td>
-                <td className="files-c-owner">{e.owner}</td>
-                <td className="files-c-perm mono">{e.perm}</td>
-                <td className="files-c-mtime files-muted">{formatWhen(trash && e.deletedAt ? e.deletedAt : e.mtime, lang)}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
     );
   }
 
@@ -378,15 +277,8 @@ export function Pane(p: PaneProps) {
             {t('leaveAdmin')}
           </Button>
         )}
-        {searchOpen || p.query ? (
-          <div className="files-search ui-in">
-            <Icon name="search" />
-            <input autoFocus value={p.query} placeholder={t('searchHere')} aria-label={t('searchHere')} onChange={(e) => p.onQuery(e.target.value)} onBlur={() => !p.query && setSearchOpen(false)} onKeyDown={(e) => e.key === 'Escape' && (p.onQuery(''), setSearchOpen(false))} />
-          </div>
-        ) : (
-          !virtual && <IconButton icon="search" label={t('search')} onClick={() => setSearchOpen(true)} />
-        )}
-        <DropdownMenu items={sortItems} aria-label={t('sort.label')} trigger={(tp) => <IconButton icon="sort" label={t('sort.label')} {...tp} />} />
+        <SearchBox query={p.query} onQuery={p.onQuery} canOpen={!virtual} t={t} />
+        <SortMenu sort={p.sort} onSort={p.onSort} t={t} />
         <Segmented<View>
           aria-label={t('view.label')}
           value={state.view}
@@ -421,6 +313,182 @@ export function Pane(p: PaneProps) {
         )}
       </div>
     </div>
+  );
+}
+
+function SearchBox({ query, onQuery, canOpen, t }: { query: string; onQuery(q: string): void; canOpen: boolean; t: TFn }) {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!query) setOpen(false);
+  }, [query]);
+
+  if (!open && !query) return canOpen && <IconButton icon="search" label={t('search')} onClick={() => setOpen(true)} />;
+  return (
+    <div className="files-search ui-in">
+      <Icon name="search" />
+      <input autoFocus value={query} placeholder={t('searchHere')} aria-label={t('searchHere')} onChange={(e) => onQuery(e.target.value)} onBlur={() => !query && setOpen(false)} onKeyDown={(e) => e.key === 'Escape' && (onQuery(''), setOpen(false))} />
+    </div>
+  );
+}
+
+function SortMenu({ sort, onSort, t }: { sort: SortState; onSort(s: SortState): void; t: TFn }) {
+  const items: MenuItem[] = (['name', 'mtime', 'size'] as SortKey[]).map((k) => ({
+    id: k,
+    label: (sort.key === k ? (sort.dir === 'asc' ? '↑ ' : '↓ ') : '') + t(`sort.${k}`),
+    onSelect: () => onSort(nextSort(sort, k)),
+  }));
+  return <DropdownMenu items={items} aria-label={t('sort.label')} trigger={(tp) => <IconButton icon="sort" label={t('sort.label')} {...tp} />} />;
+}
+
+function LoadingView({ grid }: { grid: boolean }) {
+  return (
+    <div className={grid ? 'files-grid' : 'files-skel'}>
+      {Array.from({ length: 8 }, (_, i) => (grid ? <Skeleton key={i} height={150} style={{ borderRadius: 18 }} /> : <Skeleton key={i} height={38} style={{ borderRadius: 12 }} />))}
+    </div>
+  );
+}
+
+function EmptyView({ loc, query, searching, t }: { loc: string; query: string; searching: boolean; t: TFn }) {
+  const icon = VIRTUAL_ICON[loc] ?? (query ? 'search' : 'files');
+  if (query) return <EmptyState hue="file" icon={icon} title={t('empty.search', { q: query })} text={searching ? t('searching') : t('empty.searchHint')} />;
+  const place = VIRTUAL_ICON[loc] ? loc.replace(':', '') : 'folder';
+  return <EmptyState hue="file" icon={icon} title={t(`empty.${place}`)} text={t(`empty.${place}Hint`)} />;
+}
+
+function GridView({ rows, admin, kit }: { rows: FEntry[]; admin: boolean; kit: ItemKit }) {
+  const { t, lang } = kit;
+  const folders = rows.filter(isDirLike);
+  const files = rows.filter((r) => !isDirLike(r));
+  return (
+    <>
+      {folders.length > 0 && (
+        <>
+          <div className="files-sec">
+            {t('folders')} <span>{folders.length}</span>
+          </div>
+          <div className="files-folds">
+            {folders.map((e) => (
+              <div key={e.path} {...kit.wire(e)} {...kit.folderDrop(e)} className={`files-fold files-t-dir${kit.isSelected(e) ? ' is-sel' : ''}${isHidden(e) ? ' is-hid' : ''}${kit.dropFolder === e.path ? ' is-drop' : ''}`}>
+                <span className="files-ic">
+                  <Icon name={e.type === 'symlink' ? 'link' : 'files'} />
+                </span>
+                <div className="files-fold-t">
+                  <b>{e.name}</b>
+                  <small>{kit.trash ? kit.subtitle(e) : formatWhen(e.mtime, lang)}</small>
+                </div>
+                {kit.moreButton(e)}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      {files.length > 0 && (
+        <>
+          <div className="files-sec">
+            {t('files')} <span>{files.length}</span>
+          </div>
+          <div className="files-grid">
+            {files.map((e) => {
+              const k = kindOf(e);
+              return (
+                <div key={e.path} {...kit.wire(e)} className={`files-fc files-t-${k}${kit.isSelected(e) ? ' is-sel' : ''}${isHidden(e) ? ' is-hid' : ''}`}>
+                  <Thumb e={e} admin={admin} />
+                  <div className="files-meta">
+                    <span className="files-ic files-ic--sm">
+                      <Icon name={e.type === 'symlink' ? 'link' : KIND_ICON[k]} />
+                    </span>
+                    <b title={e.name}>{e.name}</b>
+                    {kit.moreButton(e)}
+                  </div>
+                  <div className="files-sub">{kit.subtitle(e)}</div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+interface ListViewProps {
+  rows: FEntry[];
+  kit: ItemKit;
+  sort: SortState;
+  onSort(s: SortState): void;
+  onSelected(s: Set<string>): void;
+  onToggle(e: FEntry, shiftKey: boolean): void;
+  /** Show each row's parent folder (search results). */
+  showDir: boolean;
+}
+
+function ListView({ rows, kit, sort, onSort, onSelected, onToggle, showDir }: ListViewProps) {
+  const { t, lang, trash } = kit;
+  const allOn = rows.length > 0 && rows.every((r) => kit.isSelected(r));
+  const th = (key: SortKey, label: string, cls?: string) => (
+    <th className={cls} aria-sort={sort.key === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
+      <button type="button" onClick={() => onSort(nextSort(sort, key))}>
+        {label}
+        {sort.key === key && <Icon name={sort.dir === 'asc' ? 'chevronup' : 'chevron'} />}
+      </button>
+    </th>
+  );
+  return (
+    <table className="ui-table files-lv">
+      <thead>
+        <tr>
+          <th className="files-cb">
+            <button type="button" className={`files-box${allOn ? ' on' : ''}`} aria-label={t('selectAll')} aria-pressed={allOn} onClick={() => onSelected(allOn ? new Set() : new Set(rows.map((r) => r.path)))}>
+              {allOn && <Icon name="check" />}
+            </button>
+          </th>
+          {th('name', t('col.name'))}
+          {th('size', t('col.size'), 'num')}
+          {th('owner', t('col.owner'), 'files-c-owner')}
+          {th('perm', t('col.permissions'), 'files-c-perm')}
+          {th('mtime', trash ? t('col.deleted') : t('col.modified'), 'files-c-mtime')}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((e) => {
+          const k = kindOf(e);
+          const isSel = kit.isSelected(e);
+          return (
+            <tr key={e.path} {...kit.wire(e)} {...kit.folderDrop(e)} aria-selected={isSel || undefined} className={`files-t-${k}${isHidden(e) ? ' is-hid' : ''}${kit.dropFolder === e.path ? ' is-drop' : ''}`}>
+              <td className="files-cb">
+                <button
+                  type="button"
+                  className={`files-box${isSel ? ' on' : ''}`}
+                  aria-label={t('selectRow', { name: e.name })}
+                  aria-pressed={isSel}
+                  onClick={(ev) => {
+                    ev.stopPropagation();
+                    onToggle(e, ev.shiftKey);
+                  }}
+                >
+                  {isSel && <Icon name="check" />}
+                </button>
+              </td>
+              <td>
+                <div className="files-nm">
+                  <span className="files-ic files-ic--sm">
+                    <Icon name={e.type === 'symlink' ? 'link' : KIND_ICON[k]} />
+                  </span>
+                  <span className="files-nm-t">{e.name}</span>
+                  {e.type === 'symlink' && e.target && <small className="files-link">→ {e.target}</small>}
+                  {showDir && e.path && <small className="files-link">{dirname(e.path)}</small>}
+                </div>
+              </td>
+              <td className="num">{isDirLike(e) ? '' : formatBytes(e.size)}</td>
+              <td className="files-c-owner">{e.owner}</td>
+              <td className="files-c-perm mono">{e.perm}</td>
+              <td className="files-c-mtime files-muted">{formatWhen(trash && e.deletedAt ? e.deletedAt : e.mtime, lang)}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }
 

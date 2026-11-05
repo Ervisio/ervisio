@@ -2,8 +2,6 @@ package terminal
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"os/exec"
 	"time"
@@ -31,12 +29,61 @@ func RunPTY(ctx context.Context, cmd *exec.Cmd, cols, rows int, st rpc.Stream) e
 	defer ptmx.Close()
 	pid := cmd.Process.Pid
 
-	out := make(chan []byte, 64)
 	stop := make(chan struct{})
 	defer close(stop) // runs before ptmx.Close: the reader never blocks on out
+	out := readPTY(ptmx, stop)
+	exit := waitExit(cmd)
+	kill := func() { stopRun(pid, exit.done) }
+	write := func(data []byte) { _, _ = ptmx.Write(data) }
+	resize := func(cols, rows uint16) { _ = resizePTY(ptmx, cols, rows) }
+
+	in := st.Input()
+	exited := exit.done
+	var drain <-chan time.Time // set once the process ended: output still buffered gets a moment
+	for {
+		select {
+		case <-ctx.Done():
+			kill()
+			return nil
+		case b, ok := <-out:
+			if !ok {
+				<-exit.done
+				return st.Send(map[string]any{"type": "exit", "code": exit.code})
+			}
+			if err := st.SendBytes(b); err != nil {
+				kill()
+				return nil
+			}
+		case <-exited:
+			// A child that keeps the pty open must not hold the stream.
+			exited = nil
+			drain = time.After(runExitDrain)
+		case <-drain:
+			hangupProc(pid, false)
+			return st.Send(map[string]any{"type": "exit", "code": exit.code})
+		case raw, ok := <-in:
+			if !ok {
+				kill()
+				return nil
+			}
+			applyInputFrame(raw, write, resize)
+		}
+	}
+}
+
+const (
+	ptyReadSize  = 32 << 10
+	runKillGrace = time.Second
+	runExitDrain = 500 * time.Millisecond
+)
+
+// readPTY copies the pty output to the returned channel, closed on EOF or
+// read error. It gives up a pending send once stop is closed.
+func readPTY(ptmx ptyConn, stop <-chan struct{}) <-chan []byte {
+	out := make(chan []byte, 64)
 	go func() {
 		defer close(out)
-		buf := make([]byte, 32<<10)
+		buf := make([]byte, ptyReadSize)
 		for {
 			n, err := ptmx.Read(buf)
 			if n > 0 {
@@ -51,76 +98,40 @@ func RunPTY(ctx context.Context, cmd *exec.Cmd, cols, rows int, st rpc.Stream) e
 			}
 		}
 	}()
-	waited := make(chan struct{})
-	code := 0
+	return out
+}
+
+// exitStatus is the outcome of a process; code is valid once done is closed.
+type exitStatus struct {
+	done chan struct{}
+	code int
+}
+
+func waitExit(cmd *exec.Cmd) *exitStatus {
+	exit := &exitStatus{done: make(chan struct{})}
 	go func() {
 		if err := cmd.Wait(); err != nil {
 			var ee *exec.ExitError
 			if errors.As(err, &ee) {
-				code = ee.ExitCode()
+				exit.code = ee.ExitCode()
 			} else {
-				code = -1
+				exit.code = -1
 			}
 		}
-		close(waited)
+		close(exit.done)
 	}()
+	return exit
+}
 
-	kill := func() {
-		hangupProc(pid, false)
-		select {
-		case <-waited:
-			return
-		case <-time.After(time.Second):
-		}
-		killProc(pid)
-		<-waited
+// stopRun hangs up the process group and kills it if it outlives the grace
+// period, then waits for the process to be reaped.
+func stopRun(pid int, waited <-chan struct{}) {
+	hangupProc(pid, false)
+	select {
+	case <-waited:
+		return
+	case <-time.After(runKillGrace):
 	}
-
-	in := st.Input()
-	exited := waited
-	var drain <-chan time.Time // set once the process ended: output still buffered gets a moment
-	for {
-		select {
-		case <-ctx.Done():
-			kill()
-			return nil
-		case b, ok := <-out:
-			if !ok {
-				<-waited
-				return st.Send(map[string]any{"type": "exit", "code": code})
-			}
-			if err := st.SendBytes(b); err != nil {
-				kill()
-				return nil
-			}
-		case <-exited:
-			// A child that keeps the pty open must not hold the stream.
-			exited = nil
-			drain = time.After(500 * time.Millisecond)
-		case <-drain:
-			hangupProc(pid, false)
-			return st.Send(map[string]any{"type": "exit", "code": code})
-		case raw, ok := <-in:
-			if !ok {
-				kill()
-				return nil
-			}
-			var f inputFrame
-			if json.Unmarshal(raw, &f) != nil {
-				continue
-			}
-			switch f.Type {
-			case "input":
-				data, err := base64.StdEncoding.DecodeString(f.Data)
-				if err != nil || len(data) == 0 {
-					continue
-				}
-				_, _ = ptmx.Write(data)
-			case "resize":
-				if cols, rows, err := checkSize(f.Cols, f.Rows); err == nil {
-					_ = resizePTY(ptmx, cols, rows)
-				}
-			}
-		}
-	}
+	killProc(pid)
+	<-waited
 }

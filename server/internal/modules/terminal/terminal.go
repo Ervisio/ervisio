@@ -136,6 +136,14 @@ func handleAttach(ctx context.Context, c *rpc.Call, st rpc.Stream) error {
 			return nil
 		}
 	}
+	return relaySession(ctx, s, sub, st)
+}
+
+// relaySession streams live output of s to st and applies st's input frames
+// until either side ends.
+func relaySession(ctx context.Context, s *Session, sub *subscriber, st rpc.Stream) error {
+	write := func(data []byte) { _ = s.Write(data) }
+	resize := func(cols, rows uint16) { _ = s.Resize(cols, rows) }
 	in := st.Input()
 	for {
 		select {
@@ -148,37 +156,50 @@ func handleAttach(ctx context.Context, c *rpc.Call, st rpc.Stream) error {
 		case <-sub.dropped:
 			return rpc.Errorf(rpc.Unavailable, "The browser fell behind the terminal output. Reconnecting.")
 		case <-s.Done():
-			for {
-				select {
-				case b := <-sub.ch:
-					if err := st.SendBytes(b); err != nil {
-						return nil
-					}
-				default:
-					_ = st.Send(map[string]any{"type": "exit", "code": s.ExitCode()})
-					return nil
-				}
-			}
+			sendTailAndExit(s, sub, st)
+			return nil
 		case raw, ok := <-in:
 			if !ok {
 				return nil
 			}
-			var f inputFrame
-			if json.Unmarshal(raw, &f) != nil {
-				continue
+			applyInputFrame(raw, write, resize)
+		}
+	}
+}
+
+// sendTailAndExit flushes the output still queued for sub, then sends the
+// exit event.
+func sendTailAndExit(s *Session, sub *subscriber, st rpc.Stream) {
+	for {
+		select {
+		case b := <-sub.ch:
+			if err := st.SendBytes(b); err != nil {
+				return
 			}
-			switch f.Type {
-			case "input":
-				data, err := base64.StdEncoding.DecodeString(f.Data)
-				if err != nil || len(data) == 0 {
-					continue
-				}
-				_ = s.Write(data)
-			case "resize":
-				if cols, rows, err := checkSize(f.Cols, f.Rows); err == nil {
-					_ = s.Resize(cols, rows)
-				}
-			}
+		default:
+			_ = st.Send(map[string]any{"type": "exit", "code": s.ExitCode()})
+			return
+		}
+	}
+}
+
+// applyInputFrame decodes one input frame of an attached stream and hands it
+// to write or resize. Malformed frames are ignored.
+func applyInputFrame(raw json.RawMessage, write func([]byte), resize func(cols, rows uint16)) {
+	var f inputFrame
+	if json.Unmarshal(raw, &f) != nil {
+		return
+	}
+	switch f.Type {
+	case "input":
+		data, err := base64.StdEncoding.DecodeString(f.Data)
+		if err != nil || len(data) == 0 {
+			return
+		}
+		write(data)
+	case "resize":
+		if cols, rows, err := checkSize(f.Cols, f.Rows); err == nil {
+			resize(cols, rows)
 		}
 	}
 }
