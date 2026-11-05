@@ -15,6 +15,7 @@ import (
 	"sync"
 
 	"github.com/ervisio/ervisio/server/internal/brand"
+	cfg "github.com/ervisio/ervisio/server/internal/config"
 	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
@@ -147,31 +148,8 @@ func (s *store) cipher() (cipher.AEAD, error) {
 		return nil, err
 	}
 	p := filepath.Join(dir, "remotes.key")
-	key, err := os.ReadFile(p)
-	if errors.Is(err, fs.ErrNotExist) {
-		key = make([]byte, 32)
-		if _, err := rand.Read(key); err != nil {
-			return nil, err
-		}
-		f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-		if errors.Is(err, fs.ErrExist) {
-			// Another session made it first.
-			if key, err = os.ReadFile(p); err != nil {
-				return nil, err
-			}
-		} else if err != nil {
-			return nil, err
-		} else {
-			_, werr := f.Write(key)
-			if cerr := f.Close(); werr == nil {
-				werr = cerr
-			}
-			if werr != nil {
-				_ = os.Remove(p)
-				return nil, werr
-			}
-		}
-	} else if err != nil {
+	key, err := loadOrCreateKey(p)
+	if err != nil {
 		return nil, err
 	}
 	if len(key) != 32 {
@@ -187,6 +165,40 @@ func (s *store) cipher() (cipher.AEAD, error) {
 	}
 	s.gcm = g
 	return g, nil
+}
+
+// loadOrCreateKey reads the key file at p, creating it with a random key
+// when it does not exist yet.
+func loadOrCreateKey(p string) ([]byte, error) {
+	key, err := os.ReadFile(p)
+	if errors.Is(err, fs.ErrNotExist) {
+		return createKey(p)
+	}
+	return key, err
+}
+
+func createKey(p string) ([]byte, error) {
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		return nil, err
+	}
+	f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if errors.Is(err, fs.ErrExist) {
+		// Another session made it first.
+		return os.ReadFile(p)
+	}
+	if err != nil {
+		return nil, err
+	}
+	_, werr := f.Write(key)
+	if cerr := f.Close(); werr == nil {
+		werr = cerr
+	}
+	if werr != nil {
+		_ = os.Remove(p)
+		return nil, werr
+	}
+	return key, nil
 }
 
 func (s *store) seal(g cipher.AEAD, plain string) string {
@@ -277,27 +289,7 @@ func (s *store) save(list []*Conn) error {
 	if err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, ".remotes-*.tmp")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-	if err := tmp.Chmod(0o600); err != nil {
-		tmp.Close()
-		return err
-	}
-	if _, err := tmp.Write(append(b, '\n')); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), filepath.Join(dir, "remotes.json"))
+	return cfg.WriteAtomic(filepath.Join(dir, "remotes.json"), append(b, '\n'), 0o600)
 }
 
 func (s *store) list() ([]*Conn, error) {

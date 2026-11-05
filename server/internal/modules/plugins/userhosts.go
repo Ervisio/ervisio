@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ervisio/ervisio/server/internal/brand"
+	cfg "github.com/ervisio/ervisio/server/internal/config"
 	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
@@ -60,27 +61,11 @@ func writeHosts(f hostsFile) error {
 	if err := os.MkdirAll(filepath.Dir(HostsPath), 0o755); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(HostsPath), ".hosts-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
 	// World-readable on purpose: every user's bridge reads the approvals
 	// (plugins.network.request/list, plugins.access for the frame's
 	// policy). The file holds plugin ids, host names and the approver's
 	// user name, nothing secret; only root writes it (state dir 0755).
-	if err := tmp.Chmod(0o644); err != nil {
-		tmp.Close()
-		return err
-	}
-	if _, err := tmp.Write(b); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), HostsPath)
+	return cfg.WriteAtomic(HostsPath, b, 0o644)
 }
 
 // approvedFor lists the approvals of one plugin.
@@ -102,22 +87,32 @@ func NormaliseHost(raw, scheme string) (string, error) {
 	if h == "" || strings.ContainsAny(h, "*/@?# \t") || strings.Contains(h, "://") {
 		return "", fmt.Errorf("Give a host name with an optional port, like registry.example.org or registry.example.org:5000.")
 	}
-	port := "443"
-	if scheme == "http" {
-		port = "80"
-	}
-	host := h
-	if i := strings.LastIndex(h, ":"); i >= 0 {
-		host, port = h[:i], h[i+1:]
-		if n, err := strconv.Atoi(port); err != nil || n < 1 || n > 65535 {
-			return "", fmt.Errorf("The port must be a number from 1 to 65535.")
-		}
+	host, port, err := splitHostPort(h, scheme)
+	if err != nil {
+		return "", err
 	}
 	full := host + ":" + port
 	if len(full) > 253 || !NetworkHostRe.MatchString(full) {
 		return "", fmt.Errorf("%q is not a valid host name.", raw)
 	}
 	return full, nil
+}
+
+// splitHostPort splits "host" or "host:port"; the port defaults to 80 for
+// http and 443 otherwise.
+func splitHostPort(h, scheme string) (host, port string, err error) {
+	port = "443"
+	if scheme == "http" {
+		port = "80"
+	}
+	host = h
+	if i := strings.LastIndex(h, ":"); i >= 0 {
+		host, port = h[:i], h[i+1:]
+		if n, err := strconv.Atoi(port); err != nil || n < 1 || n > 65535 {
+			return "", "", fmt.Errorf("The port must be a number from 1 to 65535.")
+		}
+	}
+	return host, port, nil
 }
 
 // declaredHost reports whether the manifest's own list covers host:port.
@@ -172,6 +167,20 @@ func registerEnvs(r *rpc.Registry) {
 	r.Handle("plugins.network.revoke", rpc.Admin, netRevoke)
 }
 
+// hostAndScheme validates the scheme of p and returns its normalised
+// host:port with that scheme.
+func hostAndScheme(p netParams) (hp, sch string, err error) {
+	sch, err = p.scheme()
+	if err != nil {
+		return "", "", err
+	}
+	hp, nerr := NormaliseHost(p.Host, sch)
+	if nerr != nil {
+		return "", "", rpc.Errorf(rpc.Invalid, "%v", nerr)
+	}
+	return hp, sch, nil
+}
+
 func netRequest(_ context.Context, c *rpc.Call) (any, error) {
 	var p netParams
 	if err := c.Bind(&p); err != nil {
@@ -184,13 +193,9 @@ func netRequest(_ context.Context, c *rpc.Call) (any, error) {
 	if !f.M.Capabilities.UserHosts {
 		return nil, rpc.Errorf(rpc.Forbidden, `%s does not declare capabilities.network.userHosts, so it may not ask for more hosts.`, f.M.Name)
 	}
-	sch, err := p.scheme()
+	hp, sch, err := hostAndScheme(p)
 	if err != nil {
 		return nil, err
-	}
-	hp, nerr := NormaliseHost(p.Host, sch)
-	if nerr != nil {
-		return nil, rpc.Errorf(rpc.Invalid, "%v", nerr)
 	}
 	if declaredHost(f.M, hp) {
 		return NetworkRequest{Status: "approved", Host: hp, Scheme: "https"}, nil
@@ -221,28 +226,14 @@ func netApprove(_ context.Context, c *rpc.Call) (any, error) {
 	if !f.M.Capabilities.UserHosts {
 		return nil, rpc.Errorf(rpc.Forbidden, "%s does not declare capabilities.network.userHosts.", f.M.Name)
 	}
-	sch, err := p.scheme()
+	hp, sch, err := hostAndScheme(p)
 	if err != nil {
 		return nil, err
-	}
-	hp, nerr := NormaliseHost(p.Host, sch)
-	if nerr != nil {
-		return nil, rpc.Errorf(rpc.Invalid, "%v", nerr)
 	}
 	hostsMu.Lock()
 	defer hostsMu.Unlock()
 	file := readHosts()
-	by := os.Getenv("SUDO_USER")
-	if by == "" {
-		by = "root"
-	}
-	kept := file.Approved[:0]
-	for _, a := range file.Approved {
-		if !(a.Plugin == p.Plugin && a.Host == hp) {
-			kept = append(kept, a)
-		}
-	}
-	file.Approved = append(kept, ApprovedHost{Plugin: p.Plugin, Host: hp, Scheme: sch, By: by, At: time.Now().UTC().Truncate(time.Second)})
+	file.Approved = withApproval(file.Approved, ApprovedHost{Plugin: p.Plugin, Host: hp, Scheme: sch, By: approver(), At: time.Now().UTC().Truncate(time.Second)})
 	if len(file.Approved) > 512 {
 		return nil, rpc.Errorf(rpc.Invalid, "Too many approved hosts. Revoke some first.")
 	}
@@ -250,6 +241,25 @@ func netApprove(_ context.Context, c *rpc.Call) (any, error) {
 		return nil, rpc.Errorf(rpc.Internal, "Could not save the approval: %v", cleanErr(err))
 	}
 	return NetworkRequest{Status: "approved", Host: hp, Scheme: sch}, nil
+}
+
+// approver is the user who ran the approval: root, or the sudo caller.
+func approver() string {
+	if by := os.Getenv("SUDO_USER"); by != "" {
+		return by
+	}
+	return "root"
+}
+
+// withApproval replaces any approval of the same plugin and host by a.
+func withApproval(list []ApprovedHost, a ApprovedHost) []ApprovedHost {
+	kept := list[:0]
+	for _, x := range list {
+		if !(x.Plugin == a.Plugin && x.Host == a.Host) {
+			kept = append(kept, x)
+		}
+	}
+	return append(kept, a)
 }
 
 func netList(_ context.Context, c *rpc.Call) (any, error) {

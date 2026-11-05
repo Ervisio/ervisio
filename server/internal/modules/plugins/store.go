@@ -85,46 +85,58 @@ func devDirs(p policy) []string {
 // the configuration, or a daemon in --dev.
 func devEnabled(p policy) bool { return p.Dev || DevDirs != nil || DaemonDev }
 
-// scan lists every plugin folder, first location wins on duplicate ids.
-func scan(p policy) []*Found {
-	type root struct {
-		dir, loc string
-		single   bool // dir is itself a plugin folder (registered with loadDev)
-	}
-	var roots []root
+type scanRoot struct {
+	dir, loc string
+	single   bool // dir is itself a plugin folder (registered with loadDev)
+}
+
+func scanRoots(p policy) []scanRoot {
+	var roots []scanRoot
 	for _, d := range devDirs(p) {
-		roots = append(roots, root{dir: d, loc: LocDev})
+		roots = append(roots, scanRoot{dir: d, loc: LocDev})
 	}
 	if devEnabled(p) {
 		for _, d := range registeredDev() {
-			roots = append(roots, root{dir: d, loc: LocDev, single: true})
+			roots = append(roots, scanRoot{dir: d, loc: LocDev, single: true})
 		}
 	}
-	roots = append(roots, root{dir: SystemDir, loc: LocSystem}, root{dir: InstalledDir, loc: LocInstalled})
+	return append(roots, scanRoot{dir: SystemDir, loc: LocSystem}, scanRoot{dir: InstalledDir, loc: LocInstalled})
+}
 
+// foundAt reads the plugin folder dir; nil when it is not one.
+func foundAt(dir, loc string) *Found {
+	name := filepath.Base(dir)
+	fi, err := os.Stat(dir) // follows symlinks: dev folders may be symlinked
+	if err != nil || !fi.IsDir() {
+		return nil
+	}
+	if _, err := os.Stat(filepath.Join(dir, "manifest.json")); err != nil {
+		return nil
+	}
+	f := &Found{Dir: dir, Location: loc, Name: name}
+	m, err := LoadManifest(dir)
+	switch {
+	case err != nil:
+		f.Err = err.Error()
+	case m.ID != name && loc != LocDev:
+		f.Err = fmt.Sprintf("the folder is named %q but the manifest id is %q", name, m.ID)
+	default:
+		f.M = m
+		f.Sig = CheckSignature(dir, Keys())
+	}
+	return f
+}
+
+// scan lists every plugin folder, first location wins on duplicate ids.
+func scan(p policy) []*Found {
 	var out []*Found
 	seen := map[string]bool{}
 	add := func(dir, loc string) {
-		name := filepath.Base(dir)
-		fi, err := os.Stat(dir) // follows symlinks: dev folders may be symlinked
-		if err != nil || !fi.IsDir() {
+		f := foundAt(dir, loc)
+		if f == nil {
 			return
 		}
-		if _, err := os.Stat(filepath.Join(dir, "manifest.json")); err != nil {
-			return
-		}
-		f := &Found{Dir: dir, Location: loc, Name: name}
-		m, err := LoadManifest(dir)
-		switch {
-		case err != nil:
-			f.Err = err.Error()
-		case m.ID != name && loc != LocDev:
-			f.Err = fmt.Sprintf("the folder is named %q but the manifest id is %q", name, m.ID)
-		default:
-			f.M = m
-			f.Sig = CheckSignature(dir, Keys())
-		}
-		key := name
+		key := f.Name
 		if f.M != nil {
 			key = f.M.ID
 		}
@@ -134,7 +146,7 @@ func scan(p policy) []*Found {
 		seen[key] = true
 		out = append(out, f)
 	}
-	for _, r := range roots {
+	for _, r := range scanRoots(p) {
 		if r.single {
 			add(r.dir, r.loc)
 			continue
@@ -201,23 +213,7 @@ func writeState(s state) error {
 }
 
 func writeFileAtomic(p string, data []byte, mode os.FileMode) error {
-	tmp, err := os.CreateTemp(filepath.Dir(p), ".tmp-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(mode); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), p)
+	return cfg.WriteAtomic(p, data, mode)
 }
 
 // ---- who is calling ----
@@ -311,45 +307,56 @@ func list(adminBridge bool) []Info {
 	for _, f := range scan(p) {
 		if f.M == nil {
 			if who.Admin {
-				out = append(out, Info{ID: f.Name, Name: f.Name, Location: f.Location, Dir: f.Dir, Error: f.Err, Capabilities: emptyCaps(), Contributes: emptyContrib(), VisibleTo: VisibleTo{Groups: []string{}}, Platforms: []string{}})
+				out = append(out, brokenInfo(f))
 			}
 			continue
 		}
-		m := f.M
-		if !who.canSee(m) {
+		if !who.canSee(f.M) {
 			continue
 		}
-		in := Info{
-			ID: m.ID, Name: m.Name, Version: m.Version, Author: m.Author, Description: m.Description,
-			Icon: m.Icon, Logo: findLogo(f.Dir, m), Color: m.Color, Entry: m.Entry,
-			Enabled: st.isEnabled(m.ID), Signed: f.Sig.Signed, Verified: f.Sig.Verified, SignatureError: f.Sig.Err,
-			Capabilities: m.Capabilities, Contributes: m.Contributes, VisibleTo: m.VisibleTo,
-			Location: f.Location, Removable: f.Location == LocInstalled, Dir: f.Dir, Unloadable: f.Location == LocDev && isLoadedDev(f.Dir),
-			Platforms: effectivePlatforms(m.Platforms),
-		}
-		if in.Icon == "" {
-			in.Icon = "plugins"
-		}
-		if in.Color == "" {
-			in.Color = "plg"
-		}
-		switch trust(p, f) {
-		case trustBlocked:
-			in.Blocked = true
-			in.Enabled = false
-		case trustDevUnsigned:
-			in.DevUnsigned = true
-		}
-		if msg := m.CoreProblem(); msg != "" {
-			in.Incompatible = msg
-			in.Enabled = false
-		}
-		if e := cat.find(m.ID); e != nil && compareSemver(e.Version, m.Version) > 0 && f.Location != LocDev {
-			in.UpdateAvailable = &UpdateInfo{Version: e.Version, Notes: e.Notes, NewPermissions: !sameJSON(e.Capabilities, m.declared), Source: e.Source, SHA256: e.SHA256}
-		}
-		out = append(out, in)
+		out = append(out, pluginInfo(p, st, cat, f))
 	}
 	return out
+}
+
+// brokenInfo describes a plugin folder that could not be loaded.
+func brokenInfo(f *Found) Info {
+	return Info{ID: f.Name, Name: f.Name, Location: f.Location, Dir: f.Dir, Error: f.Err, Capabilities: emptyCaps(), Contributes: emptyContrib(), VisibleTo: VisibleTo{Groups: []string{}}, Platforms: []string{}}
+}
+
+// pluginInfo describes a loaded plugin: its manifest, trust, compatibility
+// and a catalog update when there is one.
+func pluginInfo(p policy, st state, cat *Catalog, f *Found) Info {
+	m := f.M
+	in := Info{
+		ID: m.ID, Name: m.Name, Version: m.Version, Author: m.Author, Description: m.Description,
+		Icon: m.Icon, Logo: findLogo(f.Dir, m), Color: m.Color, Entry: m.Entry,
+		Enabled: st.isEnabled(m.ID), Signed: f.Sig.Signed, Verified: f.Sig.Verified, SignatureError: f.Sig.Err,
+		Capabilities: m.Capabilities, Contributes: m.Contributes, VisibleTo: m.VisibleTo,
+		Location: f.Location, Removable: f.Location == LocInstalled, Dir: f.Dir, Unloadable: f.Location == LocDev && isLoadedDev(f.Dir),
+		Platforms: effectivePlatforms(m.Platforms),
+	}
+	if in.Icon == "" {
+		in.Icon = "plugins"
+	}
+	if in.Color == "" {
+		in.Color = "plg"
+	}
+	switch trust(p, f) {
+	case trustBlocked:
+		in.Blocked = true
+		in.Enabled = false
+	case trustDevUnsigned:
+		in.DevUnsigned = true
+	}
+	if msg := m.CoreProblem(); msg != "" {
+		in.Incompatible = msg
+		in.Enabled = false
+	}
+	if e := cat.find(m.ID); e != nil && compareSemver(e.Version, m.Version) > 0 && f.Location != LocDev {
+		in.UpdateAvailable = &UpdateInfo{Version: e.Version, Notes: e.Notes, NewPermissions: !sameJSON(e.Capabilities, m.declared), Source: e.Source, SHA256: e.SHA256}
+	}
+	return in
 }
 
 // LogoFiles are the names a plugin logo may have, at the root of the plugin

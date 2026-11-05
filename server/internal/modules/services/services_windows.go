@@ -182,7 +182,10 @@ func handleGet(ctx context.Context, c *rpc.Call) (any, error) {
 		return nil, scmError(err, p.Name, "read")
 	}
 	dependents, _ := s.ListDependentServices(svc.AnyActivity)
-	u := unitFrom(p.Name, cfg, st)
+	return serviceDetails(unitFrom(p.Name, cfg, st), cfg, st, dependents), nil
+}
+
+func serviceDetails(u *Unit, cfg mgr.Config, st svc.Status, dependents []string) map[string]any {
 	deps := map[string][]string{}
 	for _, d := range depKeys {
 		deps[d.key] = []string{}
@@ -213,7 +216,7 @@ func handleGet(ctx context.Context, c *rpc.Call) (any, error) {
 			"DisplayName": cfg.DisplayName, "StartType": startType, "ServiceStartName": cfg.ServiceStartName,
 			"BinaryPathName": cfg.BinaryPathName, "LoadOrderGroup": cfg.LoadOrderGroup,
 		},
-	}, nil
+	}
 }
 
 // waitState polls until the service reaches want or ctx ends.
@@ -270,39 +273,50 @@ func handleAction(ctx context.Context, c *rpc.Call) (any, error) {
 		}
 		return nil, scmError(err, p.Name, p.Action)
 	}
-	switch p.Action {
-	case "start":
-		err = s.Start()
-	case "stop":
-		_, err = s.Control(svc.Stop)
-		if err == nil {
-			err = waitState(ctx, s, svc.Stopped)
-		}
-	case "restart":
-		if st, qerr := s.Query(); qerr == nil && st.State != svc.Stopped {
-			if _, err = s.Control(svc.Stop); err == nil {
-				err = waitState(ctx, s, svc.Stopped)
-			}
-		}
-		if err == nil {
-			err = s.Start()
-		}
-	case "pause":
-		_, err = s.Control(svc.Pause)
-	case "continue":
-		_, err = s.Control(svc.Continue)
-	default: // enable, disable, mask, unmask: change the start type
-		var cfg mgr.Config
-		if cfg, err = s.Config(); err == nil {
-			cfg.StartType = startType
-			cfg.DelayedAutoStart = false
-			err = s.UpdateConfig(cfg)
-		}
-	}
+	err = runAction(ctx, s, p.Action, startType)
 	if err != nil {
 		return fail(err)
 	}
 	return map[string]any{"ok": true}, nil
+}
+
+// runAction performs one validated action on s; the config actions set the
+// start type.
+func runAction(ctx context.Context, s *mgr.Service, action string, startType uint32) error {
+	switch action {
+	case "start":
+		return s.Start()
+	case "stop":
+		return stopService(ctx, s)
+	case "restart":
+		if st, qerr := s.Query(); qerr == nil && st.State != svc.Stopped {
+			if err := stopService(ctx, s); err != nil {
+				return err
+			}
+		}
+		return s.Start()
+	case "pause":
+		_, err := s.Control(svc.Pause)
+		return err
+	case "continue":
+		_, err := s.Control(svc.Continue)
+		return err
+	}
+	// enable, disable, mask, unmask: change the start type
+	cfg, err := s.Config()
+	if err != nil {
+		return err
+	}
+	cfg.StartType = startType
+	cfg.DelayedAutoStart = false
+	return s.UpdateConfig(cfg)
+}
+
+func stopService(ctx context.Context, s *mgr.Service) error {
+	if _, err := s.Control(svc.Stop); err != nil {
+		return err
+	}
+	return waitState(ctx, s, svc.Stopped)
 }
 
 func handleUnitFile(ctx context.Context, c *rpc.Call) (any, error) {

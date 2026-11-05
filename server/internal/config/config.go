@@ -288,16 +288,18 @@ func Save(path string, cfg *Config) error {
 		return err
 	}
 	if old, err := os.ReadFile(path); err == nil {
-		if err := writeAtomic(path+".bak", old, 0o600); err != nil {
+		if err := WriteAtomic(path+".bak", old, 0o600); err != nil {
 			return fmt.Errorf("write backup: %w", err)
 		}
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
-	return writeAtomic(path, data, 0o644)
+	return WriteAtomic(path, data, 0o644)
 }
 
-func writeAtomic(path string, data []byte, mode os.FileMode) error {
+// WriteAtomic writes data to path through a temp file in the same
+// directory, so readers never see a partial file.
+func WriteAtomic(path string, data []byte, mode os.FileMode) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp*")
 	if err != nil {
 		return err

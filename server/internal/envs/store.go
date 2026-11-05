@@ -15,6 +15,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	cfg "github.com/ervisio/ervisio/server/internal/config"
 )
 
 // Pairing is the server side (B) of a pairing: another Ervisio server holds
@@ -165,27 +167,7 @@ func (s *store) save() error {
 	if err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(s.dir, ".envs-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-	if err := tmp.Chmod(0o600); err != nil {
-		tmp.Close()
-		return err
-	}
-	if _, err := tmp.Write(b); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), filepath.Join(s.dir, "envs.json"))
+	return cfg.WriteAtomic(filepath.Join(s.dir, "envs.json"), b, 0o600)
 }
 
 func (s *store) list() []*Env {

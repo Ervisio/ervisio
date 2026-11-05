@@ -16,6 +16,7 @@ import (
 	"sync"
 
 	"github.com/ervisio/ervisio/server/internal/brand"
+	cfg "github.com/ervisio/ervisio/server/internal/config"
 	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
@@ -114,16 +115,8 @@ func (s *Store) load() (map[string]json.RawMessage, error) {
 // Update sets the given keys (a JSON null value deletes the key). With
 // replace, keys not in values are removed. It returns the new preferences.
 func (s *Store) Update(values map[string]json.RawMessage, replace bool) (map[string]json.RawMessage, error) {
-	for k, v := range values {
-		if !keyRe.MatchString(k) {
-			return nil, rpc.Errorf(rpc.Invalid, "invalid preference key %q", k)
-		}
-		if len(v) > MaxValueSize {
-			return nil, rpc.Errorf(rpc.Invalid, "value of %s is too large", k)
-		}
-		if len(v) > 0 && !json.Valid(v) {
-			return nil, rpc.Errorf(rpc.Invalid, "value of %s is not valid JSON", k)
-		}
+	if err := checkValues(values); err != nil {
+		return nil, err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -134,13 +127,7 @@ func (s *Store) Update(values map[string]json.RawMessage, replace bool) (map[str
 			return nil, err
 		}
 	}
-	for k, v := range values {
-		if len(v) == 0 || bytes.Equal(bytes.TrimSpace(v), []byte("null")) {
-			delete(m, k)
-		} else {
-			m[k] = v
-		}
-	}
+	mergeValues(m, values)
 	data, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return nil, rpc.Errorf(rpc.Invalid, "encode preferences: %v", err)
@@ -158,30 +145,36 @@ func (s *Store) Update(values map[string]json.RawMessage, replace bool) (map[str
 	return m, nil
 }
 
+func checkValues(values map[string]json.RawMessage) error {
+	for k, v := range values {
+		if !keyRe.MatchString(k) {
+			return rpc.Errorf(rpc.Invalid, "invalid preference key %q", k)
+		}
+		if len(v) > MaxValueSize {
+			return rpc.Errorf(rpc.Invalid, "value of %s is too large", k)
+		}
+		if len(v) > 0 && !json.Valid(v) {
+			return rpc.Errorf(rpc.Invalid, "value of %s is not valid JSON", k)
+		}
+	}
+	return nil
+}
+
+// mergeValues sets the keys of values in m; an empty or null value deletes.
+func mergeValues(m, values map[string]json.RawMessage) {
+	for k, v := range values {
+		if len(v) == 0 || bytes.Equal(bytes.TrimSpace(v), []byte("null")) {
+			delete(m, k)
+		} else {
+			m[k] = v
+		}
+	}
+}
+
 func writeAtomic(path string, data []byte) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, ".prefs-*.tmp")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(0o600); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), path)
+	return cfg.WriteAtomic(path, data, 0o600)
 }

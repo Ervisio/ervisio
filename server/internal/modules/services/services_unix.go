@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	cfg "github.com/ervisio/ervisio/server/internal/config"
 	"github.com/ervisio/ervisio/server/internal/rpc"
 	"github.com/ervisio/ervisio/server/internal/sys"
 )
@@ -169,14 +170,20 @@ func applyShow(u *Unit, p map[string]string) {
 	if u.Enabled == "" {
 		u.Enabled = p["UnitFileState"]
 	}
-	if unitType(u.Name) == "timer" {
+	applyScheduleShow(u, p)
+}
+
+// applyScheduleShow fills the timer and socket specific properties of u.
+func applyScheduleShow(u *Unit, p map[string]string) {
+	t := unitType(u.Name)
+	if t == "timer" {
 		u.Next = parseUSecStamp(p["NextElapseUSecRealtime"])
 		u.Last = parseUSecStamp(p["LastTriggerUSec"])
 	}
-	if t := unitType(u.Name); t == "timer" || t == "socket" {
+	if t == "timer" || t == "socket" {
 		u.Triggers = strings.TrimSpace(p["Triggers"])
 	}
-	if unitType(u.Name) == "socket" {
+	if t == "socket" {
 		for _, l := range strings.Split(p["Listen"], "\n") {
 			if l = strings.TrimSpace(l); l != "" {
 				u.Listen = append(u.Listen, l)
@@ -276,34 +283,47 @@ func handleSummary(ctx context.Context, c *rpc.Call) (any, error) {
 	if s, err := baseUnits(ctx, "socket", false); err == nil {
 		sockets = len(s)
 	}
-	// Timers and sockets can fail too; they count as failed units.
-	for _, typ := range []string{"timer", "socket"} {
-		if l, err := listUnitsRaw(ctx, typ); err == nil {
-			for _, u := range l {
-				if u.Active == "failed" {
-					failedNames = append(failedNames, u.Name)
-					desc[u.Name] = u.Description
-				}
-			}
-		}
-	}
-	failed := []FailedUnit{}
-	if len(failedNames) > 0 {
-		props, _ := showMany(ctx, "Id,Result,ExecMainStatus,StateChangeTimestamp", failedNames)
-		for _, n := range failedNames {
-			pr := props[n]
-			code, _ := strconv.Atoi(pr["ExecMainStatus"])
-			f := FailedUnit{Name: n, Description: desc[n], Since: parseUnixStamp(pr["StateChangeTimestamp"]), Result: pr["Result"], ExitCode: code}
-			if h := hintFor(hintInput{Name: n, Result: f.Result, ExitCode: code, Active: active}); h != nil {
-				f.Hint, f.HintID = h.Text, h.ID
-			}
-			failed = append(failed, f)
-		}
-	}
+	failedNames = appendFailedSchedules(ctx, failedNames, desc)
 	return map[string]any{
 		"total": total, "running": running, "stopped": stopped,
-		"timers": timers, "sockets": sockets, "failed": failed,
+		"timers": timers, "sockets": sockets, "failed": failedUnits(ctx, failedNames, desc, active),
 	}, nil
+}
+
+// appendFailedSchedules adds the failed timers and sockets, which count as
+// failed units too, to names and records their descriptions in desc.
+func appendFailedSchedules(ctx context.Context, names []string, desc map[string]string) []string {
+	for _, typ := range []string{"timer", "socket"} {
+		l, err := listUnitsRaw(ctx, typ)
+		if err != nil {
+			continue
+		}
+		for _, u := range l {
+			if u.Active == "failed" {
+				names = append(names, u.Name)
+				desc[u.Name] = u.Description
+			}
+		}
+	}
+	return names
+}
+
+func failedUnits(ctx context.Context, names []string, desc map[string]string, active map[string]bool) []FailedUnit {
+	failed := []FailedUnit{}
+	if len(names) == 0 {
+		return failed
+	}
+	props, _ := showMany(ctx, "Id,Result,ExecMainStatus,StateChangeTimestamp", names)
+	for _, n := range names {
+		pr := props[n]
+		code, _ := strconv.Atoi(pr["ExecMainStatus"])
+		f := FailedUnit{Name: n, Description: desc[n], Since: parseUnixStamp(pr["StateChangeTimestamp"]), Result: pr["Result"], ExitCode: code}
+		if h := hintFor(hintInput{Name: n, Result: f.Result, ExitCode: code, Active: active}); h != nil {
+			f.Hint, f.HintID = h.Text, h.ID
+		}
+		failed = append(failed, f)
+	}
+	return failed
 }
 
 // ---- services.get ----
@@ -445,27 +465,34 @@ func handleUnitFile(ctx context.Context, c *rpc.Call) (any, error) {
 	if path != "" {
 		res["content"] = readText(path)
 	}
-	ovs := []fileEntry{}
-	hasOv := false
-	for _, d := range fields(props["DropInPaths"]) {
-		ovs = append(ovs, fileEntry{Path: d, Content: readText(d)})
-		if d == overridePath(p.Name) {
-			hasOv = true
-		}
-	}
+	ovs := readDropIns(props["DropInPaths"])
 	res["overrides"] = ovs
 	res["overridePath"] = overridePath(p.Name)
-	res["override"] = ""
-	if hasOv {
-		for _, o := range ovs {
-			if o.Path == overridePath(p.Name) {
-				res["override"] = o.Content
-			}
-		}
-	} else if b, err := os.ReadFile(overridePath(p.Name)); err == nil {
-		res["override"] = string(b)
-	}
+	res["override"] = currentOverride(p.Name, ovs)
 	return res, nil
+}
+
+func readDropIns(paths string) []fileEntry {
+	ovs := []fileEntry{}
+	for _, d := range fields(paths) {
+		ovs = append(ovs, fileEntry{Path: d, Content: readText(d)})
+	}
+	return ovs
+}
+
+// currentOverride returns the content of the unit's own override file: from
+// the loaded drop-ins when systemd knows it, else straight from disk.
+func currentOverride(name string, ovs []fileEntry) string {
+	file := overridePath(name)
+	for _, o := range ovs {
+		if o.Path == file {
+			return o.Content
+		}
+	}
+	if b, err := os.ReadFile(file); err == nil {
+		return string(b)
+	}
+	return ""
 }
 
 func handleSaveOverride(ctx context.Context, c *rpc.Call) (any, error) {
@@ -476,31 +503,12 @@ func handleSaveOverride(ctx context.Context, c *rpc.Call) (any, error) {
 	if err := checkName(p.Name); err != nil {
 		return nil, err
 	}
-	if len(p.Content) > maxOverrideSize {
-		return nil, rpc.Errorf(rpc.Invalid, "The override is too large (limit 256 KiB).")
-	}
-	if strings.ContainsRune(p.Content, 0) {
-		return nil, rpc.Errorf(rpc.Invalid, "The override contains a NUL character. Remove it and try again.")
+	if err := checkOverrideContent(p.Content); err != nil {
+		return nil, err
 	}
 	file := overridePath(p.Name)
-	dir := filepath.Dir(file)
-	if strings.TrimSpace(p.Content) == "" {
-		// An empty override means "remove my changes".
-		if err := os.Remove(file); err != nil && !os.IsNotExist(err) {
-			return nil, err
-		}
-		_ = os.Remove(dir) // only succeeds when empty
-	} else {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return nil, err
-		}
-		content := p.Content
-		if !strings.HasSuffix(content, "\n") {
-			content += "\n"
-		}
-		if err := writeFileAtomic(file, []byte(content), 0o644); err != nil {
-			return nil, err
-		}
+	if err := storeOverride(file, p.Content); err != nil {
+		return nil, err
 	}
 	if _, err := systemctl(ctx, "daemon-reload"); err != nil {
 		return nil, fmt.Errorf("the override was saved, but systemd could not reload its configuration: %w", err)
@@ -508,25 +516,38 @@ func handleSaveOverride(ctx context.Context, c *rpc.Call) (any, error) {
 	return map[string]any{"ok": true, "path": file}, nil
 }
 
+func checkOverrideContent(content string) error {
+	if len(content) > maxOverrideSize {
+		return rpc.Errorf(rpc.Invalid, "The override is too large (limit 256 KiB).")
+	}
+	if strings.ContainsRune(content, 0) {
+		return rpc.Errorf(rpc.Invalid, "The override contains a NUL character. Remove it and try again.")
+	}
+	return nil
+}
+
+// storeOverride writes the override file; empty content removes it.
+func storeOverride(file, content string) error {
+	dir := filepath.Dir(file)
+	if strings.TrimSpace(content) == "" {
+		// An empty override means "remove my changes".
+		if err := os.Remove(file); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		_ = os.Remove(dir) // only succeeds when empty
+		return nil
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	if !strings.HasSuffix(content, "\n") {
+		content += "\n"
+	}
+	return writeFileAtomic(file, []byte(content), 0o644)
+}
+
 func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".override-*")
-	if err != nil {
-		return err
-	}
-	name := tmp.Name()
-	defer os.Remove(name)
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(perm); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(name, path)
+	return cfg.WriteAtomic(path, data, perm)
 }
 
 // ---- services.logs ----
@@ -592,22 +613,7 @@ func handleWatch(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
 		if len(changed) == 0 && len(removed) == 0 {
 			continue
 		}
-		units := make([]*Unit, 0, len(changed))
-		for _, n := range changed {
-			l := cur[n]
-			u := &Unit{Name: n, Description: l.Description, Load: l.Load, Active: l.Active, Sub: l.Sub, Purpose: PurposeOf(n)}
-			u.State = stateOf(u.Active, u.Sub)
-			units = append(units, u)
-		}
-		var names []string
-		for _, u := range units {
-			names = append(names, u.Name)
-		}
-		if props, err := showMany(ctx, showProps, names); err == nil {
-			for _, u := range units {
-				applyShow(u, props[u.Name])
-			}
-		}
+		units := detailedUnits(ctx, changed, cur)
 		if removed == nil {
 			removed = []string{}
 		}
@@ -615,6 +621,28 @@ func handleWatch(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
 			return nil
 		}
 	}
+}
+
+// detailedUnits builds the units named in changed from the snapshot cur and
+// fills in their `systemctl show` details when those can be read.
+func detailedUnits(ctx context.Context, changed []string, cur map[string]listedUnit) []*Unit {
+	units := make([]*Unit, 0, len(changed))
+	for _, n := range changed {
+		l := cur[n]
+		u := &Unit{Name: n, Description: l.Description, Load: l.Load, Active: l.Active, Sub: l.Sub, Purpose: PurposeOf(n)}
+		u.State = stateOf(u.Active, u.Sub)
+		units = append(units, u)
+	}
+	var names []string
+	for _, u := range units {
+		names = append(names, u.Name)
+	}
+	if props, err := showMany(ctx, showProps, names); err == nil {
+		for _, u := range units {
+			applyShow(u, props[u.Name])
+		}
+	}
+	return units
 }
 
 func snapshot(ctx context.Context, typ string) (map[string]listedUnit, error) {
