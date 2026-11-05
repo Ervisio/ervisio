@@ -133,31 +133,45 @@ func (d *dnf) ListUpdates(ctx context.Context) ([]Update, error) {
 		ups[i].From = cur[ups[i].Name]
 	}
 	if len(ups) > 0 {
-		if s, err := run(ctx, 3*time.Minute, nil, "dnf", "-q", "check-update", "--security"); err == nil || exitCode(err) == 100 {
-			sec := map[string]bool{}
-			for _, u := range parseDnfCheckUpdate(s) {
-				sec[u.Name] = true
-			}
-			for i := range ups {
-				if sec[ups[i].Name] {
-					ups[i].Notes = append(ups[i].Notes, "security")
-				}
-			}
-		}
-		if sz, err := run(ctx, 3*time.Minute, nil, "dnf", "-q", "repoquery", "--upgrades", "--qf", `%{name}|%{downloadsize}\n`); err == nil {
-			sizes := map[string]int64{}
-			for _, l := range strings.Split(sz, "\n") {
-				if n, v, ok := strings.Cut(l, "|"); ok {
-					x, _ := strconv.ParseInt(strings.TrimSpace(v), 10, 64)
-					sizes[n] = x
-				}
-			}
-			for i := range ups {
-				ups[i].Size = sizes[ups[i].Name]
-			}
-		}
+		markDnfSecurity(ctx, ups)
+		addDnfSizes(ctx, ups)
 	}
 	return ups, nil
+}
+
+// markDnfSecurity adds the "security" note to the updates dnf flags as such.
+func markDnfSecurity(ctx context.Context, ups []Update) {
+	s, err := run(ctx, 3*time.Minute, nil, "dnf", "-q", "check-update", "--security")
+	if err != nil && exitCode(err) != 100 {
+		return
+	}
+	sec := map[string]bool{}
+	for _, u := range parseDnfCheckUpdate(s) {
+		sec[u.Name] = true
+	}
+	for i := range ups {
+		if sec[ups[i].Name] {
+			ups[i].Notes = append(ups[i].Notes, "security")
+		}
+	}
+}
+
+// addDnfSizes fills in the download size of each update.
+func addDnfSizes(ctx context.Context, ups []Update) {
+	sz, err := run(ctx, 3*time.Minute, nil, "dnf", "-q", "repoquery", "--upgrades", "--qf", `%{name}|%{downloadsize}\n`)
+	if err != nil {
+		return
+	}
+	sizes := map[string]int64{}
+	for _, l := range strings.Split(sz, "\n") {
+		if n, v, ok := strings.Cut(l, "|"); ok {
+			x, _ := strconv.ParseInt(strings.TrimSpace(v), 10, 64)
+			sizes[n] = x
+		}
+	}
+	for i := range ups {
+		ups[i].Size = sizes[ups[i].Name]
+	}
 }
 
 func (d *dnf) Refresh(ctx context.Context) error {

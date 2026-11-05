@@ -64,17 +64,25 @@ func validRemoteID(s string) bool {
 	return true
 }
 
+// validTransferPath reports whether p is an acceptable absolute path, in the
+// flavour of the target: POSIX for a remote server, the local one otherwise.
+func validTransferPath(p string, remote bool) bool {
+	if p == "" || len(p) > 4096 || strings.ContainsRune(p, 0) {
+		return false
+	}
+	if remote {
+		return path.IsAbs(p)
+	}
+	return filepath.IsAbs(p)
+}
+
 func transferParams(r *http.Request) (fileTarget, *rpc.Error) {
 	q := r.URL.Query()
 	t := fileTarget{path: q.Get("path"), remote: q.Get("remote")}
-	if t.remote != "" {
-		if !validRemoteID(t.remote) {
-			return t, rpc.Errorf(rpc.Invalid, "remote must be a connection id")
-		}
-		if t.path == "" || len(t.path) > 4096 || !path.IsAbs(t.path) || strings.ContainsRune(t.path, 0) {
-			return t, rpc.Errorf(rpc.Invalid, "path must be an absolute path")
-		}
-	} else if t.path == "" || len(t.path) > 4096 || !filepath.IsAbs(t.path) || strings.ContainsRune(t.path, 0) {
+	if t.remote != "" && !validRemoteID(t.remote) {
+		return t, rpc.Errorf(rpc.Invalid, "remote must be a connection id")
+	}
+	if !validTransferPath(t.path, t.remote != "") {
 		return t, rpc.Errorf(rpc.Invalid, "path must be an absolute path")
 	}
 	switch q.Get("admin") {
@@ -93,6 +101,72 @@ type fileMeta struct {
 	Name string `json:"name"`
 	Size int64  `json:"size"`
 	Mime string `json:"mime"`
+}
+
+// readDownloadMeta waits for the first event of a read stream and decodes it.
+func readDownloadMeta(st *rpc.ClientStream, method string) (fileMeta, *rpc.Error) {
+	var meta fileMeta
+	ev, ok := <-st.Events()
+	if !ok {
+		if err := st.Err(); err != nil {
+			return meta, rpc.ToError(err, false)
+		}
+		return meta, rpc.Errorf(rpc.Internal, "%s ended without data", method)
+	}
+	if ev.B64 || json.Unmarshal(ev.Data, &meta) != nil {
+		return meta, rpc.Errorf(rpc.Internal, "%s: first event must be metadata", method)
+	}
+	return meta, nil
+}
+
+// inlineHeaders picks the content type and disposition of a download: only
+// the safe types are shown inline, everything else is a plain attachment.
+func inlineHeaders(meta fileMeta, p string, inline bool) (name, ctype, disposition string) {
+	name = meta.Name
+	if name == "" {
+		name = path.Base(p)
+	}
+	ctype = meta.Mime
+	if ctype == "" {
+		ctype = mime.TypeByExtension(filepath.Ext(name))
+	}
+	disposition = "attachment"
+	if inline && safeInline[strings.TrimSpace(strings.Split(ctype, ";")[0])] {
+		disposition = "inline"
+	} else {
+		ctype = "application/octet-stream"
+	}
+	return name, ctype, disposition
+}
+
+// writeDownloadHead sends the status and headers of a file download.
+func writeDownloadHead(w http.ResponseWriter, ctype, disposition string, size int64) {
+	h := w.Header()
+	h.Set("Content-Type", ctype)
+	h.Set("Content-Disposition", disposition)
+	h.Set("Content-Security-Policy", "sandbox; default-src 'none'")
+	h.Set("Cache-Control", "no-store")
+	if size >= 0 {
+		h.Set("Content-Length", strconv.FormatInt(size, 10))
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+// decodeChunk decodes a base64 data event; ok is false when it is malformed.
+func decodeChunk(ev rpc.Event) (chunk []byte, ok bool) {
+	var b64 string
+	if json.Unmarshal(ev.Data, &b64) != nil {
+		return nil, false
+	}
+	chunk, err := base64.StdEncoding.DecodeString(b64)
+	return chunk, err == nil
+}
+
+func isDoneEvent(data json.RawMessage) bool {
+	var ctl struct {
+		Done bool `json:"done"`
+	}
+	return json.Unmarshal(data, &ctl) == nil && ctl.Done
 }
 
 func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request, sess *Session) {
@@ -117,63 +191,23 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request, sess *Se
 	}
 	defer st.Close()
 
-	// First event: metadata.
-	ev, ok := <-st.Events()
-	if !ok {
-		if err := st.Err(); err != nil {
-			writeError(w, rpc.ToError(err, false))
-		} else {
-			writeError(w, rpc.Errorf(rpc.Internal, "%s ended without data", method))
-		}
+	meta, e := readDownloadMeta(st, method)
+	if e != nil {
+		writeError(w, e)
 		return
 	}
-	var meta fileMeta
-	if ev.B64 || json.Unmarshal(ev.Data, &meta) != nil {
-		writeError(w, rpc.Errorf(rpc.Internal, "%s: first event must be metadata", method))
-		return
-	}
-	name := meta.Name
-	if name == "" {
-		name = path.Base(p)
-	}
-	ctype := meta.Mime
-	if ctype == "" {
-		ctype = mime.TypeByExtension(filepath.Ext(name))
-	}
-	disposition := "attachment"
-	if inline && safeInline[strings.TrimSpace(strings.Split(ctype, ";")[0])] {
-		disposition = "inline"
-	} else {
-		ctype = "application/octet-stream"
-	}
-	h := w.Header()
-	h.Set("Content-Type", ctype)
-	h.Set("Content-Disposition", disposition+"; filename*=UTF-8''"+url.PathEscape(name))
-	h.Set("Content-Security-Policy", "sandbox; default-src 'none'")
-	h.Set("Cache-Control", "no-store")
-	if meta.Size >= 0 {
-		h.Set("Content-Length", strconv.FormatInt(meta.Size, 10))
-	}
-	w.WriteHeader(http.StatusOK)
+	name, ctype, disposition := inlineHeaders(meta, p, inline)
+	writeDownloadHead(w, ctype, disposition+"; filename*=UTF-8''"+url.PathEscape(name), meta.Size)
 
 	var written int64
 	done := false
 	for ev := range st.Events() {
 		if !ev.B64 {
-			var ctl struct {
-				Done bool `json:"done"`
-			}
-			if json.Unmarshal(ev.Data, &ctl) == nil && ctl.Done {
-				done = true
-			}
+			done = done || isDoneEvent(ev.Data)
 			continue
 		}
-		var b64 string
-		if json.Unmarshal(ev.Data, &b64) != nil {
-			break
-		}
-		chunk, err := base64.StdEncoding.DecodeString(b64)
-		if err != nil {
+		chunk, ok := decodeChunk(ev)
+		if !ok {
 			break
 		}
 		n, err := w.Write(chunk)
@@ -188,6 +222,22 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request, sess *Se
 		s.log.Printf("download %s for %q aborted after %d bytes: %v", p, sess.Account.Name, written, st.Err())
 		panic(http.ErrAbortHandler)
 	}
+}
+
+// collectLast drains a stream's events in the background and delivers the
+// last non-data one, which carries the service's answer.
+func collectLast(st *rpc.ClientStream) <-chan json.RawMessage {
+	result := make(chan json.RawMessage, 1)
+	go func() {
+		var last json.RawMessage
+		for ev := range st.Events() {
+			if !ev.B64 {
+				last = ev.Data
+			}
+		}
+		result <- last
+	}()
+	return result
 }
 
 func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request, sess *Session) {
@@ -213,17 +263,8 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request, sess *Sess
 	}
 	defer st.Close()
 
-	// Collect events concurrently; the final one is {"done":true,…}.
-	result := make(chan json.RawMessage, 1)
-	go func() {
-		var last json.RawMessage
-		for ev := range st.Events() {
-			if !ev.B64 {
-				last = ev.Data
-			}
-		}
-		result <- last
-	}()
+	// The final event is {"done":true,…}.
+	result := collectLast(st)
 
 	sendErr := s.pumpUpload(r.Context(), st, r.Body, func() {
 		if isAdmin {
@@ -244,10 +285,7 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request, sess *Sess
 		writeError(w, rpc.ToError(err, false))
 		return
 	}
-	var ctl struct {
-		Done bool `json:"done"`
-	}
-	if last == nil || json.Unmarshal(last, &ctl) != nil || !ctl.Done {
+	if last == nil || !isDoneEvent(last) {
 		writeError(w, rpc.Errorf(rpc.Internal, "upload did not complete"))
 		return
 	}
@@ -273,11 +311,8 @@ func (s *Server) pumpUpload(ctx context.Context, st *rpc.ClientStream, body io.R
 		}
 		if n > 0 {
 			msg, _ := json.Marshal(map[string]string{"data": base64.StdEncoding.EncodeToString(buf[:n])})
-			if err := st.Send(ctx, msg); err != nil {
-				if ctx.Err() != nil {
-					return ctx.Err()
-				}
-				return s.streamSendErr(st, err)
+			if err := s.sendOrCtx(ctx, st, msg); err != nil {
+				return err
 			}
 			onChunk()
 		}
@@ -291,13 +326,19 @@ func (s *Server) pumpUpload(ctx context.Context, st *rpc.ClientStream, body io.R
 			return rpc.Errorf(rpc.Invalid, "read upload: %v", rerr)
 		}
 	}
-	if err := st.Send(ctx, json.RawMessage(`{"eof":true}`)); err != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		return s.streamSendErr(st, err)
+	return s.sendOrCtx(ctx, st, json.RawMessage(`{"eof":true}`))
+}
+
+// sendOrCtx sends one input; a failure caused by ctx ending is ctx's error.
+func (s *Server) sendOrCtx(ctx context.Context, st *rpc.ClientStream, msg json.RawMessage) error {
+	err := st.Send(ctx, msg)
+	if err == nil {
+		return nil
 	}
-	return nil
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return s.streamSendErr(st, err)
 }
 
 // streamSendErr distinguishes "the bridge ended the stream" (its error is

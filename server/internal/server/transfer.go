@@ -664,6 +664,29 @@ func (s *Server) handleTransfer(w http.ResponseWriter, r *http.Request, sess *Se
 // maxStatusWait bounds how long GET .../status holds a request open.
 const maxStatusWait = 25 * time.Second
 
+// statusWait reads the ?wait= seconds of a status request, capped.
+func statusWait(r *http.Request) time.Duration {
+	n, err := strconv.Atoi(r.URL.Query().Get("wait"))
+	if err != nil || n <= 0 {
+		return 0
+	}
+	return min(time.Duration(n)*time.Second, maxStatusWait)
+}
+
+// statusOutcome is the answer for a transfer: {"done":false} until it ended.
+func statusOutcome(res *xferResult) map[string]any {
+	select {
+	case <-res.done:
+		out := map[string]any{"done": true, "ok": res.ok, "bytes": res.bytes}
+		if res.err != "" {
+			out["error"] = res.err
+		}
+		return out
+	default:
+		return map[string]any{"done": false}
+	}
+}
+
 // handleTransferStatus is GET /api/plugins/transfer/{token}/status?wait=<seconds>:
 // the outcome of a download, for the session that started it. It waits up to
 // `wait` seconds (at most 25) for the transfer to end and answers
@@ -676,14 +699,7 @@ func (s *Server) handleTransferStatus(w http.ResponseWriter, r *http.Request, se
 		writeError(w, rpc.Errorf(rpc.NotFound, "There is no such download, or its result is no longer kept."))
 		return
 	}
-	wait := time.Duration(0)
-	if n, err := strconv.Atoi(r.URL.Query().Get("wait")); err == nil && n > 0 {
-		wait = time.Duration(n) * time.Second
-		if wait > maxStatusWait {
-			wait = maxStatusWait
-		}
-	}
-	if wait > 0 {
+	if wait := statusWait(r); wait > 0 {
 		timer := time.NewTimer(wait)
 		defer timer.Stop()
 		select {
@@ -693,42 +709,21 @@ func (s *Server) handleTransferStatus(w http.ResponseWriter, r *http.Request, se
 			return
 		}
 	}
-	out := map[string]any{"done": false}
-	select {
-	case <-res.done:
-		out = map[string]any{"done": true, "ok": res.ok, "bytes": res.bytes}
-		if res.err != "" {
-			out["error"] = res.err
-		}
-	default:
-	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, struct {
 		Result any `json:"result"`
-	}{out})
+	}{statusOutcome(res)})
 }
 
 func (s *Server) serveDownload(w http.ResponseWriter, r *http.Request, t *transfer) {
-	h := w.Header()
-	h.Set("Content-Type", "application/octet-stream")
-	h.Set("Content-Disposition", contentDisposition(t.name))
-	h.Set("Content-Security-Policy", "sandbox; default-src 'none'")
-	h.Set("Cache-Control", "no-store")
-	if t.size >= 0 {
-		h.Set("Content-Length", strconv.FormatInt(t.size, 10))
-	}
-	w.WriteHeader(http.StatusOK)
+	writeDownloadHead(w, "application/octet-stream", contentDisposition(t.name), t.size)
 	var written int64
 	for ev := range t.st.Events() {
 		if !ev.B64 {
 			continue
 		}
-		var b64 string
-		if json.Unmarshal(ev.Data, &b64) != nil {
-			break
-		}
-		chunk, err := base64.StdEncoding.DecodeString(b64)
-		if err != nil {
+		chunk, ok := decodeChunk(ev)
+		if !ok {
 			break
 		}
 		n, err := w.Write(chunk)
@@ -738,13 +733,7 @@ func (s *Server) serveDownload(w http.ResponseWriter, r *http.Request, t *transf
 			return
 		}
 	}
-	err := t.st.Err()
-	if err == nil && t.size >= 0 && written != t.size {
-		err = errors.New("the response ended early")
-	}
-	if err == nil && r.Context().Err() != nil {
-		err = r.Context().Err()
-	}
+	err := downloadEndErr(r, t, written)
 	t.finish(&written, err)
 	if err != nil {
 		// Truncated: abort the connection so the browser does not keep a
@@ -752,6 +741,18 @@ func (s *Server) serveDownload(w http.ResponseWriter, r *http.Request, t *transf
 		s.log.Printf("plugin download of %q for %q aborted after %d bytes: %v", t.name, t.sess.Account.Name, written, err)
 		panic(http.ErrAbortHandler)
 	}
+}
+
+// downloadEndErr is why a download stream ended short, or nil when complete.
+func downloadEndErr(r *http.Request, t *transfer, written int64) error {
+	err := t.st.Err()
+	if err == nil && t.size >= 0 && written != t.size {
+		err = errors.New("the response ended early")
+	}
+	if err == nil && r.Context().Err() != nil {
+		err = r.Context().Err()
+	}
+	return err
 }
 
 // finish writes the audit entry of a download and records its outcome.
@@ -780,23 +781,28 @@ func (t *transfer) finish(bytes *int64, err error) {
 	t.rec.write()
 }
 
+// failUpload records a failed upload in the audit entry and answers the
+// browser, unless it is already gone.
+func failUpload(w http.ResponseWriter, r *http.Request, t *transfer, sent int64, e *rpc.Error) {
+	cancelled := r.Context().Err() != nil
+	if t.rec != nil {
+		t.rec.e.Bytes = &sent
+		if cancelled {
+			// The browser went away or the plugin cancelled it.
+			t.rec.e.Result, t.rec.e.Detail = audit.Failed, "cancelled before the end"
+		} else {
+			t.rec.setErr(e)
+		}
+		t.rec.write()
+	}
+	if !cancelled {
+		writeError(w, e)
+	}
+}
+
 func (s *Server) serveUpload(w http.ResponseWriter, r *http.Request, t *transfer) {
 	var sent int64
-	fail := func(e *rpc.Error) {
-		if t.rec != nil {
-			t.rec.e.Bytes = &sent
-			if r.Context().Err() != nil {
-				// The browser went away or the plugin cancelled it.
-				t.rec.e.Result, t.rec.e.Detail = audit.Failed, "cancelled before the end"
-			} else {
-				t.rec.setErr(e)
-			}
-			t.rec.write()
-		}
-		if r.Context().Err() == nil {
-			writeError(w, e)
-		}
-	}
+	fail := func(e *rpc.Error) { failUpload(w, r, t, sent, e) }
 	if r.ContentLength >= 0 && r.ContentLength != t.size {
 		fail(rpc.Errorf(rpc.Invalid, "The upload is %d bytes but %d were announced.", r.ContentLength, t.size))
 		return
@@ -808,16 +814,7 @@ func (s *Server) serveUpload(w http.ResponseWriter, r *http.Request, t *transfer
 		return
 	}
 	// The bridge sends one last event with the service's answer.
-	result := make(chan json.RawMessage, 1)
-	go func() {
-		var last json.RawMessage
-		for ev := range t.st.Events() {
-			if !ev.B64 {
-				last = ev.Data
-			}
-		}
-		result <- last
-	}()
+	result := collectLast(t.st)
 	sendErr := s.pumpUpload(r.Context(), t.st, cr, func() {
 		if t.isAdmin {
 			t.sess.touchAdmin()
