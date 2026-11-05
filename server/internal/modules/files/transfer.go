@@ -35,33 +35,51 @@ func hReadStream(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
 	if !fi.Mode().IsRegular() {
 		return rpc.Errorf(rpc.Invalid, "Only files can be downloaded. Select a file, not a folder.")
 	}
-	mt := mimeOf(fi.Name())
-	if mt == "" {
-		head := make([]byte, 512)
-		n, _ := f.Read(head)
-		mt = http.DetectContentType(head[:n])
-		if _, err := f.Seek(0, 0); err != nil {
-			return err
-		}
+	mt, err := detectMime(f, fi.Name())
+	if err != nil {
+		return err
 	}
 	size := fi.Size()
 	if err := s.Send(map[string]any{"name": fi.Name(), "size": size, "mime": mt}); err != nil {
 		return err
 	}
+	sent, err := streamFile(ctx, f, s, size)
+	if err != nil {
+		return err
+	}
+	if sent != size {
+		return rpc.Errorf(rpc.Internal, "The file changed while it was being read.")
+	}
+	return s.Send(map[string]bool{"done": true})
+}
+
+// detectMime returns the mime type from the name, sniffing the content when
+// the extension is unknown. The file offset is rewound after sniffing.
+func detectMime(f *os.File, name string) (string, error) {
+	if mt := mimeOf(name); mt != "" {
+		return mt, nil
+	}
+	head := make([]byte, 512)
+	n, _ := f.Read(head)
+	if _, err := f.Seek(0, 0); err != nil {
+		return "", err
+	}
+	return http.DetectContentType(head[:n]), nil
+}
+
+// streamFile sends up to size bytes of r in chunks and returns how many were sent.
+func streamFile(ctx context.Context, r io.Reader, s rpc.Stream, size int64) (int64, error) {
 	buf := make([]byte, 64<<10)
 	var sent int64
 	for sent < size {
 		if err := ctx.Err(); err != nil {
-			return err
+			return sent, err
 		}
-		want := int64(len(buf))
-		if size-sent < want {
-			want = size - sent
-		}
-		n, err := f.Read(buf[:want])
+		want := min(int64(len(buf)), size-sent)
+		n, err := r.Read(buf[:want])
 		if n > 0 {
 			if err := s.SendBytes(buf[:n]); err != nil {
-				return err
+				return sent, err
 			}
 			sent += int64(n)
 		}
@@ -69,13 +87,10 @@ func hReadStream(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
 			break
 		}
 		if err != nil {
-			return err
+			return sent, err
 		}
 	}
-	if sent != size {
-		return rpc.Errorf(rpc.Internal, "The file changed while it was being read.")
-	}
-	return s.Send(map[string]bool{"done": true})
+	return sent, nil
 }
 
 // uploadReq is the files.writeStream parameter set.
