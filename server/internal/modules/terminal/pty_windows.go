@@ -106,21 +106,7 @@ func envBlock(env []string) (*uint16, error) {
 // works and yields the exit code. When the process ends the console is closed
 // so reads return EOF.
 func startPTY(cmd *exec.Cmd, cols, rows uint16) (ptyConn, error) {
-	path := cmd.Path
-	var args []string
-	if len(cmd.Args) > 1 {
-		args = cmd.Args[1:]
-	}
-	if path != "" {
-		if p, err := exec.LookPath(path); err == nil {
-			path = p
-		} else {
-			path = ""
-		}
-	}
-	if path == "" {
-		path, args = defaultShell()
-	}
+	path, args := commandLine(cmd)
 	cmdline, err := windows.UTF16PtrFromString(windows.ComposeCommandLine(append([]string{path}, args...)))
 	if err != nil {
 		return nil, err
@@ -140,16 +126,74 @@ func startPTY(cmd *exec.Cmd, cols, rows uint16) (ptyConn, error) {
 		return nil, err
 	}
 
-	var inRead, inWrite, outRead, outWrite windows.Handle
+	inWrite, outRead, hpc, err := openConsole(cols, rows)
+	if err != nil {
+		return nil, err
+	}
+	pi, err := spawnOnConsole(hpc, appName, cmdline, env, dir)
+	if err != nil {
+		windows.CloseHandle(inWrite)
+		windows.CloseHandle(outRead)
+		windows.ClosePseudoConsole(hpc)
+		return nil, err
+	}
+	// os.FindProcess opens its own handle; pi.Process keeps the pid from being
+	// reused until then.
+	proc, ferr := os.FindProcess(int(pi.ProcessId))
+	if ferr != nil {
+		_ = windows.TerminateProcess(pi.Process, 1)
+		windows.CloseHandle(pi.Process)
+		windows.CloseHandle(inWrite)
+		windows.CloseHandle(outRead)
+		windows.ClosePseudoConsole(hpc)
+		return nil, ferr
+	}
+	cmd.Process = proc
+
+	c := &conPTY{
+		in:  os.NewFile(uintptr(inWrite), "conpty-in"),
+		out: os.NewFile(uintptr(outRead), "conpty-out"),
+		hpc: hpc,
+	}
+	pid := int(pi.ProcessId)
+	conPTYs.Store(pid, c)
+	go closeOnExit(pi.Process, pid, c)
+	return c, nil
+}
+
+// commandLine returns the program and args to run: cmd.Path when it can be
+// found, else the default shell.
+func commandLine(cmd *exec.Cmd) (string, []string) {
+	path := cmd.Path
+	var args []string
+	if len(cmd.Args) > 1 {
+		args = cmd.Args[1:]
+	}
+	if path != "" {
+		if p, err := exec.LookPath(path); err == nil {
+			path = p
+		} else {
+			path = ""
+		}
+	}
+	if path == "" {
+		return defaultShell()
+	}
+	return path, args
+}
+
+// openConsole creates the pipes and the pseudo console. The caller owns the
+// returned input-write and output-read handles and the console.
+func openConsole(cols, rows uint16) (inWrite, outRead, hpc windows.Handle, err error) {
+	var inRead, outWrite windows.Handle
 	if err := windows.CreatePipe(&inRead, &inWrite, nil, 0); err != nil {
-		return nil, fmt.Errorf("create input pipe: %w", err)
+		return 0, 0, 0, fmt.Errorf("create input pipe: %w", err)
 	}
 	if err := windows.CreatePipe(&outRead, &outWrite, nil, 0); err != nil {
 		windows.CloseHandle(inRead)
 		windows.CloseHandle(inWrite)
-		return nil, fmt.Errorf("create output pipe: %w", err)
+		return 0, 0, 0, fmt.Errorf("create output pipe: %w", err)
 	}
-	var hpc windows.Handle
 	err = windows.CreatePseudoConsole(windows.Coord{X: int16(cols), Y: int16(rows)}, inRead, outWrite, 0, &hpc)
 	// The console holds its own references; ours must go so EOF can happen.
 	windows.CloseHandle(inRead)
@@ -157,22 +201,22 @@ func startPTY(cmd *exec.Cmd, cols, rows uint16) (ptyConn, error) {
 	if err != nil {
 		windows.CloseHandle(inWrite)
 		windows.CloseHandle(outRead)
-		return nil, fmt.Errorf("create pseudo console: %w", err)
+		return 0, 0, 0, fmt.Errorf("create pseudo console: %w", err)
 	}
-	fail := func(err error) (ptyConn, error) {
-		windows.CloseHandle(inWrite)
-		windows.CloseHandle(outRead)
-		windows.ClosePseudoConsole(hpc)
-		return nil, err
-	}
+	return inWrite, outRead, hpc, nil
+}
 
+// spawnOnConsole starts the process attached to hpc and closes its thread
+// handle. The caller owns pi.Process.
+func spawnOnConsole(hpc windows.Handle, appName, cmdline *uint16, env, dir *uint16) (windows.ProcessInformation, error) {
+	var pi windows.ProcessInformation
 	al, err := windows.NewProcThreadAttributeList(1)
 	if err != nil {
-		return fail(err)
+		return pi, err
 	}
 	defer al.Delete()
 	if err := al.Update(windows.PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, *(*unsafe.Pointer)(unsafe.Pointer(&hpc)), unsafe.Sizeof(hpc)); err != nil {
-		return fail(err)
+		return pi, err
 	}
 	var si windows.StartupInfoEx
 	si.Cb = uint32(unsafe.Sizeof(si))
@@ -185,45 +229,29 @@ func startPTY(cmd *exec.Cmd, cols, rows uint16) (ptyConn, error) {
 	si.Flags |= windows.STARTF_USESTDHANDLES
 	si.StdInput, si.StdOutput, si.StdErr = windows.InvalidHandle, windows.InvalidHandle, windows.InvalidHandle
 
-	var pi windows.ProcessInformation
 	err = windows.CreateProcess(appName, cmdline, nil, nil, false,
 		windows.EXTENDED_STARTUPINFO_PRESENT|windows.CREATE_UNICODE_ENVIRONMENT,
 		env, dir, &si.StartupInfo, &pi)
 	if err != nil {
-		return fail(fmt.Errorf("start process: %w", err))
+		return pi, fmt.Errorf("start process: %w", err)
 	}
 	windows.CloseHandle(pi.Thread)
-	// os.FindProcess opens its own handle; pi.Process keeps the pid from being
-	// reused until then.
-	proc, ferr := os.FindProcess(int(pi.ProcessId))
-	if ferr != nil {
-		_ = windows.TerminateProcess(pi.Process, 1)
-		windows.CloseHandle(pi.Process)
-		return fail(ferr)
-	}
-	cmd.Process = proc
+	return pi, nil
+}
 
-	c := &conPTY{
-		in:  os.NewFile(uintptr(inWrite), "conpty-in"),
-		out: os.NewFile(uintptr(outRead), "conpty-out"),
-		hpc: hpc,
-	}
-	pid := int(pi.ProcessId)
-	conPTYs.Store(pid, c)
-	// When the process ends, close the console so the reader sees EOF (a
-	// ConPTY output pipe otherwise stays open), then drop our handle.
-	go func(h windows.Handle) {
-		_, _ = windows.WaitForSingleObject(h, windows.INFINITE)
-		windows.CloseHandle(h)
-		conPTYs.Delete(pid)
-		c.hangup()
-		// The console host can keep the output pipe open for a while after
-		// the process is gone; give the reader a moment to drain what is
-		// left, then close our end so the session sees the end.
-		time.Sleep(500 * time.Millisecond)
-		_ = c.out.Close()
-	}(pi.Process)
-	return c, nil
+// closeOnExit waits for the process to end, then closes the console so the
+// reader sees EOF (a ConPTY output pipe otherwise stays open), and drops our
+// process handle.
+func closeOnExit(h windows.Handle, pid int, c *conPTY) {
+	_, _ = windows.WaitForSingleObject(h, windows.INFINITE)
+	windows.CloseHandle(h)
+	conPTYs.Delete(pid)
+	c.hangup()
+	// The console host can keep the output pipe open for a while after
+	// the process is gone; give the reader a moment to drain what is
+	// left, then close our end so the session sees the end.
+	time.Sleep(500 * time.Millisecond)
+	_ = c.out.Close()
 }
 
 // resizePTY changes the size of the pty.

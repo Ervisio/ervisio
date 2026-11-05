@@ -341,29 +341,17 @@ func buildEmail(s *Spec, m Message, now time.Time) []byte {
 	return b.Bytes()
 }
 
-func sendEmail(ctx context.Context, s *Spec, m Message) error {
+func dialSMTP(ctx context.Context, s *Spec, host string) (net.Conn, error) {
 	addr := hostPort(s.Host, s.Port)
-	host := strings.Trim(s.Host, "[]")
 	d := net.Dialer{Timeout: sendTimout}
-	var conn net.Conn
-	var err error
 	if s.Security == "tls" {
-		conn, err = (&tls.Dialer{NetDialer: &d, Config: tlsConfig(host)}).DialContext(ctx, "tcp", addr)
-	} else {
-		conn, err = d.DialContext(ctx, "tcp", addr)
+		return (&tls.Dialer{NetDialer: &d, Config: tlsConfig(host)}).DialContext(ctx, "tcp", addr)
 	}
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	if dl, ok := ctx.Deadline(); ok {
-		_ = conn.SetDeadline(dl)
-	}
-	c, err := smtp.NewClient(conn, host)
-	if err != nil {
-		return err
-	}
-	defer c.Close()
+	return d.DialContext(ctx, "tcp", addr)
+}
+
+// secureAndAuth upgrades the connection with STARTTLS when asked, then logs in.
+func secureAndAuth(c *smtp.Client, s *Spec, host string) error {
 	if s.Security == "starttls" {
 		if ok, _ := c.Extension("STARTTLS"); !ok {
 			return errors.New("the server does not offer STARTTLS; choose another security setting")
@@ -375,10 +363,12 @@ func sendEmail(ctx context.Context, s *Spec, m Message) error {
 	if s.Username != "" {
 		// PlainAuth refuses to send the password over an unencrypted
 		// connection (except to localhost).
-		if err := c.Auth(smtp.PlainAuth("", s.Username, s.Password, host)); err != nil {
-			return err
-		}
+		return c.Auth(smtp.PlainAuth("", s.Username, s.Password, host))
 	}
+	return nil
+}
+
+func setEnvelope(c *smtp.Client, s *Spec) error {
 	from, err := bareAddr(s.From)
 	if err != nil {
 		return err
@@ -394,6 +384,30 @@ func sendEmail(ctx context.Context, s *Spec, m Message) error {
 		if err := c.Rcpt(a); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func sendEmail(ctx context.Context, s *Spec, m Message) error {
+	host := strings.Trim(s.Host, "[]")
+	conn, err := dialSMTP(ctx, s, host)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if dl, ok := ctx.Deadline(); ok {
+		_ = conn.SetDeadline(dl)
+	}
+	c, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+	if err := secureAndAuth(c, s, host); err != nil {
+		return err
+	}
+	if err := setEnvelope(c, s); err != nil {
+		return err
 	}
 	w, err := c.Data()
 	if err != nil {

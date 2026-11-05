@@ -312,6 +312,62 @@ func (c *Config) Set(name string, value any) error {
 	return nil
 }
 
+func convertInt(value any) (any, error) {
+	errInt := errors.New("must be an integer")
+	switch n := value.(type) {
+	case float64:
+		if n != math.Trunc(n) || n < math.MinInt32 || n > math.MaxInt32 {
+			return nil, errInt
+		}
+		return int(n), nil
+	case int:
+		return n, nil
+	case interface{ Int64() (int64, error) }:
+		i, err := n.Int64()
+		if err != nil || i < math.MinInt32 || i > math.MaxInt32 {
+			return nil, errInt
+		}
+		return int(i), nil
+	}
+	return nil, errInt
+}
+
+func convertDur(value any) (any, error) {
+	s, ok := value.(string)
+	if !ok {
+		return nil, errors.New(`must be a duration string such as "5m" or "12h"`)
+	}
+	var d Duration
+	if err := d.UnmarshalText([]byte(s)); err != nil {
+		return nil, err
+	}
+	return d, nil
+}
+
+func convertList(value any) (any, error) {
+	errList := errors.New("must be a list of strings")
+	var out []string
+	switch l := value.(type) {
+	case nil:
+	case []string:
+		out = append(out, l...)
+	case []any:
+		for _, e := range l {
+			s, ok := e.(string)
+			if !ok {
+				return nil, errList
+			}
+			out = append(out, s)
+		}
+	default:
+		return nil, errList
+	}
+	for i, s := range out {
+		out[i] = strings.TrimSpace(s)
+	}
+	return out, nil
+}
+
 func (k Key) convert(value any) (any, error) {
 	switch k.Type {
 	case Bool:
@@ -321,53 +377,11 @@ func (k Key) convert(value any) (any, error) {
 		}
 		return b, nil
 	case Int:
-		switch n := value.(type) {
-		case float64:
-			if n != math.Trunc(n) || n < math.MinInt32 || n > math.MaxInt32 {
-				return nil, errors.New("must be an integer")
-			}
-			return int(n), nil
-		case int:
-			return n, nil
-		case interface{ Int64() (int64, error) }:
-			i, err := n.Int64()
-			if err != nil || i < math.MinInt32 || i > math.MaxInt32 {
-				return nil, errors.New("must be an integer")
-			}
-			return int(i), nil
-		}
-		return nil, errors.New("must be an integer")
+		return convertInt(value)
 	case Dur:
-		s, ok := value.(string)
-		if !ok {
-			return nil, errors.New(`must be a duration string such as "5m" or "12h"`)
-		}
-		var d Duration
-		if err := d.UnmarshalText([]byte(s)); err != nil {
-			return nil, err
-		}
-		return d, nil
+		return convertDur(value)
 	case List:
-		var out []string
-		switch l := value.(type) {
-		case nil:
-		case []string:
-			out = append(out, l...)
-		case []any:
-			for _, e := range l {
-				s, ok := e.(string)
-				if !ok {
-					return nil, errors.New("must be a list of strings")
-				}
-				out = append(out, s)
-			}
-		default:
-			return nil, errors.New("must be a list of strings")
-		}
-		for i, s := range out {
-			out[i] = strings.TrimSpace(s)
-		}
-		return out, nil
+		return convertList(value)
 	default: // String, Enum, FilePath
 		s, ok := value.(string)
 		if !ok {
