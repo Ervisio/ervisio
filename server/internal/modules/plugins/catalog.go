@@ -5,7 +5,6 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -95,31 +94,35 @@ func parseCatalog(data []byte) (*Catalog, error) {
 	}
 	seen := map[string]bool{}
 	out := c.Plugins[:0]
-	for i := range c.Plugins {
-		e := c.Plugins[i]
+	for _, e := range c.Plugins {
 		if !idRe.MatchString(e.ID) || !semverRe.MatchString(e.Version) || seen[e.ID] {
 			continue // ignore malformed entries instead of failing the whole catalog
 		}
 		seen[e.ID] = true
-		if !ValidLogoURL(e.Logo) {
-			e.Logo = "" // a bad logo only loses the logo
-		}
-		e.Capabilities = emptyIfNil(e.Capabilities)
-		if e.Contributes.Pages == nil || e.Contributes.Widgets == nil || e.Contributes.Snippets == nil {
-			m := Manifest{Contributes: e.Contributes}
-			m.normalise()
-			e.Contributes = m.Contributes
-		}
-		if e.VisibleTo.Groups == nil {
-			e.VisibleTo.Groups = []string{}
-		}
-		out = append(out, e)
+		out = append(out, normaliseEntry(e))
 	}
 	c.Plugins = out
 	if c.Categories == nil {
 		c.Categories = []CatalogCategory{}
 	}
 	return &c, nil
+}
+
+// normaliseEntry fills the optional parts of a valid catalog entry.
+func normaliseEntry(e CatalogEntry) CatalogEntry {
+	if !ValidLogoURL(e.Logo) {
+		e.Logo = "" // a bad logo only loses the logo
+	}
+	e.Capabilities = emptyIfNil(e.Capabilities)
+	if e.Contributes.Pages == nil || e.Contributes.Widgets == nil || e.Contributes.Snippets == nil {
+		m := Manifest{Contributes: e.Contributes}
+		m.normalise()
+		e.Contributes = m.Contributes
+	}
+	if e.VisibleTo.Groups == nil {
+		e.VisibleTo.Groups = []string{}
+	}
+	return e
 }
 
 // ValidLogoURL reports whether s is "" or a base64 data: URL of an SVG or PNG
@@ -178,11 +181,14 @@ const (
 
 // CatalogMessage is the byte string a catalog signature covers.
 func CatalogMessage(catalog []byte) ([]byte, error) {
-	c, err := Canonical(catalog)
-	if err != nil {
-		return nil, err
-	}
-	return append([]byte(catalogSigPrefix), c...), nil
+	return prefixedCanonical(catalogSigPrefix, catalog)
+}
+
+var catalogSig = signedDoc{
+	message: CatalogMessage,
+	sigFile: "catalog.sig",
+	docFile: "catalog.json",
+	noMatch: "the catalog signature does not match any trusted key",
 }
 
 // SignCatalog returns the catalog.sig content (base64 and a newline).
@@ -196,20 +202,7 @@ func SignCatalog(catalog []byte, priv ed25519.PrivateKey) ([]byte, error) {
 
 // VerifyCatalog checks a catalog.sig against the keys.
 func VerifyCatalog(catalog, sig []byte, keys []ed25519.PublicKey) error {
-	raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(sig)))
-	if err != nil || len(raw) != ed25519.SignatureSize {
-		return errors.New("catalog.sig is not a base64 ed25519 signature")
-	}
-	msg, err := CatalogMessage(catalog)
-	if err != nil {
-		return fmt.Errorf("catalog.json: %v", err)
-	}
-	for _, k := range keys {
-		if ed25519.Verify(k, msg, raw) {
-			return nil
-		}
-	}
-	return errors.New("the catalog signature does not match any trusted key")
+	return catalogSig.verify(catalog, sig, keys)
 }
 
 // catalogSigURL is where the signature of a catalog lives: the same

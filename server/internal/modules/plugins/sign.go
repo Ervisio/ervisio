@@ -3,18 +3,17 @@ package plugins
 import (
 	"bytes"
 	"crypto/ed25519"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/ervisio/ervisio/server/internal/update"
 )
 
 // TeamPublicKey is the ed25519 public key (base64) of the Ervisio team key
@@ -33,13 +32,7 @@ const TeamPublicKey = "reTBt4sr4E7AYindYYzscF4oUSPzf1hSQ7d8f/R2BfU="
 const signaturePrefix = "linuxadmin-plugin-v1\n"
 
 // TrustedKeys are the keys a signature may verify against.
-var TrustedKeys = func() []ed25519.PublicKey {
-	k, err := base64.StdEncoding.DecodeString(TeamPublicKey)
-	if err != nil || len(k) != ed25519.PublicKeySize {
-		panic("plugins: bad TeamPublicKey")
-	}
-	return []ed25519.PublicKey{k}
-}()
+var TrustedKeys = update.MustParseKeys(TeamPublicKey, "plugins: bad TeamPublicKey")
 
 // Signature describes the signature state of a plugin folder.
 type Signature struct {
@@ -69,33 +62,60 @@ func Canonical(manifest []byte) ([]byte, error) {
 	return bytes.TrimRight(buf.Bytes(), "\n"), nil
 }
 
+// prefixedCanonical is the byte string a signature covers: prefix and the
+// canonical form of doc.
+func prefixedCanonical(prefix string, doc []byte) ([]byte, error) {
+	c, err := Canonical(doc)
+	if err != nil {
+		return nil, err
+	}
+	return append([]byte(prefix), c...), nil
+}
+
 // SigningMessage is the exact byte string that is signed: a prefix and the
 // canonical manifest. The manifest's `files` map carries the sha256 of every
 // other file, so the signature covers them too.
 func SigningMessage(manifest []byte) ([]byte, error) {
-	c, err := Canonical(manifest)
-	if err != nil {
-		return nil, err
+	return prefixedCanonical(signaturePrefix, manifest)
+}
+
+// signedDoc names one kind of signed document and the messages its
+// verification reports.
+type signedDoc struct {
+	message func([]byte) ([]byte, error)
+	sigFile string
+	docFile string
+	noMatch string
+}
+
+// verify checks sig (base64) over doc with the given keys.
+func (k signedDoc) verify(doc, sig []byte, keys []ed25519.PublicKey) error {
+	raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(sig)))
+	if err != nil || len(raw) != ed25519.SignatureSize {
+		return errors.New(k.sigFile + " is not a base64 ed25519 signature")
 	}
-	return append([]byte(signaturePrefix), c...), nil
+	msg, err := k.message(doc)
+	if err != nil {
+		return fmt.Errorf("%s: %v", k.docFile, err)
+	}
+	for _, key := range keys {
+		if ed25519.Verify(key, msg, raw) {
+			return nil
+		}
+	}
+	return errors.New(k.noMatch)
+}
+
+var manifestSig = signedDoc{
+	message: SigningMessage,
+	sigFile: "manifest.sig",
+	docFile: "manifest.json",
+	noMatch: "the signature does not match any trusted key",
 }
 
 // VerifySignature checks sig (base64) over the manifest bytes with the given keys.
 func VerifySignature(manifest, sig []byte, keys []ed25519.PublicKey) error {
-	raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(sig)))
-	if err != nil || len(raw) != ed25519.SignatureSize {
-		return errors.New("manifest.sig is not a base64 ed25519 signature")
-	}
-	msg, err := SigningMessage(manifest)
-	if err != nil {
-		return fmt.Errorf("manifest.json: %v", err)
-	}
-	for _, k := range keys {
-		if ed25519.Verify(k, msg, raw) {
-			return nil
-		}
-	}
-	return errors.New("the signature does not match any trusted key")
+	return manifestSig.verify(manifest, sig, keys)
 }
 
 // HashFolder returns sha256 (hex) of every regular file under dir except
@@ -118,7 +138,7 @@ func HashFolder(dir string) (map[string]string, error) {
 		if !d.Type().IsRegular() {
 			return fmt.Errorf("%s is not a regular file", rel)
 		}
-		h, err := hashFile(p)
+		h, err := update.HashFile(p)
 		if err != nil {
 			return err
 		}
@@ -126,19 +146,6 @@ func HashFolder(dir string) (map[string]string, error) {
 		return nil
 	})
 	return out, err
-}
-
-func hashFile(p string) (string, error) {
-	f, err := os.Open(p)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // CheckSignature inspects dir for manifest.sig and verifies it against keys:
@@ -173,30 +180,35 @@ func CheckSignature(dir string, keys []ed25519.PublicKey) Signature {
 		s.Err = err.Error()
 		return s
 	}
-	var names []string
+	if s.Err = fileMismatch(m.Files, actual); s.Err == "" {
+		s.Verified = true
+	}
+	return s
+}
+
+// fileMismatch compares the hashes declared in the manifest with the actual
+// ones and describes the first difference, or returns "" when they agree.
+func fileMismatch(declared, actual map[string]string) string {
+	names := make([]string, 0, len(actual))
 	for p := range actual {
 		names = append(names, p)
 	}
 	sort.Strings(names)
 	for _, p := range names {
-		want, ok := m.Files[p]
+		want, ok := declared[p]
 		if !ok {
-			s.Err = fmt.Sprintf("%s is not listed in the signed manifest", p)
-			return s
+			return fmt.Sprintf("%s is not listed in the signed manifest", p)
 		}
 		if want != actual[p] {
-			s.Err = fmt.Sprintf("%s was changed after signing", p)
-			return s
+			return fmt.Sprintf("%s was changed after signing", p)
 		}
 	}
-	for p := range m.Files {
+	for p := range declared {
 		if _, ok := actual[p]; !ok {
-			s.Err = fmt.Sprintf("%s is listed in the manifest but missing", p)
-			return s
+			return fmt.Sprintf("%s is listed in the manifest but missing", p)
 		}
 	}
-	s.Verified = true
-	return s
+	return ""
 }
 
 // SignFolder fills the manifest's `files` map from the folder, rewrites

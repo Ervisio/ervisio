@@ -40,13 +40,17 @@ const (
 
 // TrustedKeys are the release keys a SHA256SUMS signature may verify
 // against. During a planned rotation the old key is listed here too.
-var TrustedKeys = func() []ed25519.PublicKey {
-	k, err := base64.StdEncoding.DecodeString(ReleasePublicKey)
+var TrustedKeys = MustParseKeys(ReleasePublicKey, "update: bad ReleasePublicKey")
+
+// MustParseKeys decodes one base64 ed25519 public key into a key list and
+// panics with panicMsg when it is malformed (the keys are compile-time constants).
+func MustParseKeys(b64, panicMsg string) []ed25519.PublicKey {
+	k, err := base64.StdEncoding.DecodeString(b64)
 	if err != nil || len(k) != ed25519.PublicKeySize {
-		panic("update: bad ReleasePublicKey")
+		panic(panicMsg)
 	}
 	return []ed25519.PublicKey{k}
-}()
+}
 
 // SignSums returns the signature file content (base64 + newline) for sums.
 func SignSums(sums []byte, priv ed25519.PrivateKey) []byte {
