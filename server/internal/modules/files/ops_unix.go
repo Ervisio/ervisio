@@ -5,6 +5,7 @@ package files
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"syscall"
 
@@ -151,20 +152,31 @@ func copyJobTo(ctx context.Context, move bool, toFd int, j copyJob, r *copyRepor
 	return nil
 }
 
+// openParentStat opens the directory holding path and lstats the entry there.
+// The caller closes the returned directory.
+func openParentStat(path string) (*os.File, string, unix.Stat_t, error) {
+	d, name, err := openParent(path)
+	if err != nil {
+		return nil, "", unix.Stat_t{}, err
+	}
+	st, err := lstatAt(dfd(d), name)
+	if err != nil {
+		d.Close()
+		return nil, "", unix.Stat_t{}, pathErr("lstat", path, err)
+	}
+	return d, name, st, nil
+}
+
 func hChmod(ctx context.Context, c *rpc.Call) (any, error) {
 	path, mode, recursive, err := bindChmod(c)
 	if err != nil {
 		return nil, err
 	}
-	d, name, err := openParent(path)
+	d, name, st, err := openParentStat(path)
 	if err != nil {
 		return nil, err
 	}
 	defer d.Close()
-	st, err := lstatAt(dfd(d), name)
-	if err != nil {
-		return nil, pathErr("lstat", path, err)
-	}
 	if isLink(&st) {
 		return nil, errChmodOnLink()
 	}
@@ -233,15 +245,11 @@ func hChown(ctx context.Context, c *rpc.Call) (any, error) {
 	if uid == -1 && gid == -1 {
 		return nil, rpc.Errorf(rpc.Invalid, "Choose a new owner or group.")
 	}
-	d, name, err := openParent(path)
+	d, name, st, err := openParentStat(path)
 	if err != nil {
 		return nil, err
 	}
 	defer d.Close()
-	st, err := lstatAt(dfd(d), name)
-	if err != nil {
-		return nil, pathErr("lstat", path, err)
-	}
 	if !p.Recursive || !isDir(&st) {
 		if err := unix.Fchownat(dfd(d), name, uid, gid, unix.AT_SYMLINK_NOFOLLOW); err != nil {
 			return nil, pathErr("chown", path, err)

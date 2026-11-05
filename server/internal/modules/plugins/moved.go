@@ -14,26 +14,13 @@ import (
 	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
-// Plugins that used to ship inside Ervisio and now come from the
-// marketplace (the signed catalog of the Ervisio/plugins registry).
+// Plugins that moved from the core to the marketplace.
 //
-// Up to 0.3.0 the Docker plugin was part of every release, in the packaged
-// plugin folder, enabled by default. From 0.4.0 it is not: an update removes
-// that folder. So that a machine that used it keeps it, the daemon (root)
-// installs the marketplace version into InstalledDir once, at start:
-//
-//   - only when the plugin is not present anywhere, was not switched off in
-//     plugins-state.json, and the host has what it is for (a Docker socket);
-//   - only from the signed remote catalog, with the entry's sha256 and
-//     capabilities as consent, and only a package whose signature verifies
-//     against the team key (plugins.install does all of this);
-//   - once: the outcome is kept in MovedStatePath ("installed" or
-//     "skipped"); while it is "pending" (offline, catalog not reachable) the
-//     daemon retries every hour, and Plugins shows a "moved to the
-//     marketplace" card with an Install button in the meantime.
-//
-// The installer (install.sh) records "skipped" with --no-plugins, and runs
-// `ervisiod --install-plugin docker` with --with-docker-plugin.
+// Docker shipped in the packaged plugin folder up to 0.3.0 and not from
+// 0.4.0, so an update removes it. The root daemon installs it once at start,
+// from the signed catalog, when no copy exists, it was not switched off, and
+// a Docker socket is present. The outcome is kept in MovedStatePath; "pending"
+// (offline) is retried hourly. install.sh records "skipped" with --no-plugins.
 
 // MovedPlugin is a plugin that left the core.
 type MovedPlugin struct {
