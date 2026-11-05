@@ -117,12 +117,12 @@ func ShellAllowed(shell string) bool {
 	if err != nil {
 		return shell == "/bin/sh" || shell == "/bin/csh"
 	}
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		if line == shell {
+	return shellListed(string(data), shell)
+}
+
+func shellListed(shells, shell string) bool {
+	for _, line := range strings.Split(shells, "\n") {
+		if strings.TrimSpace(line) == shell {
 			return true
 		}
 	}

@@ -1,5 +1,6 @@
 import { apiUrl, FETCH_CREDENTIALS } from './base';
 import { http } from './http';
+import { fromBase64 } from './stream';
 import { requestUnlock } from './unlock';
 import { ApiError } from './types';
 
@@ -109,33 +110,42 @@ export function sendUpload(
     let startInfo: { status: number; headers: Record<string, string> } | null = null;
     let finished: UploadResult | null = null;
     let streamError: ApiError | null = null;
+    type StreamMsg = {
+      start?: { status: number; headers: Record<string, string> };
+      data?: string;
+      done?: boolean;
+      status?: number;
+      headers?: Record<string, string>;
+      error?: { code?: string; message?: string };
+    };
+    const parseLine = (line: string): StreamMsg | null => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    };
+    const handleMsg = (m: StreamMsg) => {
+      if (m.start) {
+        startInfo = m.start;
+        o.stream?.onStart?.(m.start.status, m.start.headers ?? {});
+      } else if (typeof m.data === 'string') {
+        o.stream?.onData?.(fromBase64(m.data));
+      } else if (m.done) {
+        finished = { status: m.status ?? startInfo?.status ?? 0, headers: m.headers ?? startInfo?.headers ?? {}, body: '' };
+      } else if (m.error) {
+        streamError = new ApiError(m.error.code ?? 'internal', m.error.message ?? 'The upload failed.');
+      }
+    };
     const readLines = (final: boolean) => {
       const text = xhr.responseText;
-      let end = text.lastIndexOf('\n') + 1;
-      if (final) end = text.length;
+      const end = final ? text.length : text.lastIndexOf('\n') + 1;
       const chunk = text.slice(seen, end);
       seen = end;
       for (const line of chunk.split('\n')) {
         if (!line.trim()) continue;
-        let m: { start?: { status: number; headers: Record<string, string> }; data?: string; done?: boolean; status?: number; headers?: Record<string, string>; error?: { code?: string; message?: string } };
-        try {
-          m = JSON.parse(line);
-        } catch {
-          continue;
-        }
-        if (m.start) {
-          startInfo = m.start;
-          o.stream?.onStart?.(m.start.status, m.start.headers ?? {});
-        } else if (typeof m.data === 'string') {
-          const bin = atob(m.data);
-          const bytes = new Uint8Array(bin.length);
-          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-          o.stream?.onData?.(bytes);
-        } else if (m.done) {
-          finished = { status: m.status ?? startInfo?.status ?? 0, headers: m.headers ?? startInfo?.headers ?? {}, body: '' };
-        } else if (m.error) {
-          streamError = new ApiError(m.error.code ?? 'internal', m.error.message ?? 'The upload failed.');
-        }
+        const m = parseLine(line);
+        if (m) handleMsg(m);
       }
     };
     const streaming = () => !!o.stream && (xhr.getResponseHeader('Content-Type') ?? '').startsWith('application/x-ndjson');

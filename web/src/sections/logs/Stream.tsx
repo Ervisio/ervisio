@@ -52,6 +52,22 @@ const Row = memo(function Row({ e, sel, withDate, mobile, lang, levelLabel, onPi
   );
 });
 
+// A new head row arrived: find where the old head moved to and compensate the scroll.
+function keepViewSteady(el: HTMLElement, rows: { key: string }[], oldFirst: string, rowH: number, setUnseen: (v: number | ((u: number) => number)) => void) {
+  let k = -1;
+  const lim = Math.min(rows.length, 5000);
+  for (let i = 0; i < lim; i++) if (rows[i].key === oldFirst) { k = i; break; }
+  if (k > 0) {
+    if (el.scrollTop > rowH) {
+      el.scrollTop += k * rowH;
+      setUnseen((u) => u + k);
+    }
+  } else if (k < 0) {
+    el.scrollTop = 0;
+    setUnseen(0);
+  }
+}
+
 export function Stream({ rows, selectedKey, onSelect, loading, loadingMore, hasMore, onMore, error, onRetry, onClear, withDate, mobile, live }: Props) {
   const t = useT('logs');
   const { lang } = useI18n();
@@ -89,18 +105,7 @@ export function Stream({ rows, selectedKey, onSelect, loading, loadingMore, hasM
     const p = prev.current;
     const first = rows[0]?.key;
     if (el && p.first && first && first !== p.first) {
-      let k = -1;
-      const lim = Math.min(rows.length, 5000);
-      for (let i = 0; i < lim; i++) if (rows[i].key === p.first) { k = i; break; }
-      if (k > 0) {
-        if (el.scrollTop > rowH) {
-          el.scrollTop += k * rowH;
-          setUnseen((u) => u + k);
-        }
-      } else if (k < 0) {
-        el.scrollTop = 0;
-        setUnseen(0);
-      }
+      keepViewSteady(el, rows, p.first, rowH, setUnseen);
     } else if (el && !first) {
       el.scrollTop = 0;
     }
