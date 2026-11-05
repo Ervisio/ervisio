@@ -17,6 +17,8 @@ import { handleReply, openHttpStream, unwatchDownload, watchDownload, type Downl
 import { getLang, setLang, subscribeLang } from './i18n-shim';
 import { jobsApi, notifyApi } from './jobs';
 import * as kit from './kit';
+import { b64encode } from '../../auth/sshkey/bytes.ts';
+import type { AuditEntry, HttpRequestOptions, UploadOptions } from '../types';
 
 type ViewDef<S> = ComponentType<{ sdk: S }> | { render(container: HTMLElement, sdk: S): void | (() => void) };
 
@@ -43,24 +45,8 @@ function envArg(o?: { env?: string }): { env?: string } {
   return o && o.env ? { env: o.env } : {};
 }
 
-function bytesToB64(u: Uint8Array): string {
-  let s = '';
-  for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000));
-  return btoa(s);
-}
-
 /* ---------- HTTP (SDK v3) ---------- */
-interface HttpOptions {
-  method: string;
-  path: string;
-  query?: Record<string, string | string[]> | string;
-  headers?: Record<string, string>;
-  body?: string | Uint8Array | object;
-  /** Id of an environment (sdk.envs.list()). */
-  env?: string;
-}
-
-function httpRequest(name: string, o: HttpOptions): FrameHttpRequest {
+function httpRequest(name: string, o: HttpRequestOptions): FrameHttpRequest {
   if (!o || typeof o !== 'object') throw new PluginError({ code: 'invalid', message: 'Give {method, path}.' });
   let query = '';
   if (typeof o.query === 'string') query = o.query.replace(/^\?/, '');
@@ -80,13 +66,6 @@ function httpRequest(name: string, o: HttpOptions): FrameHttpRequest {
     req.json = true;
   }
   return req;
-}
-
-/** Options of sdk.api.upload. With onResponseData or onResponseStart the response is streamed and the result's body is empty. */
-interface UploadOptions {
-  onProgress?(p: { loaded: number; total: number }): void;
-  onResponseStart?(status: number, headers: Record<string, string>): void;
-  onResponseData?(chunk: Uint8Array): void;
 }
 
 const saveFile = (filename: string, data: string | Uint8Array | Blob, mime?: string) =>
@@ -110,23 +89,6 @@ function httpResponse(r: FrameHttpResult & { truncated?: boolean }) {
     json: () => JSON.parse(body),
     bytes: () => (r.bytes ? r.bytes.slice() : textEncoder.encode(body)),
   };
-}
-
-/** One line of the activity log. */
-interface AuditEntry {
-  time: string;
-  user: string;
-  ip?: string;
-  source: 'plugin' | 'core';
-  plugin?: string;
-  action: string;
-  via?: string;
-  target?: string;
-  result: 'ok' | 'failed' | 'denied' | 'error';
-  code?: number;
-  bytes?: number;
-  admin?: boolean;
-  detail?: string;
 }
 
 /** A download request; with onDone the host also reports how the browser's fetch ended (`did` names it). */
@@ -160,12 +122,12 @@ function makeSdk(plugin: { id: string; name: string; version: string }, view: Fr
       exec: (command: string, args: string[] = [], o?: { env?: string }) =>
         request<{ stdout: string; stderr: string; exitCode: number; truncated?: boolean }>('exec', { command, args, ...(o?.env ? { env: o.env } : {}) }),
       execStream: (command: string, args: string[], h: Parameters<typeof openStream>[2], o?: { env?: string }) => openStream(command, args ?? [], h ?? {}, o?.env),
-      async http(name: string, o: HttpOptions) {
+      async http(name: string, o: HttpRequestOptions) {
         return httpResponse(await request<FrameHttpResult>('http', httpRequest(name, o) as unknown as Record<string, unknown>));
       },
-      httpStream: (name: string, o: HttpOptions, h: HttpStreamCallbacks) => openHttpStream(httpRequest(name, o), h ?? {}),
+      httpStream: (name: string, o: HttpRequestOptions, h: HttpStreamCallbacks) => openHttpStream(httpRequest(name, o), h ?? {}),
       /** SDK 0.2: the browser saves the response of a GET as a file; it streams, there is no size limit. Resolves when the download starts. */
-      async download(name: string, o: HttpOptions, filename?: string, d?: { onDone?: (r: DownloadDone) => void }) {
+      async download(name: string, o: HttpRequestOptions, filename?: string, d?: { onDone?: (r: DownloadDone) => void }) {
         const req = httpRequest(name, { ...o, method: o?.method ?? 'GET' });
         return startDownload({ req, filename: downloadName(filename, req) }, d?.onDone);
       },
@@ -174,7 +136,7 @@ function makeSdk(plugin: { id: string; name: string; version: string }, view: Fr
         return startDownload({ command, args: args ?? [], filename: downloadName(filename, { path: command }), ...(o?.env ? { env: o.env } : {}) }, o?.onDone);
       },
       /** SDK 0.2: sends a File or Blob as the body of a POST or PUT, streamed with progress; cancel() stops it. */
-      upload(name: string, o: HttpOptions, file: Blob, opts?: UploadOptions | ((p: { loaded: number; total: number }) => void)) {
+      upload(name: string, o: HttpRequestOptions, file: Blob, opts?: UploadOptions | ((p: { loaded: number; total: number }) => void)) {
         if (!(file instanceof Blob)) throw new PluginError({ code: 'invalid', message: 'Give a File or Blob.' });
         const req = httpRequest(name, { ...o, method: o?.method ?? 'POST', body: undefined });
         const u: UploadOptions = typeof opts === 'function' ? { onProgress: opts } : opts ?? {};
@@ -215,7 +177,7 @@ function makeSdk(plugin: { id: string; name: string; version: string }, view: Fr
         return r.b64 ? b64ToBytes(r.data) : new TextEncoder().encode(r.data);
       },
       async write(path: string, data: string | Uint8Array, o?: { env?: string }): Promise<void> {
-        await request('writeFile', { ...(typeof data === 'string' ? { path, data } : { path, data: bytesToB64(data), b64: true }), ...envArg(o) });
+        await request('writeFile', { ...(typeof data === 'string' ? { path, data } : { path, data: b64encode(data), b64: true }), ...envArg(o) });
       },
       async list(path: string, o?: { env?: string }) {
         const r = await request<{ entries: { name: string; type: string; size: number; mtime: number }[] }>('listDir', { path, ...envArg(o) });

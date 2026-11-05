@@ -2,26 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, apiUrl, call } from '../../api';
 import { useT } from '../../i18n';
 import { formatBytes, formatDateTime } from '../../lib/format';
+import type { AuditEntry } from '../../plugins/types';
 import { Badge, Button, EmptyState, Input, Select, Table, useIsMobile, type Column, type Tone } from '../../ui';
-
-/** One line of the activity log (server/internal/audit). */
-export interface AuditEntry {
-  time: string;
-  user: string;
-  ip?: string;
-  source: 'plugin' | 'core';
-  plugin?: string;
-  action: string;
-  via?: string;
-  target?: string;
-  result: 'ok' | 'failed' | 'denied' | 'error';
-  code?: number;
-  bytes?: number;
-  admin?: boolean;
-  detail?: string;
-  env?: string;
-  origin?: string;
-}
 
 interface Filters {
   plugin: string;

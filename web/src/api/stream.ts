@@ -1,4 +1,5 @@
 import { ApiError, type StreamHandle, type StreamHandlers } from './types';
+import { b64encode } from '../auth/sshkey/bytes.ts';
 import { wsUrl } from './base';
 import { authEvents, MOCK } from './http';
 import { requestUnlock } from './unlock';
@@ -21,11 +22,7 @@ let reconnectTimer: number | undefined;
 const outbox: string[] = [];
 
 /** Helpers for modules that exchange base64 payloads. */
-export const toBase64 = (u: Uint8Array): string => {
-  let s = '';
-  for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000));
-  return btoa(s);
-};
+export const toBase64 = b64encode;
 export const fromBase64 = (s: string): Uint8Array => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 const fromB64 = fromBase64;
 
@@ -43,77 +40,85 @@ function connect() {
   connecting = true;
   const sock = new WebSocket(wsUrl('/api/ws'));
   ws = sock;
-  sock.onopen = () => {
-    connecting = false;
-    backoff = 500;
-    // channels that survived a reconnect and asked for reopen are re-opened; the rest were failed in onclose
-    for (const c of chans.values()) {
-      if (c.open && !c.h.reopen) continue;
-      sock.send(openFrame(c));
-      c.open = true;
-    }
-    while (outbox.length) sock.send(outbox.shift()!);
-  };
-  sock.onmessage = (ev) => {
-    let f: any;
-    try {
-      f = JSON.parse(ev.data as string);
-    } catch {
-      return;
-    }
-    const c = chans.get(f.ch);
-    if (!c) return;
-    switch (f.op) {
-      case 'data':
-        c.h.onData?.(f.b64 && typeof f.data === 'string' ? fromB64(f.data) : f.data);
-        break;
-      case 'end':
-        chans.delete(c.id);
-        c.h.onEnd?.();
-        break;
-      case 'error': {
-        const e = new ApiError(f.error?.code ?? 'internal', f.error?.message ?? 'Stream error', f.error?.data);
-        if (e.code === 'needs_admin' && !c.retried) {
-          c.retried = true;
-          requestUnlock(c.method).then(
-            () => rawSend(openFrame(c)),
-            () => {
-              chans.delete(c.id);
-              c.h.onError?.(e);
-            },
-          );
-          break;
-        }
+  sock.onopen = () => onSocketOpen(sock);
+  sock.onmessage = (ev) => onSocketMessage(ev.data as string);
+  sock.onclose = (ev) => onSocketClose(ev.code);
+  sock.onerror = () => sock.close();
+}
+
+function onSocketOpen(sock: WebSocket) {
+  connecting = false;
+  backoff = 500;
+  // channels that survived a reconnect and asked for reopen are re-opened; the rest were failed in onclose
+  for (const c of chans.values()) {
+    if (c.open && !c.h.reopen) continue;
+    sock.send(openFrame(c));
+    c.open = true;
+  }
+  while (outbox.length) sock.send(outbox.shift()!);
+}
+
+function onSocketMessage(raw: string) {
+  let f: any;
+  try {
+    f = JSON.parse(raw);
+  } catch {
+    return;
+  }
+  const c = chans.get(f.ch);
+  if (!c) return;
+  switch (f.op) {
+    case 'data':
+      c.h.onData?.(f.b64 && typeof f.data === 'string' ? fromB64(f.data) : f.data);
+      break;
+    case 'end':
+      chans.delete(c.id);
+      c.h.onEnd?.();
+      break;
+    case 'error':
+      onChannelError(c, new ApiError(f.error?.code ?? 'internal', f.error?.message ?? 'Stream error', f.error?.data));
+      break;
+  }
+}
+
+function onChannelError(c: Chan, e: ApiError) {
+  if (e.code === 'needs_admin' && !c.retried) {
+    c.retried = true;
+    requestUnlock(c.method).then(
+      () => rawSend(openFrame(c)),
+      () => {
         chans.delete(c.id);
         c.h.onError?.(e);
-        break;
-      }
+      },
+    );
+    return;
+  }
+  chans.delete(c.id);
+  c.h.onError?.(e);
+}
+
+function onSocketClose(code: number) {
+  connecting = false;
+  ws = null;
+  if (code === 1008) {
+    // the session ended: fail everything and let the session context send the user to /login
+    for (const c of [...chans.values()]) c.h.onError?.(new ApiError('unauthenticated', 'Session ended.'));
+    chans.clear();
+    authEvents.dispatchEvent(new Event('unauthenticated'));
+    return;
+  }
+  for (const c of [...chans.values()]) {
+    if (c.h.reopen) c.open = false;
+    else {
+      chans.delete(c.id);
+      c.h.onError?.(new ApiError('unavailable', 'Connection lost.'));
     }
-  };
-  sock.onclose = (ev) => {
-    connecting = false;
-    ws = null;
-    if (ev.code === 1008) {
-      // the session ended: fail everything and let the session context send the user to /login
-      for (const c of [...chans.values()]) c.h.onError?.(new ApiError('unauthenticated', 'Session ended.'));
-      chans.clear();
-      authEvents.dispatchEvent(new Event('unauthenticated'));
-      return;
-    }
-    for (const c of [...chans.values()]) {
-      if (c.h.reopen) c.open = false;
-      else {
-        chans.delete(c.id);
-        c.h.onError?.(new ApiError('unavailable', 'Connection lost.'));
-      }
-    }
-    if (chans.size > 0) {
-      window.clearTimeout(reconnectTimer);
-      reconnectTimer = window.setTimeout(connect, backoff);
-      backoff = Math.min(backoff * 2, 10_000);
-    }
-  };
-  sock.onerror = () => sock.close();
+  }
+  if (chans.size > 0) {
+    window.clearTimeout(reconnectTimer);
+    reconnectTimer = window.setTimeout(connect, backoff);
+    backoff = Math.min(backoff * 2, 10_000);
+  }
 }
 
 /**
