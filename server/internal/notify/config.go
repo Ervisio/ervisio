@@ -471,8 +471,6 @@ func (s *Spec) validateGotify() error {
 	return nil
 }
 
-// ---- storage ----
-
 type fileFormat struct {
 	Version  int    `json:"version"`
 	Channels []Spec `json:"channels"`

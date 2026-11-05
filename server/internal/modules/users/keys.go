@@ -149,8 +149,6 @@ func appendKey(data, line string) string {
 	return data + line + "\n"
 }
 
-// ---- file access, as the owner ----
-
 func readKeyFile(path string) (string, error) {
 	f, err := os.OpenFile(path, os.O_RDONLY|openNoFollow, 0)
 	if err != nil {
