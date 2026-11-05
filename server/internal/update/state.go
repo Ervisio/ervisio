@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ervisio/ervisio/server/internal/brand"
+	"github.com/ervisio/ervisio/server/internal/config"
 )
 
 // Result is the outcome of the last update or rollback, kept in
@@ -93,19 +94,7 @@ func (s *State) WriteLast(r Result) error {
 	if err != nil {
 		return err
 	}
-	tmp := s.lastPath() + ".tmp-" + randHex(4)
-	if err := os.WriteFile(tmp, append(b, '\n'), 0o644); err != nil {
-		return err
-	}
-	if err := os.Chmod(tmp, 0o644); err != nil {
-		os.Remove(tmp)
-		return err
-	}
-	if err := os.Rename(tmp, s.lastPath()); err != nil {
-		os.Remove(tmp)
-		return err
-	}
-	return nil
+	return config.WriteAtomic(s.lastPath(), append(b, '\n'), 0o644)
 }
 
 // ReadLast returns the last result, or nil. A "running" result whose

@@ -9,6 +9,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/ervisio/ervisio/server/internal/config"
 )
 
 // ownerOf returns the owner uid of an Lstat result (-1 on Windows).
@@ -70,25 +72,7 @@ func writeFileAtomic(path string, data []byte, mode os.FileMode) error {
 	if err := checkTrustedDir(dir, os.Geteuid()); err != nil {
 		return err
 	}
-	f, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*")
-	if err != nil {
-		return err
-	}
-	tmp := f.Name()
-	_, werr := f.Write(data)
-	if werr == nil {
-		werr = f.Chmod(mode)
-	}
-	if cerr := f.Close(); werr == nil {
-		werr = cerr
-	}
-	if werr == nil {
-		werr = os.Rename(tmp, path)
-	}
-	if werr != nil {
-		os.Remove(tmp)
-	}
-	return werr
+	return config.WriteAtomic(path, data, mode)
 }
 
 const maxStateFile = 4 << 20

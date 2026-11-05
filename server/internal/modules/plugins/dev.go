@@ -55,9 +55,12 @@ func saveDev(s devState) error {
 	return writeFileAtomic(f, append(b, '\n'), 0o600)
 }
 
+// isHomePath reports whether p is "~" or starts with "~/".
+func isHomePath(p string) bool { return p == "~" || strings.HasPrefix(p, "~/") }
+
 // expandHome turns ~ and ~/x into absolute paths.
 func expandHome(p string) string {
-	if p == "~" || strings.HasPrefix(p, "~/") {
+	if isHomePath(p) {
 		if home, err := os.UserHomeDir(); err == nil {
 			return filepath.Join(home, p[1:])
 		}

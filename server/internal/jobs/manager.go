@@ -2,8 +2,6 @@ package jobs
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +14,7 @@ import (
 	"github.com/ervisio/ervisio/server/internal/modules/plugins"
 	"github.com/ervisio/ervisio/server/internal/notify"
 	"github.com/ervisio/ervisio/server/internal/rpc"
+	"github.com/ervisio/ervisio/server/internal/sys"
 )
 
 // Executor runs the steps of one run for one user. Exec and HTTP call
@@ -174,11 +173,7 @@ func (m *Manager) findLocked(id string) *Instance {
 	return nil
 }
 
-func randHex(n int) string {
-	b := make([]byte, n)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
-}
+var randHex = sys.RandHex
 
 // reschedule computes the next scheduled start of an instance. An interval
 // that fell due while the daemon was down is due at once, one run only.

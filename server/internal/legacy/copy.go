@@ -1,14 +1,14 @@
 package legacy
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	"github.com/ervisio/ervisio/server/internal/sys"
 )
 
 // copyTree copies src into dst (which must not exist): folders, regular
@@ -118,7 +118,7 @@ func installTree(src, dst string, skip func(rel string) bool, edit func(tmp stri
 	if err := os.MkdirAll(parent, 0o755); err != nil {
 		return err
 	}
-	tmp := filepath.Join(parent, "."+filepath.Base(dst)+".import-"+randHex(6))
+	tmp := filepath.Join(parent, "."+filepath.Base(dst)+".import-"+sys.RandHex(6))
 	err := func() error {
 		if err := copyTree(src, tmp, skip); err != nil {
 			return err
@@ -129,7 +129,7 @@ func installTree(src, dst string, skip func(rel string) bool, edit func(tmp stri
 			}
 		}
 		if _, err := os.Lstat(dst); err == nil {
-			old := filepath.Join(parent, "."+filepath.Base(dst)+".replaced-"+randHex(6))
+			old := filepath.Join(parent, "."+filepath.Base(dst)+".replaced-"+sys.RandHex(6))
 			if err := os.Rename(dst, old); err != nil {
 				return err
 			}
@@ -138,7 +138,7 @@ func installTree(src, dst string, skip func(rel string) bool, edit func(tmp stri
 		if err := os.Rename(tmp, dst); err != nil {
 			return err
 		}
-		return syncDir(parent)
+		return sys.SyncDir(parent)
 	}()
 	if err != nil {
 		os.RemoveAll(tmp)
@@ -178,7 +178,7 @@ func writeFileAtomic(path string, data []byte, mode os.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	tmp := path + ".tmp-" + randHex(4)
+	tmp := path + ".tmp-" + sys.RandHex(4)
 	if err := os.WriteFile(tmp, data, mode); err != nil {
 		return err
 	}
@@ -209,19 +209,3 @@ func exists(p string) bool {
 }
 
 func notExist(err error) bool { return errors.Is(err, fs.ErrNotExist) }
-
-func randHex(n int) string {
-	b := make([]byte, n)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
-}
-
-func syncDir(dir string) error {
-	d, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	defer d.Close()
-	_ = d.Sync()
-	return nil
-}

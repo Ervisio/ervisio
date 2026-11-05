@@ -496,7 +496,7 @@ func validAbsFor(p string, allowHome, windows bool) bool {
 	if len(p) == 0 || len(p) > 512 || strings.ContainsAny(p, "\x00\n") {
 		return false
 	}
-	if allowHome && (p == "~" || strings.HasPrefix(p, "~/")) {
+	if allowHome && isHomePath(p) {
 		return !strings.Contains(p, "..")
 	}
 	if windows && winDriveRe.MatchString(p) {

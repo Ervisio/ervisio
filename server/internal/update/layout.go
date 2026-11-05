@@ -1,8 +1,6 @@
 package update
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -14,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/ervisio/ervisio/server/internal/brand"
+	"github.com/ervisio/ervisio/server/internal/sys"
 )
 
 // Layout describes where Ervisio is installed:
@@ -165,7 +164,7 @@ func (l *Layout) VersionFile(v string) string {
 // setLink points link at target atomically: a temporary symlink renamed
 // over the old one, so readers always see either the old or the new target.
 func setLink(link, target string) error {
-	tmp := filepath.Join(filepath.Dir(link), "."+filepath.Base(link)+".tmp-"+randHex(6))
+	tmp := filepath.Join(filepath.Dir(link), "."+filepath.Base(link)+".tmp-"+sys.RandHex(6))
 	if err := os.Symlink(target, tmp); err != nil {
 		return err
 	}
@@ -173,7 +172,7 @@ func setLink(link, target string) error {
 		os.Remove(tmp)
 		return err
 	}
-	return syncDir(filepath.Dir(link))
+	return sys.SyncDir(filepath.Dir(link))
 }
 
 // SetCurrent switches the active version (atomic).
@@ -244,7 +243,7 @@ func (l *Layout) Migrate(name string) (string, error) {
 		name += "-flat"
 		os.RemoveAll(l.VersionDir(name))
 	}
-	tmp := filepath.Join(l.VersionsDir(), "."+name+".partial-"+randHex(6))
+	tmp := filepath.Join(l.VersionsDir(), "."+name+".partial-"+sys.RandHex(6))
 	if err := l.stageFlatCopy(tmp, name); err != nil {
 		os.RemoveAll(tmp)
 		return "", fmt.Errorf("migrate flat install: %w", err)
@@ -295,7 +294,7 @@ func (l *Layout) InstallFrom(dir, v string) error {
 	}
 	dst := l.VersionDir(v)
 	if _, err := os.Lstat(dst); err == nil {
-		old := filepath.Join(l.VersionsDir(), "."+v+".old-"+randHex(6))
+		old := filepath.Join(l.VersionsDir(), "."+v+".old-"+sys.RandHex(6))
 		if err := os.Rename(dst, old); err != nil {
 			return err
 		}
@@ -304,7 +303,7 @@ func (l *Layout) InstallFrom(dir, v string) error {
 	if err := os.Rename(dir, dst); err != nil {
 		return err
 	}
-	return syncDir(l.VersionsDir())
+	return sys.SyncDir(l.VersionsDir())
 }
 
 // Prune removes every version folder except current, previous and keep,
@@ -341,7 +340,7 @@ func (l *Layout) NewPartialDir(v string) (string, error) {
 	if err := os.MkdirAll(l.VersionsDir(), 0o755); err != nil {
 		return "", err
 	}
-	return filepath.Join(l.VersionsDir(), "."+v+".partial-"+randHex(6)), nil
+	return filepath.Join(l.VersionsDir(), "."+v+".partial-"+sys.RandHex(6)), nil
 }
 
 // RunningVersionDir returns the versions/<v> folder of the running
@@ -377,22 +376,6 @@ func versionDirOf(exe, libDir string) (string, bool) {
 func isRegular(p string) bool {
 	fi, err := os.Lstat(p)
 	return err == nil && fi.Mode().IsRegular()
-}
-
-func randHex(n int) string {
-	b := make([]byte, n)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
-}
-
-func syncDir(dir string) error {
-	d, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	defer d.Close()
-	_ = d.Sync()
-	return nil
 }
 
 func readSmall(p string, max int64) ([]byte, error) {

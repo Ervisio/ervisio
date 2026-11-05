@@ -152,24 +152,24 @@ func (s *JobStep) Kind() string {
 	return ""
 }
 
-// Job returns the job called name, or nil.
-func (m *Manifest) Job(name string) *JobDef {
-	for i := range m.Capabilities.Jobs {
-		if m.Capabilities.Jobs[i].Name == name {
-			return &m.Capabilities.Jobs[i]
+// findBy returns the element of items whose key is want, or nil.
+func findBy[T any](items []T, want string, key func(*T) string) *T {
+	for i := range items {
+		if key(&items[i]) == want {
+			return &items[i]
 		}
 	}
 	return nil
 }
 
+// Job returns the job called name, or nil.
+func (m *Manifest) Job(name string) *JobDef {
+	return findBy(m.Capabilities.Jobs, name, func(x *JobDef) string { return x.Name })
+}
+
 // Command returns the declared command called name, or nil.
 func (m *Manifest) Command(name string) *Command {
-	for i := range m.Capabilities.Commands {
-		if m.Capabilities.Commands[i].Name == name {
-			return &m.Capabilities.Commands[i]
-		}
-	}
-	return nil
+	return findBy(m.Capabilities.Commands, name, func(x *Command) string { return x.Name })
 }
 
 // jobStepAllows reports whether a job step runs the command with a
@@ -191,32 +191,17 @@ func (m *Manifest) jobStepAllows(command string, sec int) bool {
 
 // API returns the declared HTTP API called name, or nil.
 func (m *Manifest) API(name string) *HTTPAPI {
-	for i := range m.Capabilities.HTTP {
-		if m.Capabilities.HTTP[i].Name == name {
-			return &m.Capabilities.HTTP[i]
-		}
-	}
-	return nil
+	return findBy(m.Capabilities.HTTP, name, func(x *HTTPAPI) string { return x.Name })
 }
 
 // Param returns the job's param called name, or nil.
 func (j *JobDef) Param(name string) *JobParam {
-	for i := range j.Params {
-		if j.Params[i].Name == name {
-			return &j.Params[i]
-		}
-	}
-	return nil
+	return findBy(j.Params, name, func(x *JobParam) string { return x.Name })
 }
 
 // Step returns the step with the id, or nil.
 func (j *JobDef) Step(id string) *JobStep {
-	for i := range j.Steps {
-		if j.Steps[i].ID == id {
-			return &j.Steps[i]
-		}
-	}
-	return nil
+	return findBy(j.Steps, id, func(x *JobStep) string { return x.ID })
 }
 
 // Timeout is the run timeout in seconds.
