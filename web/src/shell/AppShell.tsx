@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Name } from '../brand';
 import { useT } from '../i18n';
@@ -13,31 +13,37 @@ import { usePlugins } from '../plugins';
 import { UpdateNotifier } from '../sections/settings/UpdateNotifier';
 import './shell.css';
 
-export function AppShell() {
-  const t = useT('shell');
-  const loc = useLocation();
-  const { railPages } = usePlugins();
-  const [palette, setPalette] = useState(false);
-  const focus = useFocusActive();
-  useSectionBackgroundHooks();
-
+function usePaletteShortcut(toggle: () => void) {
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        setPalette((o) => !o);
+        toggle();
       }
     };
     window.addEventListener('keydown', on);
     return () => window.removeEventListener('keydown', on);
-  }, []);
+  }, [toggle]);
+}
 
+function useDocumentTitle() {
+  const t = useT('shell');
+  const { pathname } = useLocation();
+  const { railPages } = usePlugins();
   useEffect(() => {
-    const sec = SECTIONS.find((s) => (s.path === '/' ? loc.pathname === '/' : loc.pathname.startsWith(s.path)));
-    const pg = loc.pathname.startsWith('/p/') ? railPages.find((p) => loc.pathname === `/p/${p.plugin}/${p.page}`) : undefined;
+    const sec = SECTIONS.find((s) => (s.path === '/' ? pathname === '/' : pathname.startsWith(s.path)));
+    const pg = pathname.startsWith('/p/') ? railPages.find((p) => pathname === `/p/${p.plugin}/${p.page}`) : undefined;
     const title = pg?.title ?? (sec ? t(sec.titleKey) : '');
     document.title = title ? `${title} · ${Name}` : Name;
-  }, [loc.pathname, railPages, t]);
+  }, [pathname, railPages, t]);
+}
+
+export function AppShell() {
+  const [palette, setPalette] = useState(false);
+  const focus = useFocusActive();
+  useSectionBackgroundHooks();
+  usePaletteShortcut(useCallback(() => setPalette((o) => !o), []));
+  useDocumentTitle();
 
   return (
     <div className={`app${focus ? ' app--focus' : ''}`}>

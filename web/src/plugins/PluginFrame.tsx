@@ -74,6 +74,30 @@ interface PlanContext {
   watchDownload(did: number, start: TransferStart): void;
 }
 
+const runCall = (plan: Extract<Plan, { kind: 'call' }>) =>
+  plan.method === 'plugins.http'
+    ? call<HttpCallResult>(plan.method, plan.params, { admin: plan.admin }).then(toHttpResult)
+    : call(plan.method, plan.params, { admin: plan.admin });
+
+// plugins.download: the daemon checks the request, then the app (not the sandboxed frame) starts the browser's download.
+const runTransfer = (plan: Extract<Plan, { kind: 'transfer' }>, ctx: PlanContext) =>
+  startTransfer(plan.body, plan.admin).then((r) => {
+    saveDownload(r);
+    // The browser fetches the file by itself: the daemon says how that ended, and the frame hears it.
+    const did = downloadId(ctx.args);
+    if (did) ctx.watchDownload(did, r);
+    return { filename: r.filename ?? 'download', size: r.size, status: r.status };
+  });
+
+// Data the plugin holds in memory, saved from the app (the sandboxed frame may not download).
+function runSave(plan: Extract<Plan, { kind: 'save' }>, ctx: PlanContext): Promise<unknown> {
+  if (!ctx.saves.allow(plan.size)) {
+    return Promise.reject(new ApiError('unavailable', 'Too many files saved at once. Wait a few seconds and try again.'));
+  }
+  saveAsDownload(plan.data, plan.mime, plan.filename);
+  return Promise.resolve({ filename: plan.filename, size: plan.size });
+}
+
 /** Carries out an authorized request plan; the promise settles with the reply the frame gets. */
 function runPlan(plan: Plan, ctx: PlanContext): Promise<unknown> {
   const p = ctx.plugin;
@@ -81,25 +105,11 @@ function runPlan(plan: Plan, ctx: PlanContext): Promise<unknown> {
     case 'deny':
       return Promise.reject(new ApiError(plan.code, plan.message));
     case 'call':
-      return plan.method === 'plugins.http'
-        ? call<HttpCallResult>(plan.method, plan.params, { admin: plan.admin }).then(toHttpResult)
-        : call(plan.method, plan.params, { admin: plan.admin });
+      return runCall(plan);
     case 'transfer':
-      // plugins.download: the daemon checks the request, then the app (not the sandboxed frame) starts the browser's download.
-      return startTransfer(plan.body, plan.admin).then((r) => {
-        saveDownload(r);
-        // The browser fetches the file by itself: the daemon says how that ended, and the frame hears it.
-        const did = downloadId(ctx.args);
-        if (did) ctx.watchDownload(did, r);
-        return { filename: r.filename ?? 'download', size: r.size, status: r.status };
-      });
+      return runTransfer(plan, ctx);
     case 'save':
-      // Data the plugin holds in memory, saved from the app (the sandboxed frame may not download).
-      if (!ctx.saves.allow(plan.size)) {
-        return Promise.reject(new ApiError('unavailable', 'Too many files saved at once. Wait a few seconds and try again.'));
-      }
-      saveAsDownload(plan.data, plan.mime, plan.filename);
-      return Promise.resolve({ filename: plan.filename, size: plan.size });
+      return runSave(plan, ctx);
     case 'asset':
       return fetchAsset(p.id, plan.path);
     case 'toast':

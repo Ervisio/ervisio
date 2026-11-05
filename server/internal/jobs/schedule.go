@@ -22,48 +22,75 @@ func (s *Schedule) Validate() (*Schedule, error) {
 	if s == nil {
 		return nil, nil
 	}
-	out := &Schedule{Every: s.Every}
 	switch {
 	case s.Every != 0 && len(s.At) > 0:
 		return nil, fmt.Errorf("A schedule is either an interval (every) or times of the day (at), not both.")
 	case s.Every != 0:
-		if s.Every < MinInterval || s.Every > 366*24*3600 {
-			return nil, fmt.Errorf("The interval must be at least %d seconds and at most a year.", MinInterval)
-		}
-		if len(s.Days) > 0 {
-			return nil, fmt.Errorf("days only goes with times of the day (at).")
-		}
+		return s.validateInterval()
 	case len(s.At) > 0:
-		if len(s.At) > 24 {
-			return nil, fmt.Errorf("At most 24 times of day.")
-		}
-		seen := map[string]bool{}
-		for _, a := range s.At {
-			if _, _, ok := parseClock(a); !ok {
-				return nil, fmt.Errorf("%q is not a time of day (use HH:MM, 24 hours).", a)
-			}
-			if !seen[a] {
-				seen[a] = true
-				out.At = append(out.At, a)
-			}
-		}
-		sort.Strings(out.At)
-		dseen := map[int]bool{}
-		for _, d := range s.Days {
-			if d < 0 || d > 6 {
-				return nil, fmt.Errorf("days are numbers from 0 (Sunday) to 6 (Saturday).")
-			}
-			if !dseen[d] {
-				dseen[d] = true
-				out.Days = append(out.Days, d)
-			}
-		}
-		sort.Ints(out.Days)
-		if len(out.Days) == 7 {
-			out.Days = nil
-		}
+		return s.validateClockTimes()
 	default:
 		return nil, fmt.Errorf("Give an interval (every) or times of the day (at).")
+	}
+}
+
+func (s *Schedule) validateInterval() (*Schedule, error) {
+	if s.Every < MinInterval || s.Every > 366*24*3600 {
+		return nil, fmt.Errorf("The interval must be at least %d seconds and at most a year.", MinInterval)
+	}
+	if len(s.Days) > 0 {
+		return nil, fmt.Errorf("days only goes with times of the day (at).")
+	}
+	return &Schedule{Every: s.Every}, nil
+}
+
+func (s *Schedule) validateClockTimes() (*Schedule, error) {
+	if len(s.At) > 24 {
+		return nil, fmt.Errorf("At most 24 times of day.")
+	}
+	at, err := uniqueClockTimes(s.At)
+	if err != nil {
+		return nil, err
+	}
+	days, err := uniqueDays(s.Days)
+	if err != nil {
+		return nil, err
+	}
+	return &Schedule{Every: s.Every, At: at, Days: days}, nil
+}
+
+func uniqueClockTimes(times []string) ([]string, error) {
+	var out []string
+	seen := map[string]bool{}
+	for _, a := range times {
+		if _, _, ok := parseClock(a); !ok {
+			return nil, fmt.Errorf("%q is not a time of day (use HH:MM, 24 hours).", a)
+		}
+		if !seen[a] {
+			seen[a] = true
+			out = append(out, a)
+		}
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// uniqueDays sorts and dedupes; all seven days is the same as none.
+func uniqueDays(days []int) ([]int, error) {
+	var out []int
+	seen := map[int]bool{}
+	for _, d := range days {
+		if d < 0 || d > 6 {
+			return nil, fmt.Errorf("days are numbers from 0 (Sunday) to 6 (Saturday).")
+		}
+		if !seen[d] {
+			seen[d] = true
+			out = append(out, d)
+		}
+	}
+	sort.Ints(out)
+	if len(out) == 7 {
+		return nil, nil
 	}
 	return out, nil
 }
