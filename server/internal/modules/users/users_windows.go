@@ -54,8 +54,6 @@ func registerPlatform(r *rpc.Registry) bool {
 	return true
 }
 
-// ---- running PowerShell ----
-
 const psPrelude = `$ErrorActionPreference='Stop'
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
 try {
@@ -183,6 +181,30 @@ func winGroups(ctx context.Context, c *rpc.Call) (any, error) {
 	return s.groupsResult(), nil
 }
 
+// winLockSnapshot takes winMu and loads the snapshot. On success the caller
+// must call unlock.
+func winLockSnapshot(ctx context.Context) (*winSnapshot, func(), error) {
+	winMu.Lock()
+	s, err := snapshot(ctx)
+	if err != nil {
+		winMu.Unlock()
+		return nil, nil, err
+	}
+	return s, winMu.Unlock, nil
+}
+
+// winLockTarget takes winMu and finds the named person (see winTarget). On
+// success the caller must call unlock.
+func winLockTarget(ctx context.Context, name string) (*winSnapshot, *winUser, func(), error) {
+	winMu.Lock()
+	s, u, err := winTarget(ctx, name, true)
+	if err != nil {
+		winMu.Unlock()
+		return nil, nil, nil, err
+	}
+	return s, u, winMu.Unlock, nil
+}
+
 // winTarget loads the snapshot and finds a person account.
 func winTarget(ctx context.Context, name string, allowBuiltin bool) (*winSnapshot, *winUser, error) {
 	if err := validWinUser(name); err != nil {
@@ -226,8 +248,6 @@ func adminGroupName(s *winSnapshot) string {
 	return ""
 }
 
-// ---- users.create ----
-
 const psCreate = `
 $p = @{ Name = $in.name }
 if ($in.fullName) { $p.FullName = $in.fullName }
@@ -245,12 +265,11 @@ func winCreate(ctx context.Context, c *rpc.Call) (any, error) {
 	if err := validWinCreateInput(p); err != nil {
 		return nil, err
 	}
-	winMu.Lock()
-	defer winMu.Unlock()
-	s, err := snapshot(ctx)
+	s, unlock, err := winLockSnapshot(ctx)
 	if err != nil {
 		return nil, err
 	}
+	defer unlock()
 	if s.user(p.Name) != nil || s.group(p.Name) != nil {
 		return nil, rpc.Errorf(rpc.Conflict, "A user or group called %s already exists", p.Name)
 	}
@@ -293,8 +312,6 @@ func winCreateGroups(s *winSnapshot, p createParams) ([]string, error) {
 	return groups, nil
 }
 
-// ---- users.modify ----
-
 const psModify = `
 $n = $in.name
 if ($in.PSObject.Properties['fullName']) { Set-LocalUser -Name $n -FullName ([string]$in.fullName) }
@@ -327,12 +344,11 @@ func winModify(ctx context.Context, c *rpc.Call) (any, error) {
 	if err := setWinText(in, "description", "description", p.Description, 256); err != nil {
 		return nil, err
 	}
-	winMu.Lock()
-	defer winMu.Unlock()
-	s, u, err := winTarget(ctx, p.Name, true)
+	s, u, unlock, err := winLockTarget(ctx, p.Name)
 	if err != nil {
 		return nil, err
 	}
+	defer unlock()
 	in["name"] = u.Name
 	if p.Groups != nil {
 		add, rem, err := winPlanGroups(s, u, p.Groups.Add, p.Groups.Remove)
@@ -375,8 +391,6 @@ func winPlanGroups(s *winSnapshot, u *winUser, addIn, remIn []string) (add, rem 
 	return add, rem, nil
 }
 
-// ---- password / lock / delete / admin ----
-
 const psSetPassword = `
 Set-LocalUser -Name $in.name -Password (ConvertTo-SecureString $in.password -AsPlainText -Force)
 if ($in.mustChange) { $u = [ADSI]("WinNT://./" + $in.name + ",user"); $u.PasswordExpired = 1; $u.SetInfo() }
@@ -415,12 +429,11 @@ func winSetEnabled(ctx context.Context, c *rpc.Call, enable bool) (any, error) {
 	if err := c.Bind(&p); err != nil {
 		return nil, err
 	}
-	winMu.Lock()
-	defer winMu.Unlock()
-	s, u, err := winTarget(ctx, p.Name, true)
+	s, u, unlock, err := winLockTarget(ctx, p.Name)
 	if err != nil {
 		return nil, err
 	}
+	defer unlock()
 	if !enable && u.SID == s.Self {
 		return nil, rpc.Errorf(rpc.Forbidden, "You cannot lock your own account")
 	}
@@ -485,12 +498,11 @@ func winSetAdmin(ctx context.Context, c *rpc.Call) (any, error) {
 	if err := c.Bind(&p); err != nil {
 		return nil, err
 	}
-	winMu.Lock()
-	defer winMu.Unlock()
-	s, u, err := winTarget(ctx, p.Name, true)
+	s, u, unlock, err := winLockTarget(ctx, p.Name)
 	if err != nil {
 		return nil, err
 	}
+	defer unlock()
 	ag := adminGroupName(s)
 	if ag == "" {
 		return nil, rpc.Errorf(rpc.Conflict, "This system has no Administrators group")
@@ -507,27 +519,31 @@ func winSetAdmin(ctx context.Context, c *rpc.Call) (any, error) {
 	return okResult(), nil
 }
 
-// ---- groups.* ----
-
 const psGroupCreate = `New-LocalGroup -Name $in.name | Out-Null`
 const psGroupDelete = `Remove-LocalGroup -SID $in.sid`
 
-func winGroupCreate(ctx context.Context, c *rpc.Call) (any, error) {
-	var p struct {
-		Name string `json:"name"`
-	}
+// bindWinGroup binds the group name of a call and checks it.
+func bindWinGroup(c *rpc.Call) (nameParams, error) {
+	var p nameParams
 	if err := c.Bind(&p); err != nil {
-		return nil, err
+		return p, err
 	}
 	if err := validWinGroup(p.Name); err != nil {
-		return nil, err
+		return p, err
 	}
-	winMu.Lock()
-	defer winMu.Unlock()
-	s, err := snapshot(ctx)
+	return p, nil
+}
+
+func winGroupCreate(ctx context.Context, c *rpc.Call) (any, error) {
+	p, err := bindWinGroup(c)
 	if err != nil {
 		return nil, err
 	}
+	s, unlock, err := winLockSnapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
 	if s.group(p.Name) != nil || s.user(p.Name) != nil {
 		return nil, rpc.Errorf(rpc.Conflict, "A group or user called %s already exists", p.Name)
 	}
@@ -538,21 +554,15 @@ func winGroupCreate(ctx context.Context, c *rpc.Call) (any, error) {
 }
 
 func winGroupDelete(ctx context.Context, c *rpc.Call) (any, error) {
-	var p struct {
-		Name string `json:"name"`
-	}
-	if err := c.Bind(&p); err != nil {
-		return nil, err
-	}
-	if err := validWinGroup(p.Name); err != nil {
-		return nil, err
-	}
-	winMu.Lock()
-	defer winMu.Unlock()
-	s, err := snapshot(ctx)
+	p, err := bindWinGroup(c)
 	if err != nil {
 		return nil, err
 	}
+	s, unlock, err := winLockSnapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
 	g := s.group(p.Name)
 	if g == nil {
 		return nil, rpc.Errorf(rpc.NotFound, "There is no group called %s", p.Name)

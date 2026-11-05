@@ -189,6 +189,30 @@ func openNoBlock(root *os.Root, rel string) (*os.File, error) {
 	return root.OpenFile(rel, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 }
 
+// openCapRoot opens the declared folder of r as an os.Root.
+func openCapRoot(r capRoot, path string) (*os.Root, error) {
+	root, err := os.OpenRoot(r.dir)
+	if err != nil {
+		return nil, fileErr(err, path)
+	}
+	return root, nil
+}
+
+// openCapFile opens the entry r names, read-only and without blocking, with
+// the root that holds it. The caller closes both.
+func openCapFile(r capRoot, path string) (*os.Root, *os.File, error) {
+	root, err := openCapRoot(r, path)
+	if err != nil {
+		return nil, nil, err
+	}
+	fh, err := openNoBlock(root, r.rel)
+	if err != nil {
+		_ = root.Close()
+		return nil, nil, fileErr(err, path)
+	}
+	return root, fh, nil
+}
+
 // privateFolder reports whether a write folder holds the plugin's own data
 // in the user's home (create: true under ~): new files there are 0600, so a
 // plugin's saved settings (registry passwords, tokens) are not readable by
@@ -232,15 +256,11 @@ func readPluginFile(_ context.Context, c *rpc.Call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	root, err := os.OpenRoot(r.dir)
+	root, fh, err := openCapFile(r, p.Path)
 	if err != nil {
-		return nil, fileErr(err, p.Path)
+		return nil, err
 	}
 	defer root.Close()
-	fh, err := openNoBlock(root, r.rel)
-	if err != nil {
-		return nil, fileErr(err, p.Path)
-	}
 	defer fh.Close()
 	b, err := readRegular(fh, p.Path)
 	if err != nil {
@@ -338,9 +358,9 @@ func writePluginFile(_ context.Context, c *rpc.Call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	root, err := os.OpenRoot(r.dir)
+	root, err := openCapRoot(r, p.Path)
 	if err != nil {
-		return nil, fileErr(err, p.Path)
+		return nil, err
 	}
 	defer root.Close()
 	mode, err := writeMode(root, r, p.Path)
@@ -376,15 +396,11 @@ func listPluginDir(_ context.Context, c *rpc.Call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	root, err := os.OpenRoot(r.dir)
+	root, dh, err := openCapFile(r, p.Path)
 	if err != nil {
-		return nil, fileErr(err, p.Path)
+		return nil, err
 	}
 	defer root.Close()
-	dh, err := openNoBlock(root, r.rel)
-	if err != nil {
-		return nil, fileErr(err, p.Path)
-	}
 	defer dh.Close()
 	ents, err := dh.ReadDir(maxPluginListing)
 	if err != nil && !errors.Is(err, io.EOF) {
