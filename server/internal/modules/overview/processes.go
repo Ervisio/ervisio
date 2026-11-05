@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ervisio/ervisio/server/internal/rpc"
@@ -27,11 +28,14 @@ type Process struct {
 }
 
 type procStat struct {
-	pid   int
-	name  string
-	state string
-	ticks uint64 // utime + stime
-	rss   uint64 // pages
+	pid     int
+	name    string
+	state   string
+	ticks   uint64 // utime + stime
+	rss     uint64 // pages
+	started uint64
+	ppid    int
+	threads int
 }
 
 // parseProcStat parses /proc/<pid>/stat. The command name sits in parentheses
@@ -58,7 +62,10 @@ func parseProcStat(b []byte) (procStat, bool) {
 	if rss < 0 {
 		rss = 0
 	}
-	return procStat{pid: pid, name: s[open+1 : end], state: f[0], ticks: ut + st, rss: uint64(rss)}, true
+	started, _ := strconv.ParseUint(f[19], 10, 64)
+	ppid, _ := strconv.Atoi(f[1])
+	threads, _ := strconv.Atoi(f[17])
+	return procStat{pid: pid, name: s[open+1 : end], state: f[0], ticks: ut + st, rss: uint64(rss), started: started, ppid: ppid, threads: threads}, true
 }
 
 func readStats() map[int]procStat {
@@ -121,8 +128,11 @@ func rankProcesses(list []Process, by string, n int) []Process {
 }
 
 var userNames = map[uint32]string{}
+var userNamesMu sync.Mutex
 
 func userName(uid uint32) string {
+	userNamesMu.Lock()
+	defer userNamesMu.Unlock()
 	if n, ok := userNames[uid]; ok {
 		return n
 	}

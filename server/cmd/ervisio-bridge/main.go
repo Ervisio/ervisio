@@ -30,6 +30,7 @@ import (
 
 func main() {
 	admin := flag.Bool("admin", false, "run as the root bridge (must be started as root)")
+	memoryLimit := flag.String("memory-limit", "auto", "soft Go memory budget: auto (96MiB on Linux <=2GiB), off, or e.g. 128MiB")
 	configPath := flag.String("config", brand.ConfigPath, "daemon configuration file")
 	dev := flag.Bool("dev", false, "the daemon runs in --dev (passed by ervisiod)")
 	devPlugins := flag.String("dev-plugins", "", "with --dev: the daemon's ./plugins folder")
@@ -43,6 +44,9 @@ func main() {
 
 	log.SetFlags(0)
 	log.SetPrefix(brand.BridgeBinary + ": ")
+	if err := bridge.ConfigureMemoryLimit(*memoryLimit); err != nil {
+		log.Fatal(err)
+	}
 
 	if *admin && !bridge.Privileged() {
 		log.Fatal("--admin requires root")

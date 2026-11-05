@@ -1,0 +1,9 @@
+# Bridge memory on small Linux hosts
+
+Each signed-in account has its own Go bridge; unlocking administrator actions can start an additional bridge. On Linux systems with at most 2 GiB of physical RAM (or a smaller detected cgroup limit), each bridge automatically uses a **96 MiB soft Go runtime memory budget**. Larger or unknown hosts and other platforms retain Go's normal memory policy.
+
+This is a garbage collection target, not an RSS quota. It does not kill requests, remove results, stop shell processes, or limit memory used by native child programs. A live Go heap can exceed the target when necessary. Servers still need sufficient RAM or swap for their other services and package manager processes.
+
+Operators can set `GOMEMLIMIT=128MiB` (or another Go memory value, including `off`) on the daemon service to override the automatic policy. The daemon explicitly forwards that value as `ervisio-bridge --memory-limit 128MiB` to both user and administrator bridges, including PAM/sudo launches; relying on environment inheritance alone would lose it. A bridge launched directly also respects inherited `GOMEMLIMIT`. Restart bridges/the daemon after changing the operator setting. The standalone bridge flag accepts `auto`, `off`, and integer `B`, `KiB`, `MiB`, `GiB`, or `TiB` values.
+
+APT read commands share one cancellable subprocess slot per bridge. Cache misses for updates, installed packages and store suggestions therefore cannot start multiple package database readers simultaneously in that bridge. Only individual read commands hold the slot, so nested metadata/ownership queries cannot deadlock. Queued reads respect cancellation and their existing timeout, and every completed query still returns its complete normal result. Actual package transactions retain their existing execution and permission checks.
