@@ -92,6 +92,17 @@ func runTool(ctx context.Context, what, stdin string, name string, args ...strin
 
 var dbMu sync.Mutex // serialises our own account changes
 
+// lockSystem takes dbMu and loads the account databases. The caller must call the returned done function.
+func lockSystem() (*system, func(), error) {
+	dbMu.Lock()
+	s, err := loadSystem(false)
+	if err != nil {
+		dbMu.Unlock()
+		return nil, nil, err
+	}
+	return s, dbMu.Unlock, nil
+}
+
 func person(s *system, name string, allowRoot bool) (*passwdEntry, error) {
 	if err := validName("User", name); err != nil {
 		return nil, err
@@ -315,12 +326,11 @@ func create(ctx context.Context, c *rpc.Call) (any, error) {
 	if err := validCreateInput(p); err != nil {
 		return nil, err
 	}
-	dbMu.Lock()
-	defer dbMu.Unlock()
-	s, err := loadSystem(false)
+	s, done, err := lockSystem()
 	if err != nil {
 		return nil, err
 	}
+	defer done()
 	if s.byName[p.Name] != nil {
 		return nil, rpc.Errorf(rpc.Conflict, "A user called %s already exists", p.Name)
 	}
@@ -424,12 +434,11 @@ func modify(ctx context.Context, c *rpc.Call) (any, error) {
 	if err := c.Bind(&p); err != nil {
 		return nil, err
 	}
-	dbMu.Lock()
-	defer dbMu.Unlock()
-	s, err := loadSystem(false)
+	s, done, err := lockSystem()
 	if err != nil {
 		return nil, err
 	}
+	defer done()
 	u, err := person(s, p.Name, true)
 	if err != nil {
 		return nil, err
@@ -696,22 +705,25 @@ func revokeAdmin(ctx context.Context, s *system, u *passwdEntry) error {
 
 // ---- groups.* ----
 
-func groupCreate(ctx context.Context, c *rpc.Call) (any, error) {
-	var p struct {
-		Name string `json:"name"`
-	}
+// bindGroup reads and validates the name of a group call.
+func bindGroup(c *rpc.Call) (nameParams, error) {
+	var p nameParams
 	if err := c.Bind(&p); err != nil {
-		return nil, err
+		return p, err
 	}
-	if err := validName("Group", p.Name); err != nil {
-		return nil, err
-	}
-	dbMu.Lock()
-	defer dbMu.Unlock()
-	s, err := loadSystem(false)
+	return p, validName("Group", p.Name)
+}
+
+func groupCreate(ctx context.Context, c *rpc.Call) (any, error) {
+	p, err := bindGroup(c)
 	if err != nil {
 		return nil, err
 	}
+	s, done, err := lockSystem()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	if s.groupName[p.Name] != nil {
 		return nil, rpc.Errorf(rpc.Conflict, "A group called %s already exists", p.Name)
 	}
@@ -722,21 +734,15 @@ func groupCreate(ctx context.Context, c *rpc.Call) (any, error) {
 }
 
 func groupDelete(ctx context.Context, c *rpc.Call) (any, error) {
-	var p struct {
-		Name string `json:"name"`
-	}
-	if err := c.Bind(&p); err != nil {
-		return nil, err
-	}
-	if err := validName("Group", p.Name); err != nil {
-		return nil, err
-	}
-	dbMu.Lock()
-	defer dbMu.Unlock()
-	s, err := loadSystem(false)
+	p, err := bindGroup(c)
 	if err != nil {
 		return nil, err
 	}
+	s, done, err := lockSystem()
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	g := s.groupName[p.Name]
 	if g == nil {
 		return nil, rpc.Errorf(rpc.NotFound, "There is no group called %s", p.Name)
@@ -766,12 +772,11 @@ func groupMember(ctx context.Context, c *rpc.Call, add bool) (any, error) {
 	if err := validName("User", p.User); err != nil {
 		return nil, err
 	}
-	dbMu.Lock()
-	defer dbMu.Unlock()
-	s, err := loadSystem(false)
+	s, done, err := lockSystem()
 	if err != nil {
 		return nil, err
 	}
+	defer done()
 	if err := checkMemberTarget(s, p.Group, p.User, add); err != nil {
 		return nil, err
 	}
@@ -826,6 +831,23 @@ func keyTarget(c *rpc.Call, name string) (*passwdEntry, string, error) {
 	return p, filepath.Join(p.Home, ".ssh", "authorized_keys"), nil
 }
 
+// editKeyFile runs edit with the authorized_keys path and contents of the named account, as that account, under keysMu.
+func editKeyFile(c *rpc.Call, name string, edit func(path, data string) error) error {
+	u, path, err := keyTarget(c, name)
+	if err != nil {
+		return err
+	}
+	keysMu.Lock()
+	defer keysMu.Unlock()
+	return asUser(u.UID, u.GID, func() error {
+		data, err := readKeyFile(path)
+		if err != nil {
+			return err
+		}
+		return edit(path, data)
+	})
+}
+
 func sshKeys(ctx context.Context, c *rpc.Call) (any, error) {
 	var p struct {
 		Name string `json:"name"`
@@ -864,17 +886,7 @@ func addSSHKey(ctx context.Context, c *rpc.Call) (any, error) {
 	if perr != nil {
 		return nil, rpc.Errorf(rpc.Invalid, "That is not a valid public key: %s", perr)
 	}
-	u, path, err := keyTarget(c, p.Name)
-	if err != nil {
-		return nil, err
-	}
-	keysMu.Lock()
-	defer keysMu.Unlock()
-	err = asUser(u.UID, u.GID, func() error {
-		data, err := readKeyFile(path)
-		if err != nil {
-			return err
-		}
+	err := editKeyFile(c, p.Name, func(path, data string) error {
 		for _, e := range parseAuthorizedKeys(data) {
 			if e.Fingerprint == k.Fingerprint {
 				return rpc.Errorf(rpc.Conflict, "This key is already authorized")
@@ -899,17 +911,7 @@ func removeSSHKey(ctx context.Context, c *rpc.Call) (any, error) {
 	if !strings.HasPrefix(p.Fingerprint, "SHA256:") {
 		return nil, rpc.Errorf(rpc.Invalid, "Give the SHA256 fingerprint of the key to remove")
 	}
-	u, path, err := keyTarget(c, p.Name)
-	if err != nil {
-		return nil, err
-	}
-	keysMu.Lock()
-	defer keysMu.Unlock()
-	err = asUser(u.UID, u.GID, func() error {
-		data, err := readKeyFile(path)
-		if err != nil {
-			return err
-		}
+	err := editKeyFile(c, p.Name, func(path, data string) error {
 		out, n := removeKey(data, p.Fingerprint)
 		if n == 0 {
 			return rpc.Errorf(rpc.NotFound, "That key is no longer in the file")
