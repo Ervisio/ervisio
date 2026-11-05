@@ -38,7 +38,7 @@ type forceParams struct {
 	Force bool `json:"force"`
 }
 
-func ms(t time.Time) int64 {
+func unixMillis(t time.Time) int64 {
 	if t.IsZero() {
 		return 0
 	}
@@ -92,7 +92,7 @@ func buildSummary(ctx context.Context, m *manager, force bool) (map[string]any, 
 		"rebootNeeded":  reboot,
 		"rebootPending": rebootPending(),
 		"security":      security,
-		"lastCheck":     ms(at),
+		"lastCheck":     unixMillis(at),
 		"schedule":      sched,
 		"busy":          busy,
 		"warnings":      warns,
@@ -200,28 +200,31 @@ func search(ctx context.Context, c *rpc.Call) (any, error) {
 	var p struct {
 		Query string `json:"query"`
 	}
-	if err := c.Bind(&p); err != nil {
-		return nil, err
-	}
-	m := getManager()
-	if err := m.requireAny(); err != nil {
-		return nil, err
-	}
-	return m.search(ctx, p.Query)
+	return withManager(c, &p, func(m *manager) (any, error) {
+		return m.search(ctx, p.Query)
+	})
 }
 
 func suggest(ctx context.Context, c *rpc.Call) (any, error) {
 	var p struct {
 		Category string `json:"category"`
 	}
-	if err := c.Bind(&p); err != nil {
+	return withManager(c, &p, func(m *manager) (any, error) {
+		return m.suggest(ctx, p.Category)
+	})
+}
+
+// withManager binds the request into p, checks that a package manager is
+// available and runs fn on it.
+func withManager(c *rpc.Call, p any, fn func(m *manager) (any, error)) (any, error) {
+	if err := c.Bind(p); err != nil {
 		return nil, err
 	}
 	m := getManager()
 	if err := m.requireAny(); err != nil {
 		return nil, err
 	}
-	return m.suggest(ctx, p.Category)
+	return fn(m)
 }
 
 func apps(ctx context.Context, c *rpc.Call) (any, error) {

@@ -76,8 +76,6 @@ func currentVersions(ctx context.Context, names []string) map[string]string {
 	return m
 }
 
-// ---- dnf ----
-
 type dnf struct{}
 
 func newDnf() *dnf { return &dnf{} }
@@ -301,17 +299,19 @@ func (d *dnf) step(title string, args ...string) Plan {
 }
 
 func (d *dnf) Install(pkgs []string) (Plan, error) {
-	if err := validNames(pkgs); err != nil || len(pkgs) == 0 {
-		return Plan{}, orInvalid(err)
-	}
-	return d.step("install", append([]string{"install", "--"}, pkgs...)...), nil
+	return d.changePkgs("install", pkgs)
 }
 
 func (d *dnf) Remove(pkgs []string) (Plan, error) {
+	return d.changePkgs("remove", pkgs)
+}
+
+// changePkgs plans a verb that takes package names, such as install or remove.
+func (d *dnf) changePkgs(verb string, pkgs []string) (Plan, error) {
 	if err := validNames(pkgs); err != nil || len(pkgs) == 0 {
 		return Plan{}, orInvalid(err)
 	}
-	return d.step("remove", append([]string{"remove", "--"}, pkgs...)...), nil
+	return d.step(verb, append([]string{verb, "--"}, pkgs...)...), nil
 }
 
 func (d *dnf) Upgrade(pkgs []string) (Plan, error) {
@@ -323,8 +323,6 @@ func (d *dnf) Upgrade(pkgs []string) (Plan, error) {
 	}
 	return d.step("upgrade", append([]string{"upgrade", "--"}, pkgs...)...), nil
 }
-
-// ---- zypper ----
 
 type zypper struct{}
 
@@ -459,17 +457,19 @@ func (z *zypper) step(title string, args ...string) Step {
 }
 
 func (z *zypper) Install(pkgs []string) (Plan, error) {
-	if err := validNames(pkgs); err != nil || len(pkgs) == 0 {
-		return Plan{}, orInvalid(err)
-	}
-	return Plan{Steps: []Step{z.step("install", append([]string{"install", "--"}, pkgs...)...)}}, nil
+	return z.changePkgs("install", pkgs)
 }
 
 func (z *zypper) Remove(pkgs []string) (Plan, error) {
+	return z.changePkgs("remove", pkgs)
+}
+
+// changePkgs plans a verb that takes package names, such as install or remove.
+func (z *zypper) changePkgs(verb string, pkgs []string) (Plan, error) {
 	if err := validNames(pkgs); err != nil || len(pkgs) == 0 {
 		return Plan{}, orInvalid(err)
 	}
-	return Plan{Steps: []Step{z.step("remove", append([]string{"remove", "--"}, pkgs...)...)}}, nil
+	return Plan{Steps: []Step{z.step(verb, append([]string{verb, "--"}, pkgs...)...)}}, nil
 }
 
 func (z *zypper) Upgrade(pkgs []string) (Plan, error) {

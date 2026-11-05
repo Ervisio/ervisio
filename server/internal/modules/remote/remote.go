@@ -98,8 +98,6 @@ func cleanMsg(err error, fallback string) string {
 	return fallback
 }
 
-/* ---------- connections ---------- */
-
 func (m *module) hList(ctx context.Context, c *rpc.Call) (any, error) {
 	list, err := m.st.list()
 	if err != nil {
@@ -225,11 +223,32 @@ func (m *module) hStart(ctx context.Context, c *rpc.Call) (any, error) {
 	return map[string]string{"path": sp}, nil
 }
 
-/* ---------- file operations ---------- */
-
 type pathParams struct {
 	Conn string `json:"conn"`
 	Path string `json:"path"`
+}
+
+// bindPathParams binds the request and validates its path.
+func bindPathParams(c *rpc.Call) (pathParams, string, error) {
+	var p pathParams
+	if err := c.Bind(&p); err != nil {
+		return p, "", err
+	}
+	pth, err := cleanRemote(p.Path)
+	return p, pth, err
+}
+
+// checkoutPath validates the path and checks out a pooled connection for it.
+func (m *module) checkoutPath(ctx context.Context, p pathParams) (*handle, string, error) {
+	pth, err := cleanRemote(p.Path)
+	if err != nil {
+		return nil, "", err
+	}
+	h, err := m.pool.get(ctx, p.Conn)
+	if err != nil {
+		return nil, "", remoteErr(err)
+	}
+	return h, pth, nil
 }
 
 func (m *module) run(ctx context.Context, id string, fn func(h *handle) error) error {
@@ -277,11 +296,7 @@ func (m *module) hLs(ctx context.Context, c *rpc.Call) (any, error) {
 }
 
 func (m *module) hStat(ctx context.Context, c *rpc.Call) (any, error) {
-	var p pathParams
-	if err := c.Bind(&p); err != nil {
-		return nil, err
-	}
-	pth, err := cleanRemote(p.Path)
+	p, pth, err := bindPathParams(c)
 	if err != nil {
 		return nil, err
 	}
@@ -366,11 +381,7 @@ func mkdirParents(ctx context.Context, h *handle, pth string) error {
 }
 
 func (m *module) hCreate(ctx context.Context, c *rpc.Call) (any, error) {
-	var p pathParams
-	if err := c.Bind(&p); err != nil {
-		return nil, err
-	}
-	pth, err := cleanRemote(p.Path)
+	p, pth, err := bindPathParams(c)
 	if err != nil {
 		return nil, err
 	}
@@ -482,8 +493,6 @@ func (m *module) hRemove(ctx context.Context, c *rpc.Call) (any, error) {
 	return map[string]any{"deleted": deleted, "failed": failed}, nil
 }
 
-/* ---------- text ---------- */
-
 func (m *module) hReadText(ctx context.Context, c *rpc.Call) (any, error) {
 	var p struct {
 		pathParams
@@ -594,20 +603,14 @@ func writeTextFile(ctx context.Context, h *handle, pth string, data []byte, expe
 	return map[string]any{"path": pth, "size": ne.Size, "mtime": ne.MTime}, nil
 }
 
-/* ---------- streams (docs/api/files-transfer.md) ---------- */
-
 func (m *module) hReadStream(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
 	var p pathParams
 	if err := c.Bind(&p); err != nil {
 		return err
 	}
-	pth, err := cleanRemote(p.Path)
+	h, pth, err := m.checkoutPath(ctx, p)
 	if err != nil {
 		return err
-	}
-	h, err := m.pool.get(ctx, p.Conn)
-	if err != nil {
-		return remoteErr(err)
 	}
 	err = readStream(ctx, h, pth, s)
 	h.release(err)
@@ -753,13 +756,9 @@ func (m *module) hWriteStream(ctx context.Context, c *rpc.Call, s rpc.Stream) er
 	if err := c.Bind(&p); err != nil {
 		return err
 	}
-	pth, err := cleanRemote(p.Path)
+	h, pth, err := m.checkoutPath(ctx, p.pathParams)
 	if err != nil {
 		return err
-	}
-	h, err := m.pool.get(ctx, p.Conn)
-	if err != nil {
-		return remoteErr(err)
 	}
 	n, err := writeFile(ctx, h, posixOps, pth, &inputReader{ctx: ctx, s: s}, p.Size, p.Overwrite, nil)
 	h.release(err)
