@@ -97,14 +97,7 @@ func renderTimer(at string) string {
 
 func (m *manager) setSchedule(ctx context.Context, at *string) (string, error) {
 	if at == nil || *at == "" {
-		if runtime.GOOS == "windows" {
-			return "", removeScheduleOS(ctx)
-		}
-		_, _ = run(ctx, 30*time.Second, nil, "systemctl", "disable", "--now", timerName)
-		_ = os.Remove(filepath.Join(systemdDir, timerName))
-		_ = os.Remove(filepath.Join(systemdDir, serviceName))
-		_, _ = run(ctx, 30*time.Second, nil, "systemctl", "daemon-reload")
-		return "", nil
+		return "", clearSchedule(ctx)
 	}
 	if !atRe.MatchString(*at) {
 		return "", rpc.Errorf(rpc.Invalid, "The time must look like 03:00 (24-hour clock).")
@@ -112,36 +105,63 @@ func (m *manager) setSchedule(ctx context.Context, at *string) (string, error) {
 	if m.primary == nil {
 		return "", rpc.Errorf(rpc.Unavailable, "No supported system package manager was found.")
 	}
-	var plans []Plan
-	p, err := m.primary.Upgrade(nil)
+	plans, optional, err := m.schedulePlans()
 	if err != nil {
 		return "", err
 	}
-	plans = append(plans, p)
+	if runtime.GOOS == "windows" {
+		return setScheduleOS(ctx, plans, *at)
+	}
+	if err := installTimer(ctx, plans, optional, *at); err != nil {
+		return "", err
+	}
+	return *at, nil
+}
+
+func clearSchedule(ctx context.Context) error {
+	if runtime.GOOS == "windows" {
+		return removeScheduleOS(ctx)
+	}
+	_, _ = run(ctx, 30*time.Second, nil, "systemctl", "disable", "--now", timerName)
+	_ = os.Remove(filepath.Join(systemdDir, timerName))
+	_ = os.Remove(filepath.Join(systemdDir, serviceName))
+	_, _ = run(ctx, 30*time.Second, nil, "systemctl", "daemon-reload")
+	return nil
+}
+
+// schedulePlans returns the upgrade plans to run and how many of them are required
+// (the flatpak plan after that is best effort).
+func (m *manager) schedulePlans() ([]Plan, int, error) {
+	p, err := m.primary.Upgrade(nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	plans := []Plan{p}
 	optional := len(plans)
 	if m.flatpak != nil {
 		if fp, err := m.flatpak.(scoped).WithScope("system").Upgrade(nil); err == nil {
 			plans = append(plans, fp)
 		}
 	}
-	if runtime.GOOS == "windows" {
-		return setScheduleOS(ctx, plans, *at)
-	}
+	return plans, optional, nil
+}
+
+func installTimer(ctx context.Context, plans []Plan, optional int, at string) error {
 	svc, err := renderService(plans, optional)
 	if err != nil {
-		return "", err
+		return err
 	}
 	if err := os.WriteFile(filepath.Join(systemdDir, serviceName), []byte(svc), 0o644); err != nil {
-		return "", err
+		return err
 	}
-	if err := os.WriteFile(filepath.Join(systemdDir, timerName), []byte(renderTimer(*at)), 0o644); err != nil {
-		return "", err
+	if err := os.WriteFile(filepath.Join(systemdDir, timerName), []byte(renderTimer(at)), 0o644); err != nil {
+		return err
 	}
 	if _, err := run(ctx, 30*time.Second, nil, "systemctl", "daemon-reload"); err != nil {
-		return "", rpc.Errorf(rpc.Internal, "Could not reload systemd: %v", err)
+		return rpc.Errorf(rpc.Internal, "Could not reload systemd: %v", err)
 	}
 	if _, err := run(ctx, 30*time.Second, nil, "systemctl", "enable", "--now", timerName); err != nil {
-		return "", rpc.Errorf(rpc.Internal, "Could not start the update timer: %v", err)
+		return rpc.Errorf(rpc.Internal, "Could not start the update timer: %v", err)
 	}
-	return *at, nil
+	return nil
 }

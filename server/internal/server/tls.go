@@ -57,38 +57,17 @@ func (s *Server) tlsConfig() (*tls.Config, error) {
 // ensureSelfSigned creates (or renews when expiring within 30 days) a
 // self-signed ECDSA certificate for the host name and primary IP.
 func ensureSelfSigned(certFile, keyFile string, lg *log.Logger) error {
-	if data, err := os.ReadFile(certFile); err == nil {
-		if block, _ := pem.Decode(data); block != nil {
-			if c, err := x509.ParseCertificate(block.Bytes); err == nil && time.Until(c.NotAfter) > 30*24*time.Hour {
-				if _, err := os.Stat(keyFile); err == nil {
-					return nil
-				}
-			}
-		}
+	if certStillValid(certFile, keyFile) {
+		return nil
 	}
 	lg.Printf("tls: generating self-signed certificate in %s", filepath.Dir(certFile))
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return err
 	}
-	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 127))
+	tmpl, err := selfSignedTemplate()
 	if err != nil {
 		return err
-	}
-	host := sys.Hostname()
-	tmpl := &x509.Certificate{
-		SerialNumber:          serial,
-		Subject:               pkix.Name{CommonName: host, Organization: []string{brand.Name}},
-		NotBefore:             time.Now().Add(-time.Hour),
-		NotAfter:              time.Now().Add(397 * 24 * time.Hour),
-		KeyUsage:              x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		BasicConstraintsValid: true,
-		DNSNames:              []string{host, "localhost"},
-		IPAddresses:           []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback},
-	}
-	if ip := net.ParseIP(sys.PrimaryIP()); ip != nil {
-		tmpl.IPAddresses = append(tmpl.IPAddresses, ip)
 	}
 	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
 	if err != nil {
@@ -105,6 +84,47 @@ func ensureSelfSigned(certFile, keyFile string, lg *log.Logger) error {
 		return err
 	}
 	return os.WriteFile(certFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o644)
+}
+
+// certStillValid reports whether certFile parses, outlives 30 days and has its key file.
+func certStillValid(certFile, keyFile string) bool {
+	data, err := os.ReadFile(certFile)
+	if err != nil {
+		return false
+	}
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return false
+	}
+	c, err := x509.ParseCertificate(block.Bytes)
+	if err != nil || time.Until(c.NotAfter) <= 30*24*time.Hour {
+		return false
+	}
+	_, err = os.Stat(keyFile)
+	return err == nil
+}
+
+func selfSignedTemplate() (*x509.Certificate, error) {
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 127))
+	if err != nil {
+		return nil, err
+	}
+	host := sys.Hostname()
+	tmpl := &x509.Certificate{
+		SerialNumber:          serial,
+		Subject:               pkix.Name{CommonName: host, Organization: []string{brand.Name}},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(397 * 24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		DNSNames:              []string{host, "localhost"},
+		IPAddresses:           []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback},
+	}
+	if ip := net.ParseIP(sys.PrimaryIP()); ip != nil {
+		tmpl.IPAddresses = append(tmpl.IPAddresses, ip)
+	}
+	return tmpl, nil
 }
 
 // splitTLS sniffs the first byte of each connection on ln: TLS handshakes

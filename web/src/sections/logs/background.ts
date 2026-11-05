@@ -9,6 +9,27 @@ import type { Entry } from './types';
 /** A toast at most once a minute per watched file; the bell entry keeps counting meanwhile. */
 const TOAST_EVERY = 60_000;
 
+type Watcher = ReturnType<typeof normalizeWatchers>[number];
+type Seen = Map<string, { count: number; toastAt: number }>;
+type Translate = ReturnType<typeof useT>;
+
+/** Bell entry for every error of a watched file, plus a rate-limited toast. */
+function raiseError(e: Omit<Entry, 'key'>, names: Map<string, Watcher>, seen: Seen, tr: Translate) {
+  const w = names.get(e.srcId) ?? (e.file ? names.get(`file:${e.file}`) : undefined);
+  if (!w) return;
+  const s = seen.get(w.path) ?? { count: 0, toastAt: 0 };
+  s.count++;
+  seen.set(w.path, s);
+  const title = s.count === 1 ? tr('notice.error', { name: w.name }) : tr('notice.errors', { name: w.name, count: s.count });
+  const msg = e.message.length > 300 ? `${e.message.slice(0, 300)}…` : e.message;
+  notify({ title, detail: msg, tone: 'err', icon: 'logs', to: `/logs?file=${encodeURIComponent(w.path)}&level=err`, key: `logs:${w.path}` });
+  const now = Date.now();
+  if (now - s.toastAt > TOAST_EVERY) {
+    s.toastAt = now;
+    toast.err(tr('notice.error', { name: w.name }), msg);
+  }
+}
+
 /**
  * "Notify on errors" for log watchers: while the app is open (any page), follow the watched files that have
  * notify on, error level only, and raise a toast plus a notification center entry. One stream for all of them,
@@ -26,7 +47,7 @@ export default function useLogsBackground() {
   useEffect(() => {
     if (status !== 'authed' || !ready || !watched.length) return;
     const names = new Map(watched.map((w) => [`file:${w.path}`, w]));
-    const seen = new Map<string, { count: number; toastAt: number }>();
+    const seen: Seen = new Map();
     let closed = false;
     const h = stream<Omit<Entry, 'key'>[]>(
       'logs.follow',
@@ -36,21 +57,7 @@ export default function useLogsBackground() {
         onData: (batch) => {
           if (closed || !Array.isArray(batch)) return;
           for (const e of batch) {
-            if (e.level !== 'err') continue;
-            const w = names.get(e.srcId) ?? (e.file ? names.get(`file:${e.file}`) : undefined);
-            if (!w) continue;
-            const s = seen.get(w.path) ?? { count: 0, toastAt: 0 };
-            s.count++;
-            seen.set(w.path, s);
-            const tr = tRef.current;
-            const title = s.count === 1 ? tr('notice.error', { name: w.name }) : tr('notice.errors', { name: w.name, count: s.count });
-            const msg = e.message.length > 300 ? `${e.message.slice(0, 300)}…` : e.message;
-            notify({ title, detail: msg, tone: 'err', icon: 'logs', to: `/logs?file=${encodeURIComponent(w.path)}&level=err`, key: `logs:${w.path}` });
-            const now = Date.now();
-            if (now - s.toastAt > TOAST_EVERY) {
-              s.toastAt = now;
-              toast.err(tr('notice.error', { name: w.name }), msg);
-            }
+            if (e.level === 'err') raiseError(e, names, seen, tRef.current);
           }
         },
         // Unreadable file (needs_admin), missing file, daemon gone: stay quiet, the Logs page shows the problem.
