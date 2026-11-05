@@ -1,5 +1,32 @@
 {
   "title": "Impostazioni",
+  "native": {
+    "find": "Trova un'impostazione",
+    "category": "Categoria impostazioni",
+    "results": "Risultati di ricerca",
+    "resultCount": "{count} impostazioni corrispondenti",
+    "adminAccount": "Account amministratore",
+    "standardAccount": "Account personale",
+    "adminLocked": "I controlli del server richiedono l'accesso amministratore",
+    "adminSettings": "Impostazioni di questo server",
+    "product": "Ervisio",
+    "descriptions": {
+      "appearance": "Scegli interfaccia, tema e preferenze di visualizzazione.",
+      "language": "Lingua, formato dell'ora e primo giorno della settimana.",
+      "terminal": "Colori, testo e comandi rapidi delle tue sessioni shell reali.",
+      "notifications": "Scegli gli eventi da mostrare nelle notifiche.",
+      "browser": "Preferenze salvate nel browser che stai utilizzando.",
+      "activity": "Accessi, azioni amministrative e modifiche su questo server.",
+      "signin": "Accesso agli account, durata delle sessioni e permessi amministrativi.",
+      "web": "Indirizzo di ascolto, HTTPS e certificato utilizzato da Ervisio.",
+      "plugpol": "Installazione plugin, accesso alla rete e modalità sviluppo.",
+      "channels": "Invia le notifiche del server ai canali configurati.",
+      "pluginjobs": "Pianificazioni e attività in background dei plugin installati.",
+      "envs": "Ambienti remoti e connessioni disponibili a Ervisio.",
+      "hosts": "Gestisci i server a cui ti colleghi da questa console.",
+      "about": "Versione, informazioni sul server e aggiornamenti software."
+    }
+  },
   "cancel": "Annulla",
   "undo": "Annulla",
   "saved": "{name} salvato",

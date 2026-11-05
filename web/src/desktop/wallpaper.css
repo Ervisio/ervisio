@@ -1,0 +1,86 @@
+/* Shared by desktop and sign-in; independent of either shell bundle. */
+.eos-wallpaper {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: -2;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 110%, var(--eos-blue, #2678e9), #0d183d 68%, #060c20);
+}
+.eos-wallpaper-light {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 48%, transparent 20%, #04081688 100%);
+}
+.eos-bloom {
+  position: absolute;
+  width: 920px;
+  height: 920px;
+  left: 50%;
+  top: 46%;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 30px 50px #070c2866);
+}
+.eos-bloom i {
+  display: block;
+  position: absolute;
+  left: 29%;
+  top: 10%;
+  width: 42%;
+  height: 64%;
+  border-radius: 48% 48% 44% 44%;
+  transform-origin: 50% 64%;
+  transform: rotate(var(--turn));
+  background: linear-gradient(
+    105deg,
+    #eef7ff99,
+    var(--eos-cyan, #4cd5e5) 8%,
+    var(--eos-blue, #2678e9) 37%,
+    #244b9f 64%,
+    #132046 87%
+  );
+  box-shadow:
+    inset 3px 1px 2px #e2f7ff77,
+    inset -14px -4px 38px #13215755;
+  opacity: 0.9;
+}
+.eos-bloom i:nth-child(1) {
+  --turn: -67deg;
+}
+.eos-bloom i:nth-child(2) {
+  --turn: -22deg;
+}
+.eos-bloom i:nth-child(3) {
+  --turn: 23deg;
+}
+.eos-bloom i:nth-child(4) {
+  --turn: 68deg;
+}
+.eos-bloom i:nth-child(5) {
+  --turn: 113deg;
+}
+.eos-bloom i:nth-child(6) {
+  --turn: 158deg;
+}
+.eos-bloom i:nth-child(7) {
+  --turn: 203deg;
+}
+.eos-bloom i:nth-child(8) {
+  --turn: 248deg;
+}
+.eos-wallpaper--mint {
+  --eos-blue: #168d86;
+  --eos-cyan: #a3f7d2;
+  background: radial-gradient(ellipse at 50% 90%, #116d68, #062e3d 70%, #081e2d);
+}
+.eos-wallpaper--sunset {
+  --eos-blue: #c66488;
+  --eos-cyan: #ffc09a;
+  background: linear-gradient(160deg, #271e4e, #723b69 65%, #bf705f);
+}
+.eos-wallpaper--plain {
+  background: var(--bg);
+}
+.eos-wallpaper--plain .eos-bloom {
+  display: none;
+}

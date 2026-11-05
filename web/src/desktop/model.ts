@@ -23,7 +23,7 @@ export interface DesktopData {
   wallpaper: 'bloom' | 'mint' | 'sunset' | 'plain';
   bounds: Record<string, WindowBounds>;
 }
-export const DEFAULT_APPS = ['this-pc', 'files', 'terminal', 'plugins', 'settings'];
+export const DEFAULT_APPS = ['this-pc', 'files', 'overview', 'terminal', 'plugins', 'settings'];
 const text = (x: unknown, max = 160): x is string =>
   typeof x === 'string' && x.length > 0 && x.length <= max;
 const record = (x: unknown): x is Record<string, unknown> =>

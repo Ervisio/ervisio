@@ -138,11 +138,14 @@ export type HostToFrame =
       appOrigin: string;
       /** The server's operating system (sdk.platform). Missing from consoles before 0.6.1: the runtime assumes 'linux'. */
       platform?: 'linux' | 'windows';
+      /** False when its ErvisiOS window is minimized; older consoles omit it. */
+      active?: boolean;
       /** Source of the plugin's entry module, fetched by the host (the frame cannot reach the daemon). */
       code: string;
     }
   | { la: 'plugin'; t: 'theme'; theme: FrameTheme }
   | { la: 'plugin'; t: 'lang'; lang: string }
+  | { la: 'plugin'; t: 'visibility'; active: boolean }
   | { la: 'plugin'; t: 'res'; id: number; ok: true; value: unknown }
   | { la: 'plugin'; t: 'res'; id: number; ok: false; error: FrameError }
   | {

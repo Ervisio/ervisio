@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased · ErvisiOS branch
+
+### Added
+- Optional ErvisiOS desktop, native app navigation, per-user virtual folders, native Terminal appearance settings and secure additional plugin signing keys.
+- Native AI, Docker, Minecraft and Caddy views, with legacy plugin pages remaining available in windows.
+- Minimized windows suspend presentation timers and UI polling while retaining their state and active server jobs.
+- ErvisiOS Task Manager with all visible host processes, sampled CPU/RAM use, performance graphs and available GPU sensors.
+- Native File Explorer, user management and focused Settings categories, plus application navigation for Software, Services and Plugins.
+
+### Fixed
+- Self-update and rollback health checks honor HTTP mode behind a reverse proxy, and helpers retain the active configuration path.
+- Releasing a dragged window no longer restarts its appearance animation.
+- Software catalogs load only when needed and reuse account-scoped cached reads; quick connectivity retains the latest real result while refreshing.
+- Small Linux hosts automatically apply a soft Go memory budget to session bridges and serialize APT read subprocesses.
+- Failed application downloads offer an interface reload instead of repeatedly reopening a cached failure.
+
 ## [0.6.4] - 2026-11-04
 
 ### Changed

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useWindowActivity } from '../../lib/windowActivity';
 import { ApiError, stream, errorMessage } from '../../api';
 import { fcall, onFilesChanged, type RunOpts } from './fapi';
 import type { FEntry, RawEntry } from './types';
@@ -37,6 +38,7 @@ const SEARCH_MAX_RESULTS = 500;
 
 /** Loads what a pane shows: a folder, the Trash, recent or starred items, or search results. */
 export function usePaneData(a: Args): PaneData {
+  const active = useWindowActivity();
   const [entries, setEntries] = useState<FEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
@@ -51,13 +53,16 @@ export function usePaneData(a: Args): PaneData {
 
   useEffect(
     () =>
-      onFilesChanged((dir) => {
-        if (isAffectedBy(a.loc, dir)) reload();
-      }),
-    [a.loc, reload],
+      active
+        ? onFilesChanged((dir) => {
+            if (isAffectedBy(a.loc, dir)) reload();
+          })
+        : undefined,
+    [a.loc, reload, active],
   );
 
   useEffect(() => {
+    if (!active) return;
     let live = true;
     const isLive = () => live;
     const ctl = new AbortController();
@@ -109,7 +114,7 @@ export function usePaneData(a: Args): PaneData {
       live = false;
       ctl.abort();
     };
-  }, [a.loc, a.admin, a.showHidden, a.query, a.enabled, n, starredKey]);
+  }, [a.loc, a.admin, a.showHidden, a.query, a.enabled, n, starredKey, active]);
 
   return { entries, loading, error, truncated, searching, reload };
 }

@@ -1,0 +1,474 @@
+.usr-native {
+  container: usr-accounts / inline-size;
+  min-height: 100%;
+  color: var(--ink);
+}
+.usr-native-layout {
+  display: flex;
+  min-height: 100%;
+}
+.usr-native-sidebar {
+  width: 200px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 10px 12px;
+  background: color-mix(in srgb, var(--sunk) 75%, transparent);
+  border-right: 1px solid var(--line);
+}
+.usr-native-identity {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 0 8px 10px;
+  color: var(--h-usr);
+}
+.usr-native-identity > span,
+.usr-native-self > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.usr-native-identity b {
+  font-size: 15px;
+  color: var(--ink);
+}
+.usr-native-identity small,
+.usr-native-self small {
+  color: var(--ink2);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.usr-native-self {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-align: left;
+  padding: 10px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.usr-native-self b {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.usr-native-sidebar nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.usr-native-sidebar nav button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  padding: 11px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink2);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.usr-native-sidebar nav button:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+.usr-native-sidebar nav button.is-active {
+  background: var(--h-usr-s);
+  color: var(--h-usr);
+  box-shadow: inset 3px 0 var(--h-usr);
+}
+.usr-native-sidebar nav small {
+  margin-left: auto;
+  font-size: 10px;
+  color: inherit;
+}
+.usr-native-privilege {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--ink2);
+  font-size: 10px;
+  line-height: 1.45;
+  padding: 12px 8px 0;
+  margin-top: auto;
+}
+.usr-native-right {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.usr-native-commandbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
+}
+.usr-native-commandbar .ui-btn {
+  border-radius: 6px;
+}
+.usr-native-command-spacer {
+  flex: 1;
+}
+.usr-native-search {
+  width: min(260px, 35%);
+  flex: none;
+}
+.usr-native-workspace {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  position: relative;
+}
+.usr-native-content {
+  flex: 1;
+  min-width: 0;
+  padding: 24px;
+}
+.usr-native-heading {
+  margin-bottom: 20px;
+}
+.usr-native-heading h1 {
+  font-size: 24px;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+.usr-native-heading p {
+  font-size: 12px;
+  color: var(--ink2);
+  line-height: 1.6;
+  margin: 6px 0 0;
+}
+.usr-native .usr-note {
+  margin: 0 0 18px;
+  padding: 10px 12px;
+  font-size: 11px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+.usr-native-accounts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
+  gap: 12px;
+  align-content: start;
+}
+.usr-native-account {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  min-width: 0;
+  text-align: left;
+  padding: 17px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease;
+}
+.usr-native-account:hover {
+  border-color: color-mix(in srgb, var(--h-usr) 55%, var(--line));
+}
+.usr-native-account.is-selected {
+  background: color-mix(in srgb, var(--h-usr) 7%, var(--surface));
+  border-color: var(--h-usr);
+}
+.usr-native-account-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+.usr-native-account-head > span:nth-child(2) {
+  display: grid;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.usr-native-account-head b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+.usr-native-account-head small {
+  color: var(--ink2);
+  font-size: 11px;
+}
+.usr-native .usr-av {
+  border-radius: 50%;
+}
+.usr-native-account-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.usr-native-account-meta code,
+.usr-native-account-home code {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink2);
+}
+.usr-native-account-home {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: var(--ink2);
+}
+.usr-native-account-home code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.usr-native-account-login {
+  font-size: 10px;
+  color: var(--ink2);
+}
+.usr-native-account-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.usr-native-account-groups > span {
+  font: 10px var(--mono);
+  background: var(--sunk);
+  padding: 4px 6px;
+  border-radius: 4px;
+  color: var(--ink2);
+}
+.usr-native .usr-badge {
+  border-radius: 4px;
+  font-size: 10px;
+  padding: 3px 6px;
+  font-weight: 600;
+}
+.usr-native-security-summary {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 15px;
+  background: var(--h-usr-s);
+  border-radius: 9px;
+  color: var(--h-usr);
+}
+.usr-native-security-summary > div {
+  display: grid;
+  gap: 5px;
+}
+.usr-native-security-summary b {
+  font-size: 13px;
+  color: var(--ink);
+}
+.usr-native-security-summary span,
+.usr-native-help {
+  font-size: 11px;
+  color: var(--ink2);
+}
+.usr-native-help {
+  line-height: 1.7;
+  margin: 15px 0;
+}
+.usr-native-access-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  overflow: hidden;
+}
+.usr-native-access {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.usr-native-access:last-child {
+  border-bottom: 0;
+}
+.usr-native-access-person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+.usr-native-access-person > span:nth-child(2) {
+  display: grid;
+  gap: 4px;
+}
+.usr-native-access-person b {
+  font-size: 12px;
+}
+.usr-native-access-person small {
+  font-size: 10px;
+  color: var(--ink2);
+}
+.usr-native-access-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.usr-native-access-actions .ui-btn {
+  font-size: 10px;
+}
+.usr-native-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--line);
+  color: var(--ink2);
+  font-size: 10px;
+  background: var(--sunk);
+}
+.usr-native-skeleton {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.usr-native .usr-tablewrap {
+  padding: 0;
+}
+.usr-native .usr-glist {
+  padding: 12px 0;
+}
+.usr-native .usr-group {
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.usr-native .usr-bar {
+  padding: 0 0 10px;
+}
+.usr-native .ui-panel {
+  flex: 0 0 340px;
+  width: 340px;
+  border-left: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--surface);
+}
+.usr-native .ui-panel-hd {
+  padding: 18px 16px;
+}
+.usr-native .ui-panel-body {
+  padding: 16px;
+}
+.usr-native .ui-panel-tabs {
+  padding: 0 16px;
+}
+.usr-native .usr-acts .ui-btn {
+  font-size: 10px;
+  padding: 6px 8px;
+  border-radius: 5px;
+}
+.usr-native .usr-row,
+.usr-native .usr-key {
+  border-radius: 7px;
+}
+.usr-native :is(button, input):focus-visible {
+  outline: 2px solid var(--h-usr);
+  outline-offset: 2px;
+}
+@container usr-accounts (max-width:950px) {
+  .usr-native-sidebar {
+    width: 175px;
+  }
+  .usr-native-content {
+    padding: 18px;
+  }
+  .usr-native .ui-panel {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: min(370px, 100%);
+    max-width: 100%;
+    z-index: 5;
+    box-shadow: -12px 0 30px color-mix(in srgb, var(--ink) 12%, transparent);
+  }
+  .usr-native-commandbar {
+    flex-wrap: wrap;
+  }
+  .usr-native-search {
+    width: min(230px, 40%);
+  }
+}
+@container usr-accounts (max-width:640px) {
+  .usr-native-layout {
+    flex-direction: column;
+  }
+  .usr-native-sidebar {
+    width: 100%;
+    padding: 10px;
+    gap: 8px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .usr-native-identity,
+  .usr-native-self,
+  .usr-native-privilege {
+    display: none;
+  }
+  .usr-native-sidebar nav {
+    flex-direction: row;
+    overflow: auto;
+  }
+  .usr-native-sidebar nav button {
+    white-space: nowrap;
+    padding: 10px;
+  }
+  .usr-native-commandbar {
+    padding: 10px;
+  }
+  .usr-native-command-spacer {
+    display: none;
+  }
+  .usr-native-search {
+    width: 100%;
+    flex-basis: 100%;
+    order: 5;
+  }
+  .usr-native-content {
+    padding: 16px;
+  }
+  .usr-native-access {
+    flex-wrap: wrap;
+  }
+  .usr-native-access-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .usr-native-status {
+    flex-wrap: wrap;
+  }
+  .usr-native-heading h1 {
+    font-size: 21px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .usr-native-account {
+    transition: none;
+  }
+}

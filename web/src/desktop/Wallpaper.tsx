@@ -1,3 +1,5 @@
+import './wallpaper.css';
+
 /** Offline, deterministic interpretation of the supplied concept's Bloom wallpaper. */
 export function Wallpaper({ kind = 'bloom' }: { kind?: string }) {
   return (

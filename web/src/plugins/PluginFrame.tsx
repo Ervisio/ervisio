@@ -4,6 +4,7 @@ import { useSession } from '../api';
 import { apiUrl } from '../api/base';
 import { useI18n, useT } from '../i18n';
 import { themeVars, useTheme } from '../theme';
+import { useWindowActivity } from '../lib/windowActivity';
 import { EmptyState, Skeleton } from '../ui';
 import type { BrokerUser } from './broker';
 import type { FrameTheme, FrameView, HostToFrame } from './protocol';
@@ -33,9 +34,13 @@ interface FrameProps {
   view: FrameView;
   title?: string;
   style?: CSSProperties;
+  /** Keeps the frame mounted while suspending presentation timers when minimized. */
+  active?: boolean;
 }
 
-function FrameSession({ plugin, view, title, style }: FrameProps) {
+function FrameSession({ plugin, view, title, style, active: requestedActive = true }: FrameProps) {
+  const windowActive = useWindowActivity();
+  const active = requestedActive && windowActive;
   const t = useT('plugins');
   const nav = useNavigate();
   const { session } = useSession();
@@ -57,7 +62,7 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
     }),
     [th.theme, th.colourMode, th.distroColour, th.density],
   );
-  const live = useRef({ themeSnap, lang, user: {} as BrokerUser, plugin, nav });
+  const live = useRef({ themeSnap, lang, user: {} as BrokerUser, plugin, nav, active });
   live.current = {
     themeSnap,
     lang,
@@ -69,6 +74,7 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
     },
     plugin,
     nav,
+    active,
   };
 
   const post = useCallback(
@@ -110,6 +116,9 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
   useEffect(() => {
     if (phase === 'running') post({ la: 'plugin', t: 'lang', lang });
   }, [phase, lang, post]);
+  useEffect(() => {
+    post({ la: 'plugin', t: 'visibility', active });
+  }, [active, phase, post]);
 
   if (phase === 'failed') {
     return (

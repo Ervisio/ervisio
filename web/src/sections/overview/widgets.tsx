@@ -18,6 +18,7 @@ import {
 import { PluginFrame, usePlugins } from '../../plugins';
 import { useRunning, type ActionResult } from './actions';
 import { usePolling, useRefreshInterval } from '../../lib/refresh';
+import { useWindowActivity } from '../../lib/windowActivity';
 import { physicalNet, useAlerts, useHost, useMetrics, type AlertItem } from './data';
 import { bytes, bytesStr, duration, num, rate } from './fmt';
 import {
@@ -73,17 +74,21 @@ function SetUp({ ctx, w, text }: { ctx: WidgetCtx; w: Widget; text: string }) {
 }
 
 function useTick(ms: number, on = true) {
+  const active = useWindowActivity();
   const [n, set] = useState(0);
   useEffect(() => {
-    if (!on) return;
+    if (!on || !active) return;
     const id = window.setInterval(() => set((x) => x + 1), ms);
     return () => window.clearInterval(id);
-  }, [ms, on]);
+  }, [ms, on, active]);
   return n;
 }
 
 /** Calls a method now and every `every` ms while visible; never opens the unlock dialog by itself. */
 function usePoll<T>(method: string, params: unknown, every: number, admin = false, enabled = true) {
+  const active = useWindowActivity();
+  const activeRef = useRef(active);
+  activeRef.current = active;
   const [data, setData] = useState<T | null>(null);
   const [err, setErr] = useState<ApiError | null>(null);
   const key = JSON.stringify(params) + admin;
@@ -102,7 +107,7 @@ function usePoll<T>(method: string, params: unknown, every: number, admin = fals
     [method, admin],
   );
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !activeRef.current) return;
     void load();
   }, [load, key, enabled]);
   usePolling(() => void load(), every, enabled);
@@ -660,6 +665,7 @@ function Log({ w, ctx }: { w: Widget; ctx: WidgetCtx }) {
 
 /* ---------- command output ---------- */
 function Output({ w, ctx }: { w: Widget; ctx: WidgetCtx }) {
+  const active = useWindowActivity();
   const t = useT('overview');
   const s = w.settings ?? {};
   const argv: string[] = Array.isArray(s.argv) ? s.argv : [];
@@ -694,13 +700,13 @@ function Output({ w, ctx }: { w: Widget; ctx: WidgetCtx }) {
     [key, every], // eslint-disable-line react-hooks/exhaustive-deps
   );
   useEffect(() => {
-    if (!argv.length) return;
+    if (!argv.length || !active) return;
     void run(false);
     const id = window.setInterval(() => {
       if (!document.hidden) void run(false);
     }, every * 1000);
     return () => window.clearInterval(id);
-  }, [run, every, key]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [run, every, key, active]); // eslint-disable-line react-hooks/exhaustive-deps
   const cmd = argv.join(' ');
   return (
     <Card

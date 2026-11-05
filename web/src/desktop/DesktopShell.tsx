@@ -33,6 +33,7 @@ import {
 } from './model';
 import { Wallpaper } from './Wallpaper';
 import { Connectivity } from './Connectivity';
+import { WindowActivityProvider, useWindowActivity } from '../lib/windowActivity';
 import { collectDropped, type Dropped } from '../sections/files/dropfiles';
 import './desktop.css';
 
@@ -40,20 +41,24 @@ type AppEntry = NavEntry & { native: boolean; plugin?: string; page?: string; na
 type Context = { x: number; y: number; item?: string; folder?: string | null; app?: string };
 type Edit = { kind: 'create'; parent: string | null } | { kind: 'rename'; id: string };
 const DRAG_TYPE = 'application/x-ervisio-desktop';
+const importFailure = (error: Error) =>
+  /dynamically imported module|loading chunk|module script/i.test(error.message);
 
 class WindowBoundary extends Component<
-  { children: ReactNode; fallback: ReactNode },
-  { failed: boolean }
+  { children: ReactNode; fallback(error: Error, retry: () => void): ReactNode },
+  { error: Error | null }
 > {
-  state = { failed: false };
-  static getDerivedStateFromError() {
-    return { failed: true };
+  state: { error: Error | null } = { error: null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
   }
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('ErvisiOS application:', error, info.componentStack);
   }
   render() {
-    return this.state.failed ? this.props.fallback : this.props.children;
+    return this.state.error
+      ? this.props.fallback(this.state.error, () => this.setState({ error: null }))
+      : this.props.children;
   }
 }
 
@@ -67,6 +72,7 @@ function AppIcon({ app, size = 24 }: { app: AppEntry; size?: number }) {
 
 function AppContent({ app, url }: { app: AppEntry; url: string }) {
   const { plugins } = usePlugins();
+  const active = useWindowActivity();
   const t = useT('shell');
   if (app.plugin) {
     const plugin = plugins.find((p) => p.id === app.plugin);
@@ -80,6 +86,7 @@ function AppContent({ app, url }: { app: AppEntry; url: string }) {
     return (
       <PluginFrame
         plugin={plugin}
+        active={active}
         view={{ kind: 'page', id: app.nativeView ?? app.page!, shell: 'ervisios' }}
         title={app.label}
       />
@@ -88,7 +95,11 @@ function AppContent({ app, url }: { app: AppEntry; url: string }) {
   return (
     <Routes location={url}>
       {SECTIONS.map((s) => (
-        <Route key={s.id} path={s.path === '/' ? '/' : `${s.path}/*`} element={<s.page />} />
+        <Route
+          key={s.id}
+          path={s.path === '/' ? '/' : `${s.path}/*`}
+          element={s.desktopPage ? <s.desktopPage /> : <s.page />}
+        />
       ))}
     </Routes>
   );
@@ -233,7 +244,12 @@ export function DesktopShell() {
       },
       ...[...nav.main, nav.settings].map((a) => ({
         ...a,
-        label: a.key === 'files' ? t('desktop.explorer') : a.label,
+        label:
+          a.key === 'files'
+            ? t('desktop.explorer')
+            : a.key === 'overview'
+              ? t('desktop.taskManager')
+              : a.label,
         native: true,
       })),
       ...pages.map((p) => {
@@ -379,8 +395,13 @@ export function DesktopShell() {
   }, [currentURL, apps, location.pathname, open, pluginsLoading]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setClock(new Date()), 1000);
-    return () => window.clearInterval(timer);
+    let timer: number;
+    const tick = () => {
+      setClock(new Date());
+      timer = window.setTimeout(tick, 60_000 - (Date.now() % 60_000));
+    };
+    timer = window.setTimeout(tick, 60_000 - (Date.now() % 60_000));
+    return () => window.clearTimeout(timer);
   }, []);
   useEffect(() => {
     if (panel === 'start') searchRef.current?.focus();
@@ -691,52 +712,63 @@ export function DesktopShell() {
                 changeData((d) => ({ ...d, bounds: { ...d.bounds, [win.app]: bounds } }))
               }
             >
-              <WindowBoundary
-                fallback={
-                  <div className="eos-empty">
-                    <Icon name="alert" />
-                    <p>{t('desktop.appFailed')}</p>
-                    <Button
-                      onClick={() => setWindows((list) => list.filter((w) => w.id !== win.id))}
-                    >
-                      {t('desktop.close')}
-                    </Button>
-                  </div>
-                }
-              >
-                <Suspense
-                  fallback={
-                    <div className="eos-loading">
-                      <Skeleton lines={6} />
+              <WindowActivityProvider active={!win.minimized}>
+                <WindowBoundary
+                  fallback={(error, retry) => (
+                    <div className="eos-empty eos-app-error" role="alert">
+                      <Icon name="alert" />
+                      <p>{t('desktop.appFailed')}</p>
+                      <details>
+                        <summary>{t('desktop.errorDetails')}</summary>
+                        <pre>{error.message}</pre>
+                      </details>
+                      <Button
+                        onClick={importFailure(error) ? () => window.location.reload() : retry}
+                      >
+                        {t(importFailure(error) ? 'desktop.reload' : 'desktop.retry')}
+                      </Button>
+                      <Button
+                        onClick={() => setWindows((list) => list.filter((w) => w.id !== win.id))}
+                      >
+                        {t('desktop.close')}
+                      </Button>
                     </div>
-                  }
-                >
-                  {folder ? (
-                    <div className="eos-folder-content">
-                      <div className="eos-folder-toolbar">
-                        <Icon name="files" />
-                        <span>{t('desktop.virtualFolder')}</span>
-                        <Button icon="folderplus" onClick={() => createFolder(folder.id)}>
-                          {t('desktop.newFolder')}
-                        </Button>
-                      </div>
-                      <p>{t('desktop.virtualHint')}</p>
-                      {renderItems(folder.id)}
-                      {!data.folders.some((f) => f.parent === folder.id) &&
-                        !data.shortcuts.some((s) => s.folder === folder.id) && (
-                          <div className="eos-empty">
-                            <Icon name="files" size={36} />
-                            <p>{t('desktop.emptyFolder')}</p>
-                          </div>
-                        )}
-                    </div>
-                  ) : app!.key === 'this-pc' ? (
-                    <ThisPC apps={apps} open={open} />
-                  ) : (
-                    <AppContent app={app!} url={win.url} />
                   )}
-                </Suspense>
-              </WindowBoundary>
+                >
+                  <Suspense
+                    fallback={
+                      <div className="eos-loading">
+                        <Skeleton lines={6} />
+                      </div>
+                    }
+                  >
+                    {folder ? (
+                      <div className="eos-folder-content">
+                        <div className="eos-folder-toolbar">
+                          <Icon name="files" />
+                          <span>{t('desktop.virtualFolder')}</span>
+                          <Button icon="folderplus" onClick={() => createFolder(folder.id)}>
+                            {t('desktop.newFolder')}
+                          </Button>
+                        </div>
+                        <p>{t('desktop.virtualHint')}</p>
+                        {renderItems(folder.id)}
+                        {!data.folders.some((f) => f.parent === folder.id) &&
+                          !data.shortcuts.some((s) => s.folder === folder.id) && (
+                            <div className="eos-empty">
+                              <Icon name="files" size={36} />
+                              <p>{t('desktop.emptyFolder')}</p>
+                            </div>
+                          )}
+                      </div>
+                    ) : app!.key === 'this-pc' ? (
+                      <ThisPC apps={apps} open={open} />
+                    ) : (
+                      <AppContent app={app!} url={win.url} />
+                    )}
+                  </Suspense>
+                </WindowBoundary>
+              </WindowActivityProvider>
             </AppWindow>
           );
         })}
@@ -1125,16 +1157,16 @@ export function DesktopShell() {
                 <Icon name="files" size={25} />
               </button>
             ))}
-          <button
-            className="eos-ai-button"
-            title={t('desktop.assistant')}
-            aria-label={t('desktop.assistant')}
-            onClick={() =>
-              ai ? open(ai) : open(apps.find((a) => a.key === 'plugins')!, '/plugins?tab=browse')
-            }
-          >
-            <Icon name="zap" size={22} />
-          </button>
+          {ai && (
+            <button
+              className="eos-ai-button"
+              title={t('desktop.assistant')}
+              aria-label={t('desktop.assistant')}
+              onClick={() => open(ai)}
+            >
+              <Icon name="zap" size={22} />
+            </button>
+          )}
         </div>
         <div className="eos-tray">
           <button

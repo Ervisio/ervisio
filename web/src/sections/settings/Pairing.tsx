@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useWindowActivity } from '../../lib/windowActivity';
 import { useSession, errorMessage } from '../../api';
 import { useT } from '../../i18n';
 import { formatDateTime } from '../../lib/format';
@@ -88,6 +89,7 @@ export function PairingBlock({
 }
 
 function TokenDialog({ defaultUser, onClose }: { defaultUser: string; onClose(): void }) {
+  const active = useWindowActivity();
   const t = useT('envs');
   const [user, setUser] = useState(defaultUser);
   const [tok, setTok] = useState<PairToken | null>(null);
@@ -95,13 +97,13 @@ function TokenDialog({ defaultUser, onClose }: { defaultUser: string; onClose():
   const [err, setErr] = useState('');
   const [left, setLeft] = useState(0);
   useEffect(() => {
-    if (!tok) return;
+    if (!tok || !active) return;
     const end = Date.parse(tok.expires);
     const tick = () => setLeft(Math.max(0, Math.round((end - Date.now()) / 1000)));
     tick();
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
-  }, [tok]);
+  }, [tok, active]);
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
     if (tok) return;

@@ -224,5 +224,24 @@
     "games": "Punteggi dei giochi",
     "http": "File del server web",
     "ftp": "File del server FTP"
+  },
+  "native": {
+    "navigation": "Navigazione account",
+    "security": "Accesso e sicurezza",
+    "signedIn": "Accesso effettuato",
+    "privileged": "Dettagli protetti degli account disponibili",
+    "standard": "Alcuni dettagli richiedono diritti di amministratore",
+    "refresh": "Aggiorna account",
+    "accessSummary": "Accesso agli account",
+    "accessCounts": "{admins} amministratori, {restricted} account con limitazioni note, {total} persone",
+    "securityText": "Apri un account per gestire permessi, chiavi SSH o sessioni. Ogni modifica rispetta i permessi applicati da Ervisio.",
+    "accountCounts": "{people} persone, {system} account di sistema, {groups} gruppi",
+    "loading": "Lettura degli account…",
+    "description": {
+      "people": "Le persone che possono accedere a questa macchina. Seleziona un account per gestirne l’accesso.",
+      "system": "Account utilizzati dal sistema operativo e dai suoi servizi.",
+      "groups": "Gestisci i membri dei gruppi e gli accessi concessi da ogni gruppo.",
+      "security": "Chiavi SSH, permessi degli account e sessioni attive su questa macchina."
+    }
   }
 }

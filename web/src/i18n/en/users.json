@@ -224,5 +224,24 @@
     "games": "Game scores",
     "http": "Web server files",
     "ftp": "FTP server files"
+  },
+  "native": {
+    "navigation": "Account navigation",
+    "security": "Access and security",
+    "signedIn": "Signed in",
+    "privileged": "Protected account details available",
+    "standard": "Some details need administrator rights",
+    "refresh": "Refresh accounts",
+    "accessSummary": "Account access",
+    "accessCounts": "{admins} administrators, {restricted} accounts with known restrictions, {total} people",
+    "securityText": "Open an account to manage its permissions, SSH keys or sessions. Every change uses the account permissions enforced by Ervisio.",
+    "accountCounts": "{people} people, {system} system accounts, {groups} groups",
+    "loading": "Reading accounts…",
+    "description": {
+      "people": "People who can sign in to this machine. Select an account to manage its access.",
+      "system": "Accounts used by the operating system and its services.",
+      "groups": "Manage group membership and the access each group grants.",
+      "security": "SSH keys, account permissions and active sessions on this machine."
+    }
   }
 }

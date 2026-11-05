@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useWindowActivity } from '../../lib/windowActivity';
 import { usePaneData, type PaneData } from './data';
 import { fcall, onFilesChanged } from './fapi';
 import type { Side } from './filesPageTypes';
@@ -8,11 +9,13 @@ import type { FilesTabs } from './useFilesTabs';
 const PLACES_REFRESH_MS = 60_000;
 
 export function usePlaces(): Places | null {
+  const active = useWindowActivity();
   const [places, setPlaces] = useState<Places | null>(null);
   const loadPlaces = useCallback(() => {
     fcall<Places>('files.places', {}).then(setPlaces, () => undefined);
   }, []);
   useEffect(() => {
+    if (!active) return;
     loadPlaces();
     const iv = window.setInterval(loadPlaces, PLACES_REFRESH_MS);
     const off = onFilesChanged(() => loadPlaces());
@@ -20,7 +23,7 @@ export function usePlaces(): Places | null {
       window.clearInterval(iv);
       off();
     };
-  }, [loadPlaces]);
+  }, [loadPlaces, active]);
   return places;
 }
 

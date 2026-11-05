@@ -14,6 +14,9 @@ export interface SectionDef {
   /** Key in the `shell` namespace, e.g. nav.services. */
   titleKey: string;
   page: LazyExoticComponent<ComponentType>;
+  /** Optional native ErvisiOS view. Classic keeps the normal section page. */
+  desktopPage?: LazyExoticComponent<ComponentType>;
+  desktopTitleKey?: string;
   /** Shown in the rail / dock. Settings is placed separately by the shell. */
   rail: boolean;
   /** Operating systems the section works on; all when unset. */
@@ -30,6 +33,8 @@ export const SECTIONS: SectionDef[] = [
     titleKey: 'nav.overview',
     rail: true,
     page: lazy(() => import('./overview')),
+    desktopPage: lazy(() => import('./taskmanager')),
+    desktopTitleKey: 'desktop.taskManager',
   },
   {
     id: 'terminal',

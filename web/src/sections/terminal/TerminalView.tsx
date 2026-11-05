@@ -13,6 +13,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { stream, toBase64, type StreamHandle } from '../../api';
 import { useT } from '../../i18n';
+import { useWindowActivity } from '../../lib/windowActivity';
 import { Button } from '../../ui';
 import { buildTheme } from './xtermTheme';
 import type { TermHandle } from './types';
@@ -68,7 +69,8 @@ function copySilently(text: string) {
 
 function createTerminal(el: HTMLElement, options: Props) {
   const term = new Terminal({
-    fontFamily: options.fontFamily ?? '"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace',
+    fontFamily:
+      options.fontFamily ?? '"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace',
     fontSize: options.fontSize,
     cursorBlink: options.cursorBlink ?? true,
     cursorStyle: options.cursorStyle ?? 'block',
@@ -76,7 +78,10 @@ function createTerminal(el: HTMLElement, options: Props) {
     scrollback: options.scrollback ?? 5000,
     allowTransparency: !!options.transparent,
     allowProposedApi: true,
-    theme: { ...buildTheme(options.themeMode), ...(options.transparent ? { background: '#00000000' } : {}) },
+    theme: {
+      ...buildTheme(options.themeMode),
+      ...(options.transparent ? { background: '#00000000' } : {}),
+    },
     macOptionIsMeta: true,
   });
   const fit = new FitAddon();
@@ -259,6 +264,7 @@ function observeHostSize(el: HTMLElement, doFit: () => void): () => void {
 
 /** One xterm bound to a persistent session: attaches (replaying the scrollback), resizes and reconnects. */
 const TerminalView = forwardRef<TermHandle, Props>(function TerminalView(props, ref) {
+  const active = useWindowActivity();
   const t = useT('terminal');
   const { id, admin } = props;
   const host = useRef<HTMLDivElement>(null);
@@ -354,32 +360,46 @@ const TerminalView = forwardRef<TermHandle, Props>(function TerminalView(props, 
 
   // Follow the app theme (CSS variables on :root change when the theme or colour mode does).
   useEffect(() => {
+    if (!active) return;
     const mo = new MutationObserver(() => setTick((n) => n + 1));
     mo.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ['style', 'data-scheme', 'class'],
     });
     return () => mo.disconnect();
-  }, []);
+  }, [active]);
   useEffect(() => {
     const term = termRef.current;
-    if (term) term.options.theme = { ...buildTheme(props.themeMode), ...(props.transparent ? { background: '#00000000' } : {}) };
-  }, [props.themeMode, props.transparent, tick]);
+    if (term && active)
+      term.options.theme = {
+        ...buildTheme(props.themeMode),
+        ...(props.transparent ? { background: '#00000000' } : {}),
+      };
+  }, [props.themeMode, props.transparent, tick, active]);
   useEffect(() => {
     const term = termRef.current;
     if (!term) return;
     term.options.fontSize = props.fontSize;
-    term.options.fontFamily = props.fontFamily ?? '"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace';
+    term.options.fontFamily =
+      props.fontFamily ?? '"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace';
     term.options.cursorStyle = props.cursorStyle ?? 'block';
-    term.options.cursorBlink = props.cursorBlink ?? true;
+    term.options.cursorBlink = active && (props.cursorBlink ?? true);
     term.options.lineHeight = props.lineHeight ?? 1;
     term.options.scrollback = props.scrollback ?? 5000;
     try {
-      fitRef.current?.fit();
+      if (active) fitRef.current?.fit();
     } catch {
       /* ignore */
     }
-  }, [props.fontSize, props.fontFamily, props.cursorStyle, props.cursorBlink, props.lineHeight, props.scrollback]);
+  }, [
+    props.fontSize,
+    props.fontFamily,
+    props.cursorStyle,
+    props.cursorBlink,
+    props.lineHeight,
+    props.scrollback,
+    active,
+  ]);
 
   return (
     <div className="terminal-view">

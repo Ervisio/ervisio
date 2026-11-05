@@ -291,5 +291,18 @@
     "trash": "File: apri il Cestino",
     "newFolder": "File: nuova cartella",
     "split": "File: attiva la vista divisa"
+  },
+  "native": {
+    "thisPC": "Questo PC",
+    "hostFiles": "File e archiviazione di questo server",
+    "devices": "Dispositivi e unità",
+    "quickAccess": "Accesso rapido",
+    "back": "Indietro",
+    "forward": "Avanti",
+    "refresh": "Aggiorna cartella",
+    "freeSpace": "{free} disponibili su {total}",
+    "noDisks": "Informazioni sulle unità non disponibili",
+    "itemCount_one": "{count} elemento",
+    "itemCount_other": "{count} elementi"
   }
 }

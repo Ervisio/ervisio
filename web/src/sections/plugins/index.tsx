@@ -13,6 +13,7 @@ import { Developer } from './Developer';
 import { Security } from './Security';
 import type { CatalogEntry, PluginInfo, TabId } from './types';
 import './plugins.css';
+import { NativeAppFrame } from '../../ui/NativeAppFrame';
 
 const MOVED_DISMISSED = 'ervisio.plugins.movedDismissed';
 const TABS: TabId[] = ['installed', 'updates', 'browse', 'security', 'developer'];
@@ -310,61 +311,80 @@ export default function PluginsPage() {
   );
 
   return (
-    <Page flush hue="plg">
-      <div className="plugins-root">
-        <div className="plugins-bar">
-          <Tabs<TabId>
-            variant="pill"
-            hue="plg"
-            aria-label={t('title')}
-            value={tab}
-            onChange={setTab}
-            items={tabs}
-          />
-          <span className="plugins-sp" />
-          {hasSearch && (
-            <div className="plugins-search">
-              <Input
-                icon="search"
-                aria-label={t('search')}
-                placeholder={t('search')}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-            </div>
-          )}
-          <Button variant="primary" icon="plus" onClick={browse}>
-            {t('getPlugins')}
-          </Button>
-        </div>
-        <div className="plugins-body">
-          {tab === 'installed' &&
-            list({
-              title: q ? t('noMatch') : t('emptyInstalled'),
-              text: q ? t('noMatchText') : t('emptyInstalledText'),
-            })}
-          {tab === 'updates' && list({ title: t('emptyUpdates'), text: t('emptyUpdatesText') })}
-          {tab === 'browse' && (
-            <Browse catalog={catalog} query={query} busyId={busyId} onInstall={askInstall} />
-          )}
-          {tab === 'security' &&
-            (state === 'ready' ? (
-              <Security plugins={plugins} busyId={busyId} onToggle={onToggle} />
-            ) : (
-              <div className="plugins-pad">
-                <Skeleton lines={5} />
+    <NativeAppFrame
+      title={t('title')}
+      icon="plugins"
+      items={tabs.map((item) => ({
+        ...item,
+        icon: (
+          {
+            installed: 'plugins',
+            updates: 'download',
+            browse: 'grid',
+            security: 'shield',
+            developer: 'code',
+          } as const
+        )[item.id],
+      }))}
+      active={tab}
+      onSelect={setTab}
+    >
+      <Page flush hue="plg">
+        <div className="plugins-root">
+          <div className="plugins-bar">
+            <Tabs<TabId>
+              variant="pill"
+              hue="plg"
+              aria-label={t('title')}
+              value={tab}
+              onChange={setTab}
+              items={tabs}
+            />
+            <span className="plugins-sp" />
+            {hasSearch && (
+              <div className="plugins-search">
+                <Input
+                  icon="search"
+                  aria-label={t('search')}
+                  placeholder={t('search')}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
               </div>
-            ))}
-          {tab === 'developer' && <Developer plugins={plugins} refresh={refresh} />}
+            )}
+            <Button variant="primary" icon="plus" onClick={browse}>
+              {t('getPlugins')}
+            </Button>
+          </div>
+          <div className="plugins-body">
+            {tab === 'installed' &&
+              list({
+                title: q ? t('noMatch') : t('emptyInstalled'),
+                text: q ? t('noMatchText') : t('emptyInstalledText'),
+              })}
+            {tab === 'updates' && list({ title: t('emptyUpdates'), text: t('emptyUpdatesText') })}
+            {tab === 'browse' && (
+              <Browse catalog={catalog} query={query} busyId={busyId} onInstall={askInstall} />
+            )}
+            {tab === 'security' &&
+              (state === 'ready' ? (
+                <Security plugins={plugins} busyId={busyId} onToggle={onToggle} />
+              ) : (
+                <div className="plugins-pad">
+                  <Skeleton lines={5} />
+                </div>
+              ))}
+            {tab === 'developer' && <Developer plugins={plugins} refresh={refresh} />}
+          </div>
         </div>
-      </div>
-      <ConsentDialog
-        entry={consent?.entry ?? null}
-        mode={consent?.mode ?? 'install'}
-        busy={!!consent && busyId === consent.entry.id}
-        onCancel={() => setConsent(null)}
-        onConfirm={() => consent && void runInstall(consent.entry, consent.mode)}
-      />
-    </Page>
+        <ConsentDialog
+          entry={consent?.entry ?? null}
+          mode={consent?.mode ?? 'install'}
+          busy={!!consent && busyId === consent.entry.id}
+          onCancel={() => setConsent(null)}
+          onConfirm={() => consent && void runInstall(consent.entry, consent.mode)}
+        />
+      </Page>
+    </NativeAppFrame>
   );
 }

@@ -88,7 +88,9 @@
     "virtualFolder": "ErvisiOS folder",
     "emptyFolder": "Drag apps here from Start or use Move to folder.",
     "unavailable": "This app is unavailable. Check whether its plugin is enabled.",
-    "appFailed": "The app could not open. Close this window and open it again.",
+    "appFailed": "The app could not open. Try again or reload the interface if the problem persists.",
+    "errorDetails": "Error details",
+    "reload": "Reload interface",
     "start": "Start",
     "search": "Search apps and plugins",
     "searchShort": "Search",
@@ -164,7 +166,8 @@
       "linkDown": "Inactive",
       "ssid": "SSID: {name}",
       "connection": "Connection: {name}"
-    }
+    },
+    "taskManager": "Task Manager"
   },
   "commands": {
     "opening": "Opening {name}.",

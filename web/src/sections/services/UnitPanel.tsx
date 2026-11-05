@@ -4,6 +4,7 @@ import { ApiError, call, useSession } from '../../api';
 import { useT } from '../../i18n';
 import { formatBytes, formatDuration } from '../../lib/format';
 import { usePolling, useRefreshInterval } from '../../lib/refresh';
+import { useWindowActivity } from '../../lib/windowActivity';
 import {
   Badge,
   Button,
@@ -283,6 +284,7 @@ function InfoTab({
 }
 
 function LogsTab({ name }: { name: string }) {
+  const active = useWindowActivity();
   const t = useT('services');
   const nav = useNavigate();
   const [lines, setLines] = useState<LogLine[] | null>(null);
@@ -290,6 +292,7 @@ function LogsTab({ name }: { name: string }) {
   const box = useRef<HTMLPreElement>(null);
 
   useEffect(() => {
+    if (!active) return;
     let live = true;
     const go = async () => {
       try {
@@ -308,7 +311,7 @@ function LogsTab({ name }: { name: string }) {
       live = false;
       window.clearInterval(id);
     };
-  }, [name]);
+  }, [name, active]);
 
   useEffect(() => {
     const el = box.current;

@@ -1,5 +1,32 @@
 {
   "title": "Settings",
+  "native": {
+    "find": "Find a setting",
+    "category": "Settings category",
+    "results": "Search results",
+    "resultCount": "{count} matching settings",
+    "adminAccount": "Administrator account",
+    "standardAccount": "Personal account",
+    "adminLocked": "Server controls require administrator access",
+    "adminSettings": "Settings for this server",
+    "product": "Ervisio",
+    "descriptions": {
+      "appearance": "Choose your interface, theme and display preferences.",
+      "language": "Language, time format and the first day of the week.",
+      "terminal": "Colors, text and command shortcuts for your real shell sessions.",
+      "notifications": "Choose the events that appear in your notifications.",
+      "browser": "Preferences saved on the browser you are using.",
+      "activity": "Sign-ins, administrator actions and changes on this server.",
+      "signin": "Account access, session lifetime and administrator permissions.",
+      "web": "Listening address, HTTPS and the certificate used by Ervisio.",
+      "plugpol": "Plugin installation, network access and development mode.",
+      "channels": "Send server notifications to your configured channels.",
+      "pluginjobs": "Schedules and background work created by installed plugins.",
+      "envs": "Remote environments and connections available to Ervisio.",
+      "hosts": "Manage the servers you connect to from this console.",
+      "about": "Version, host information and software updates."
+    }
+  },
   "cancel": "Cancel",
   "undo": "Undo",
   "saved": "{name} saved",

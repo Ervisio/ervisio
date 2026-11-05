@@ -33,6 +33,17 @@
 .sw-muted {
   color: var(--ink3);
 }
+.sw-read-error {
+  margin: 10px 16px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 12px;
+  background: var(--h-log-s);
+  color: var(--ink);
+}
 .sw-checked {
   font-size: 13px;
 }

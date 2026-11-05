@@ -25,6 +25,7 @@ export function GroupsView({
   reload,
   newOpen,
   setNewOpen,
+  showCreate = true,
 }: {
   groups: GroupInfo[];
   people: UserInfo[];
@@ -32,6 +33,7 @@ export function GroupsView({
   reload(): Promise<void>;
   newOpen: boolean;
   setNewOpen(v: boolean): void;
+  showCreate?: boolean;
 }) {
   const t = useT('users');
   const desc = useGroupDesc();
@@ -99,9 +101,11 @@ export function GroupsView({
           ]}
         />
         <div className="usr-sp" />
-        <Button icon="plus" onClick={() => setNewOpen(true)}>
-          {t('groups.newTitle')}
-        </Button>
+        {showCreate && (
+          <Button icon="plus" onClick={() => setNewOpen(true)}>
+            {t('groups.newTitle')}
+          </Button>
+        )}
       </div>
       {list.length === 0 ? (
         <EmptyState

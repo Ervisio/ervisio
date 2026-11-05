@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useSession } from '../api';
+import { usePrefs, useSession } from '../api';
 import { useT } from '../i18n';
 import { usePlugins } from '../plugins';
 import { SECTIONS, useRailBadges, useSectionBadgeHooks, type RailBadge } from '../sections';
@@ -26,13 +26,16 @@ export function useNav() {
   const { railPages } = usePlugins();
   const registered = useRailBadges();
   const fromHooks = useSectionBadgeHooks();
-  const os = useSession().session?.os ?? 'linux';
+  const { session, host } = useSession();
+  const { prefs } = usePrefs();
+  const desktop = (prefs['shell.mode'] ?? host?.defaultShell) === 'ervisios';
+  const os = session?.os ?? 'linux';
   return useMemo(() => {
     const entry = (s: (typeof SECTIONS)[number]): NavEntry => ({
       key: s.id,
       to: s.path,
       icon: s.icon,
-      label: t(s.titleKey),
+      label: t(desktop && s.desktopTitleKey ? s.desktopTitleKey : s.titleKey),
       hueClass: `hue-${s.hue}`,
       badge: registered[s.id] ?? fromHooks[s.id],
       end: s.path === '/',
@@ -52,5 +55,5 @@ export function useNav() {
       kind: 'plugin',
     }));
     return { main, settings, plugins };
-  }, [t, railPages, registered, fromHooks, os]);
+  }, [t, railPages, registered, fromHooks, os, desktop]);
 }

@@ -116,6 +116,7 @@ export function GridView({ rows, admin, kit }: { rows: FEntry[]; admin: boolean;
             {folders.map((e) => (
               <div
                 key={e.path}
+                data-entry-type={e.type}
                 {...kit.wire(e)}
                 {...kit.folderDrop(e)}
                 className={`files-fold files-t-dir${kit.isSelected(e) ? ' is-sel' : ''}${isHidden(e) ? ' is-hid' : ''}${kit.dropFolder === e.path ? ' is-drop' : ''}`}

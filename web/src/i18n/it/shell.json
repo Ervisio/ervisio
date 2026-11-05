@@ -88,7 +88,9 @@
     "virtualFolder": "Cartella ErvisiOS",
     "emptyFolder": "Trascina qui le app da Start oppure usa Sposta in cartella.",
     "unavailable": "Questa app non è disponibile. Controlla che il plugin sia attivo.",
-    "appFailed": "L’app non si è aperta. Chiudi questa finestra e riaprila.",
+    "appFailed": "L’app non si è aperta. Riprova o ricarica l’interfaccia se il problema persiste.",
+    "errorDetails": "Dettagli dell’errore",
+    "reload": "Ricarica interfaccia",
     "start": "Start",
     "search": "Cerca app e plugin",
     "searchShort": "Cerca",
@@ -164,7 +166,8 @@
       "linkDown": "Inattiva",
       "ssid": "SSID: {name}",
       "connection": "Connessione: {name}"
-    }
+    },
+    "taskManager": "Gestione attività"
   },
   "commands": {
     "opening": "Apro {name}.",

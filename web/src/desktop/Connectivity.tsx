@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { call, errorMessage, useSession } from '../api';
 import { useT } from '../i18n';
+import { useAccountScope } from '../lib/accountScope';
+import { ScopedReadCache } from '../lib/scopedReadCache';
 import { Button, Icon, Skeleton, Switch } from '../ui';
 import './connectivity.css';
 
@@ -36,17 +38,32 @@ export interface HostConnectivity {
   }[];
 }
 
+const connectivityCache = new ScopedReadCache<HostConnectivity>();
+const CACHE_TTL = 15_000;
+
 /** The quick panel mounts this component while open. These are server radios, never the browser device. */
 export function Connectivity() {
   const t = useT('shell');
   const { host, session } = useSession();
+  const scope = useAccountScope();
   const canManage = !!session && (!!session.isRoot || session.isAdmin || session.canSudo);
-  const [data, setData] = useState<HostConnectivity | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [snapshot, setSnapshot] = useState(() => ({
+    scope,
+    data: scope ? (connectivityCache.peek(scope) ?? null) : null,
+    loading: true,
+    error: '',
+  }));
+  // Account changes select a different snapshot immediately, before effects run.
+  const data =
+    snapshot.scope === scope
+      ? snapshot.data
+      : scope
+        ? (connectivityCache.peek(scope) ?? null)
+        : null;
+  const loading = snapshot.scope !== scope || snapshot.loading;
+  const error = snapshot.scope === scope ? snapshot.error : '';
   const [busy, setBusy] = useState<Radio | null>(null);
-  const [error, setError] = useState('');
   const mounted = useRef(false);
-  const controller = useRef<AbortController | null>(null);
   const sequence = useRef(0);
   const changing = useRef(false);
   // Retain active virtual links while keeping inactive tunnels from burying
@@ -56,30 +73,49 @@ export function Connectivity() {
       (network) => network.state === 'up' || network.type === 'ethernet' || network.type === 'wifi',
     ) ?? [];
 
-  const load = useCallback(async () => {
-    if (changing.current) return;
-    const request = ++sequence.current;
-    setLoading(true);
-    try {
-      const value = await call<HostConnectivity>(
-        'system.connectivity',
-        {},
-        { noUnlock: true, signal: controller.current?.signal },
-      );
-      if (mounted.current && request === sequence.current) {
-        setData(value);
-        setError('');
+  const load = useCallback(
+    async (force = false) => {
+      if (!scope || changing.current) return;
+      const request = ++sequence.current;
+      setSnapshot((previous) => ({
+        scope,
+        data: connectivityCache.peek(scope) ?? null,
+        loading: true,
+        error: previous.scope === scope ? previous.error : '',
+      }));
+      try {
+        await connectivityCache.load(
+          scope,
+          () => call<HostConnectivity>('system.connectivity', {}, { noUnlock: true }),
+          CACHE_TTL,
+          force,
+        );
+        if (mounted.current && request === sequence.current) {
+          setSnapshot({
+            scope,
+            data: connectivityCache.peek(scope) ?? null,
+            loading: false,
+            error: '',
+          });
+        }
+      } catch (failure) {
+        if (mounted.current && request === sequence.current) {
+          setSnapshot({
+            scope,
+            data: connectivityCache.peek(scope) ?? null,
+            loading: false,
+            error: errorMessage(failure),
+          });
+        }
       }
-    } catch (failure) {
-      if (mounted.current && request === sequence.current) setError(errorMessage(failure));
-    } finally {
-      if (mounted.current && request === sequence.current) setLoading(false);
-    }
-  }, []);
+    },
+    [scope],
+  );
 
   useEffect(() => {
     mounted.current = true;
-    controller.current = new AbortController();
+    changing.current = false;
+    setBusy(null);
     void load();
     const timer = window.setInterval(() => {
       if (!document.hidden) void load();
@@ -87,32 +123,37 @@ export function Connectivity() {
     return () => {
       mounted.current = false;
       sequence.current += 1;
-      controller.current?.abort();
       window.clearInterval(timer);
     };
   }, [load]);
 
   const change = async (radio: Radio, enabled: boolean) => {
     const current = data?.[radio];
-    if (changing.current || !canManage || !current?.supported || current.enabled === null) return;
+    if (!scope || changing.current || !canManage || !current?.supported || current.enabled === null)
+      return;
     changing.current = true;
     const request = ++sequence.current;
     setBusy(radio);
-    setError('');
+    connectivityCache.invalidate(scope);
+    setSnapshot((previous) => ({ ...previous, error: '' }));
     try {
       const value = await call<HostConnectivity>(
         'system.connectivity.set',
         { radio, enabled },
-        { admin: true, signal: controller.current?.signal },
+        { admin: true },
       );
-      if (mounted.current && request === sequence.current) setData(value);
-    } catch (failure) {
-      if (mounted.current && request === sequence.current) setError(errorMessage(failure));
-    } finally {
-      changing.current = false;
+      connectivityCache.put(scope, value);
       if (mounted.current && request === sequence.current) {
+        setSnapshot({ scope, data: value, loading: false, error: '' });
+      }
+    } catch (failure) {
+      if (mounted.current && request === sequence.current) {
+        setSnapshot((previous) => ({ ...previous, error: errorMessage(failure), loading: false }));
+      }
+    } finally {
+      if (mounted.current && request === sequence.current) {
+        changing.current = false;
         setBusy(null);
-        setLoading(false);
       }
     }
   };
@@ -129,7 +170,7 @@ export function Connectivity() {
           aria-label={t('desktop.connectivity.refresh')}
           loading={loading}
           disabled={!!busy}
-          onClick={() => void load()}
+          onClick={() => void load(true)}
         />
       </div>
       <p className="eos-connectivity-hint">
@@ -226,7 +267,7 @@ export function Connectivity() {
         <div className="eos-connectivity-error" role="alert">
           <strong>{t('desktop.connectivity.failed')}</strong>
           <p>{error}</p>
-          <Button size="sm" onClick={() => void load()}>
+          <Button size="sm" onClick={() => void load(true)}>
             {t('desktop.retry')}
           </Button>
         </div>

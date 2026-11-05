@@ -31,7 +31,7 @@ export function ScheduleDialog({
     setErr('');
     try {
       await call('software.schedule', { at: value });
-      await loadSummary();
+      await loadSummary(true);
       toast.ok(value ? t('schedule.saved', { time: value }) : t('schedule.removed'));
       onClose();
     } catch (e) {

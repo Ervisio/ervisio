@@ -24,7 +24,8 @@ import { StrengthHint } from './CreateDialog';
 import type { GroupInfo, SessionInfo, SshKey, UserInfo, UserList } from './types';
 import { ADMIN_GROUPS, COMMON_GROUPS } from './util';
 
-type Tab = 'info' | 'groups' | 'keys' | 'sess';
+export type UserDetailTab = 'info' | 'groups' | 'keys' | 'sess';
+type Tab = UserDetailTab;
 
 export function UserPanel({
   user,
@@ -33,6 +34,7 @@ export function UserPanel({
   self,
   onClose,
   reload,
+  initialTab,
 }: {
   user: UserInfo | null;
   data: UserList;
@@ -40,6 +42,7 @@ export function UserPanel({
   self: string;
   onClose(): void;
   reload(): Promise<void>;
+  initialTab?: UserDetailTab;
 }) {
   const t = useT('users');
   const [tab, setTab] = useState<Tab>('info');
@@ -48,8 +51,8 @@ export function UserPanel({
   const [busy, setBusy] = useState(false);
   const name = user?.name ?? '';
   useEffect(() => {
-    setTab('info');
-  }, [name]);
+    setTab(initialTab ?? 'info');
+  }, [name, initialTab]);
 
   const run = async (fn: () => Promise<unknown>, ok: string) => {
     setBusy(true);

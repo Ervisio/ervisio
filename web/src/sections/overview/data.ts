@@ -1,7 +1,9 @@
-import { useEffect, useSyncExternalStore } from 'react';
+import { useCallback, useEffect } from 'react';
 import { call, stream, errorMessage } from '../../api';
 import type { StreamHandle } from '../../api';
 import { onRefreshNow, useRefreshInterval } from '../../lib/refresh';
+import { useActivityExternalStore, useWindowActivity } from '../../lib/windowActivity';
+import { useAccountScope } from '../../lib/accountScope';
 
 /* ---------- types of system.* and overview.* results ---------- */
 export interface Metrics {
@@ -70,14 +72,18 @@ let bucket: {
 } | null = null;
 
 interface Snap {
+  scope: string | null;
   metrics: Metrics | null;
   history: Point[];
   error: string;
 }
-let snap: Snap = { metrics: null, history: [], error: '' };
+const emptySnap: Snap = { scope: null, metrics: null, history: [], error: '' };
+let snap: Snap = emptySnap;
+let currentScope: string | null = null;
+let generation = 0;
+let streamGeneration = 0;
 const subs = new Set<() => void>();
 let handle: StreamHandle | null = null;
-let stopTimer: number | undefined;
 let streamMs = 2000; // interval wanted by the user
 let handleMs = 0; // interval the open stream was started with
 
@@ -97,7 +103,7 @@ function ingest(m: Metrics) {
   bucket.mem += m.memory.percent;
   bucket.net += physicalNet(m).reduce((a, n) => a + n.rxRate + n.txRate, 0);
   for (const d of m.disks) bucket.disks[d.mount] = d.percent;
-  snap = { metrics: m, history: [...history, avg(bucket)], error: '' };
+  snap = { scope: currentScope, metrics: m, history: [...history, avg(bucket)], error: '' };
   subs.forEach((s) => s());
 }
 
@@ -119,7 +125,9 @@ function avg(b: NonNullable<typeof bucket>): Point {
 }
 
 function start() {
-  if (handle) return;
+  if (handle || !currentScope) return;
+  const owner = currentScope;
+  const started = ++streamGeneration;
   handleMs = streamMs;
   bucketMs = Math.max(MIN_BUCKET, streamMs);
   handle = stream<Metrics>(
@@ -127,8 +135,11 @@ function start() {
     { interval: streamMs },
     {
       reopen: true,
-      onData: ingest,
+      onData: (metrics) => {
+        if (owner === currentScope && started === streamGeneration) ingest(metrics);
+      },
       onError: (e) => {
+        if (owner !== currentScope || started !== streamGeneration) return;
         snap = { ...snap, error: e.message };
         subs.forEach((s) => s());
       },
@@ -140,6 +151,7 @@ function restart() {
   if (!handle) return;
   handle.close();
   handle = null;
+  streamGeneration++;
   start();
 }
 
@@ -149,93 +161,147 @@ onRefreshNow(() => {
   if (alertSubs.size) void refreshAlerts();
 });
 
-function subscribe(cb: () => void) {
+function subscribe(scope: string | null, cb: () => void) {
+  selectScope(scope);
   subs.add(cb);
-  window.clearTimeout(stopTimer);
   start();
   return () => {
     subs.delete(cb);
     if (!subs.size) {
-      // keep the stream for a moment so switching sections does not reconnect
-      stopTimer = window.setTimeout(() => {
-        if (!subs.size) {
-          handle?.close();
-          handle = null;
-        }
-      }, 5000);
+      handle?.close();
+      handle = null;
+      streamGeneration++;
     }
   };
 }
 
 /** Latest metrics and the last hour of history (kept in memory while the app is open). */
 export function useMetrics(): Snap {
+  const scope = useAccountScope();
+  const active = useWindowActivity();
   const ms = useRefreshInterval();
   streamMs = ms;
   useEffect(() => {
-    if (handle && handleMs !== ms) restart();
-  }, [ms]);
-  return useSyncExternalStore(subscribe, () => snap);
+    if (active && scope === currentScope && handle && handleMs !== ms) restart();
+  }, [ms, active, scope]);
+  const listen = useCallback((cb: () => void) => subscribe(scope, cb), [scope]);
+  const result = useActivityExternalStore(listen, () => snap);
+  // A minimized consumer retains its rendered snapshot. Never expose that
+  // frozen account's data after SessionProvider changes the authenticated user.
+  return result.scope === scope ? result : emptySnap;
 }
 
 /* ---------- small cached fetchers ---------- */
-let hostCache: Host | null = null;
+let hostSnap: { scope: string | null; host: Host | null } = { scope: null, host: null };
 let hostPromise: Promise<void> | null = null;
 const hostSubs = new Set<() => void>();
 
 export function useHost(): Host | null {
-  const h = useSyncExternalStore(
-    (cb) => (hostSubs.add(cb), () => void hostSubs.delete(cb)),
-    () => hostCache,
+  const scope = useAccountScope();
+  const active = useWindowActivity();
+  const listen = useCallback(
+    (cb: () => void) => {
+      selectScope(scope);
+      hostSubs.add(cb);
+      return () => {
+        hostSubs.delete(cb);
+      };
+    },
+    [scope],
   );
+  const h = useActivityExternalStore(listen, () => hostSnap);
   useEffect(() => {
-    if (hostCache || hostPromise) return;
+    if (!scope || !active) return;
+    selectScope(scope);
+    if (hostSnap.host || hostPromise) return;
+    const started = generation;
     hostPromise = call<Host>('system.host')
       .then((r) => {
-        hostCache = r;
+        if (scope !== currentScope || started !== generation) return;
+        hostSnap = { scope, host: r };
         hostSubs.forEach((s) => s());
       })
       .catch(() => undefined)
       .finally(() => {
-        hostPromise = null;
+        if (scope === currentScope && started === generation) hostPromise = null;
       });
-  }, []);
-  return h;
+  }, [active, scope]);
+  return h.scope === scope ? h.host : null;
 }
 
 interface AlertSnap {
+  scope: string | null;
   alerts: AlertItem[] | null;
   error: string;
   at: number;
 }
-let alertSnap: AlertSnap = { alerts: null, error: '', at: 0 };
+const emptyAlerts: AlertSnap = { scope: null, alerts: null, error: '', at: 0 };
+let alertSnap: AlertSnap = emptyAlerts;
 let alertBusy = false;
 const alertSubs = new Set<() => void>();
 
 export async function refreshAlerts() {
-  if (alertBusy) return;
+  if (alertBusy || !currentScope) return;
+  const owner = currentScope;
+  const started = generation;
   alertBusy = true;
   try {
     const r = await call<AlertItem[]>('overview.alerts');
-    alertSnap = { alerts: Array.isArray(r) ? r : [], error: '', at: Date.now() };
+    if (owner !== currentScope || started !== generation) return;
+    alertSnap = { scope: owner, alerts: Array.isArray(r) ? r : [], error: '', at: Date.now() };
   } catch (e) {
+    if (owner !== currentScope || started !== generation) return;
     alertSnap = { ...alertSnap, error: errorMessage(e), at: Date.now() };
   } finally {
-    alertBusy = false;
-    alertSubs.forEach((s) => s());
+    if (owner === currentScope && started === generation) {
+      alertBusy = false;
+      alertSubs.forEach((s) => s());
+    }
   }
 }
 
 /** Alerts, refreshed at the user's rate (at least every 30 s) while something shows them (the daemon caches the slow checks). */
 export function useAlerts() {
-  const s = useSyncExternalStore(
-    (cb) => (alertSubs.add(cb), () => void alertSubs.delete(cb)),
-    () => alertSnap,
+  const scope = useAccountScope();
+  const active = useWindowActivity();
+  const listen = useCallback(
+    (cb: () => void) => {
+      selectScope(scope);
+      alertSubs.add(cb);
+      return () => {
+        alertSubs.delete(cb);
+      };
+    },
+    [scope],
   );
+  const s = useActivityExternalStore(listen, () => alertSnap);
   const every = Math.max(useRefreshInterval(), 30_000);
   useEffect(() => {
+    if (!scope || !active) return;
+    selectScope(scope);
     if (Date.now() - alertSnap.at > 20_000) void refreshAlerts();
     const id = window.setInterval(() => !document.hidden && void refreshAlerts(), every);
     return () => window.clearInterval(id);
-  }, [every]);
-  return { ...s, refresh: refreshAlerts };
+  }, [every, active, scope]);
+  return { ...(s.scope === scope ? s : emptyAlerts), refresh: refreshAlerts };
+}
+
+/** One shared connection is enough for the current account. Switching identity
+ * drops all telemetry/history and invalidates late RPC/stream callbacks. */
+function selectScope(scope: string | null) {
+  if (scope === currentScope) return;
+  currentScope = scope;
+  generation++;
+  streamGeneration++;
+  handle?.close();
+  handle = null;
+  handleMs = 0;
+  history = [];
+  bucket = null;
+  snap = { ...emptySnap, scope };
+  hostSnap = { scope, host: null };
+  hostPromise = null;
+  alertSnap = { ...emptyAlerts, scope };
+  alertBusy = false;
+  for (const notify of [...subs, ...hostSubs, ...alertSubs]) notify();
 }

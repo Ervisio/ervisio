@@ -268,6 +268,7 @@ export interface FrameLive {
   user: BrokerUser;
   plugin: PluginManifest;
   nav: NavigateFunction;
+  active?: boolean;
 }
 
 export type PostToFrame = (m: HostToFrame, transfer?: Transferable[]) => void;
@@ -476,6 +477,7 @@ async function sendInit(b: Bridge, c: FrameConnection, fail: (msg: string) => vo
       theme: snap(),
       appOrigin: consoleOrigin(),
       platform: c.platform,
+      active: b.live.current.active !== false,
       code,
     });
   } catch (e) {

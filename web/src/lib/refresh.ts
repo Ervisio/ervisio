@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { usePrefs } from '../api';
+import { useWindowActivity } from './windowActivity';
 
 /** Per-user "how often live data refreshes" (pref `refreshInterval`, milliseconds). */
 export const REFRESH_KEY = 'refreshInterval';
@@ -47,25 +48,27 @@ export function onRefreshNow(fn: () => void): () => void {
 }
 
 /**
- * Runs `fn` every `ms` while the tab is visible, plus once when the tab becomes visible again and
+ * Runs `fn` every `ms` while this window and tab are visible, plus once on restore and
  * whenever "Refresh now" is used. Does not run `fn` at mount; the caller loads initial data itself.
  */
 export function usePolling(fn: () => void, ms: number, enabled = true) {
+  const active = useWindowActivity();
   const ref = useRef(fn);
+  const paused = useRef(false);
   ref.current = fn;
   useEffect(() => {
-    if (!enabled) return;
-    const tick = () => {
-      if (!document.hidden) ref.current();
-    };
+    if (!enabled || !active) {
+      paused.current = true;
+      return;
+    }
+    if (paused.current) ref.current();
+    paused.current = false;
+    const tick = () => ref.current();
     const id = window.setInterval(tick, ms);
-    const vis = () => !document.hidden && ref.current();
-    document.addEventListener('visibilitychange', vis);
     const off = onRefreshNow(tick);
     return () => {
       window.clearInterval(id);
-      document.removeEventListener('visibilitychange', vis);
       off();
     };
-  }, [ms, enabled]);
+  }, [ms, enabled, active]);
 }

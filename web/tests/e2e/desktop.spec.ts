@@ -120,8 +120,13 @@ test('apps can be dragged from Start onto the desktop', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Start', exact: true }).click();
   const source = page.locator('.eos-start-app').filter({ hasText: 'Servizi' });
-  await source.dragTo(page.locator('.eos-workspace'), { force: true, targetPosition: { x: 300, y: 50 } });
-  await expect(page.locator('.eos-desktop-items .eos-shortcut').filter({ hasText: 'Servizi' })).toBeVisible();
+  await source.dragTo(page.locator('.eos-workspace'), {
+    force: true,
+    targetPosition: { x: 300, y: 50 },
+  });
+  await expect(
+    page.locator('.eos-desktop-items .eos-shortcut').filter({ hasText: 'Servizi' }),
+  ).toBeVisible();
 });
 
 test('ErvisiOS sign-in uses real auth fields over the concept desktop', async ({ page }) => {
@@ -137,6 +142,46 @@ test('ErvisiOS sign-in uses real auth fields over the concept desktop', async ({
   await expect(page.locator('input[autocomplete="current-password"]')).toBeVisible();
   await page.screenshot({ path: 'test-results/login-ervisios.png' });
   await page.setViewportSize({ width: 390, height: 844 });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
   await page.screenshot({ path: 'test-results/login-mobile.png' });
+});
+
+test('releasing a dragged window keeps it opaque without replaying its opening animation', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.goto('/');
+  await page.locator('.eos-shortcut').filter({ hasText: 'Questo PC' }).dblclick();
+  const win = page.getByRole('region', { name: 'Questo PC', exact: true });
+  await expect(win).toBeVisible();
+  await win.evaluate(async (element) => {
+    await Promise.all(element.getAnimations().map((animation) => animation.finished));
+    element.setAttribute('data-animation-replays', '0');
+    element.addEventListener('animationstart', (event) => {
+      if (event.target === element)
+        element.setAttribute(
+          'data-animation-replays',
+          String(Number(element.getAttribute('data-animation-replays')) + 1),
+        );
+    });
+  });
+  const titlebar = await win.locator('.eos-titlebar').boundingBox();
+  expect(titlebar).not.toBeNull();
+  await page.mouse.move(titlebar!.x + 150, titlebar!.y + 17);
+  await page.mouse.down();
+  await page.mouse.move(titlebar!.x + 240, titlebar!.y + 75, { steps: 5 });
+  await expect(win).toHaveClass(/is-dragging/);
+  await page.mouse.up();
+  const opacity = await win.evaluate(async (element) => {
+    const frames: number[] = [];
+    for (let i = 0; i < 10; i++) {
+      await new Promise(requestAnimationFrame);
+      frames.push(Number(getComputedStyle(element).opacity));
+    }
+    return Math.min(...frames);
+  });
+  expect(opacity).toBe(1);
+  await expect(win).toHaveAttribute('data-animation-replays', '0');
 });

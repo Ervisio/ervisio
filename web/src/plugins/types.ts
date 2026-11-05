@@ -316,6 +316,11 @@ export type PluginViewDef<S = PluginSDK> =
 
 export interface PluginSDK {
   version: 4;
+  /** Visibility combines the minimized window and browser tab; active work is never cancelled. */
+  visibility: {
+    readonly hidden: boolean;
+    onChange(callback: (hidden: boolean) => void): () => void;
+  };
   /** Contract v4: UI surface and deterministic assistant UI commands. Commands are restricted to plugin ai. */
   shell: {
     mode: 'classic' | 'ervisios';

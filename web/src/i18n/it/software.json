@@ -7,6 +7,7 @@
     "history": "Cronologia"
   },
   "checkNow": "Controlla ora",
+  "retry": "Riprova",
   "checked": "Controllato {when}",
   "check": {
     "done": "Controllo aggiornamenti completato",

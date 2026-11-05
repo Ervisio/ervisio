@@ -7,6 +7,7 @@
     "history": "History"
   },
   "checkNow": "Check now",
+  "retry": "Retry",
   "checked": "Checked {when}",
   "check": {
     "done": "Checked for updates",
