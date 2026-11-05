@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [7.0.2] - 2026-11-06
 
 ### Added
 - Shared This PC drive and saved-network-location cards with real capacity information, drive properties and context menus, opening before Home in both interfaces.
