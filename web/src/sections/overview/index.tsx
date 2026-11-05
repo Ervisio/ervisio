@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -9,44 +8,30 @@ import {
   type PointerEvent as RPointerEvent,
   type RefObject,
 } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { usePrefs, useSession } from '../../api';
 import { useT, type TFn } from '../../i18n';
 import { usePlugins, type PluginWidgetInfo } from '../../plugins';
-import { Button, ConfirmDialog, Icon, Page, Sheet, toast, useMediaQuery } from '../../ui';
-import { requestConfirm, runAction, useConfirmRequest } from './actions';
+import { Button, ConfirmDialog, Icon, Page, Sheet, useMediaQuery } from '../../ui';
+import { runAction } from './actions';
 import { OutputDialog } from './OutputDialog';
 import { Library, type LibItem } from './Library';
 import { SettingsDialog } from './SettingsDialog';
 import { RefreshSelect } from '../../lib/RefreshSelect';
 import { refreshNow, useSetRefreshInterval } from '../../lib/refresh';
 import { useAlerts, useHost } from './data';
+import { setWindowsDefaults, normalizeLayout, type DashAction, type Widget } from './model';
+import { WidgetBody, type WidgetCtx } from './widgets';
 import {
-  defaultLayout,
-  setWindowsDefaults,
-  normalizeLayout,
-  snapCols,
-  stepCols,
-  uid,
-  type DashAction,
-  type Widget,
-} from './model';
-import { WidgetBody, widgetTitle, type WidgetCtx } from './widgets';
+  useActionConfirm,
+  useDashboardDraft,
+  useWidgetEdits,
+  useWidgetSettings,
+} from './overviewEditor';
 import './overview.css';
 
-const GAP = 14;
-const GRID_COLUMNS = 12;
 const DRAG_THRESHOLD = 5;
 const EDGE_SCROLL_ZONE = 70;
 const EDGE_SCROLL_STEP = 14;
-
-function move<T>(list: T[], from: number, to: number): T[] {
-  if (from === to || from < 0 || to < 0 || to >= list.length) return list;
-  const next = list.slice();
-  const [x] = next.splice(from, 1);
-  next.splice(to, 0, x);
-  return next;
-}
 
 interface DragUi {
   kind: 'widget' | 'new';
@@ -69,25 +54,6 @@ interface DragRun {
   overId?: string;
   overEnd?: boolean;
   raf?: number;
-}
-
-type WidgetKeyAction = 'grow' | 'shrink' | 'prev' | 'next' | 'settings' | 'remove';
-
-const WIDGET_KEYS = new Map<string, WidgetKeyAction>([
-  ['ArrowLeft', 'prev'],
-  ['ArrowUp', 'prev'],
-  ['ArrowRight', 'next'],
-  ['ArrowDown', 'next'],
-  ['Enter', 'settings'],
-  [' ', 'settings'],
-  ['Delete', 'remove'],
-  ['Backspace', 'remove'],
-]);
-
-function widgetKeyAction(e: KeyboardEvent): WidgetKeyAction | undefined {
-  if (e.shiftKey && e.key === 'ArrowRight') return 'grow';
-  if (e.shiftKey && e.key === 'ArrowLeft') return 'shrink';
-  return WIDGET_KEYS.get(e.key);
 }
 
 function isInside(el: Element | null | undefined, x: number, y: number): boolean {
@@ -138,29 +104,6 @@ function startEdgeScroll(dragRun: RefObject<DragRun | null>, scroller: HTMLEleme
     cur.raf = requestAnimationFrame(tick);
   };
   return requestAnimationFrame(tick);
-}
-
-function trackResize(
-  grid: HTMLElement,
-  el: HTMLElement,
-  startX: number,
-  onCols: (cols: number) => void,
-  onEnd: () => void,
-) {
-  const colW = (grid.getBoundingClientRect().width + GAP) / GRID_COLUMNS;
-  const startW = el.getBoundingClientRect().width;
-  const handleMove = (ev: PointerEvent) => onCols((startW + (ev.clientX - startX) + GAP) / colW);
-  const handleUp = () => {
-    window.removeEventListener('pointermove', handleMove);
-    window.removeEventListener('pointerup', handleUp);
-    window.removeEventListener('pointercancel', handleUp);
-    document.body.classList.remove('ov-dragging');
-    onEnd();
-  };
-  document.body.classList.add('ov-dragging');
-  window.addEventListener('pointermove', handleMove);
-  window.addEventListener('pointerup', handleUp);
-  window.addEventListener('pointercancel', handleUp);
 }
 
 function dashboardSummary(t: TFn, alerts: { severity: string }[] | null, host: string): string {
@@ -393,10 +336,135 @@ function WidgetTools({ t, name, onSettings, onRemove, onResizeDown }: WidgetTool
   );
 }
 
-export default function OverviewPage() {
-  const t = useT('overview');
+interface WidgetItemProps {
+  t: TFn;
+  w: Widget;
+  index: number;
+  total: number;
+  name: string;
+  editing: boolean;
+  dragUi: DragUi | null;
+  ctx: WidgetCtx;
+  onPointerDown: (e: RPointerEvent<HTMLDivElement>) => void;
+  onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => void;
+  onSettings: () => void;
+  onRemove: () => void;
+  onResizeDown: (e: RPointerEvent<HTMLElement>) => void;
+}
+
+function WidgetItem({
+  t,
+  w,
+  index,
+  total,
+  name,
+  editing,
+  dragUi,
+  ctx,
+  onPointerDown,
+  onKeyDown,
+  onSettings,
+  onRemove,
+  onResizeDown,
+}: WidgetItemProps) {
+  return (
+    <div
+      role="listitem"
+      data-wid={w.id}
+      className={widgetClass(w, dragUi)}
+      tabIndex={editing ? 0 : undefined}
+      aria-roledescription={editing ? t('edit.roleDesc') : undefined}
+      aria-label={editing ? t('edit.widgetLabel', { name, pos: index + 1, total }) : undefined}
+      onPointerDown={editing ? onPointerDown : undefined}
+      onKeyDown={editing ? onKeyDown : undefined}
+    >
+      {editing && (
+        <WidgetTools
+          t={t}
+          name={name}
+          onSettings={onSettings}
+          onRemove={onRemove}
+          onResizeDown={onResizeDown}
+        />
+      )}
+      <div className="ov-w-body" {...(editing ? ({ inert: '' } as object) : {})}>
+        <WidgetBody w={w} ctx={ctx} />
+      </div>
+    </div>
+  );
+}
+
+function DropZone({
+  t,
+  dropRef,
+  isOver,
+}: {
+  t: TFn;
+  dropRef: RefObject<HTMLDivElement>;
+  isOver: boolean;
+}) {
+  return (
+    <div ref={dropRef} className={`ov-drop${isOver ? ' ov-drop--on' : ''}`}>
+      <div>
+        <Icon name="plus" />
+        {t('edit.drop')}
+      </div>
+    </div>
+  );
+}
+
+function OverviewActions({ t, onEdit }: { t: TFn; onEdit: () => void }) {
   const tc = useT('common');
   const setRefresh = useSetRefreshInterval();
+  return (
+    <>
+      <span className="ov-refresh">
+        <RefreshSelect label={tc('refreshRate.label')} onPick={(ms) => void setRefresh(ms)} />
+        <Button
+          iconOnly
+          icon="refresh"
+          variant="ghost"
+          aria-label={tc('refreshRate.now')}
+          title={tc('refreshRate.now')}
+          onClick={refreshNow}
+        />
+      </span>
+      <Button icon="edit" onClick={onEdit}>
+        {t('personalize')}
+      </Button>
+    </>
+  );
+}
+
+interface ActionConfirmDialogProps {
+  t: TFn;
+  action: DashAction | null;
+  onClose: () => void;
+}
+
+function ActionConfirmDialog({ t, action, onClose }: ActionConfirmDialogProps) {
+  return (
+    <ConfirmDialog
+      open={!!action}
+      onClose={onClose}
+      onConfirm={() => {
+        if (action) void runAction(action, t);
+      }}
+      danger={false}
+      icon="play"
+      title={t('action.confirmTitle', { name: action?.label ?? '' })}
+      description={
+        action
+          ? `${action.argv.join(' ')}${action.admin ? ` (${t('action.asAdmin')})` : ''}`
+          : undefined
+      }
+      confirmLabel={t('action.run')}
+    />
+  );
+}
+
+export default function OverviewPage() {
+  const t = useT('overview');
   const { prefs, set } = usePrefs();
   const { session } = useSession();
   setWindowsDefaults(session?.os === 'windows');
@@ -404,212 +472,43 @@ export default function OverviewPage() {
   const { alerts } = useAlerts();
   const { widgets: pluginWidgets } = usePlugins();
   const wide = useMediaQuery('(min-width: 1180px)');
-  const [params, setParams] = useSearchParams();
 
   const saved = useMemo(() => normalizeLayout(prefs.dashboard).widgets, [prefs.dashboard]);
-  const [draft, setDraft] = useState<Widget[] | null>(null);
-  const draftRef = useRef(draft);
-  draftRef.current = draft;
-  const editing = draft !== null;
-  const list = draft ?? saved;
-
-  const [settingsId, setSettingsId] = useState<string | null>(null);
-  const [confirm, setConfirm] = useState<DashAction | null>(null);
-  const [discard, setDiscard] = useState(false);
+  const { confirm, closeConfirm, run } = useActionConfirm(t);
+  const dash = useDashboardDraft(saved, set, t);
+  const { editing, list } = dash;
   const [libOpen, setLibOpen] = useState(false);
-  const [announce, setAnnounce] = useState('');
-  const [focusReq, setFocusReq] = useState<{ id: string; n: number } | null>(null);
-  const gridRef = useRef<HTMLDivElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
-
-  const confirmReq = useConfirmRequest();
-  useEffect(() => {
-    if (confirmReq) {
-      setConfirm(confirmReq);
-      requestConfirm(null);
-    }
-  }, [confirmReq]);
-
-  const startEdit = useCallback(
-    () => setDraft(JSON.parse(JSON.stringify(saved)) as Widget[]),
-    [saved],
-  );
-  useEffect(() => {
-    if (params.get('personalize')) {
-      startEdit();
-      const next = new URLSearchParams(params);
-      next.delete('personalize');
-      setParams(next, { replace: true });
-    }
-  }, [params, setParams, startEdit]);
-
-  const dirty = editing && JSON.stringify(draft) !== JSON.stringify(saved);
-  const cancel = () => (dirty ? setDiscard(true) : setDraft(null));
-  const save = async () => {
-    if (!draft) return;
-    try {
-      await set('dashboard', { version: 1, widgets: draft });
-      toast.ok(t('saved'));
-      setDraft(null);
-    } catch (e) {
-      toast.err(t('saveFailed'), e instanceof Error ? e.message : undefined);
-    }
-  };
-
-  const update = useCallback(
-    (fn: (l: Widget[]) => Widget[]) => setDraft((d) => (d ? fn(d) : d)),
-    [],
-  );
-  const nameOf = useCallback((w: Widget) => widgetTitle(w, t), [t]);
-
-  const moveWidget = (id: string, to: number, say = true) => {
-    const cur = draftRef.current;
-    if (!cur) return;
-    const from = cur.findIndex((w) => w.id === id);
-    if (from < 0 || to < 0 || to >= cur.length || from === to) return;
-    update((l) => move(l, from, to));
-    if (say)
-      setAnnounce(t('edit.moved', { name: nameOf(cur[from]), pos: to + 1, total: cur.length }));
-  };
-  const resizeWidget = (id: string, cols: number, say = false) => {
-    const c = snapCols(cols);
-    const cur = draftRef.current?.find((w) => w.id === id);
-    if (!cur || cur.cols === c) return;
-    update((l) => l.map((w) => (w.id === id ? { ...w, cols: c } : w)));
-    if (say) setAnnounce(t('edit.resized', { name: nameOf(cur), cols: c }));
-  };
-  const removeWidget = (id: string) => {
-    const cur = draftRef.current;
-    const w = cur?.find((x) => x.id === id);
-    if (!cur || !w) return;
-    const i = cur.indexOf(w);
-    update((l) => l.filter((x) => x.id !== id));
-    setAnnounce(t('edit.removed', { name: nameOf(w) }));
-    const next = cur[i + 1] ?? cur[i - 1];
-    if (next) setFocusReq({ id: next.id, n: Date.now() });
-  };
-  const addItem = (item: LibItem, at?: number) => {
-    const w: Widget = { id: uid(), type: item.type, cols: item.cols, settings: item.settings?.() };
-    update((l) => {
-      const n = l.slice();
-      n.splice(at === undefined || at < 0 ? n.length : at, 0, w);
-      return n;
-    });
-    setAnnounce(t('edit.added', { name: item.title }));
-    setFocusReq({ id: w.id, n: Date.now() });
-    if (item.configure) setSettingsId(w.id);
-    setLibOpen(false);
-  };
-  const resetLayout = () => {
-    setDraft(defaultLayout().widgets);
-    setAnnounce(t('edit.reset'));
-  };
-  const announceMoved = (id: string) => {
-    const cur = draftRef.current;
-    const w = cur?.find((x) => x.id === id);
-    if (cur && w)
-      setAnnounce(t('edit.moved', { name: nameOf(w), pos: cur.indexOf(w) + 1, total: cur.length }));
-  };
-  const announceResized = (id: string) => {
-    const cur = draftRef.current?.find((x) => x.id === id);
-    if (cur) setAnnounce(t('edit.resized', { name: nameOf(cur), cols: cur.cols }));
-  };
-
-  useLayoutEffect(() => {
-    if (!focusReq) return;
-    const el = gridRef.current?.querySelector<HTMLElement>(`[data-wid="${focusReq.id}"]`);
-    if (el) {
-      el.focus({ preventScroll: true });
-      el.scrollIntoView({ block: 'nearest', behavior: 'auto' });
-    }
-  }, [focusReq]);
-
-  const { dragUi, onWidgetPointerDown, onLibPointerDown } = useWidgetDrag({
-    gridRef,
-    dropRef,
-    draftRef,
-    moveWidget,
-    addItem,
-    announceMoved,
+  const settings = useWidgetSettings(list, saved, editing, dash.update, set);
+  const edits = useWidgetEdits({
+    t,
+    draftRef: dash.draftRef,
+    update: dash.update,
+    reset: dash.reset,
+    openSettings: settings.openSettings,
+    closeLibrary: () => setLibOpen(false),
   });
-
-  const onResizeDown = (w: Widget, e: RPointerEvent<HTMLElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const grid = gridRef.current;
-    const el = (e.currentTarget.closest('[data-wid]') as HTMLElement) ?? null;
-    if (!grid || !el) return;
-    trackResize(
-      grid,
-      el,
-      e.clientX,
-      (cols) => resizeWidget(w.id, cols),
-      () => announceResized(w.id),
-    );
-  };
-
-  const onWidgetKey = (w: Widget, i: number, e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.target !== e.currentTarget) return;
-    const action = widgetKeyAction(e);
-    if (!action) return;
-    e.preventDefault();
-    const len = draftRef.current?.length ?? 0;
-    switch (action) {
-      case 'grow':
-      case 'shrink':
-        resizeWidget(w.id, stepCols(w.cols, action === 'grow' ? 1 : -1), true);
-        break;
-      case 'prev':
-        moveWidget(w.id, i - 1);
-        setFocusReq({ id: w.id, n: Date.now() });
-        break;
-      case 'next':
-        moveWidget(w.id, Math.min(len - 1, i + 1));
-        setFocusReq({ id: w.id, n: Date.now() });
-        break;
-      case 'settings':
-        setSettingsId(w.id);
-        break;
-      case 'remove':
-        removeWidget(w.id);
-        break;
-    }
-  };
-
-  const run = useCallback(
-    (a: DashAction) => {
-      if (a.confirm) setConfirm(a);
-      else void runAction(a, t);
-    },
-    [t],
-  );
+  const { dragUi, onWidgetPointerDown, onLibPointerDown } = useWidgetDrag({
+    gridRef: edits.gridRef,
+    dropRef,
+    draftRef: dash.draftRef,
+    moveWidget: edits.moveWidget,
+    addItem: edits.addItem,
+    announceMoved: edits.announceMoved,
+  });
+  const { openSettings } = settings;
   const ctx: WidgetCtx = useMemo(
-    () => ({ editing, run, configure: (id) => setSettingsId(id) }),
-    [editing, run],
+    () => ({ editing, run, configure: (id) => openSettings(id) }),
+    [editing, run, openSettings],
   );
-
-  const settingsWidget = list.find((w) => w.id === settingsId) ?? null;
-  const pluginTitle = pluginTitleOf(settingsWidget, pluginWidgets);
-  const saveSettings = (s: Widget['settings']) => {
-    const id = settingsId;
-    setSettingsId(null);
-    if (!id) return;
-    if (editing) update((l) => l.map((w) => (w.id === id ? { ...w, settings: s } : w)));
-    else
-      void set('dashboard', {
-        version: 1,
-        widgets: saved.map((w) => (w.id === id ? { ...w, settings: s } : w)),
-      });
-  };
 
   const name = session?.name?.trim().split(/\s+/)[0] || session?.user || '';
   const summary = dashboardSummary(t, alerts, host?.hostname || t('summary.thisMachine'));
-
   const library = (
     <Library
-      onAdd={(i) => addItem(i)}
+      onAdd={(i) => edits.addItem(i)}
       onPointerDown={onLibPointerDown}
-      onReset={resetLayout}
+      onReset={edits.resetLayout}
       className={wide ? '' : 'ov-lib--sheet'}
     />
   );
@@ -619,26 +518,7 @@ export default function OverviewPage() {
       hue="ov"
       title={editing ? undefined : t('greeting', { name })}
       subtitle={editing ? undefined : summary}
-      actions={
-        editing ? undefined : (
-          <>
-            <span className="ov-refresh">
-              <RefreshSelect label={tc('refreshRate.label')} onPick={(ms) => void setRefresh(ms)} />
-              <Button
-                iconOnly
-                icon="refresh"
-                variant="ghost"
-                aria-label={tc('refreshRate.now')}
-                title={tc('refreshRate.now')}
-                onClick={refreshNow}
-              />
-            </span>
-            <Button icon="edit" onClick={startEdit}>
-              {t('personalize')}
-            </Button>
-          </>
-        )
-      }
+      actions={editing ? undefined : <OverviewActions t={t} onEdit={dash.startEdit} />}
     >
       <div className={`ov${editing ? ' ov--editing' : ''}${editing && wide ? ' ov--lib' : ''}`}>
         <div className="ov-main">
@@ -647,50 +527,31 @@ export default function OverviewPage() {
               t={t}
               wide={wide}
               onAdd={() => setLibOpen(true)}
-              onCancel={cancel}
-              onSave={() => void save()}
+              onCancel={dash.cancel}
+              onSave={() => void dash.save()}
             />
           )}
           <div className="ov-canvas">
-            <div ref={gridRef} className="ov-grid" role="list">
+            <div ref={edits.gridRef} className="ov-grid" role="list">
               {list.map((w, i) => (
-                <div
+                <WidgetItem
                   key={w.id}
-                  role="listitem"
-                  data-wid={w.id}
-                  className={widgetClass(w, dragUi)}
-                  tabIndex={editing ? 0 : undefined}
-                  aria-roledescription={editing ? t('edit.roleDesc') : undefined}
-                  aria-label={
-                    editing
-                      ? t('edit.widgetLabel', { name: nameOf(w), pos: i + 1, total: list.length })
-                      : undefined
-                  }
-                  onPointerDown={editing ? (e) => onWidgetPointerDown(w, e) : undefined}
-                  onKeyDown={editing ? (e) => onWidgetKey(w, i, e) : undefined}
-                >
-                  {editing && (
-                    <WidgetTools
-                      t={t}
-                      name={nameOf(w)}
-                      onSettings={() => setSettingsId(w.id)}
-                      onRemove={() => removeWidget(w.id)}
-                      onResizeDown={(e) => onResizeDown(w, e)}
-                    />
-                  )}
-                  <div className="ov-w-body" {...(editing ? ({ inert: '' } as object) : {})}>
-                    <WidgetBody w={w} ctx={ctx} />
-                  </div>
-                </div>
+                  t={t}
+                  w={w}
+                  index={i}
+                  total={list.length}
+                  name={edits.nameOf(w)}
+                  editing={editing}
+                  dragUi={dragUi}
+                  ctx={ctx}
+                  onPointerDown={(e) => onWidgetPointerDown(w, e)}
+                  onKeyDown={(e) => edits.onWidgetKey(w, i, e)}
+                  onSettings={() => openSettings(w.id)}
+                  onRemove={() => edits.removeWidget(w.id)}
+                  onResizeDown={(e) => edits.onResizeDown(w, e)}
+                />
               ))}
-              {editing && (
-                <div ref={dropRef} className={`ov-drop${dragUi?.overEnd ? ' ov-drop--on' : ''}`}>
-                  <div>
-                    <Icon name="plus" />
-                    {t('edit.drop')}
-                  </div>
-                </div>
-              )}
+              {editing && <DropZone t={t} dropRef={dropRef} isOver={!!dragUi?.overEnd} />}
             </div>
           </div>
         </div>
@@ -704,36 +565,21 @@ export default function OverviewPage() {
       )}
 
       <div className="ov-sr" role="status" aria-live="polite">
-        {announce}
+        {edits.announce}
       </div>
 
       <SettingsDialog
-        widget={settingsWidget}
-        pluginTitle={pluginTitle}
-        onClose={() => setSettingsId(null)}
-        onSave={saveSettings}
+        widget={settings.settingsWidget}
+        pluginTitle={pluginTitleOf(settings.settingsWidget, pluginWidgets)}
+        onClose={() => openSettings(null)}
+        onSave={settings.saveSettings}
       />
       <OutputDialog />
+      <ActionConfirmDialog t={t} action={confirm} onClose={closeConfirm} />
       <ConfirmDialog
-        open={!!confirm}
-        onClose={() => setConfirm(null)}
-        onConfirm={() => {
-          if (confirm) void runAction(confirm, t);
-        }}
-        danger={false}
-        icon="play"
-        title={t('action.confirmTitle', { name: confirm?.label ?? '' })}
-        description={
-          confirm
-            ? `${confirm.argv.join(' ')}${confirm.admin ? ` (${t('action.asAdmin')})` : ''}`
-            : undefined
-        }
-        confirmLabel={t('action.run')}
-      />
-      <ConfirmDialog
-        open={discard}
-        onClose={() => setDiscard(false)}
-        onConfirm={() => setDraft(null)}
+        open={dash.isDiscardOpen}
+        onClose={dash.closeDiscard}
+        onConfirm={dash.discard}
         title={t('edit.discardTitle')}
         description={t('edit.discardText')}
         confirmLabel={t('edit.discard')}
