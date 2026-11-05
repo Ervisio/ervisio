@@ -264,7 +264,7 @@ canonical form is the JSON re-encoded with sorted keys and no whitespace. Becaus
 other file in `files`, the signature covers the whole folder. Verification also fails when a file differs from its hash,
 when a listed file is missing, or when the folder holds a file that is not listed.
 
-The trusted key is `plugins.TeamPublicKey` in `sign.go`, the public half of the Ervisio team key. The private key
+The embedded trusted key is `plugins.TeamPublicKey` in `sign.go`, the public half of the Ervisio team key. Administrators can add plugin-only public keys with `plugins.trusted_keys` in the server configuration; this does not grant catalog-signing authority. The private key
 is never in the repository: where it lives, who may use it and how to rotate it is in `docs/PLUGIN-SIGNING.md`.
 Marketplace plugins are signed with it by the registry's CI.
 

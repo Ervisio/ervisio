@@ -54,6 +54,9 @@ func main() {
 		log.Fatal("--config must be an absolute path")
 	}
 	configmod.Path = filepath.Clean(*configPath)
+	if _, err := plugins.LoadPluginSigningKeys(configmod.Path); err != nil {
+		log.Fatal(err)
+	}
 	migrateUserDir()
 	// A versioned install lists the plugins shipped with its own version.
 	if vdir, ok := update.RunningVersionDir(); ok {

@@ -134,6 +134,9 @@ type TLS struct {
 type Plugins struct {
 	AllowUnsigned bool `toml:"allow_unsigned"`
 	Dev           bool `toml:"dev"`
+	// TrustedKeys adds private/deployment plugin signers to the embedded team
+	// keys. These public keys do not grant authority over marketplace catalogs.
+	TrustedKeys []string `toml:"trusted_keys"`
 	// CatalogURL is the https address of the marketplace catalog shown in
 	// Plugins › Browse (default: the Ervisio registry on GitHub Pages; empty
 	// turns the remote catalog off). The catalog must carry a valid
@@ -198,6 +201,7 @@ func (c *Config) Clone() *Config {
 	cp.Auth.AllowGroups = append([]string(nil), c.Auth.AllowGroups...)
 	cp.Web.AllowedOrigins = append([]string(nil), c.Web.AllowedOrigins...)
 	cp.Web.TrustedProxies = append([]string(nil), c.Web.TrustedProxies...)
+	cp.Plugins.TrustedKeys = append([]string(nil), c.Plugins.TrustedKeys...)
 	return &cp
 }
 

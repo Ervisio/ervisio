@@ -164,6 +164,8 @@ var keys = []Key{
 		get: func(c *Config) any { return c.Plugins.AllowUnsigned }, set: func(c *Config, v any) { c.Plugins.AllowUnsigned = v.(bool) }, validate: noCheck},
 	{Name: "plugins.dev", Type: Bool,
 		get: func(c *Config) any { return c.Plugins.Dev }, set: func(c *Config, v any) { c.Plugins.Dev = v.(bool) }, validate: noCheck},
+	{Name: "plugins.trusted_keys", Type: List,
+		get: func(c *Config) any { return c.Plugins.TrustedKeys }, set: func(c *Config, v any) { c.Plugins.TrustedKeys = v.([]string) }, validate: validatePluginKeys},
 	{Name: "plugins.catalog_url", Type: String,
 		get: func(c *Config) any { return c.Plugins.CatalogURL }, set: func(c *Config, v any) { c.Plugins.CatalogURL = v.(string) }, validate: validateCatalogURL},
 	{Name: "plugins.catalog_key", Type: String,
@@ -262,6 +264,25 @@ func validateEd25519Key(v any) error {
 	b, err := base64.StdEncoding.DecodeString(s)
 	if err != nil || len(b) != ed25519.PublicKeySize {
 		return errors.New("must be empty or the base64 of an ed25519 public key (32 bytes)")
+	}
+	return nil
+}
+
+func validatePluginKeys(v any) error {
+	keys := v.([]string)
+	if len(keys) > 16 {
+		return errors.New("at most 16 additional plugin public keys")
+	}
+	seen := make(map[string]bool, len(keys))
+	for n, text := range keys {
+		key, err := base64.StdEncoding.DecodeString(text)
+		if err != nil || len(key) != ed25519.PublicKeySize {
+			return fmt.Errorf("entry %d must be the base64 of an ed25519 public key (32 bytes)", n+1)
+		}
+		if seen[string(key)] {
+			return fmt.Errorf("entry %d duplicates an earlier plugin public key", n+1)
+		}
+		seen[string(key)] = true
 	}
 	return nil
 }

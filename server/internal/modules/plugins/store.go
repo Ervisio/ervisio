@@ -121,7 +121,7 @@ func foundAt(dir, loc string) *Found {
 		f.Err = fmt.Sprintf("the folder is named %q but the manifest id is %q", name, m.ID)
 	default:
 		f.M = m
-		f.Sig = CheckSignature(dir, Keys())
+		f.Sig = CheckSignature(dir, pluginSigningKeys())
 	}
 	return f
 }
