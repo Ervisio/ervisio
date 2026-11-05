@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useStore } from '../../lib/useStore';
 import { apiUrl, call, stream, ApiError, MOCK } from '../../api';
 
 /* Self-update API (docs/api/updates.md). */
@@ -113,13 +113,7 @@ const set = (patch: Partial<RunState> | null) => {
 };
 
 export function useRun(): RunState | null {
-  return useSyncExternalStore(
-    (cb) => {
-      subs.add(cb);
-      return () => void subs.delete(cb);
-    },
-    () => run,
-  );
+  return useStore(subs, () => run);
 }
 export const clearRun = () => {
   if (run && ['done', 'rolled-back', 'timeout', 'error'].includes(run.phase)) set(null);

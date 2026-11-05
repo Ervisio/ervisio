@@ -1,6 +1,6 @@
-import { useSyncExternalStore } from 'react';
 import { ApiError, requestUnlock, stream, uploadUrl } from '../../api';
 import { emitChanged, fcall, isUnlocked } from './fapi';
+import { useStore } from '../../lib/useStore';
 import { basename, dirname, nextId } from './util';
 
 export type TransferKind = 'upload' | 'copy' | 'move';
@@ -61,13 +61,7 @@ function pump() {
 }
 
 export function useTransfers(): Transfer[] {
-  return useSyncExternalStore(
-    (f) => {
-      subs.add(f);
-      return () => void subs.delete(f);
-    },
-    () => snapshot,
-  );
+  return useStore(subs, () => snapshot);
 }
 
 export const transferActions = {
@@ -110,6 +104,19 @@ interface UploadOpts {
   onElevate?: () => void;
 }
 
+/** Picks the error code for a failed upload response. */
+function uploadErrorCode(status: number, body: any): string {
+  return body?.error?.code ?? (status === 409 ? 'conflict' : status === 403 ? 'needs_admin' : 'internal');
+}
+
+function parseJson(text: string): any {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
 export function enqueueUpload(o: UploadOpts) {
   const rel = o.rel ?? o.file.name;
   const target = o.dest === '/' ? '/' + rel : o.dest + '/' + rel;
@@ -120,60 +127,67 @@ export function enqueueUpload(o: UploadOpts) {
   let elevated = false;
   let last = { t: 0, b: 0 };
 
+  const fail = (errorCode: string, error: string) => {
+    patch(id, { status: 'error', errorCode, error });
+    pump();
+  };
+
+  const onProgress = (ev: ProgressEvent) => {
+    const now = performance.now();
+    const dt = (now - last.t) / 1000;
+    let speed: number | undefined;
+    if (dt > 0.5) {
+      speed = (ev.loaded - last.b) / dt;
+      last = { t: now, b: ev.loaded };
+    }
+    patch(id, { done: ev.loaded, ...(speed !== undefined ? { speed } : {}) });
+  };
+
+  const elevateAndRestart = (code: string, body: any) => {
+    elevated = true;
+    void (isUnlocked() ? Promise.resolve() : requestUnlock('upload')).then(
+      () => {
+        admin = true;
+        o.onElevate?.();
+        patch(id, { status: 'running', done: 0 });
+        start();
+      },
+      () => fail(code, body?.error?.message ?? 'Administrator rights are needed to write here.'),
+    );
+  };
+
+  const onLoad = (req: XMLHttpRequest) => {
+    if (req.status >= 200 && req.status < 300) {
+      patch(id, { status: 'done', done: o.file.size, speed: undefined });
+      pump();
+      emitChanged(dirname(target));
+      return;
+    }
+    const body = parseJson(req.responseText);
+    const code = uploadErrorCode(req.status, body);
+    if (code === 'needs_admin' && !admin && !elevated) {
+      elevateAndRestart(code, body);
+      return;
+    }
+    fail(code, body?.error?.message ?? `Upload failed (${req.status}).`);
+  };
+
   const start = () => {
-    xhr = new XMLHttpRequest();
-    xhr.open('POST', uploadUrl(target, admin, overwrite));
-    xhr.setRequestHeader('X-Requested-With', 'ervisio');
-    xhr.withCredentials = true;
+    const req = new XMLHttpRequest();
+    xhr = req;
+    req.open('POST', uploadUrl(target, admin, overwrite));
+    req.setRequestHeader('X-Requested-With', 'ervisio');
+    req.withCredentials = true;
     last = { t: performance.now(), b: 0 };
-    xhr.upload.onprogress = (ev) => {
-      const now = performance.now();
-      const dt = (now - last.t) / 1000;
-      let speed: number | undefined;
-      if (dt > 0.5) {
-        speed = (ev.loaded - last.b) / dt;
-        last = { t: now, b: ev.loaded };
-      }
-      patch(id, { done: ev.loaded, ...(speed !== undefined ? { speed } : {}) });
-    };
-    xhr.onload = () => {
-      let body: any = null;
-      try {
-        body = JSON.parse(xhr!.responseText);
-      } catch {
-        /* not json */
-      }
-      if (xhr!.status >= 200 && xhr!.status < 300) {
-        patch(id, { status: 'done', done: o.file.size, speed: undefined });
-        pump();
-        emitChanged(dirname(target));
-        return;
-      }
-      const code: string = body?.error?.code ?? (xhr!.status === 409 ? 'conflict' : xhr!.status === 403 ? 'needs_admin' : 'internal');
-      if (code === 'needs_admin' && !admin && !elevated) {
-        elevated = true;
-        void (isUnlocked() ? Promise.resolve() : requestUnlock('upload')).then(
-          () => {
-            admin = true;
-            o.onElevate?.();
-            patch(id, { status: 'running', done: 0 });
-            start();
-          },
-          () => {
-            patch(id, { status: 'error', errorCode: code, error: body?.error?.message ?? 'Administrator rights are needed to write here.' });
-            pump();
-          },
-        );
-        return;
-      }
-      patch(id, { status: 'error', errorCode: code, error: body?.error?.message ?? `Upload failed (${xhr!.status}).` });
-      pump();
-    };
-    xhr.onerror = () => {
-      patch(id, { status: 'error', errorCode: 'network', error: 'The connection was lost.' });
-      pump();
-    };
-    xhr.send(o.file);
+    req.upload.onprogress = onProgress;
+    req.onload = () => onLoad(req);
+    req.onerror = () => fail('network', 'The connection was lost.');
+    req.send(o.file);
+  };
+
+  const requeue = () => {
+    patch(id, { status: 'queued', done: 0, error: undefined, errorCode: undefined });
+    pump();
   };
 
   const job: Job = {
@@ -188,13 +202,9 @@ export function enqueueUpload(o: UploadOpts) {
     cancel: () => xhr?.abort(),
     replace: () => {
       overwrite = true;
-      patch(id, { status: 'queued', done: 0, error: undefined, errorCode: undefined });
-      pump();
+      requeue();
     },
-    retry: () => {
-      patch(id, { status: 'queued', done: 0, error: undefined, errorCode: undefined });
-      pump();
-    },
+    retry: requeue,
   };
   jobs.push(job);
   emit();
@@ -221,6 +231,8 @@ export interface CopyOpts {
   onDone?: () => void;
 }
 
+type CopyMsg = { type?: string; total?: number; items?: number; done?: number; current?: string };
+
 export function enqueueCopy(o: CopyOpts) {
   const id = nextId();
   const label = o.from.length === 1 ? basename(o.from[0]) : `${o.from.length} items`;
@@ -228,38 +240,39 @@ export function enqueueCopy(o: CopyOpts) {
   let admin = o.admin;
   let elevated = false;
 
+  const onData = (m: CopyMsg) => {
+    if (m.type === 'start') patch(id, { total: m.total, items: m.items });
+    else if (m.type === 'progress') patch(id, { done: m.done, total: m.total, name: o.from.length === 1 ? label : `${label} · ${m.current}` });
+    else if (m.done) patch(id, { done: -1 });
+  };
+
+  const onEnd = () => {
+    const j = jobs.find((x) => x.id === id);
+    if (j && j.status === 'running') {
+      patch(id, { status: 'done', done: j.total });
+      emitChanged();
+      o.onDone?.();
+    }
+  };
+
+  const onError = (e: { code: string; message: string }) => {
+    const j = jobs.find((x) => x.id === id);
+    if (!j || j.status === 'cancelled') return;
+    if (e.code === 'needs_admin' && !admin && !elevated && isUnlocked()) {
+      // the stream layer already asked for the password; run the copy on the root bridge now
+      elevated = true;
+      admin = true;
+      o.onElevate?.();
+      begin();
+      return;
+    }
+    patch(id, { status: 'error', errorCode: e.code, error: e.message });
+    emitChanged();
+  };
+
   const begin = () => {
     patch(id, { status: 'running', done: 0, error: undefined });
-    handle = stream<any>('files.copy', { from: o.from, to: o.to, move: o.move }, {
-      admin,
-      onData: (m) => {
-        if (m.type === 'start') patch(id, { total: m.total, items: m.items });
-        else if (m.type === 'progress') patch(id, { done: m.done, total: m.total, name: o.from.length === 1 ? label : `${label} · ${m.current}` });
-        else if (m.done) patch(id, { done: -1 });
-      },
-      onEnd: () => {
-        const j = jobs.find((x) => x.id === id);
-        if (j && j.status === 'running') {
-          patch(id, { status: 'done', done: j.total });
-          emitChanged();
-          o.onDone?.();
-        }
-      },
-      onError: (e) => {
-        const j = jobs.find((x) => x.id === id);
-        if (!j || j.status === 'cancelled') return;
-        if (e.code === 'needs_admin' && !admin && !elevated && isUnlocked()) {
-          // the stream layer already asked for the password; run the copy on the root bridge now
-          elevated = true;
-          admin = true;
-          o.onElevate?.();
-          begin();
-          return;
-        }
-        patch(id, { status: 'error', errorCode: e.code, error: e.message });
-        emitChanged();
-      },
-    });
+    handle = stream<CopyMsg>('files.copy', { from: o.from, to: o.to, move: o.move }, { admin, onData, onEnd, onError });
   };
 
   const job: Job = {

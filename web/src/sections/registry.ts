@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import { useStore } from '../lib/useStore';
 import type { IconName } from '../ui';
 
 /* ---------------- Palette actions ---------------- */
@@ -46,13 +47,7 @@ export function usePaletteActions(owner: string, list: PaletteAction[]) {
 }
 
 export function useAllPaletteActions(): PaletteAction[] {
-  const map = useSyncExternalStore(
-    (cb) => {
-      aSubs.add(cb);
-      return () => void aSubs.delete(cb);
-    },
-    () => actions,
-  );
+  const map = useStore(aSubs, () => actions);
   const fromHooks = useSectionPaletteHooks();
   return useMemo(() => [...map.values()].flat().concat(fromHooks), [map, fromHooks]);
 }
@@ -80,13 +75,7 @@ export function useRailBadge(sectionId: string, count: number | undefined, tone:
 }
 
 export function useRailBadges(): Record<string, RailBadge | undefined> {
-  return useSyncExternalStore(
-    (cb) => {
-      bSubs.add(cb);
-      return () => void bSubs.delete(cb);
-    },
-    () => badges,
-  );
+  return useStore(bSubs, () => badges);
 }
 
 /* ---------------- Optional always-on hooks provided by section folders ----------------

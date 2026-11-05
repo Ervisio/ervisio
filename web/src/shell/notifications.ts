@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useStore } from '../lib/useStore';
 import type { IconName } from '../ui';
 
 /*
@@ -52,11 +52,5 @@ export const clearNotices = () => {
   emit();
 };
 export function useNotices(): Notice[] {
-  return useSyncExternalStore(
-    (cb) => {
-      subs.add(cb);
-      return () => void subs.delete(cb);
-    },
-    () => list,
-  );
+  return useStore(subs, () => list);
 }
