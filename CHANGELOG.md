@@ -17,6 +17,9 @@
 - Failed application downloads offer an interface reload instead of repeatedly reopening a cached failure.
 - Native Explorer selection no longer opens details; the context menu opens Properties in a compact dialog, and list view shares the folder/document artwork.
 - Dragging a maximized or docked window restores its normal size under the pointer; dropping at desktop edges maximizes or docks it.
+- Launcher search highlights the first match immediately, opens it with Enter and supports arrow-key selection.
+- Native Software content scrolls within its actual window height without a blank outer tail.
+- Window titlebars are slightly shorter and use a subtle theme-aware tint.
 
 ## [0.6.4] - 2026-11-04
 
