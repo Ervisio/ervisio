@@ -412,9 +412,25 @@ export default function FilesPage() {
   const places = usePlaces();
   const { data, selectedEntries } = useFilesPaneData(tabs, prefs.showHidden, prefs.starredList);
   const targets = selectedEntries(side);
-  const panel = useFilesPanel(targets, mobile, split);
+  const panel = useFilesPanel(
+    targets,
+    mobile,
+    split,
+    native,
+    `${tab.id}:${side}:${pane(side).loc}:${adminOf(side)}:${computer}`,
+  );
   const actions = useFilesActions({ t, isRoot, tabs, selectedEntries, panel });
-  const menu = useFilesMenu({ t, tabs, data, selectedEntries, prefs, actions, panel, fileInput });
+  const menu = useFilesMenu({
+    t,
+    tabs,
+    data,
+    selectedEntries,
+    prefs,
+    actions,
+    panel,
+    fileInput,
+    native,
+  });
   const goPlace = (loc: string) => {
     setComputer(false);
     tabs.navigate(side, loc);
@@ -580,11 +596,12 @@ export default function FilesPage() {
       </div>
       {panel.isOpen && (
         <SidePanel
-          entries={targets}
+          native={native}
+          entries={panel.entries}
           admin={adminOf(side)}
           inline={!split && !mobile}
           inTrash={inTrash}
-          starred={targets.length === 1 && prefs.starred.has(targets[0].path)}
+          starred={panel.entries.length === 1 && prefs.starred.has(panel.entries[0].path)}
           canChown={!!session?.canSudo}
           onClose={panel.dismiss}
           onEdit={(e) => actions.setDialog({ kind: 'edit', entry: e, admin: adminOf(side) })}

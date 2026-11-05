@@ -15,6 +15,8 @@
 - Software catalogs load only when needed and reuse account-scoped cached reads; quick connectivity retains the latest real result while refreshing.
 - Small Linux hosts automatically apply a soft Go memory budget to session bridges and serialize APT read subprocesses.
 - Failed application downloads offer an interface reload instead of repeatedly reopening a cached failure.
+- Native Explorer selection no longer opens details; the context menu opens Properties explicitly, and list view shares the folder/document artwork.
+- Dragging a maximized or docked window restores its normal size under the pointer; dropping at desktop edges maximizes or docks it.
 
 ## [0.6.4] - 2026-11-04
 

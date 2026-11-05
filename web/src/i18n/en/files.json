@@ -171,7 +171,8 @@
     "emptyTrash": "Empty Trash",
     "selectAll": "Select all",
     "refresh": "Refresh",
-    "chown": "Change owner"
+    "chown": "Change owner",
+    "properties": "Properties"
   },
   "bulk": {
     "label": "Selected items",
@@ -304,5 +305,6 @@
     "noDisks": "No storage information available",
     "itemCount_one": "{count} item",
     "itemCount_other": "{count} items"
-  }
+  },
+  "propertiesFor": "Properties: {name}"
 }

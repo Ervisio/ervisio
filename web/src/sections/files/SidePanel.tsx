@@ -6,10 +6,12 @@ import { Button, Checkbox, Icon, Panel, Skeleton, Tabs, toast } from '../../ui';
 import { emitChanged, fcall } from './fapi';
 import { KIND_ICON, canInlineImage, kindOf, looksTextual } from './kinds';
 import { Thumb } from './Thumb';
+import { NativeFileIcon } from './NativeFileIcon';
 import { isDirLike, type FEntry } from './types';
 import { bitsToMode, dirname, formatWhen, modeBits } from './util';
 
 export interface SidePanelProps {
+  native?: boolean;
   entries: FEntry[];
   admin: boolean;
   inline: boolean;
@@ -44,7 +46,7 @@ export function SidePanel(p: SidePanelProps) {
       inline={p.inline}
       open
       onClose={p.onClose}
-      title={title}
+      title={p.native ? t('propertiesFor', { name: title }) : title}
       subtitle={
         e
           ? typeLabel(e, t)
@@ -122,7 +124,9 @@ function Details({ e, p, t }: { e: FEntry; p: SidePanelProps; t: ReturnType<type
   return (
     <div className="files-side">
       <div className="files-pv">
-        {dir ? (
+        {p.native ? (
+          <NativeFileIcon entry={e} />
+        ) : dir ? (
           <span className="files-ic files-ic--big files-t-dir">
             <Icon name="files" />
           </span>

@@ -171,7 +171,8 @@
     "emptyTrash": "Svuota il Cestino",
     "selectAll": "Seleziona tutto",
     "refresh": "Aggiorna",
-    "chown": "Cambia proprietario"
+    "chown": "Cambia proprietario",
+    "properties": "Proprietà"
   },
   "bulk": {
     "label": "Elementi selezionati",
@@ -304,5 +305,6 @@
     "noDisks": "Informazioni sulle unità non disponibili",
     "itemCount_one": "{count} elemento",
     "itemCount_other": "{count} elementi"
-  }
+  },
+  "propertiesFor": "Proprietà: {name}"
 }

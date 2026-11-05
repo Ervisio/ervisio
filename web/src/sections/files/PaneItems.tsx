@@ -5,12 +5,14 @@ import { Icon } from '../../ui';
 import { KIND_ICON, kindOf } from './kinds';
 import { isHidden, nextSort } from './paneUtil';
 import { Thumb } from './Thumb';
+import { NativeFileIcon } from './NativeFileIcon';
 import { isDirLike, type FEntry, type SortKey, type SortState } from './types';
 import type { PickKeys } from './usePaneSelection';
 import { dirname, formatWhen } from './util';
 
 /** Per-item wiring shared by the grid and list views. */
 export interface ItemKit {
+  native?: boolean;
   wire(e: FEntry): {
     'data-path': string;
     draggable: boolean;
@@ -34,6 +36,7 @@ export interface ItemKit {
 }
 
 interface ItemKitArgs {
+  native?: boolean;
   trash: boolean;
   lang: string;
   t: TFn;
@@ -89,6 +92,7 @@ export function buildItemKit(a: ItemKitArgs): ItemKit {
       ? t('deletedAt', { when: formatWhen(e.deletedAt, lang) })
       : `${isDirLike(e) ? '' : formatBytes(e.size) + ', '}${formatWhen(e.mtime, lang)}`;
   return {
+    native: a.native,
     wire,
     folderDrop: a.folderDrop,
     moreButton,
@@ -121,9 +125,13 @@ export function GridView({ rows, admin, kit }: { rows: FEntry[]; admin: boolean;
                 {...kit.folderDrop(e)}
                 className={`files-fold files-t-dir${kit.isSelected(e) ? ' is-sel' : ''}${isHidden(e) ? ' is-hid' : ''}${kit.dropFolder === e.path ? ' is-drop' : ''}`}
               >
-                <span className="files-ic">
-                  <Icon name={e.type === 'symlink' ? 'link' : 'files'} />
-                </span>
+                {kit.native ? (
+                  <NativeFileIcon entry={e} />
+                ) : (
+                  <span className="files-ic">
+                    <Icon name={e.type === 'symlink' ? 'link' : 'files'} />
+                  </span>
+                )}
                 <div className="files-fold-t">
                   <b>{e.name}</b>
                   <small>{kit.trash ? kit.subtitle(e) : formatWhen(e.mtime, lang)}</small>
@@ -148,11 +156,19 @@ export function GridView({ rows, admin, kit }: { rows: FEntry[]; admin: boolean;
                   {...kit.wire(e)}
                   className={`files-fc files-t-${k}${kit.isSelected(e) ? ' is-sel' : ''}${isHidden(e) ? ' is-hid' : ''}`}
                 >
-                  <Thumb e={e} admin={admin} />
+                  {kit.native ? (
+                    <div className="files-os-preview">
+                      <NativeFileIcon entry={e} />
+                    </div>
+                  ) : (
+                    <Thumb e={e} admin={admin} />
+                  )}
                   <div className="files-meta">
-                    <span className="files-ic files-ic--sm">
-                      <Icon name={e.type === 'symlink' ? 'link' : KIND_ICON[k]} />
-                    </span>
+                    {!kit.native && (
+                      <span className="files-ic files-ic--sm">
+                        <Icon name={e.type === 'symlink' ? 'link' : KIND_ICON[k]} />
+                      </span>
+                    )}
                     <b title={e.name}>{e.name}</b>
                     {kit.moreButton(e)}
                   </div>
@@ -250,9 +266,13 @@ export function ListView({
               </td>
               <td>
                 <div className="files-nm">
-                  <span className="files-ic files-ic--sm">
-                    <Icon name={e.type === 'symlink' ? 'link' : KIND_ICON[k]} />
-                  </span>
+                  {kit.native ? (
+                    <NativeFileIcon entry={e} compact />
+                  ) : (
+                    <span className="files-ic files-ic--sm">
+                      <Icon name={e.type === 'symlink' ? 'link' : KIND_ICON[k]} />
+                    </span>
+                  )}
                   <span className="files-nm-t">{e.name}</span>
                   {e.type === 'symlink' && e.target && (
                     <small className="files-link">→ {e.target}</small>

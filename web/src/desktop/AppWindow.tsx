@@ -3,6 +3,9 @@ import { Icon } from '../ui';
 import { useT } from '../i18n';
 import { clampBounds, type WindowBounds } from './model';
 
+const DRAG_THRESHOLD = 6;
+const SNAP_EDGE = 12;
+
 export interface DesktopWindow {
   id: string;
   app: string;
@@ -40,7 +43,17 @@ export function AppWindow({
   const el = useRef<HTMLElement>(null);
   const [dragging, setDragging] = useState(false);
   const preview = useRef(win.bounds);
-  const drag = useRef<{ x: number; y: number; bounds: WindowBounds; resize: boolean } | null>(null);
+  const drag = useRef<{
+    pointerId: number;
+    x: number;
+    y: number;
+    bounds: WindowBounds;
+    resize: boolean;
+    restore: boolean;
+    moved: boolean;
+    anchorX: number;
+    anchorY: number;
+  } | null>(null);
   const latest = useRef({ win, onChange, onSaveBounds });
   latest.current = { win, onChange, onSaveBounds };
 
@@ -57,21 +70,57 @@ export function AppWindow({
   }, []);
 
   const begin = (e: PointerEvent<HTMLElement>, resize: boolean) => {
+    if (drag.current) return;
     if (e.button !== 0 || (!resize && (e.target as HTMLElement).closest('button'))) return;
-    if (win.maximized || win.snap) return;
+    if (resize && (win.maximized || win.snap)) return;
+    const rectangle = el.current?.getBoundingClientRect();
+    if (!rectangle) return;
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
     onFocus();
-    drag.current = { x: e.clientX, y: e.clientY, bounds: win.bounds, resize };
+    drag.current = {
+      pointerId: e.pointerId,
+      x: e.clientX,
+      y: e.clientY,
+      bounds: win.bounds,
+      resize,
+      restore: win.maximized || !!win.snap,
+      moved: false,
+      anchorX: Math.max(0, Math.min(1, (e.clientX - rectangle.left) / rectangle.width)),
+      anchorY: Math.max(0, e.clientY - e.currentTarget.getBoundingClientRect().top),
+    };
     preview.current = win.bounds;
-    setDragging(true);
   };
   const move = (e: PointerEvent<HTMLElement>) => {
     const d = drag.current,
       host = el.current?.parentElement;
-    if (!d || !host) return;
+    if (!d || d.pointerId !== e.pointerId || !host) return;
     const dx = e.clientX - d.x,
       dy = e.clientY - d.y;
+    if (!d.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+    d.moved = true;
+    setDragging(true);
+    if (d.restore) {
+      const rectangle = host.getBoundingClientRect();
+      const bounds = clampBounds(
+        {
+          ...d.bounds,
+          x: e.clientX - rectangle.left - d.bounds.width * d.anchorX,
+          y: e.clientY - rectangle.top - d.anchorY,
+        },
+        host.clientWidth,
+        host.clientHeight,
+      );
+      // Restore the retained normal size below this pointer, then continue
+      // using the same captured gesture and titlebar DOM node.
+      d.restore = false;
+      d.x = e.clientX;
+      d.y = e.clientY;
+      d.bounds = bounds;
+      preview.current = bounds;
+      onChange({ bounds, maximized: false, snap: undefined });
+      return;
+    }
     const b = d.resize
       ? {
           ...d.bounds,
@@ -82,11 +131,27 @@ export function AppWindow({
     preview.current = clampBounds(b, host.clientWidth, host.clientHeight);
     onChange({ bounds: preview.current });
   };
-  const end = () => {
-    if (drag.current) {
+  const end = (e: PointerEvent<HTMLElement>, snap = true) => {
+    const gesture = drag.current;
+    if (gesture && gesture.pointerId === e.pointerId) {
       drag.current = null;
-      onSaveBounds(preview.current);
+      const host = el.current?.parentElement;
+      if (gesture.moved) {
+        if (snap && !gesture.resize && host && host.clientWidth >= 860) {
+          const rectangle = host.getBoundingClientRect();
+          if (e.clientY <= rectangle.top + SNAP_EDGE) {
+            onChange({ maximized: true, snap: undefined });
+          } else if (e.clientX <= rectangle.left + SNAP_EDGE) {
+            onChange({ maximized: false, snap: 'left' });
+          } else if (e.clientX >= rectangle.right - SNAP_EDGE) {
+            onChange({ maximized: false, snap: 'right' });
+          }
+        }
+        onSaveBounds(preview.current);
+      }
       setDragging(false);
+      if (e.currentTarget.hasPointerCapture(e.pointerId))
+        e.currentTarget.releasePointerCapture(e.pointerId);
     }
   };
   return (
@@ -109,8 +174,9 @@ export function AppWindow({
         className="eos-titlebar"
         onPointerDown={(e) => begin(e, false)}
         onPointerMove={move}
-        onPointerUp={end}
-        onPointerCancel={end}
+        onPointerUp={(e) => end(e)}
+        onPointerCancel={(e) => end(e, false)}
+        onLostPointerCapture={(e) => end(e, false)}
         onDoubleClick={(e) =>
           !(e.target as HTMLElement).closest('button') &&
           onChange({ maximized: !win.maximized, snap: undefined })
@@ -162,8 +228,9 @@ export function AppWindow({
           tabIndex={0}
           onPointerDown={(e) => begin(e, true)}
           onPointerMove={move}
-          onPointerUp={end}
-          onPointerCancel={end}
+          onPointerUp={(e) => end(e)}
+          onPointerCancel={(e) => end(e, false)}
+          onLostPointerCapture={(e) => end(e, false)}
           onKeyDown={(e) => {
             const delta = e.shiftKey ? 50 : 10;
             const b = { ...win.bounds };

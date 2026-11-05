@@ -105,12 +105,6 @@ export function NativeFilesCommandBar(p: CommandBarProps) {
         onClick={() => p.onShortcut('refresh')}
       />
       <span className="files-sp" />
-      <IconButton
-        icon="info"
-        label={t('act.details')}
-        disabled={!selected}
-        onClick={() => p.onShortcut('details')}
-      />
     </div>
   );
 }
