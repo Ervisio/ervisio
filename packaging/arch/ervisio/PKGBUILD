@@ -4,7 +4,7 @@
 # binaries: the "ervisio-bin" package.
 
 pkgname=ervisio
-pkgver=0.7.0
+pkgver=7.0.1
 pkgrel=1
 pkgdesc='Web console for managing a Linux server from the browser (formerly LinuxAdmin)'
 arch=('x86_64' 'aarch64')
@@ -20,7 +20,7 @@ source=("$pkgname-$pkgver.tar.gz::https://github.com/ervisio/ervisio/archive/ref
         'ervisio.pam'
         'package-service.sh')
 # Set by update-pkgbuild.sh.
-sha256sums=('1435d6cac3edeba6301aac157df1140f078e8a0f54d72d09203d635fdce9dd3c' '698517efd8015f508f626e67830e46700dc675fd1208414f29f73d92671df6dd' '1f0fc6193955474569e821518ac8334e06a93fe16173851cb69e4327edda0bb3')
+sha256sums=('a238e0ebaff79a3c6a6e2b2c25d0076799ca641a092e0a40b10b1703a972a339' '698517efd8015f508f626e67830e46700dc675fd1208414f29f73d92671df6dd' '1f0fc6193955474569e821518ac8334e06a93fe16173851cb69e4327edda0bb3')
 
 _src() { printf '%s' "$srcdir/ervisio-$pkgver"; }
 
