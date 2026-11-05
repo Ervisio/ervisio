@@ -57,26 +57,8 @@ func Substitute(c *Command, args []string) ([]string, error) {
 		return nil, fmt.Errorf("%q takes %d argument(s), got %d", c.Name, len(c.Args), len(args))
 	}
 	for i, spec := range c.Args {
-		a := args[i]
-		max := spec.MaxLen
-		if max == 0 {
-			max = 256
-		}
-		if len(a) > max || len(a) > maxArgLen || strings.ContainsRune(a, 0) {
-			return nil, fmt.Errorf("argument %d is too long or contains a NUL byte", i+1)
-		}
-		if strings.HasPrefix(a, "-") && !spec.AllowDash {
-			return nil, fmt.Errorf("argument %d (%q) may not start with a dash", i+1, a)
-		}
-		re := spec.re
-		if re == nil { // manifest built without ParseManifest (tests)
-			var err error
-			if re, err = compileSpec(spec.Pattern); err != nil {
-				return nil, err
-			}
-		}
-		if !re.MatchString(a) {
-			return nil, fmt.Errorf("argument %d (%q) is not allowed for %q", i+1, a, c.Name)
+		if err := checkArg(c, spec, i, args[i]); err != nil {
+			return nil, err
 		}
 	}
 	out := make([]string, len(c.Argv))
@@ -88,6 +70,31 @@ func Substitute(c *Command, args []string) ([]string, error) {
 		})
 	}
 	return out, nil
+}
+
+// checkArg validates the i-th argument against its declared slot.
+func checkArg(c *Command, spec ArgSpec, i int, a string) error {
+	max := spec.MaxLen
+	if max == 0 {
+		max = 256
+	}
+	if len(a) > max || len(a) > maxArgLen || strings.ContainsRune(a, 0) {
+		return fmt.Errorf("argument %d is too long or contains a NUL byte", i+1)
+	}
+	if strings.HasPrefix(a, "-") && !spec.AllowDash {
+		return fmt.Errorf("argument %d (%q) may not start with a dash", i+1, a)
+	}
+	re := spec.re
+	if re == nil { // manifest built without ParseManifest (tests)
+		var err error
+		if re, err = compileSpec(spec.Pattern); err != nil {
+			return err
+		}
+	}
+	if !re.MatchString(a) {
+		return fmt.Errorf("argument %d (%q) is not allowed for %q", i+1, a, c.Name)
+	}
+	return nil
 }
 
 // resolved is an authorised, ready-to-run command.
@@ -107,57 +114,96 @@ func resolve(c *rpc.Call, p ExecParams, wantPTY bool) (*resolved, error) {
 		return nil, err
 	}
 	m := f.M
-	var cmd *Command
-	for i := range m.Capabilities.Commands {
-		if m.Capabilities.Commands[i].Name == p.Command {
-			cmd = &m.Capabilities.Commands[i]
-		}
+	cmd, err := findCommand(m, p.Command, wantPTY)
+	if err != nil {
+		return nil, err
 	}
-	if cmd == nil {
-		return nil, rpc.Errorf(rpc.NotFound, "%s does not declare a command %q.", m.Name, p.Command)
-	}
-	if cmd.PTY != wantPTY {
-		if cmd.PTY {
-			return nil, rpc.Errorf(rpc.Invalid, "%s declares %q as a terminal command; open it with sdk.api.pty.", m.Name, p.Command)
-		}
-		return nil, rpc.Errorf(rpc.Invalid, "%s does not declare %q as a terminal (pty) command.", m.Name, p.Command)
-	}
-	if p.EnvSocket != "" {
-		// Against an environment the docker program only talks to the user's
-		// own tunnel: no administrator rights are needed or used.
-		if cmd.Remote == "" || c.Admin {
-			return nil, rpc.Errorf(rpc.Forbidden, "%s does not allow %q to run on an environment.", m.Name, p.Command)
-		}
-		if err := envSocketOK(p.EnvSocket); err != nil {
-			return nil, err
-		}
-	} else {
-		// A command declared as user-level never runs on the root bridge: the
-		// plugin cannot raise its own rights by asking for admin.
-		if c.Admin && !cmd.Admin {
-			return nil, rpc.Errorf(rpc.Forbidden, "%s declares %q as a user command; it does not run with administrator rights.", m.Name, p.Command)
-		}
-		root := c.Admin || os.Geteuid() == 0
-		if cmd.Admin && !root && !(cmd.AdminUnlessGroup != "" && who.Groups[cmd.AdminUnlessGroup]) {
-			return nil, rpc.Errorf(rpc.NeedsAdmin, "%s needs administrator rights to run %q.", m.Name, p.Command)
-		}
+	if err := checkRights(c, p, m, cmd, who); err != nil {
+		return nil, err
 	}
 	argv, err := Substitute(cmd, p.Args)
 	if err != nil {
 		return nil, rpc.Errorf(rpc.Invalid, "%v", err)
 	}
 	argv = remoteArgv(cmd, argv, p.EnvSocket)
+	to, err := commandTimeout(m, cmd, p)
+	if err != nil {
+		return nil, err
+	}
+	return &resolved{argv: argv, timeout: to}, nil
+}
+
+// findCommand returns the manifest command called name, which must be a pty
+// command exactly when wantPTY.
+func findCommand(m *Manifest, name string, wantPTY bool) (*Command, error) {
+	var cmd *Command
+	for i := range m.Capabilities.Commands {
+		if m.Capabilities.Commands[i].Name == name {
+			cmd = &m.Capabilities.Commands[i]
+		}
+	}
+	if cmd == nil {
+		return nil, rpc.Errorf(rpc.NotFound, "%s does not declare a command %q.", m.Name, name)
+	}
+	if cmd.PTY != wantPTY {
+		if cmd.PTY {
+			return nil, rpc.Errorf(rpc.Invalid, "%s declares %q as a terminal command; open it with sdk.api.pty.", m.Name, name)
+		}
+		return nil, rpc.Errorf(rpc.Invalid, "%s does not declare %q as a terminal (pty) command.", m.Name, name)
+	}
+	return cmd, nil
+}
+
+// checkRights checks that the caller may run cmd: on an environment, or with
+// the rights the command declares.
+func checkRights(c *rpc.Call, p ExecParams, m *Manifest, cmd *Command, who caller) error {
+	if p.EnvSocket != "" {
+		// Against an environment the docker program only talks to the user's
+		// own tunnel: no administrator rights are needed or used.
+		if cmd.Remote == "" || c.Admin {
+			return rpc.Errorf(rpc.Forbidden, "%s does not allow %q to run on an environment.", m.Name, p.Command)
+		}
+		return envSocketOK(p.EnvSocket)
+	}
+	// A command declared as user-level never runs on the root bridge: the
+	// plugin cannot raise its own rights by asking for admin.
+	if c.Admin && !cmd.Admin {
+		return rpc.Errorf(rpc.Forbidden, "%s declares %q as a user command; it does not run with administrator rights.", m.Name, p.Command)
+	}
+	root := c.Admin || os.Geteuid() == 0
+	if cmd.Admin && !root && !(cmd.AdminUnlessGroup != "" && who.Groups[cmd.AdminUnlessGroup]) {
+		return rpc.Errorf(rpc.NeedsAdmin, "%s needs administrator rights to run %q.", m.Name, p.Command)
+	}
+	return nil
+}
+
+// commandTimeout is the command's own timeout, or the one a job step asks
+// for when the manifest allows it.
+func commandTimeout(m *Manifest, cmd *Command, p ExecParams) (time.Duration, error) {
 	to := defaultTimeout
 	if cmd.TimeoutSec > 0 {
 		to = time.Duration(cmd.TimeoutSec) * time.Second
 	}
 	if p.TimeoutSec != 0 {
 		if !m.jobStepAllows(cmd.Name, p.TimeoutSec) {
-			return nil, rpc.Errorf(rpc.Forbidden, "%s declares no job step that lets %q run for %d seconds.", m.Name, p.Command, p.TimeoutSec)
+			return 0, rpc.Errorf(rpc.Forbidden, "%s declares no job step that lets %q run for %d seconds.", m.Name, p.Command, p.TimeoutSec)
 		}
 		to = time.Duration(p.TimeoutSec) * time.Second
 	}
-	return &resolved{argv: argv, timeout: to}, nil
+	return to, nil
+}
+
+// resolveCmd resolves the command and builds its exec.Cmd, without timeout.
+func resolveCmd(ctx context.Context, c *rpc.Call, p ExecParams) (*resolved, *exec.Cmd, error) {
+	r, err := resolve(c, p, false)
+	if err != nil {
+		return nil, nil, err
+	}
+	cmd, err := sys.Cmd{Name: r.argv[0], Args: r.argv[1:], Timeout: -1}.Command(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	return r, cmd, nil
 }
 
 func runExec(ctx context.Context, c *rpc.Call, p ExecParams) (*ExecResult, error) {
@@ -214,11 +260,7 @@ func (b *limitBuf) Write(p []byte) (int, error) {
 // runStream runs the command and sends {"stream":"stdout"|"stderr","line":…} per
 // line, then {"exit":code}. There is no timeout; the client closes the stream.
 func runStream(ctx context.Context, c *rpc.Call, s rpc.Stream, p ExecParams) error {
-	r, err := resolve(c, p, false)
-	if err != nil {
-		return err
-	}
-	cmd, err := sys.Cmd{Name: r.argv[0], Args: r.argv[1:], Timeout: -1}.Command(ctx)
+	r, cmd, err := resolveCmd(ctx, c, p)
 	if err != nil {
 		return err
 	}
@@ -235,23 +277,9 @@ func runStream(ctx context.Context, c *rpc.Call, s rpc.Stream, p ExecParams) err
 	}
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-	pump := func(name string, rd io.Reader) {
-		defer wg.Done()
-		sc := bufio.NewScanner(rd)
-		sc.Buffer(make([]byte, 64<<10), 1<<20)
-		for sc.Scan() {
-			mu.Lock()
-			err := s.Send(map[string]string{"stream": name, "line": sc.Text()})
-			mu.Unlock()
-			if err != nil {
-				_ = cmd.Process.Kill()
-				return
-			}
-		}
-	}
 	wg.Add(2)
-	go pump("stdout", so)
-	go pump("stderr", se)
+	go pumpLines(cmd, s, &mu, &wg, "stdout", so)
+	go pumpLines(cmd, s, &mu, &wg, "stderr", se)
 	wg.Wait()
 	code := 0
 	if err := cmd.Wait(); err != nil {
@@ -266,4 +294,21 @@ func runStream(ctx context.Context, c *rpc.Call, s rpc.Stream, p ExecParams) err
 		return nil
 	}
 	return s.Send(map[string]int{"exit": code})
+}
+
+// pumpLines sends each line of rd as a stream event; a failed send kills the
+// command. mu serialises the sends of both pumps.
+func pumpLines(cmd *exec.Cmd, s rpc.Stream, mu *sync.Mutex, wg *sync.WaitGroup, name string, rd io.Reader) {
+	defer wg.Done()
+	sc := bufio.NewScanner(rd)
+	sc.Buffer(make([]byte, 64<<10), 1<<20)
+	for sc.Scan() {
+		mu.Lock()
+		err := s.Send(map[string]string{"stream": name, "line": sc.Text()})
+		mu.Unlock()
+		if err != nil {
+			_ = cmd.Process.Kill()
+			return
+		}
+	}
 }

@@ -89,13 +89,20 @@ func (s *Server) jobOwnerOK(a *account.Account) string {
 		return "it is no longer allowed to sign in (auth.allow_users, auth.allow_groups, auth.admins_only)"
 	}
 	if s.checker != nil {
-		if sh, err := s.checker.shadow(a.Name); err == nil {
-			if sh.Expired(time.Now()) {
-				return "the account expired"
-			}
-		} else if err := s.checker.pamAcct(a.Name, ""); err != nil && errors.Is(err, pam.ErrAccount) {
-			return fmt.Sprintf("PAM refused the account: %v", err)
+		return s.checker.jobAccountIssue(a.Name)
+	}
+	return ""
+}
+
+// jobAccountIssue is the reason the system refuses the account (expired, or
+// PAM account check), or "" when it is fine.
+func (ch *accountChecker) jobAccountIssue(name string) string {
+	if sh, err := ch.shadow(name); err == nil {
+		if sh.Expired(time.Now()) {
+			return "the account expired"
 		}
+	} else if err := ch.pamAcct(name, ""); err != nil && errors.Is(err, pam.ErrAccount) {
+		return fmt.Sprintf("PAM refused the account: %v", err)
 	}
 	return ""
 }
@@ -128,6 +135,18 @@ func newBridgePool() *bridgePool { return &bridgePool{m: map[string]*pooled{}} }
 // slow NSS lookup); other callers for the same key wait for it, callers for
 // other keys do not.
 func (bp *bridgePool) acquire(key string, start func() (*bridge.Proc, error)) (*bridge.Proc, error) {
+	e, p := bp.reuse(key)
+	if p != nil {
+		return p, nil
+	}
+	p, err := start()
+	return bp.finishStart(key, e, p, err)
+}
+
+// reuse returns a live bridge for key and counts a use, waiting for one that
+// is starting. When there is none it registers a starting entry (e) and
+// returns a nil bridge: the caller starts it.
+func (bp *bridgePool) reuse(key string) (*pooled, *bridge.Proc) {
 	bp.mu.Lock()
 	for {
 		e := bp.m[key]
@@ -145,16 +164,18 @@ func (bp *bridgePool) acquire(key string, start func() (*bridge.Proc, error)) (*
 				e.timer = nil
 			}
 			bp.mu.Unlock()
-			return e.p, nil
+			return nil, e.p
 		}
 		break
 	}
 	e := &pooled{starting: make(chan struct{})}
 	bp.m[key] = e
 	bp.mu.Unlock()
+	return e, nil
+}
 
-	p, err := start()
-
+// finishStart records the outcome of starting a bridge for e.
+func (bp *bridgePool) finishStart(key string, e *pooled, p *bridge.Proc, err error) (*bridge.Proc, error) {
 	bp.mu.Lock()
 	defer bp.mu.Unlock()
 	close(e.starting)
@@ -229,33 +250,14 @@ type bridgeExecutor struct {
 func (e *bridgeExecutor) proc(ctx context.Context, admin bool) (*bridge.Proc, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	key := "u:" + strconv.FormatUint(uint64(e.a.UID), 10)
-	if e.a.SID != "" {
-		key = "u:" + e.a.SID // RIDs can repeat across Windows domains
-	}
-	if admin {
-		key = "root"
-	}
+	key := e.poolKey(admin)
 	if p := e.held[key]; p != nil && p.Alive() {
 		return p, nil
 	}
 	if e.held == nil {
 		e.held = map[string]*bridge.Proc{}
 	}
-	p, err := e.s.jobPool.acquire(key, func() (*bridge.Proc, error) {
-		if admin {
-			ra, err := adminJobAccount()
-			if err != nil {
-				return nil, err
-			}
-			return bridge.StartRoot(ctx, e.s.rootSpec(ra))
-		}
-		p, err := bridge.StartUser(ctx, e.s.spec(e.a, ""))
-		if err != nil {
-			return nil, rpc.Errorf(rpc.Unavailable, "Could not start a bridge for %s: %v", e.a.Name, err)
-		}
-		return p, nil
-	})
+	p, err := e.s.jobPool.acquire(key, func() (*bridge.Proc, error) { return e.start(ctx, admin) })
 	if err != nil {
 		return nil, err
 	}
@@ -263,6 +265,33 @@ func (e *bridgeExecutor) proc(ctx context.Context, admin bool) (*bridge.Proc, er
 		e.s.jobPool.release(key, old)
 	}
 	e.held[key] = p
+	return p, nil
+}
+
+// poolKey is the pool key of the bridge a step uses.
+func (e *bridgeExecutor) poolKey(admin bool) string {
+	if admin {
+		return "root"
+	}
+	if e.a.SID != "" {
+		return "u:" + e.a.SID // RIDs can repeat across Windows domains
+	}
+	return "u:" + strconv.FormatUint(uint64(e.a.UID), 10)
+}
+
+// start starts a root bridge (admin) or the user's bridge.
+func (e *bridgeExecutor) start(ctx context.Context, admin bool) (*bridge.Proc, error) {
+	if admin {
+		ra, err := adminJobAccount()
+		if err != nil {
+			return nil, err
+		}
+		return bridge.StartRoot(ctx, e.s.rootSpec(ra))
+	}
+	p, err := bridge.StartUser(ctx, e.s.spec(e.a, ""))
+	if err != nil {
+		return nil, rpc.Errorf(rpc.Unavailable, "Could not start a bridge for %s: %v", e.a.Name, err)
+	}
 	return p, nil
 }
 

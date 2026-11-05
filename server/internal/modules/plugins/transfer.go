@@ -13,7 +13,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/ervisio/ervisio/server/internal/rpc"
-	"github.com/ervisio/ervisio/server/internal/sys"
 )
 
 // Large transfers (plugins.download / plugins.upload in the SDK). The
@@ -57,11 +56,7 @@ func runHTTPDownload(ctx context.Context, c *rpc.Call, s rpc.Stream, p HTTPParam
 // before it writes anything is reported as an error, not as a broken file.
 // A non-zero exit ends the stream with an error.
 func runExecDownload(ctx context.Context, c *rpc.Call, s rpc.Stream, p ExecParams) error {
-	r, err := resolve(c, p, false)
-	if err != nil {
-		return err
-	}
-	cmd, err := sys.Cmd{Name: r.argv[0], Args: r.argv[1:], Timeout: -1}.Command(ctx)
+	r, cmd, err := resolveCmd(ctx, c, p)
 	if err != nil {
 		return err
 	}
@@ -76,7 +71,27 @@ func runExecDownload(ctx context.Context, c *rpc.Call, s rpc.Stream, p ExecParam
 		return rpc.Errorf(rpc.Unavailable, "Could not run %s: %v", r.argv[0], err)
 	}
 	start := map[string]any{"status": 200, "headers": map[string]string{}}
-	started := false
+	started, ok := pipeChunks(cmd, s, so, start)
+	if !ok {
+		return nil
+	}
+	werr := cmd.Wait()
+	if ctx.Err() != nil {
+		return nil
+	}
+	if werr != nil {
+		return execDownloadError(p.Command, r.argv[0], werr, errb.buf.String())
+	}
+	if !started {
+		return s.Send(start)
+	}
+	return nil
+}
+
+// pipeChunks sends the command's output as binary chunks, with start before
+// the first one. ok is false when a send failed: the command is then killed
+// and reaped.
+func pipeChunks(cmd *exec.Cmd, s rpc.Stream, so io.Reader, start map[string]any) (started, ok bool) {
 	buf := make([]byte, httpChunk)
 	for {
 		n, rerr := so.Read(buf)
@@ -84,40 +99,36 @@ func runExecDownload(ctx context.Context, c *rpc.Call, s rpc.Stream, p ExecParam
 			if !started {
 				started = true
 				if err := s.Send(start); err != nil {
-					_ = cmd.Process.Kill()
-					_ = cmd.Wait()
-					return nil
+					abortCmd(cmd)
+					return started, false
 				}
 			}
 			if err := s.SendBytes(buf[:n]); err != nil {
-				_ = cmd.Process.Kill()
-				_ = cmd.Wait()
-				return nil
+				abortCmd(cmd)
+				return started, false
 			}
 		}
 		if rerr != nil {
-			break
+			return started, true
 		}
 	}
-	werr := cmd.Wait()
-	if ctx.Err() != nil {
-		return nil
+}
+
+func abortCmd(cmd *exec.Cmd) {
+	_ = cmd.Process.Kill()
+	_ = cmd.Wait()
+}
+
+// execDownloadError turns a failed Wait into the stream's error.
+func execDownloadError(command, prog string, werr error, stderr string) error {
+	var ee *exec.ExitError
+	if !errors.As(werr, &ee) {
+		return rpc.Errorf(rpc.Unavailable, "Could not run %s: %v", prog, werr)
 	}
-	if werr != nil {
-		var ee *exec.ExitError
-		if errors.As(werr, &ee) {
-			msg := errb.buf.String()
-			if !utf8.ValidString(msg) {
-				msg = ""
-			}
-			return rpc.Errorf(rpc.Unavailable, "%s failed with exit code %d: %s", p.Command, ee.ExitCode(), msg)
-		}
-		return rpc.Errorf(rpc.Unavailable, "Could not run %s: %v", r.argv[0], werr)
+	if !utf8.ValidString(stderr) {
+		stderr = ""
 	}
-	if !started {
-		return s.Send(start)
-	}
-	return nil
+	return rpc.Errorf(rpc.Unavailable, "%s failed with exit code %d: %s", command, ee.ExitCode(), stderr)
 }
 
 // runHTTPUpload is plugins.httpUpload. The rules are checked first, then
