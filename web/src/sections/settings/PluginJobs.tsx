@@ -28,11 +28,15 @@ export function describeSchedule(t: (k: string, v?: Record<string, string | numb
 }
 
 const hookUrl = (path: string) => `${window.location.origin}${path}`;
+const jobLabel = (j: JobInstance) => j.name || j.job;
+const MAX_WEBHOOKS = 5;
+
+type Webhook = JobInstance['webhooks'][number];
+type FailFn = (name: string, e: unknown) => void;
 
 /** Settings > Plugin jobs (administrators): every job instance plugins created, with owner, schedule, last run, webhooks. */
 export function PluginJobsBlock() {
   const t = useT('settings');
-  const { lang } = useI18n();
   const { data, state, error, reload } = useAdminLoad(listJobs, 5000);
   const [logs, setLogs] = useState<JobInstance | null>(null);
   const [removing, setRemoving] = useState<JobInstance | null>(null);
@@ -45,11 +49,18 @@ export function PluginJobsBlock() {
   if (state === 'locked') return <LockedPanel title={t('jobs.lockedTitle')} text={t('jobs.lockedText')} onUnlocked={() => void reload()} />;
   if (state === 'failed') return <div className="st-warn" role="alert"><Icon name="alert" /><div>{error}</div></div>;
   const all = data?.instances ?? [];
-  const byPlugin = new Map<string, JobInstance[]>();
-  for (const j of all) byPlugin.set(j.plugin, [...(byPlugin.get(j.plugin) ?? []), j]);
+  const byPlugin = groupByPlugin(all);
 
-  const fail = (name: string, e: unknown) => toast.err(t('saveFailed', { name }), e instanceof Error ? e.message : undefined);
-  const label = (j: JobInstance) => j.name || j.job;
+  const fail: FailFn = (name, e) => toast.err(t('saveFailed', { name }), e instanceof Error ? e.message : undefined);
+
+  const runNow = async (j: JobInstance) => {
+    setBusy(j.id);
+    try { await runJob(j.id); toast.info(t('jobs.started', { name: jobLabel(j) })); void reload(); } catch (e) { fail(jobLabel(j), e); } finally { setBusy(''); }
+  };
+
+  const createHook = async (j: JobInstance, name: string) => {
+    try { const created = await createWebhook(j.id, name); setNaming(null); setHook({ job: j, created }); void reload(); } catch (e) { fail(jobLabel(j), e); }
+  };
 
   return (
     <>
@@ -58,86 +69,140 @@ export function PluginJobsBlock() {
       {[...byPlugin.entries()].map(([plugin, list]) => (
         <div key={plugin}>
           <div className="st-gl2">{plugin}</div>
-          {list.map((j) => {
-            const last = j.last;
-            return (
-              <div className="st-job" key={j.id}>
-                <div className="st-job-hd">
-                  <div className="grow">
-                    <b>{label(j)}</b>
-                    <small>{t('jobs.owner', { user: j.owner })} · {describeSchedule(t, lang, j.schedule)}{j.name ? ` · ${j.job}` : ''}</small>
-                  </div>
-                  {j.running ? <Badge tone="info">{t('jobs.status.running')}</Badge> : !j.enabled ? <Badge>{t('jobs.status.disabled')}</Badge> : j.awaitingApproval ? <Badge tone="warn">{t('jobs.status.awaiting')}</Badge> : last ? <Badge tone={STATUS_TONE[last.status] ?? 'neutral'}>{t(`jobs.status.${last.status}`)}</Badge> : <Badge>{t('jobs.status.never')}</Badge>}
-                  <Switch aria-label={t('jobs.enable', { name: label(j) })} checked={j.enabled} onChange={(on) => setJobEnabled(j.id, on).then(() => reload(), (e) => fail(label(j), e))} />
-                </div>
-                {j.disabledReason && !j.enabled && <div className="st-warn"><Icon name="alert" /><div>{j.disabledReason}</div></div>}
-                {j.needsAdmin && (
-                  <div className={`st-warn${j.approval?.valid ? ' st-warn--soft' : ''}`}>
-                    <Icon name="shield" />
-                    <div className="grow">{j.approval ? (j.approval.valid ? t('jobs.admin', { by: j.approval.by, when: formatDateTime(j.approval.at) }) : t('jobs.adminStale')) : t('jobs.adminMissing')}</div>
-                    {j.awaitingApproval && <Button size="sm" icon="shield" onClick={() => setApproving(j)}>{t('jobs.approve.action')}</Button>}
-                  </div>
-                )}
-                <div className="st-job-meta">
-                  {last && <small>{t('jobs.lastRun', { when: relativeTime(last.started, lang) })}{last.error ? ` · ${last.error}` : ''}</small>}
-                  {j.enabled && !j.awaitingApproval && j.nextRun ? <small>{t('jobs.nextRun', { when: relativeTime(j.nextRun, lang) })}</small> : null}
-                </div>
-                <div className="st-job-hooks">
-                  <b>{t('jobs.webhooks.title')}</b>
-                  {j.webhooks.length === 0 && <small>{t('jobs.webhooks.none')}</small>}
-                  {j.webhooks.map((w) => (
-                    <div className="st-host" key={w.id}>
-                      <Icon name="link" size={15} />
-                      <div className="grow">
-                        <b>{w.label || t('jobs.webhooks.unnamed')}</b>
-                        <small>{t('jobs.webhooks.created', { when: formatDateTime(w.created) })} · {w.lastUsed ? t('jobs.webhooks.used', { when: relativeTime(w.lastUsed, lang) }) : t('jobs.webhooks.unused')}</small>
-                      </div>
-                      <Button size="sm" icon="refresh" onClick={() => regenerateWebhook(j.id, w.id).then((created) => { setHook({ job: j, created }); void reload(); }, (e) => fail(label(j), e))}>{t('jobs.webhooks.regenerate')}</Button>
-                      <IconButton icon="trash" label={t('jobs.webhooks.revokeLabel', { name: w.label || w.id })} onClick={() => setRevoking({ job: j, id: w.id, label: w.label || w.id })} />
-                    </div>
-                  ))}
-                  <div><Button size="sm" icon="plus" disabled={j.webhooks.length >= 5} onClick={() => setNaming(j)}>{t('jobs.webhooks.add')}</Button></div>
-                </div>
-                <div className="st-job-act">
-                  <Button icon="play" loading={busy === j.id} disabled={!j.enabled || j.running || !!j.awaitingApproval} onClick={async () => {
-                    setBusy(j.id);
-                    try { await runJob(j.id); toast.info(t('jobs.started', { name: label(j) })); void reload(); } catch (e) { fail(label(j), e); } finally { setBusy(''); }
-                  }}>{t('jobs.runNow')}</Button>
-                  <Button icon="logs" onClick={() => setLogs(j)}>{t('jobs.logs')}</Button>
-                  <IconButton icon="trash" label={t('jobs.delete', { name: label(j) })} onClick={() => setRemoving(j)} />
-                </div>
-              </div>
-            );
-          })}
+          {list.map((j) => (
+            <JobCard key={j.id} job={j} starting={busy === j.id} reload={reload} fail={fail}
+              onRun={() => void runNow(j)} onLogs={() => setLogs(j)} onRemove={() => setRemoving(j)} onApprove={() => setApproving(j)}
+              onAddHook={() => setNaming(j)} onRevokeHook={(w) => setRevoking({ job: j, id: w.id, label: w.label || w.id })}
+              onHookCreated={(created) => setHook({ job: j, created })} />
+          ))}
         </div>
       ))}
 
       {logs && <LogsDialog job={logs} onClose={() => setLogs(null)} />}
-      {naming && <NameHookDialog onClose={() => setNaming(null)} onCreate={async (name) => {
-        const j = naming;
-        try { const created = await createWebhook(j.id, name); setNaming(null); setHook({ job: j, created }); void reload(); } catch (e) { fail(label(j), e); }
-      }} />}
-      {hook && (
-        <Dialog open onClose={() => setHook(null)} title={t('jobs.webhooks.urlTitle')} description={t('jobs.webhooks.urlText')} icon="link"
-          footer={<Button variant="primary" onClick={() => setHook(null)}>{t('jobs.webhooks.done')}</Button>}>
-          <Input label={t('jobs.webhooks.url')} mono readOnly value={hookUrl(hook.created.path)} onFocus={(e) => e.currentTarget.select()}
-            end={<IconButton icon="copy" label={t('jobs.webhooks.copy')} onClick={() => navigator.clipboard?.writeText(hookUrl(hook.created.path)).then(() => toast.ok(t('jobs.webhooks.copied')), () => undefined)} />} />
-          <small className="st-note">{t('jobs.webhooks.curl')}</small>
-          <code className="st-code">curl -X POST {hookUrl(hook.created.path)}</code>
-        </Dialog>
-      )}
+      {naming && <NameHookDialog onClose={() => setNaming(null)} onCreate={(name) => createHook(naming, name)} />}
+      {hook && <HookUrlDialog path={hook.created.path} onClose={() => setHook(null)} />}
       <ConfirmDialog open={!!revoking} onClose={() => setRevoking(null)} title={t('jobs.webhooks.revokeTitle')} description={t('jobs.webhooks.revokeText')} confirmLabel={t('jobs.webhooks.revoke')} cancelLabel={t('cancel')}
         onConfirm={async () => { if (revoking) { await revokeWebhook(revoking.job.id, revoking.id); void reload(); } }} />
       <ConfirmDialog open={!!approving} onClose={() => setApproving(null)} danger={false} icon="shield"
-        title={t('jobs.approve.title', { name: approving ? label(approving) : '' })}
+        title={t('jobs.approve.title', { name: approving ? jobLabel(approving) : '' })}
         description={t('jobs.approve.text', { plugin: approving?.plugin ?? '', user: approving?.owner ?? '' })}
         confirmLabel={t('jobs.approve.confirm')} cancelLabel={t('cancel')}
-        onConfirm={async () => { if (approving) { await approveJob(approving.id); toast.ok(t('jobs.approve.done', { name: label(approving) })); void reload(); } }}>
+        onConfirm={async () => { if (approving) { await approveJob(approving.id); toast.ok(t('jobs.approve.done', { name: jobLabel(approving) })); void reload(); } }}>
         {approving && <ApprovalDetails job={approving} />}
       </ConfirmDialog>
-      <ConfirmDialog open={!!removing} onClose={() => setRemoving(null)} title={t('jobs.deleteTitle')} description={t('jobs.deleteText', { name: removing ? label(removing) : '' })} confirmLabel={t('jobs.deleteAction')} cancelLabel={t('cancel')}
+      <ConfirmDialog open={!!removing} onClose={() => setRemoving(null)} title={t('jobs.deleteTitle')} description={t('jobs.deleteText', { name: removing ? jobLabel(removing) : '' })} confirmLabel={t('jobs.deleteAction')} cancelLabel={t('cancel')}
         onConfirm={async () => { if (removing) { await deleteJob(removing.id); void reload(); } }} />
     </>
+  );
+}
+
+function groupByPlugin(jobs: JobInstance[]): Map<string, JobInstance[]> {
+  const byPlugin = new Map<string, JobInstance[]>();
+  for (const j of jobs) byPlugin.set(j.plugin, [...(byPlugin.get(j.plugin) ?? []), j]);
+  return byPlugin;
+}
+
+interface JobCardProps {
+  job: JobInstance;
+  starting: boolean;
+  reload(): unknown;
+  fail: FailFn;
+  onRun(): void;
+  onLogs(): void;
+  onRemove(): void;
+  onApprove(): void;
+  onAddHook(): void;
+  onRevokeHook(w: Webhook): void;
+  onHookCreated(created: NewWebhook): void;
+}
+
+function JobCard({ job: j, starting, reload, fail, onRun, onLogs, onRemove, onApprove, onAddHook, onRevokeHook, onHookCreated }: JobCardProps) {
+  const t = useT('settings');
+  const { lang } = useI18n();
+  const last = j.last;
+  return (
+    <div className="st-job">
+      <div className="st-job-hd">
+        <div className="grow">
+          <b>{jobLabel(j)}</b>
+          <small>{t('jobs.owner', { user: j.owner })} · {describeSchedule(t, lang, j.schedule)}{j.name ? ` · ${j.job}` : ''}</small>
+        </div>
+        <JobStatusBadge job={j} />
+        <Switch aria-label={t('jobs.enable', { name: jobLabel(j) })} checked={j.enabled} onChange={(on) => setJobEnabled(j.id, on).then(() => reload(), (e) => fail(jobLabel(j), e))} />
+      </div>
+      {j.disabledReason && !j.enabled && <div className="st-warn"><Icon name="alert" /><div>{j.disabledReason}</div></div>}
+      {j.needsAdmin && <AdminApprovalNote job={j} onApprove={onApprove} />}
+      <div className="st-job-meta">
+        {last && <small>{t('jobs.lastRun', { when: relativeTime(last.started, lang) })}{last.error ? ` · ${last.error}` : ''}</small>}
+        {j.enabled && !j.awaitingApproval && j.nextRun ? <small>{t('jobs.nextRun', { when: relativeTime(j.nextRun, lang) })}</small> : null}
+      </div>
+      <div className="st-job-hooks">
+        <b>{t('jobs.webhooks.title')}</b>
+        {j.webhooks.length === 0 && <small>{t('jobs.webhooks.none')}</small>}
+        {j.webhooks.map((w) => (
+          <WebhookRow key={w.id} webhook={w} onRevoke={() => onRevokeHook(w)}
+            onRegenerate={() => regenerateWebhook(j.id, w.id).then((created) => { onHookCreated(created); void reload(); }, (e) => fail(jobLabel(j), e))} />
+        ))}
+        <div><Button size="sm" icon="plus" disabled={j.webhooks.length >= MAX_WEBHOOKS} onClick={onAddHook}>{t('jobs.webhooks.add')}</Button></div>
+      </div>
+      <div className="st-job-act">
+        <Button icon="play" loading={starting} disabled={!j.enabled || j.running || !!j.awaitingApproval} onClick={onRun}>{t('jobs.runNow')}</Button>
+        <Button icon="logs" onClick={onLogs}>{t('jobs.logs')}</Button>
+        <IconButton icon="trash" label={t('jobs.delete', { name: jobLabel(j) })} onClick={onRemove} />
+      </div>
+    </div>
+  );
+}
+
+function JobStatusBadge({ job: j }: { job: JobInstance }) {
+  const t = useT('settings');
+  if (j.running) return <Badge tone="info">{t('jobs.status.running')}</Badge>;
+  if (!j.enabled) return <Badge>{t('jobs.status.disabled')}</Badge>;
+  if (j.awaitingApproval) return <Badge tone="warn">{t('jobs.status.awaiting')}</Badge>;
+  if (j.last) return <Badge tone={STATUS_TONE[j.last.status] ?? 'neutral'}>{t(`jobs.status.${j.last.status}`)}</Badge>;
+  return <Badge>{t('jobs.status.never')}</Badge>;
+}
+
+function AdminApprovalNote({ job: j, onApprove }: { job: JobInstance; onApprove(): void }) {
+  const t = useT('settings');
+  const approval = j.approval;
+  const text = !approval ? t('jobs.adminMissing') : approval.valid ? t('jobs.admin', { by: approval.by, when: formatDateTime(approval.at) }) : t('jobs.adminStale');
+  return (
+    <div className={`st-warn${approval?.valid ? ' st-warn--soft' : ''}`}>
+      <Icon name="shield" />
+      <div className="grow">{text}</div>
+      {j.awaitingApproval && <Button size="sm" icon="shield" onClick={onApprove}>{t('jobs.approve.action')}</Button>}
+    </div>
+  );
+}
+
+function WebhookRow({ webhook: w, onRegenerate, onRevoke }: { webhook: Webhook; onRegenerate(): void; onRevoke(): void }) {
+  const t = useT('settings');
+  const { lang } = useI18n();
+  return (
+    <div className="st-host">
+      <Icon name="link" size={15} />
+      <div className="grow">
+        <b>{w.label || t('jobs.webhooks.unnamed')}</b>
+        <small>{t('jobs.webhooks.created', { when: formatDateTime(w.created) })} · {w.lastUsed ? t('jobs.webhooks.used', { when: relativeTime(w.lastUsed, lang) }) : t('jobs.webhooks.unused')}</small>
+      </div>
+      <Button size="sm" icon="refresh" onClick={onRegenerate}>{t('jobs.webhooks.regenerate')}</Button>
+      <IconButton icon="trash" label={t('jobs.webhooks.revokeLabel', { name: w.label || w.id })} onClick={onRevoke} />
+    </div>
+  );
+}
+
+function HookUrlDialog({ path, onClose }: { path: string; onClose(): void }) {
+  const t = useT('settings');
+  const url = hookUrl(path);
+  return (
+    <Dialog open onClose={onClose} title={t('jobs.webhooks.urlTitle')} description={t('jobs.webhooks.urlText')} icon="link"
+      footer={<Button variant="primary" onClick={onClose}>{t('jobs.webhooks.done')}</Button>}>
+      <Input label={t('jobs.webhooks.url')} mono readOnly value={url} onFocus={(e) => e.currentTarget.select()}
+        end={<IconButton icon="copy" label={t('jobs.webhooks.copy')} onClick={() => navigator.clipboard?.writeText(url).then(() => toast.ok(t('jobs.webhooks.copied')), () => undefined)} />} />
+      <small className="st-note">{t('jobs.webhooks.curl')}</small>
+      <code className="st-code">curl -X POST {url}</code>
+    </Dialog>
   );
 }
 

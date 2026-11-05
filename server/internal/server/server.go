@@ -121,20 +121,8 @@ func New(opts Options) (*Server, error) {
 	if opts.Logger == nil {
 		opts.Logger = log.Default()
 	}
-	if opts.NoAuth && !opts.Dev {
-		return nil, errors.New("--dev-insecure-noauth requires --dev")
-	}
-	if opts.DevAuthorizedKeys != "" && !opts.Dev {
-		return nil, errors.New("--dev-authorized-keys requires --dev")
-	}
-	if opts.NoAuth && bridge.RunningAsServiceIdentity() {
-		return nil, errors.New("--dev-insecure-noauth refuses to run as root")
-	}
-	if !opts.Dev && !bridge.Privileged() {
-		return nil, errors.New("ervisiod must run as root (use --dev for development)")
-	}
-	if fi, err := os.Stat(opts.Bridge); err != nil || !fi.Mode().IsRegular() {
-		return nil, fmt.Errorf("bridge binary %q not found (use --bridge)", opts.Bridge)
+	if err := validateOptions(opts); err != nil {
+		return nil, err
 	}
 	holder, err := newConfigHolder(opts.ConfigPath, opts.Logger)
 	if err != nil {
@@ -165,21 +153,52 @@ func New(opts Options) (*Server, error) {
 	}
 	s.env = s.newEnvState()
 	if opts.Dev {
-		if s.devUser, err = account.Current(); err != nil {
+		if err := s.initDev(); err != nil {
 			cancel()
-			return nil, fmt.Errorf("resolve current user: %w", err)
-		}
-		if opts.WebDir == "" {
-			u, err := url.Parse(opts.ViteURL)
-			if err != nil || u.Host == "" {
-				cancel()
-				return nil, fmt.Errorf("invalid Vite URL %q", opts.ViteURL)
-			}
-			s.vite = newViteProxy(u, s.log)
-			s.viteHost = u.Host
+			return nil, err
 		}
 	}
 	return s, nil
+}
+
+// validateOptions rejects flag combinations and environments the daemon
+// must not start with.
+func validateOptions(opts Options) error {
+	if opts.NoAuth && !opts.Dev {
+		return errors.New("--dev-insecure-noauth requires --dev")
+	}
+	if opts.DevAuthorizedKeys != "" && !opts.Dev {
+		return errors.New("--dev-authorized-keys requires --dev")
+	}
+	if opts.NoAuth && bridge.RunningAsServiceIdentity() {
+		return errors.New("--dev-insecure-noauth refuses to run as root")
+	}
+	if !opts.Dev && !bridge.Privileged() {
+		return errors.New("ervisiod must run as root (use --dev for development)")
+	}
+	if fi, err := os.Stat(opts.Bridge); err != nil || !fi.Mode().IsRegular() {
+		return fmt.Errorf("bridge binary %q not found (use --bridge)", opts.Bridge)
+	}
+	return nil
+}
+
+// initDev resolves the only account allowed in dev mode and, without a
+// built web app, sets up the proxy to the Vite dev server.
+func (s *Server) initDev() error {
+	var err error
+	if s.devUser, err = account.Current(); err != nil {
+		return fmt.Errorf("resolve current user: %w", err)
+	}
+	if s.opts.WebDir != "" {
+		return nil
+	}
+	u, err := url.Parse(s.opts.ViteURL)
+	if err != nil || u.Host == "" {
+		return fmt.Errorf("invalid Vite URL %q", s.opts.ViteURL)
+	}
+	s.vite = newViteProxy(u, s.log)
+	s.viteHost = u.Host
+	return nil
 }
 
 // Config returns the current configuration.
@@ -253,79 +272,19 @@ func (s *Server) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if s.opts.DevAuthorizedKeys != "" {
-		// The file replaces every account's authorized_keys and skips the
-		// StrictModes checks on ~/.ssh: only for a daemon reachable from
-		// this machine, with a file only the daemon's user can change.
-		host, _, _ := net.SplitHostPort(ln.Addr().String())
-		if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
-			ln.Close()
-			return errors.New("--dev-authorized-keys only listens on a loopback address")
-		}
-		if _, err := readDevAuthorizedKeys(s.opts.DevAuthorizedKeys); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			ln.Close()
-			return err
-		}
-	}
-	if s.opts.NoAuth {
-		host, _, _ := net.SplitHostPort(ln.Addr().String())
-		if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
-			ln.Close()
-			return errors.New("--dev-insecure-noauth only listens on a loopback address")
-		}
-		u, err := s.newNoAuthToken("http://" + ln.Addr().String())
-		if err != nil {
-			ln.Close()
-			return err
-		}
-		s.log.Printf("WARNING: --dev-insecure-noauth: open this one-time URL to sign in as %q without a password: %s", s.devUser.Name, u)
+	if err := s.checkDevListener(ln); err != nil {
+		ln.Close()
+		return err
 	}
 
-	handler := s.Handler()
-	newSrv := func(h http.Handler) *http.Server {
-		return &http.Server{
-			Handler:           h,
-			ReadHeaderTimeout: 10 * time.Second,
-			IdleTimeout:       120 * time.Second,
-			MaxHeaderBytes:    64 << 10,
-			BaseContext:       func(net.Listener) context.Context { return s.baseCtx },
-			ErrorLog:          s.log,
-		}
-	}
-	srv := newSrv(handler)
-	var redirect *http.Server
-
-	go s.janitor(ctx)
-	go s.audit.Prune()
-	// Background work (jobs, webhooks) records to the same log through audit.Record.
-	s.audit.Errorf = s.log.Printf
-	audit.SetDefault(s.audit)
+	srv := s.newHTTPServer(s.Handler())
+	s.startBackground(ctx)
 	defer audit.ClearDefault(s.audit)
-	if s.jobs != nil {
-		go s.jobs.Run(ctx)
-	}
-	go s.runAlertWatch(ctx)
-	go s.envLoop(ctx)
 
 	errCh := make(chan error, 2)
-	if s.opts.Dev {
-		s.log.Printf("listening on http://%s (dev mode)", ln.Addr())
-		go func() { errCh <- srv.Serve(ln) }()
-	} else if plain {
-		s.log.Printf("listening on http://%s (tls.mode = http: plain HTTP for a reverse proxy on this machine)", ln.Addr())
-		go func() { errCh <- srv.Serve(ln) }()
-	} else {
-		tlsCfg, err := s.tlsConfig()
-		if err != nil {
-			ln.Close()
-			return err
-		}
-		srv.TLSConfig = tlsCfg
-		tlsLn, plainLn := splitTLS(ln, s.log)
-		go func() { errCh <- srv.ServeTLS(tlsLn, "", "") }()
-		redirect = newSrv(redirectHandler(s.Config().TLS.Redirect))
-		go func() { errCh <- redirect.Serve(plainLn) }()
-		s.log.Printf("listening on https://%s", ln.Addr())
+	redirect, err := s.serve(ln, srv, plain, errCh)
+	if err != nil {
+		return err
 	}
 
 	select {
@@ -338,6 +297,93 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 	s.shutdown(srv, redirect)
 	return nil
+}
+
+// checkDevListener applies the dev-only flags that need the listener: both
+// refuse a non-loopback address; --dev-insecure-noauth prints its sign-in URL.
+func (s *Server) checkDevListener(ln net.Listener) error {
+	if s.opts.DevAuthorizedKeys != "" {
+		// The file replaces every account's authorized_keys and skips the
+		// StrictModes checks on ~/.ssh: only for a daemon reachable from
+		// this machine, with a file only the daemon's user can change.
+		if !isLoopbackListener(ln) {
+			return errors.New("--dev-authorized-keys only listens on a loopback address")
+		}
+		if _, err := readDevAuthorizedKeys(s.opts.DevAuthorizedKeys); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+	}
+	if s.opts.NoAuth {
+		if !isLoopbackListener(ln) {
+			return errors.New("--dev-insecure-noauth only listens on a loopback address")
+		}
+		u, err := s.newNoAuthToken("http://" + ln.Addr().String())
+		if err != nil {
+			return err
+		}
+		s.log.Printf("WARNING: --dev-insecure-noauth: open this one-time URL to sign in as %q without a password: %s", s.devUser.Name, u)
+	}
+	return nil
+}
+
+func isLoopbackListener(ln net.Listener) bool {
+	host, _, _ := net.SplitHostPort(ln.Addr().String())
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func (s *Server) newHTTPServer(h http.Handler) *http.Server {
+	return &http.Server{
+		Handler:           h,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    64 << 10,
+		BaseContext:       func(net.Listener) context.Context { return s.baseCtx },
+		ErrorLog:          s.log,
+	}
+}
+
+// startBackground starts the session janitor, audit pruning, jobs, alert
+// watch and environments loop, and makes s.audit the default activity log
+// (the caller clears it).
+func (s *Server) startBackground(ctx context.Context) {
+	go s.janitor(ctx)
+	go s.audit.Prune()
+	// Background work (jobs, webhooks) records to the same log through audit.Record.
+	s.audit.Errorf = s.log.Printf
+	audit.SetDefault(s.audit)
+	if s.jobs != nil {
+		go s.jobs.Run(ctx)
+	}
+	go s.runAlertWatch(ctx)
+	go s.envLoop(ctx)
+}
+
+// serve starts srv on ln (plain HTTP in dev or tls.mode = http, otherwise
+// HTTPS plus the HTTP redirect server it returns); serve errors go to errCh.
+func (s *Server) serve(ln net.Listener, srv *http.Server, plain bool, errCh chan<- error) (*http.Server, error) {
+	if s.opts.Dev {
+		s.log.Printf("listening on http://%s (dev mode)", ln.Addr())
+		go func() { errCh <- srv.Serve(ln) }()
+		return nil, nil
+	}
+	if plain {
+		s.log.Printf("listening on http://%s (tls.mode = http: plain HTTP for a reverse proxy on this machine)", ln.Addr())
+		go func() { errCh <- srv.Serve(ln) }()
+		return nil, nil
+	}
+	tlsCfg, err := s.tlsConfig()
+	if err != nil {
+		ln.Close()
+		return nil, err
+	}
+	srv.TLSConfig = tlsCfg
+	tlsLn, plainLn := splitTLS(ln, s.log)
+	go func() { errCh <- srv.ServeTLS(tlsLn, "", "") }()
+	redirect := s.newHTTPServer(redirectHandler(s.Config().TLS.Redirect))
+	go func() { errCh <- redirect.Serve(plainLn) }()
+	s.log.Printf("listening on https://%s", ln.Addr())
+	return redirect, nil
 }
 
 func (s *Server) shutdown(srv, redirect *http.Server) {
