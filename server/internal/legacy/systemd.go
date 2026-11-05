@@ -14,7 +14,6 @@ import (
 
 // Systemd is the part of systemctl the migration uses.
 type Systemd interface {
-	// Systemctl runs `systemctl args...`.
 	Systemctl(ctx context.Context, args ...string) error
 	IsActive(ctx context.Context, unit string) bool
 	IsEnabled(ctx context.Context, unit string) bool

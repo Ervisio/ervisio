@@ -9,7 +9,6 @@ import (
 
 const oNoFollow = syscall.O_NOFOLLOW
 
-// fileOwner returns the uid and gid of fi.
 func fileOwner(fi fs.FileInfo) (uid, gid int, ok bool) {
 	st, ok := fi.Sys().(*syscall.Stat_t)
 	if !ok {
