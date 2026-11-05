@@ -164,6 +164,19 @@ func New(opts Options) (*Server, error) {
 // validateOptions rejects flag combinations and environments the daemon
 // must not start with.
 func validateOptions(opts Options) error {
+	if err := validateDevFlags(opts); err != nil {
+		return err
+	}
+	if !opts.Dev && !bridge.Privileged() {
+		return errors.New("ervisiod must run as root (use --dev for development)")
+	}
+	if fi, err := os.Stat(opts.Bridge); err != nil || !fi.Mode().IsRegular() {
+		return fmt.Errorf("bridge binary %q not found (use --bridge)", opts.Bridge)
+	}
+	return nil
+}
+
+func validateDevFlags(opts Options) error {
 	if opts.NoAuth && !opts.Dev {
 		return errors.New("--dev-insecure-noauth requires --dev")
 	}
@@ -172,12 +185,6 @@ func validateOptions(opts Options) error {
 	}
 	if opts.NoAuth && bridge.RunningAsServiceIdentity() {
 		return errors.New("--dev-insecure-noauth refuses to run as root")
-	}
-	if !opts.Dev && !bridge.Privileged() {
-		return errors.New("ervisiod must run as root (use --dev for development)")
-	}
-	if fi, err := os.Stat(opts.Bridge); err != nil || !fi.Mode().IsRegular() {
-		return fmt.Errorf("bridge binary %q not found (use --bridge)", opts.Bridge)
 	}
 	return nil
 }

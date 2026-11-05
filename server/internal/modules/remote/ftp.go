@@ -73,22 +73,46 @@ func ftpErr(op, p string, err error) error {
 	if !errors.As(err, &te) {
 		return err
 	}
-	msg := strings.ToLower(te.Msg)
-	var base error
-	switch {
-	case te.Code == 550 && (strings.Contains(msg, "no such") || strings.Contains(msg, "not found") || strings.Contains(msg, "not exist") || strings.Contains(msg, "cannot find")):
-		base = os.ErrNotExist
-	case te.Code == 550 && (strings.Contains(msg, "exists") || strings.Contains(msg, "already")):
-		base = os.ErrExist
-	case te.Code == 550 && (strings.Contains(msg, "permission") || strings.Contains(msg, "denied") || strings.Contains(msg, "not allowed")),
-		te.Code == 553, te.Code == 532:
-		base = os.ErrPermission
-	case te.Code == 421:
+	if te.Code == 421 {
 		return io.ErrUnexpectedEOF
-	default:
+	}
+	base := ftpBaseErr(te)
+	if base == nil {
 		return rpc.Errorf(rpc.Internal, "%s %s: the server answered %d %s", op, p, te.Code, te.Msg)
 	}
 	return &os.PathError{Op: op, Path: p, Err: &ftpMsgErr{base: base, msg: te.Msg}}
+}
+
+// ftpBaseErr maps a reply to the os error it stands for, or nil when unknown.
+func ftpBaseErr(te *textproto.Error) error {
+	switch te.Code {
+	case 550:
+		return ftp550Err(strings.ToLower(te.Msg))
+	case 553, 532:
+		return os.ErrPermission
+	}
+	return nil
+}
+
+func ftp550Err(msg string) error {
+	switch {
+	case containsAny(msg, "no such", "not found", "not exist", "cannot find"):
+		return os.ErrNotExist
+	case containsAny(msg, "exists", "already"):
+		return os.ErrExist
+	case containsAny(msg, "permission", "denied", "not allowed"):
+		return os.ErrPermission
+	}
+	return nil
+}
+
+func containsAny(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
 }
 
 type ftpMsgErr struct {

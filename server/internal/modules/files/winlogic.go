@@ -47,20 +47,30 @@ func isInsideWin(child, parent string) bool {
 // (SystemRoot, ProgramFiles, ...).
 func windowsProtectedPath(p string, extra []string) bool {
 	n := winNorm(p)
-	if len(n) == 2 && n[1] == ':' || len(n) == 3 && n[1] == ':' && n[2] == '\\' || n == `\` {
+	if isWinRoot(n) || matchesAnyWinPath(n, extra) {
 		return true
 	}
-	for _, e := range extra {
+	return len(n) > 3 && n[1] == ':' && n[2] == '\\' && isWinSystemFolder(strings.ToLower(n[3:]))
+}
+
+func isWinRoot(n string) bool {
+	return len(n) == 2 && n[1] == ':' || len(n) == 3 && n[1] == ':' && n[2] == '\\' || n == `\`
+}
+
+func matchesAnyWinPath(n string, paths []string) bool {
+	for _, e := range paths {
 		if e != "" && strings.EqualFold(n, winNorm(e)) {
 			return true
 		}
 	}
-	if len(n) > 3 && n[1] == ':' && n[2] == '\\' {
-		switch strings.ToLower(n[3:]) {
-		case "windows", "users", "program files", "program files (x86)", "programdata",
-			"recovery", "system volume information", "$recycle.bin", "boot", "documents and settings":
-			return true
-		}
+	return false
+}
+
+func isWinSystemFolder(name string) bool {
+	switch name {
+	case "windows", "users", "program files", "program files (x86)", "programdata",
+		"recovery", "system volume information", "$recycle.bin", "boot", "documents and settings":
+		return true
 	}
 	return false
 }
