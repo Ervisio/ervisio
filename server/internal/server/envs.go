@@ -144,16 +144,6 @@ func (s *Server) envsCall(ctx context.Context, sess *Session, method string, par
 		return nil, s.envsOff(), true
 	}
 	m := s.env.m
-	bind := func(v any) *rpc.Error {
-		p := params
-		if len(p) == 0 || string(p) == "null" {
-			p = json.RawMessage("{}")
-		}
-		if err := json.Unmarshal(p, v); err != nil {
-			return rpc.Errorf(rpc.Invalid, "invalid params for %s: %v", method, err)
-		}
-		return nil
-	}
 	if method == "plugins.envs.list" {
 		return m.Briefs(sess.Account.Name, sess.Account.GroupNames), nil, true
 	}
@@ -161,101 +151,145 @@ func (s *Server) envsCall(ctx context.Context, sess *Session, method string, par
 		return nil, rpc.Errorf(rpc.NeedsAdmin, "administrator rights are needed").WithData(map[string]string{"method": method}), true
 	}
 	sess.touchAdmin()
+	bind := func(v any) *rpc.Error { return bindEnvParams(method, params, v) }
+	var res any
+	var e *rpc.Error
 	switch method {
 	case "envs.list":
-		return map[string]any{"envs": m.List(), "pairings": pairingViews(m.Pairings()), "openTokens": m.OpenTokens(), "server": sys.Hostname()}, nil, true
+		res = map[string]any{"envs": m.List(), "pairings": pairingViews(m.Pairings()), "openTokens": m.OpenTokens(), "server": sys.Hostname()}
 	case "envs.probe":
-		var in envs.Input
-		if e := bind(&in); e != nil {
-			return nil, e, true
-		}
-		r, err := m.Probe(ctx, in)
-		if err != nil {
-			return nil, envErr(err), true
-		}
-		return r, nil, true
+		res, e = s.envsProbe(ctx, bind)
 	case "envs.create":
-		var in envs.Input
-		if e := bind(&in); e != nil {
-			return nil, e, true
-		}
-		v, err := m.Create(ctx, in, sess.Account.Name)
-		if err != nil {
-			return nil, envErr(err), true
-		}
-		s.log.Printf("environments: %s added %q (%s)", sess.Account.Name, v.Name, v.Kind)
-		if v.Kind == envs.KindErvisio {
-			// The name is what the other server says it is; what identifies
-			// it is the certificate pinned when it was added.
-			s.log.Printf("environments: %q is paired with a server that calls itself %q, pinned certificate %s", v.Name, v.PairedWith, v.Fingerprint)
-		}
-		return v, nil, true
+		res, e = s.envsCreate(ctx, sess, bind)
 	case "envs.update":
-		var p struct {
-			ID string `json:"id"`
-			envs.Input
-		}
-		if e := bind(&p); e != nil {
-			return nil, e, true
-		}
-		v, err := m.Update(ctx, p.ID, p.Input)
-		if err != nil {
-			return nil, envErr(err), true
-		}
-		s.log.Printf("environments: %s changed %q", sess.Account.Name, v.Name)
-		return v, nil, true
+		res, e = s.envsUpdate(ctx, sess, bind)
 	case "envs.delete":
-		var p struct {
-			ID string `json:"id"`
-		}
-		if e := bind(&p); e != nil {
-			return nil, e, true
-		}
-		if err := m.Delete(ctx, p.ID); err != nil {
-			return nil, envErr(err), true
-		}
-		s.dropRemotes(p.ID)
-		s.log.Printf("environments: %s removed %s", sess.Account.Name, p.ID)
-		return map[string]string{"id": p.ID}, nil, true
+		res, e = s.envsDelete(ctx, sess, bind)
 	case "envs.test":
-		var p struct {
-			ID string `json:"id"`
-		}
-		if e := bind(&p); e != nil {
-			return nil, e, true
-		}
-		st := m.Test(ctx, p.ID)
-		if st == nil {
-			return nil, rpc.Errorf(rpc.NotFound, "There is no such environment."), true
-		}
-		return st, nil, true
+		res, e = s.envsTest(ctx, bind)
 	case "envs.pairToken.create":
-		var p struct {
-			User string `json:"user"`
-		}
-		if e := bind(&p); e != nil {
-			return nil, e, true
-		}
-		return s.createPairToken(sess, p.User)
+		res, e = s.envsPairToken(sess, bind)
 	case "envs.pairings.revoke":
-		var p struct {
-			ID string `json:"id"`
-		}
-		if e := bind(&p); e != nil {
-			return nil, e, true
-		}
-		ok, err := m.RevokePairing(p.ID)
-		if err != nil {
-			return nil, envErr(err), true
-		}
-		if !ok {
-			return nil, rpc.Errorf(rpc.NotFound, "There is no such pairing."), true
-		}
-		s.closePairConns(p.ID)
-		s.log.Printf("environments: %s revoked pairing %s", sess.Account.Name, p.ID)
-		return map[string]string{"id": p.ID}, nil, true
+		res, e = s.envsRevokePairing(sess, bind)
+	default:
+		e = rpc.Errorf(rpc.NotFound, "unknown method %s", method)
 	}
-	return nil, rpc.Errorf(rpc.NotFound, "unknown method %s", method), true
+	return res, e, true
+}
+
+func bindEnvParams(method string, params json.RawMessage, v any) *rpc.Error {
+	if len(params) == 0 || string(params) == "null" {
+		params = json.RawMessage("{}")
+	}
+	if err := json.Unmarshal(params, v); err != nil {
+		return rpc.Errorf(rpc.Invalid, "invalid params for %s: %v", method, err)
+	}
+	return nil
+}
+
+func (s *Server) envsProbe(ctx context.Context, bind func(any) *rpc.Error) (any, *rpc.Error) {
+	var in envs.Input
+	if e := bind(&in); e != nil {
+		return nil, e
+	}
+	r, err := s.env.m.Probe(ctx, in)
+	if err != nil {
+		return nil, envErr(err)
+	}
+	return r, nil
+}
+
+func (s *Server) envsCreate(ctx context.Context, sess *Session, bind func(any) *rpc.Error) (any, *rpc.Error) {
+	var in envs.Input
+	if e := bind(&in); e != nil {
+		return nil, e
+	}
+	v, err := s.env.m.Create(ctx, in, sess.Account.Name)
+	if err != nil {
+		return nil, envErr(err)
+	}
+	s.log.Printf("environments: %s added %q (%s)", sess.Account.Name, v.Name, v.Kind)
+	if v.Kind == envs.KindErvisio {
+		// The name is what the other server says it is; what identifies
+		// it is the certificate pinned when it was added.
+		s.log.Printf("environments: %q is paired with a server that calls itself %q, pinned certificate %s", v.Name, v.PairedWith, v.Fingerprint)
+	}
+	return v, nil
+}
+
+func (s *Server) envsUpdate(ctx context.Context, sess *Session, bind func(any) *rpc.Error) (any, *rpc.Error) {
+	var p struct {
+		ID string `json:"id"`
+		envs.Input
+	}
+	if e := bind(&p); e != nil {
+		return nil, e
+	}
+	v, err := s.env.m.Update(ctx, p.ID, p.Input)
+	if err != nil {
+		return nil, envErr(err)
+	}
+	s.log.Printf("environments: %s changed %q", sess.Account.Name, v.Name)
+	return v, nil
+}
+
+func (s *Server) envsDelete(ctx context.Context, sess *Session, bind func(any) *rpc.Error) (any, *rpc.Error) {
+	var p struct {
+		ID string `json:"id"`
+	}
+	if e := bind(&p); e != nil {
+		return nil, e
+	}
+	if err := s.env.m.Delete(ctx, p.ID); err != nil {
+		return nil, envErr(err)
+	}
+	s.dropRemotes(p.ID)
+	s.log.Printf("environments: %s removed %s", sess.Account.Name, p.ID)
+	return map[string]string{"id": p.ID}, nil
+}
+
+func (s *Server) envsTest(ctx context.Context, bind func(any) *rpc.Error) (any, *rpc.Error) {
+	var p struct {
+		ID string `json:"id"`
+	}
+	if e := bind(&p); e != nil {
+		return nil, e
+	}
+	st := s.env.m.Test(ctx, p.ID)
+	if st == nil {
+		return nil, rpc.Errorf(rpc.NotFound, "There is no such environment.")
+	}
+	return st, nil
+}
+
+func (s *Server) envsPairToken(sess *Session, bind func(any) *rpc.Error) (any, *rpc.Error) {
+	var p struct {
+		User string `json:"user"`
+	}
+	if e := bind(&p); e != nil {
+		return nil, e
+	}
+	res, e, _ := s.createPairToken(sess, p.User)
+	return res, e
+}
+
+func (s *Server) envsRevokePairing(sess *Session, bind func(any) *rpc.Error) (any, *rpc.Error) {
+	var p struct {
+		ID string `json:"id"`
+	}
+	if e := bind(&p); e != nil {
+		return nil, e
+	}
+	ok, err := s.env.m.RevokePairing(p.ID)
+	if err != nil {
+		return nil, envErr(err)
+	}
+	if !ok {
+		return nil, rpc.Errorf(rpc.NotFound, "There is no such pairing.")
+	}
+	s.closePairConns(p.ID)
+	s.log.Printf("environments: %s revoked pairing %s", sess.Account.Name, p.ID)
+	return map[string]string{"id": p.ID}, nil
 }
 
 func pairingViews(ps []envs.Pairing) []pairingView {
@@ -338,28 +372,9 @@ func (s *Server) routeWithEnv(ctx context.Context, sess *Session, method string,
 		p, isAdmin, e = s.route(ctx, sess, method, admin)
 		return p, isAdmin, params, release, e
 	}
-	// encoding/json matches field names without regard to case, so
-	// "EnvSocket" or "ENV" would reach the bridge's EnvSocket and Env just
-	// like the exact keys: every spelling is taken out (security review L3).
-	// "via" is set only by the pairing relay, never by a browser.
-	hadSock := len(takeKeyFold(obj, "envSocket")) > 0
-	if len(takeKeyFold(obj, "via")) > 0 {
-		hadSock = true
-	}
-	var envID string
-	if raws := takeKeyFold(obj, "env"); len(raws) > 0 {
-		hadSock = true
-		if len(raws) > 1 || json.Unmarshal(raws[0], &envID) != nil {
-			return nil, false, nil, release, rpc.Errorf(rpc.Invalid, "env must be an environment id")
-		}
-	}
-	rebuilt := params
-	if hadSock {
-		b, err := json.Marshal(obj)
-		if err != nil {
-			return nil, false, nil, release, rpc.Errorf(rpc.Invalid, "invalid params")
-		}
-		rebuilt = b
+	envID, rebuilt, e := stripEnvKeys(obj, params)
+	if e != nil {
+		return nil, false, nil, release, e
 	}
 	if envID == "" {
 		p, isAdmin, e = s.route(ctx, sess, method, admin)
@@ -379,14 +394,8 @@ func (s *Server) routeWithEnv(ctx context.Context, sess *Session, method string,
 	if e != nil {
 		return nil, false, nil, release, e
 	}
-	// The plugin's own bridge-side check: plugin usable by this user, and
-	// the capability or command opts in with "remote" for this kind.
-	chk := map[string]any{"method": method, "kind": env.Kind, "params": json.RawMessage(rebuilt)}
-	if _, lerr := ub.Level("plugins.envCheck"); !lerr {
-		return nil, false, nil, release, rpc.Errorf(rpc.Unavailable, "this server's plugin bridge does not support environments")
-	}
-	if _, err := ub.Call(ctx, "plugins.envCheck", chk); err != nil {
-		return nil, false, nil, release, rpc.ToError(err, false)
+	if e := checkEnvForPlugin(ctx, ub, method, env, rebuilt); e != nil {
+		return nil, false, nil, release, e
 	}
 	if env.Kind == envs.KindErvisio {
 		rp, e := s.remoteBridge(ctx, sess, env)
@@ -402,6 +411,49 @@ func (s *Server) routeWithEnv(ctx context.Context, sess *Session, method string,
 	obj["envSocket"], _ = json.Marshal(path)
 	b, _ := json.Marshal(obj)
 	return ub, false, b, release, nil
+}
+
+// stripEnvKeys takes the "env", "envSocket" and "via" keys out of obj and
+// returns the requested environment id and the params to forward (the
+// originals when nothing was removed).
+func stripEnvKeys(obj map[string]json.RawMessage, params json.RawMessage) (string, json.RawMessage, *rpc.Error) {
+	// encoding/json matches field names without regard to case, so
+	// "EnvSocket" or "ENV" would reach the bridge's EnvSocket and Env just
+	// like the exact keys: every spelling is taken out (security review L3).
+	// "via" is set only by the pairing relay, never by a browser.
+	removed := len(takeKeyFold(obj, "envSocket")) > 0
+	if len(takeKeyFold(obj, "via")) > 0 {
+		removed = true
+	}
+	var envID string
+	if raws := takeKeyFold(obj, "env"); len(raws) > 0 {
+		removed = true
+		if len(raws) > 1 || json.Unmarshal(raws[0], &envID) != nil {
+			return "", nil, rpc.Errorf(rpc.Invalid, "env must be an environment id")
+		}
+	}
+	if !removed {
+		return envID, params, nil
+	}
+	b, err := json.Marshal(obj)
+	if err != nil {
+		return "", nil, rpc.Errorf(rpc.Invalid, "invalid params")
+	}
+	return envID, b, nil
+}
+
+// checkEnvForPlugin runs the plugin's own bridge-side check: plugin usable
+// by this user, and the capability or command opts in with "remote" for
+// this kind.
+func checkEnvForPlugin(ctx context.Context, ub *bridge.Proc, method string, env *envs.Env, params json.RawMessage) *rpc.Error {
+	chk := map[string]any{"method": method, "kind": env.Kind, "params": params}
+	if _, lerr := ub.Level("plugins.envCheck"); !lerr {
+		return rpc.Errorf(rpc.Unavailable, "this server's plugin bridge does not support environments")
+	}
+	if _, err := ub.Call(ctx, "plugins.envCheck", chk); err != nil {
+		return rpc.ToError(err, false)
+	}
+	return nil
 }
 
 // takeKeyFold removes from obj every key that equals name under Unicode case

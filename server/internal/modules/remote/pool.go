@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/fs"
 	"net"
+	"slices"
 	"sync"
 	"syscall"
 	"time"
@@ -111,62 +112,96 @@ func (p *pool) get(ctx context.Context, id string) (*handle, error) {
 	defer deadline.Stop()
 	for {
 		p.mu.Lock()
-		e := p.entries[id]
-		if e != nil && e.spec.Updated != spec.Updated {
-			// Edited: close what is idle, forget the rest once released.
-			p.dropLocked(id)
-			e = nil
-		}
-		if e == nil {
-			e = &entry{spec: spec, notify: make(chan struct{})}
-			p.entries[id] = e
-		}
-		for _, s := range e.slots {
-			if shared(spec.Kind) || s.inUse == 0 {
-				s.inUse++
-				s.last = time.Now()
-				p.mu.Unlock()
-				return &handle{FS: s.fs, spec: spec, p: p, id: id, s: s}, nil
-			}
+		e := p.entryLocked(id, spec)
+		if s := claimSlotLocked(e, spec.Kind); s != nil {
+			p.mu.Unlock()
+			return &handle{FS: s.fs, spec: spec, p: p, id: id, s: s}, nil
 		}
 		if len(e.slots)+e.dialing < maxSlots(spec.Kind) {
-			if p.open >= maxOpen {
-				p.closeIdleLocked(0)
-			}
-			if p.open >= maxOpen {
-				p.mu.Unlock()
-				return nil, rpc.Errorf(rpc.Unavailable, "Too many remote connections are open in this session. Close some tabs and try again.")
-			}
-			e.dialing++
-			p.open++
-			p.mu.Unlock()
-			f, err := p.dial(ctx, spec)
-			p.mu.Lock()
-			e.dialing--
-			if err != nil {
-				p.open--
-				p.wakeLocked(e)
+			if err := p.reserveDialLocked(e); err != nil {
 				p.mu.Unlock()
 				return nil, err
 			}
-			s := &slot{fs: f, inUse: 1, last: time.Now()}
-			if p.entries[id] == e {
-				e.slots = append(e.slots, s)
-			}
-			p.startReaperLocked()
-			p.wakeLocked(e)
 			p.mu.Unlock()
-			return &handle{FS: f, spec: spec, fresh: true, p: p, id: id, s: s}, nil
+			return p.dialSlot(ctx, id, e, spec)
 		}
 		ch := e.notify
 		p.mu.Unlock()
-		select {
-		case <-ch:
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-deadline.C:
-			return nil, rpc.Errorf(rpc.Unavailable, "The connection is busy with other transfers. Try again when they are done.")
+		if err := waitForSlot(ctx, ch, deadline); err != nil {
+			return nil, err
 		}
+	}
+}
+
+// entryLocked returns the entry for id, replacing it when the spec was edited.
+func (p *pool) entryLocked(id string, spec *Conn) *entry {
+	e := p.entries[id]
+	if e != nil && e.spec.Updated != spec.Updated {
+		// Edited: close what is idle, forget the rest once released.
+		p.dropLocked(id)
+		e = nil
+	}
+	if e == nil {
+		e = &entry{spec: spec, notify: make(chan struct{})}
+		p.entries[id] = e
+	}
+	return e
+}
+
+// claimSlotLocked marks a reusable slot of e as in use, or returns nil.
+func claimSlotLocked(e *entry, kind string) *slot {
+	for _, s := range e.slots {
+		if shared(kind) || s.inUse == 0 {
+			s.inUse++
+			s.last = time.Now()
+			return s
+		}
+	}
+	return nil
+}
+
+// reserveDialLocked counts a connection about to be dialled, closing idle
+// ones first when the pool is full.
+func (p *pool) reserveDialLocked(e *entry) error {
+	if p.open >= maxOpen {
+		p.closeIdleLocked(0)
+	}
+	if p.open >= maxOpen {
+		return rpc.Errorf(rpc.Unavailable, "Too many remote connections are open in this session. Close some tabs and try again.")
+	}
+	e.dialing++
+	p.open++
+	return nil
+}
+
+// dialSlot dials the connection reserved by reserveDialLocked (p.mu not held).
+func (p *pool) dialSlot(ctx context.Context, id string, e *entry, spec *Conn) (*handle, error) {
+	f, err := p.dial(ctx, spec)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	e.dialing--
+	if err != nil {
+		p.open--
+		p.wakeLocked(e)
+		return nil, err
+	}
+	s := &slot{fs: f, inUse: 1, last: time.Now()}
+	if p.entries[id] == e {
+		e.slots = append(e.slots, s)
+	}
+	p.startReaperLocked()
+	p.wakeLocked(e)
+	return &handle{FS: f, spec: spec, fresh: true, p: p, id: id, s: s}, nil
+}
+
+func waitForSlot(ctx context.Context, ch <-chan struct{}, deadline *time.Timer) error {
+	select {
+	case <-ch:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-deadline.C:
+		return rpc.Errorf(rpc.Unavailable, "The connection is busy with other transfers. Try again when they are done.")
 	}
 }
 
@@ -187,14 +222,7 @@ func (p *pool) put(id string, s *slot, err error) {
 	s.inUse--
 	s.last = time.Now()
 	e := p.entries[id]
-	member := false
-	if e != nil {
-		for _, x := range e.slots {
-			if x == s {
-				member = true
-			}
-		}
-	}
+	member := e != nil && slices.Contains(e.slots, s)
 	if broken || !member {
 		if member {
 			p.removeSlotLocked(e, s)
@@ -286,20 +314,23 @@ func (p *pool) startReaperLocked() {
 // connBroken reports transport failures (as opposed to "not found" and the
 // like), after which a connection is not used again.
 func connBroken(err error) bool {
-	if err == nil {
-		return false
-	}
-	var re *rpc.Error
-	if errors.As(err, &re) {
-		return false
-	}
-	if errors.Is(err, fs.ErrNotExist) || errors.Is(err, fs.ErrExist) || errors.Is(err, fs.ErrPermission) {
+	if err == nil || isCallError(err) {
 		return false
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		// The call was given up half-way: an FTP transfer may still run.
 		return true
 	}
+	return isTransportError(err)
+}
+
+// isCallError reports errors about the request itself, not the connection.
+func isCallError(err error) bool {
+	var re *rpc.Error
+	return errors.As(err, &re) || errors.Is(err, fs.ErrNotExist) || errors.Is(err, fs.ErrExist) || errors.Is(err, fs.ErrPermission)
+}
+
+func isTransportError(err error) bool {
 	var ne net.Error
 	return errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, net.ErrClosed) ||
 		errors.Is(err, sftp.ErrSSHFxConnectionLost) || errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE) ||

@@ -203,41 +203,62 @@ func (p *pacman) prepareCheckDB() (string, error) {
 	if err := ensurePrivateDir(tmp, true); err != nil {
 		return "", rpc.Errorf(rpc.Internal, "The private package database folder is not safe to use: %v", err)
 	}
-	local := filepath.Join(tmp, "local")
-	want := filepath.Join(p.db(), "local")
-	if t, err := os.Readlink(local); err != nil || t != want {
-		if err := os.RemoveAll(local); err != nil {
-			return "", err
-		}
-		if err := os.Symlink(want, local); err != nil {
-			return "", err
-		}
+	if err := p.linkLocalDB(tmp); err != nil {
+		return "", err
 	}
 	syncDir := filepath.Join(tmp, "sync")
+	if err := ensureSyncDir(syncDir); err != nil {
+		return "", err
+	}
+	if err := p.copySyncDBs(syncDir); err != nil {
+		return "", err
+	}
+	return tmp, nil
+}
+
+func (p *pacman) linkLocalDB(tmp string) error {
+	local := filepath.Join(tmp, "local")
+	want := filepath.Join(p.db(), "local")
+	if t, err := os.Readlink(local); err == nil && t == want {
+		return nil
+	}
+	if err := os.RemoveAll(local); err != nil {
+		return err
+	}
+	return os.Symlink(want, local)
+}
+
+func ensureSyncDir(syncDir string) error {
 	if fi, err := os.Lstat(syncDir); err == nil && (!fi.IsDir() || ownerOf(fi) != os.Geteuid()) {
 		if err := os.RemoveAll(syncDir); err != nil {
-			return "", err
+			return err
 		}
 	}
 	if err := os.Mkdir(syncDir, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
-		return "", err
+		return err
 	}
-	// Start from the system sync databases, so only changes are downloaded.
-	if ents, err := os.ReadDir(filepath.Join(p.db(), "sync")); err == nil {
-		for _, e := range ents {
-			dst := filepath.Join(syncDir, e.Name())
-			if fi, err := os.Lstat(dst); err == nil {
-				if fi.Mode().IsRegular() && ownerOf(fi) == os.Geteuid() {
-					continue
-				}
-				if err := os.RemoveAll(dst); err != nil {
-					return "", err
-				}
+	return nil
+}
+
+// copySyncDBs starts from the system sync databases, so only changes are downloaded.
+func (p *pacman) copySyncDBs(syncDir string) error {
+	ents, err := os.ReadDir(filepath.Join(p.db(), "sync"))
+	if err != nil {
+		return nil
+	}
+	for _, e := range ents {
+		dst := filepath.Join(syncDir, e.Name())
+		if fi, err := os.Lstat(dst); err == nil {
+			if fi.Mode().IsRegular() && ownerOf(fi) == os.Geteuid() {
+				continue
 			}
-			copyFile(filepath.Join(p.db(), "sync", e.Name()), dst)
+			if err := os.RemoveAll(dst); err != nil {
+				return err
+			}
 		}
+		copyFile(filepath.Join(p.db(), "sync", e.Name()), dst)
 	}
-	return tmp, nil
+	return nil
 }
 
 func (p *pacman) Refresh(ctx context.Context) error {
@@ -369,60 +390,73 @@ func parseServiceFiles(out string) map[string][]string {
 
 // annotate adds reboot, security and restartService notes.
 func (p *pacman) annotate(ctx context.Context, ups []Update) {
-	var names []string
 	for i := range ups {
 		if needsReboot(ups[i].Name) {
 			ups[i].Notes = append(ups[i].Notes, "reboot")
 		}
-		names = append(names, ups[i].Name)
 	}
-	if len(names) > 0 && len(names) <= 300 {
-		var installed []string
-		for i := range ups {
-			if ups[i].From != "" {
-				installed = append(installed, ups[i].Name)
-			}
-		}
-		// Stream the (huge) file list and keep only systemd service files.
-		var keep strings.Builder
-		sctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		_ = sys.Stream(sctx, "pacman", append([]string{"-Ql", "--"}, installed...), func(line string) error {
-			if strings.Contains(line, " /usr/lib/systemd/system/") && strings.HasSuffix(line, ".service") {
-				keep.WriteString(line + "\n")
-			}
-			return nil
-		})
-		cancel()
-		if out := keep.String(); out != "" {
-			units := parseServiceFiles(out)
-			var all []string
-			for _, us := range units {
-				all = append(all, us...)
-			}
-			if len(all) > 0 {
-				active := activeUnits(ctx, all)
-				for i := range ups {
-					for _, u := range units[ups[i].Name] {
-						if active[u] {
-							ups[i].Notes = append(ups[i].Notes, "restartService:"+u)
-							break
-						}
-					}
-				}
-			}
-		}
+	if len(ups) > 0 && len(ups) <= 300 {
+		annotateRestarts(ctx, ups)
 	}
 	if have("arch-audit") {
-		if out, _ := run(ctx, time.Minute, nil, "arch-audit", "--upgradable", "--format", "%n"); out != "" {
-			vuln := map[string]bool{}
-			for _, n := range strings.Fields(out) {
-				vuln[n] = true
+		annotateSecurity(ctx, ups)
+	}
+}
+
+// annotateRestarts adds restartService notes for installed packages that ship
+// a systemd service which is currently active.
+func annotateRestarts(ctx context.Context, ups []Update) {
+	var installed []string
+	for i := range ups {
+		if ups[i].From != "" {
+			installed = append(installed, ups[i].Name)
+		}
+	}
+	// Stream the (huge) file list and keep only systemd service files.
+	var keep strings.Builder
+	sctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	_ = sys.Stream(sctx, "pacman", append([]string{"-Ql", "--"}, installed...), func(line string) error {
+		if strings.Contains(line, " /usr/lib/systemd/system/") && strings.HasSuffix(line, ".service") {
+			keep.WriteString(line + "\n")
+		}
+		return nil
+	})
+	cancel()
+	out := keep.String()
+	if out == "" {
+		return
+	}
+	units := parseServiceFiles(out)
+	var all []string
+	for _, us := range units {
+		all = append(all, us...)
+	}
+	if len(all) == 0 {
+		return
+	}
+	active := activeUnits(ctx, all)
+	for i := range ups {
+		for _, u := range units[ups[i].Name] {
+			if active[u] {
+				ups[i].Notes = append(ups[i].Notes, "restartService:"+u)
+				break
 			}
-			for i := range ups {
-				if vuln[ups[i].Name] {
-					ups[i].Notes = append(ups[i].Notes, "security")
-				}
-			}
+		}
+	}
+}
+
+func annotateSecurity(ctx context.Context, ups []Update) {
+	out, _ := run(ctx, time.Minute, nil, "arch-audit", "--upgradable", "--format", "%n")
+	if out == "" {
+		return
+	}
+	vuln := map[string]bool{}
+	for _, n := range strings.Fields(out) {
+		vuln[n] = true
+	}
+	for i := range ups {
+		if vuln[ups[i].Name] {
+			ups[i].Notes = append(ups[i].Notes, "security")
 		}
 	}
 }
