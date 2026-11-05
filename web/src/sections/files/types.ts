@@ -81,6 +81,17 @@ export interface Remote {
   hasPassphrase?: boolean;
   share?: string;
   domain?: string;
+  updated?: number;
+}
+
+export interface RemoteCapacity {
+  supported: boolean;
+  path?: string;
+  total?: number;
+  used?: number;
+  free?: number;
+  avail?: number;
+  error?: string;
 }
 
 export const isDirLike = (e: Pick<RawEntry, 'type' | 'targetType'>) =>

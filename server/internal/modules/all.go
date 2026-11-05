@@ -11,6 +11,7 @@ import (
 	"github.com/ervisio/ervisio/server/internal/modules/remote"
 	"github.com/ervisio/ervisio/server/internal/modules/services"
 	"github.com/ervisio/ervisio/server/internal/modules/software"
+	"github.com/ervisio/ervisio/server/internal/modules/storage"
 	"github.com/ervisio/ervisio/server/internal/modules/system"
 	"github.com/ervisio/ervisio/server/internal/modules/terminal"
 	"github.com/ervisio/ervisio/server/internal/modules/updates"
@@ -30,6 +31,7 @@ func RegisterAll(r *rpc.Registry) {
 	logs.Register(r)
 	services.Register(r)
 	software.Register(r)
+	storage.Register(r)
 	users.Register(r)
 	plugins.Register(r)
 	updates.Register(r)

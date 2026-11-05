@@ -42,7 +42,7 @@ test.beforeEach(async ({ page }) => {
 test('native Properties is a compact centered popup and selection never opens a side panel', async ({
   page,
 }) => {
-  await page.goto('/files');
+  await page.goto('/files?path=/home/alice');
   const files = page.locator('.files-native');
   const readme = files.locator('[data-path="/home/alice/README.txt"]');
   await readme.click();
@@ -88,7 +88,7 @@ test('native Properties is a compact centered popup and selection never opens a 
 test('native list shares folder and extension icons, selects without preview and opens folders on double-click', async ({
   page,
 }) => {
-  await page.goto('/files');
+  await page.goto('/files?path=/home/alice');
   const files = page.locator('.files-native');
   await files.getByRole('radio', { name: 'List', exact: true }).click();
   const folder = files.locator('tr[data-path="/home/alice/Documents"]');
@@ -112,7 +112,7 @@ test('native list shares folder and extension icons, selects without preview and
 });
 
 test('classic file selection retains its existing automatic details panel', async ({ page }) => {
-  await page.goto('/files');
+  await page.goto('/files?path=/home/alice');
   await page.evaluate(() =>
     localStorage.setItem(
       'ervisio.mock.prefs',
@@ -122,6 +122,11 @@ test('classic file selection retains its existing automatic details panel', asyn
   await page.reload();
   const files = page.locator('.files-root');
   await expect(files).not.toHaveClass(/files-native/);
+  await files
+    .locator('.files-places')
+    .first()
+    .getByRole('link', { name: 'Home', exact: true })
+    .click();
   await files.locator('[data-path="/home/alice/README.txt"]').click();
   await expect(page.getByRole('complementary', { name: 'README.txt', exact: true })).toBeVisible();
   await expect(files.locator('.files-os-icon')).toHaveCount(0);
@@ -130,7 +135,7 @@ test('classic file selection retains its existing automatic details panel', asyn
 test('Properties inspects the inactive split pane target after right-click activates it', async ({
   page,
 }) => {
-  await page.goto('/files');
+  await page.goto('/files?path=/home/alice');
   const files = page.locator('.files-native');
   await files.getByRole('button', { name: 'Split view', exact: true }).click();
   const left = files.locator('.files-pn').nth(0);
@@ -152,7 +157,7 @@ test('native Properties popup fits a phone viewport and closes from its footer',
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/files');
+  await page.goto('/files?path=/home/alice');
   const files = page.locator('.files-native');
   const readme = files.locator('[data-path="/home/alice/README.txt"]');
   await readme.click();

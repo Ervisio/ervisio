@@ -211,10 +211,12 @@ type failure struct {
 func doDelete(paths []string, trash bool) (any, error) {
 	home, _ := homeDir()
 	deleted := []string{}
+	trashed := []map[string]string{}
 	failed := []failure{}
 	var firstErr error
 	for _, p := range paths {
-		if err := deleteOne(p, home, trash); err != nil {
+		id, err := deleteOne(p, home, trash)
+		if err != nil {
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -223,28 +225,31 @@ func doDelete(paths []string, trash bool) (any, error) {
 			continue
 		}
 		deleted = append(deleted, p)
+		if id != "" {
+			trashed = append(trashed, map[string]string{"path": p, "id": id})
+		}
 	}
 	if len(deleted) == 0 && firstErr != nil {
 		return nil, firstErr // lets needs_admin reach the client
 	}
-	return map[string]any{"deleted": deleted, "failed": failed}, nil
+	return map[string]any{"deleted": deleted, "failed": failed, "trashed": trashed}, nil
 }
 
 // deleteOne trashes or removes p after the safety checks.
-func deleteOne(p, home string, trash bool) error {
+func deleteOne(p, home string, trash bool) (string, error) {
 	if err := checkNotProtected(p); err != nil {
-		return err
+		return "", err
 	}
 	if home != "" && p == home {
-		return rpc.Errorf(rpc.Forbidden, "Your home folder cannot be deleted from here.")
+		return "", rpc.Errorf(rpc.Forbidden, "Your home folder cannot be deleted from here.")
 	}
 	if err := checkExists(p); err != nil {
-		return err
+		return "", err
 	}
 	if trash {
 		return moveToTrash(p)
 	}
-	return removePath(p) // never follows symlinks, not even in parent folders as root
+	return "", removePath(p) // never follows symlinks, not even in parent folders as root
 }
 
 // homeOverride lets tests pick the home directory.

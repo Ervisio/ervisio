@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- Shared This PC drive and saved-network-location cards with real capacity information, drive properties and context menus, opening before Home in both interfaces.
+- Folder workspaces in Code editor with a lazy directory tree, per-document undo history and bounded, cancellable project-wide text search for local and saved remote files.
+- Explicit local data-volume formatting with filesystem/label options, quick/full modes, administrator unlock, device identity revalidation and protected system-volume refusal.
+- Personal preference reset and a complete Linux Ervisio configuration/private-data reset with a reviewed scope, private backup, typed confirmation and health-checked recovery.
+
+### Changed
+- Notepad tabs share the ErvisiOS window titlebar, matching Terminal.
+- Explorer Delete uses the Cestino/Trash and provides real Undo/Ctrl+Z; Shift+Delete asks for permanent deletion, and clipboard/select-all shortcuts respect the active view.
+
 ## [7.0.1] - 2026-11-05
 
 ### Added

@@ -1,8 +1,9 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, errorMessage, usePrefs, useSession } from '../../api';
 import { useT } from '../../i18n';
 import type { WindowCloseRequest } from '../../lib/windowClose';
+import { NotepadTitlebar } from '../../desktop/NotepadTitlebar';
 import { Button, Dialog, Icon, IconButton, Input, Skeleton, toast } from '../../ui';
 import { emitChanged, fcall } from '../files/fapi';
 import { isRemoteLocation, remoteTarget } from '../files/remoteLocation';
@@ -20,11 +21,13 @@ import {
 } from './document';
 import './editor.css';
 import { useEditorDrafts } from './DraftsProvider';
+import { ProjectTree } from './ProjectTree';
+import { ProjectSearch } from './ProjectSearch';
 
 const CodeSurface = lazy(() => import('./CodeSurface'));
 const LanguagePicker = lazy(() => import('./LanguagePicker'));
 const MAX_TEXT_BYTES = 2 << 20;
-type PathDialog = { kind: 'open' | 'save'; value: string; error: string; busy: boolean };
+type PathDialog = { kind: 'open' | 'save' | 'folder'; value: string; error: string; busy: boolean };
 
 export default function CodeEditor() {
   return <TextWorkspace mode="code" />;
@@ -36,7 +39,10 @@ export function TextWorkspace({ mode }: { mode: EditorMode }) {
   const { prefs, set } = usePrefs();
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const { documents, setDocuments, activeId, setActiveId } = useEditorDrafts(mode);
+  const { documents, setDocuments, activeId, setActiveId, surfaces, project, setProject } =
+    useEditorDrafts(mode);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarTab, setSidebarTab] = useState<'files' | 'search'>('files');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [conflict, setConflict] = useState(false);
@@ -50,7 +56,9 @@ export function TextWorkspace({ mode }: { mode: EditorMode }) {
   const workspace = useRef<HTMLDivElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const code = useRef<CodeControls | null>(null);
+  const reveal = useRef<{ path: string; line?: number; column?: number } | null>(null);
   const latest = useRef(documents);
+  const opening = useRef(new Set<string>());
   latest.current = documents;
   const active = documents.find((d) => d.id === activeId) ?? documents[0];
   const settingsKey = `editor.${mode}`;
@@ -72,6 +80,8 @@ export function TextWorkspace({ mode }: { mode: EditorMode }) {
         setActiveId(existing.id);
         return;
       }
+      if (opening.current.has(path)) return;
+      opening.current.add(path);
       setBusy(true);
       setError('');
       try {
@@ -113,12 +123,14 @@ export function TextWorkspace({ mode }: { mode: EditorMode }) {
         setError(errorMessage(e));
         throw e;
       } finally {
+        opening.current.delete(path);
         setBusy(false);
       }
     },
     [setDocuments, setActiveId],
   );
   const requestedPath = params.get('path') ?? '';
+  const requestedFolder = mode === 'code' ? (params.get('folder') ?? '') : '';
   const requestedAdmin = params.get('admin') === '1';
   const lastLaunch = useRef('');
   useEffect(() => {
@@ -127,6 +139,26 @@ export function TextWorkspace({ mode }: { mode: EditorMode }) {
     lastLaunch.current = key;
     void openPath(requestedPath, requestedAdmin).catch(() => {});
   }, [requestedPath, requestedAdmin, openPath]);
+  useEffect(() => {
+    if (requestedFolder) {
+      setProject({
+        path: requestedFolder,
+        admin: requestedAdmin && !isRemoteLocation(requestedFolder),
+      });
+      setSidebarOpen(true);
+    }
+  }, [requestedFolder, requestedAdmin, setProject]);
+
+  const openProjectFile = (path: string, line?: number, column?: number) => {
+    reveal.current = { path, line, column };
+    if (active.path === path && code.current) {
+      if (line) code.current.reveal(line, column);
+      else code.current.focus();
+      reveal.current = null;
+      return;
+    }
+    void openPath(path, project?.admin).catch(() => {});
+  };
 
   useEffect(() => {
     if (!dirty) return;
@@ -166,13 +198,15 @@ export function TextWorkspace({ mode }: { mode: EditorMode }) {
     if (isDocumentDirty(doc)) setPendingClose(() => close);
     else close();
   };
-  const showPathDialog = (kind: 'open' | 'save') => {
+  const showPathDialog = (kind: 'open' | 'save' | 'folder') => {
     if (busy || (kind === 'save' && active.readOnly)) return;
     const home = session?.home ?? (session?.os === 'windows' ? 'C:\\' : '/');
     setDialog({
       kind,
       value:
-        active.path ||
+        (kind === 'folder'
+          ? project?.path || (active.path ? dirname(active.path) : home)
+          : active.path) ||
         `${home.replace(/[\\/]$/, '')}/${kind === 'save' ? (mode === 'text' ? 'notes.txt' : 'untitled.txt') : ''}`,
       error: '',
       busy: false,
@@ -227,13 +261,35 @@ export function TextWorkspace({ mode }: { mode: EditorMode }) {
     if (!dialog) return;
     const path = dialog.value.trim();
     if (!/^(?:\/|[A-Za-z]:[\\/]|\\\\)/.test(path) && !isRemoteLocation(path)) {
-      setDialog({ ...dialog, error: t('absolutePath') });
+      setDialog({
+        ...dialog,
+        error: t(dialog.kind === 'folder' ? 'project.absoluteFolderPath' : 'absolutePath'),
+      });
       return;
     }
     setDialog({ ...dialog, busy: true, error: '' });
     try {
       if (dialog.kind === 'open') {
         await openPath(path);
+        setDialog(null);
+        return;
+      }
+      if (dialog.kind === 'folder') {
+        let elevated = false;
+        const entry = await fcall<{ type: string; targetType?: string }>(
+          'files.stat',
+          { path },
+          {
+            onElevate: () => {
+              elevated = true;
+            },
+          },
+        );
+        if (entry.type !== 'dir' && entry.targetType !== 'dir')
+          throw new Error(t('project.notFolder'));
+        setProject({ path, admin: elevated });
+        setSidebarOpen(true);
+        setSidebarTab('files');
         setDialog(null);
         return;
       }
@@ -314,11 +370,26 @@ export function TextWorkspace({ mode }: { mode: EditorMode }) {
       setPosition(next);
     }
   };
+  const TabsFrame = mode === 'text' ? NotepadTitlebar : Fragment;
 
   return (
     <div
       ref={workspace}
       className={`editor-workspace editor-workspace--${mode}`}
+      onKeyDownCapture={(event) => {
+        if (
+          mode === 'code' &&
+          (event.ctrlKey || event.metaKey) &&
+          event.shiftKey &&
+          event.key.toLowerCase() === 'f'
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          setSidebarOpen(true);
+          setSidebarTab('search');
+          if (!project) showPathDialog('folder');
+        }
+      }}
       onKeyDown={(event) => {
         if (!(event.ctrlKey || event.metaKey)) return;
         if (event.key.toLowerCase() === 's') {
@@ -336,38 +407,65 @@ export function TextWorkspace({ mode }: { mode: EditorMode }) {
         }
       }}
     >
-      <div className="editor-tabs" role="tablist" aria-label={t('documents')}>
-        {documents.map((doc) => (
-          <div className={`editor-tab${doc.id === active.id ? ' is-active' : ''}`} key={doc.id}>
-            <button
-              role="tab"
-              aria-selected={doc.id === active.id}
-              onClick={() => {
-                setActiveId(doc.id);
-                setPosition(0);
-                setError('');
-                setConflict(false);
-              }}
-              title={doc.path || t('untitled')}
-            >
-              <Icon name={mode === 'code' ? 'code' : 'file'} size={15} />
-              <span>{doc.path ? documentName(doc.path) : t('untitled')}</span>
-              {isDocumentDirty(doc) && <i aria-label={t('unsaved')} />}
-            </button>
-            <button
-              className="editor-tab-close"
-              aria-label={t('closeDocument', {
-                name: doc.path ? documentName(doc.path) : t('untitled'),
-              })}
-              onClick={() => closeTab(doc)}
-            >
-              <Icon name="close" size={13} />
-            </button>
-          </div>
-        ))}
-        <IconButton icon="plus" label={t('new')} onClick={newTab} size="sm" variant="ghost" />
-      </div>
+      <TabsFrame>
+        <div className="editor-tabs" role="tablist" aria-label={t('documents')}>
+          {documents.map((doc) => (
+            <div className={`editor-tab${doc.id === active.id ? ' is-active' : ''}`} key={doc.id}>
+              <button
+                role="tab"
+                aria-selected={doc.id === active.id}
+                onClick={() => {
+                  setActiveId(doc.id);
+                  setPosition(0);
+                  setError('');
+                  setConflict(false);
+                }}
+                title={doc.path || t('untitled')}
+              >
+                <Icon name={mode === 'code' ? 'code' : 'file'} size={15} />
+                <span>{doc.path ? documentName(doc.path) : t('untitled')}</span>
+                {isDocumentDirty(doc) && <i aria-label={t('unsaved')} />}
+              </button>
+              <button
+                className="editor-tab-close"
+                aria-label={t('closeDocument', {
+                  name: doc.path ? documentName(doc.path) : t('untitled'),
+                })}
+                onClick={() => closeTab(doc)}
+              >
+                <Icon name="close" size={13} />
+              </button>
+            </div>
+          ))}
+          <IconButton icon="plus" label={t('new')} onClick={newTab} size="sm" variant="ghost" />
+        </div>
+      </TabsFrame>
       <div className="editor-toolbar">
+        {mode === 'code' && (
+          <>
+            <IconButton
+              icon="columns"
+              label={t(sidebarOpen ? 'project.hide' : 'project.show')}
+              variant="ghost"
+              size="sm"
+              onClick={() => setSidebarOpen((value) => !value)}
+            />
+            <Button size="sm" variant="ghost" icon="files" onClick={() => showPathDialog('folder')}>
+              {t('project.openFolder')}
+            </Button>
+            <IconButton
+              icon="search"
+              label={t('project.searchShortcut')}
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSidebarOpen(true);
+                setSidebarTab('search');
+                if (!project) showPathDialog('folder');
+              }}
+            />
+          </>
+        )}
         <Button size="sm" variant="ghost" icon="files" onClick={() => showPathDialog('open')}>
           {t('open')}
         </Button>
@@ -471,40 +569,101 @@ export function TextWorkspace({ mode }: { mode: EditorMode }) {
           )}
         </div>
       )}
-      <div className="editor-body">
-        {mode === 'code' ? (
-          <Suspense fallback={<Skeleton lines={8} />}>
-            <CodeSurface
-              key={active.id}
-              value={active.text}
-              name={name}
-              language={language}
-              label={t('codeArea')}
-              readOnly={active.readOnly || busy}
-              wrap={wrap}
-              fontSize={fontSize}
-              onChange={(text) => update(active.id, { text })}
-              onPosition={setPosition}
-              controls={(controls) => {
-                code.current = controls;
-              }}
-            />
-          </Suspense>
-        ) : (
-          <textarea
-            key={active.id}
-            ref={textarea}
-            className="editor-notepad"
-            aria-label={t('textArea')}
-            value={active.text}
-            readOnly={active.readOnly || busy}
-            spellCheck={false}
-            wrap={wrap ? 'soft' : 'off'}
-            style={{ fontSize }}
-            onChange={(e) => update(active.id, { text: e.target.value })}
-            onSelect={(e) => setPosition(e.currentTarget.selectionStart)}
-          />
+      <div className="editor-main">
+        {mode === 'code' && sidebarOpen && (
+          <aside className="editor-project" aria-label={t('project.title')}>
+            <div className="editor-project-tabs">
+              <button
+                type="button"
+                className={sidebarTab === 'files' ? 'is-active' : ''}
+                onClick={() => setSidebarTab('files')}
+              >
+                {t('project.files')}
+              </button>
+              <button
+                type="button"
+                className={sidebarTab === 'search' ? 'is-active' : ''}
+                onClick={() => setSidebarTab('search')}
+              >
+                {t('project.search')}
+              </button>
+              {project && (
+                <IconButton
+                  icon="close"
+                  label={t('project.closeFolder')}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setProject(null)}
+                />
+              )}
+            </div>
+            {project ? (
+              sidebarTab === 'files' ? (
+                <ProjectTree
+                  key={project.path}
+                  root={project}
+                  onOpen={openProjectFile}
+                  onElevate={() =>
+                    setProject((project) => (project ? { ...project, admin: true } : null))
+                  }
+                />
+              ) : (
+                <ProjectSearch key={project.path} root={project} onOpen={openProjectFile} />
+              )
+            ) : (
+              <div className="editor-project-empty">
+                <Icon name="files" size={25} />
+                <p>{t('project.noFolder')}</p>
+                <Button size="sm" onClick={() => showPathDialog('folder')}>
+                  {t('project.openFolder')}
+                </Button>
+              </div>
+            )}
+          </aside>
         )}
+        <div className="editor-body">
+          {mode === 'code' ? (
+            <Suspense fallback={<Skeleton lines={8} />}>
+              <CodeSurface
+                key={active.id}
+                documentId={active.id}
+                memory={surfaces.current}
+                value={active.text}
+                name={name}
+                language={language}
+                label={t('codeArea')}
+                readOnly={active.readOnly || busy}
+                wrap={wrap}
+                fontSize={fontSize}
+                onChange={(text) => update(active.id, { text })}
+                onPosition={setPosition}
+                controls={(controls) => {
+                  code.current = controls;
+                  if (controls && reveal.current?.path === active.path) {
+                    if (reveal.current.line)
+                      controls.reveal(reveal.current.line, reveal.current.column);
+                    else controls.focus();
+                    reveal.current = null;
+                  }
+                }}
+              />
+            </Suspense>
+          ) : (
+            <textarea
+              key={active.id}
+              ref={textarea}
+              className="editor-notepad"
+              aria-label={t('textArea')}
+              value={active.text}
+              readOnly={active.readOnly || busy}
+              spellCheck={false}
+              wrap={wrap ? 'soft' : 'off'}
+              style={{ fontSize }}
+              onChange={(e) => update(active.id, { text: e.target.value })}
+              onSelect={(e) => setPosition(e.currentTarget.selectionStart)}
+            />
+          )}
+        </div>
       </div>
       <footer className="editor-status">
         <span>{t('position', location)}</span>
@@ -544,7 +703,13 @@ export function TextWorkspace({ mode }: { mode: EditorMode }) {
         <Dialog
           open
           onClose={() => !dialog.busy && setDialog(null)}
-          title={t(dialog.kind === 'open' ? 'openTitle' : 'saveTitle')}
+          title={t(
+            dialog.kind === 'folder'
+              ? 'project.openFolder'
+              : dialog.kind === 'open'
+                ? 'openTitle'
+                : 'saveTitle',
+          )}
           icon="files"
           onSubmit={(e) => {
             e.preventDefault();
@@ -556,14 +721,14 @@ export function TextWorkspace({ mode }: { mode: EditorMode }) {
                 {t('cancel')}
               </Button>
               <Button type="submit" variant="primary" loading={dialog.busy}>
-                {t(dialog.kind === 'open' ? 'open' : 'save')}
+                {t(dialog.kind === 'save' ? 'save' : 'open')}
               </Button>
             </>
           }
         >
           <Input
-            label={t('serverPath')}
-            hint={t('serverPathHint')}
+            label={t(dialog.kind === 'folder' ? 'project.folderPath' : 'serverPath')}
+            hint={t(dialog.kind === 'folder' ? 'project.folderHint' : 'serverPathHint')}
             value={dialog.value}
             onChange={(e) => setDialog({ ...dialog, value: e.target.value, error: '' })}
             error={dialog.error || undefined}

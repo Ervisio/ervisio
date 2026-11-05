@@ -1,5 +1,8 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
+const computerWindow = (page: Page) =>
+  page.locator('.eos-window').and(page.getByRole('region', { name: 'Questo PC', exact: true }));
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('ervisio.mock.user', JSON.stringify('alice'));
@@ -22,7 +25,7 @@ test.beforeEach(async ({ page }) => {
   });
   await page.goto('/');
   await page.locator('.eos-shortcut').filter({ hasText: 'Questo PC' }).dblclick();
-  await expect(page.getByRole('region', { name: 'Questo PC', exact: true })).toBeVisible();
+  await expect(computerWindow(page)).toBeVisible();
 });
 
 const geometry = async (window: Locator) => {
@@ -61,7 +64,7 @@ async function dock(page: Page, window: Locator, edge: 'top' | 'left' | 'right')
 test('top-edge maximize restores the previous normal size below the pointer and continues the same drag', async ({
   page,
 }) => {
-  const window = page.getByRole('region', { name: 'Questo PC', exact: true });
+  const window = computerWindow(page);
   const normal = await geometry(window);
   await dock(page, window, 'top');
   const host = await geometry(page.locator('.eos-workspace'));
@@ -98,7 +101,7 @@ test('top-edge maximize restores the previous normal size below the pointer and 
 test('left and right edge docking both restore normal dimensions and keep the titlebar reachable', async ({
   page,
 }) => {
-  const window = page.getByRole('region', { name: 'Questo PC', exact: true });
+  const window = computerWindow(page);
   const normal = await geometry(window);
   const host = await geometry(page.locator('.eos-workspace'));
   for (const edge of ['left', 'right'] as const) {
@@ -124,7 +127,7 @@ test('left and right edge docking both restore normal dimensions and keep the ti
 test('clicking a maximized titlebar preserves it, and buttons or double-click restore the retained bounds', async ({
   page,
 }) => {
-  const window = page.getByRole('region', { name: 'Questo PC', exact: true });
+  const window = computerWindow(page);
   const normal = await geometry(window);
   await window.getByRole('button', { name: 'Ingrandisci', exact: true }).click();
   await expect(window).toHaveClass(/is-maximized/);

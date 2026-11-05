@@ -61,6 +61,11 @@ Returned by `files.list`, `files.stat`, `files.search`, `files.places` (recent) 
 `trash:true` moves items to the freedesktop Trash of the account running the bridge
 (`~/.local/share/Trash/{files,info}` with a `.trashinfo` file; names are made unique). Items on other
 file systems are copied into it. `trash:false` removes for good (`unlinkat`/descriptor walk: **symlinks are removed, never followed**).
+Successful `trash:true` deletions additionally return `trashed:[{path,id}]`. Undo uses those exact
+IDs on the same user/admin bridge as the deletion, rather than guessing the newest item by path.
+The UI uses Trash for local Delete even when browsing as root; administrator Trash is visibly
+labelled and separate from the user's Trash. Ctrl+Z and the Undo toast restore the same receipt.
+Shift+Delete and remote deletion use an explicit permanent-delete confirmation.
 Protected folders (`/`, `/etc`, `/usr`, `/var`, `/home`, `/root`, `/boot`, ...) and the account's home folder are refused
 (`forbidden`). If nothing could be deleted, the first error is returned as the call's error (so `needs_admin` reaches
 the client); otherwise partial failures are listed in `failed`. The client uses permanent deletion (after a confirmation)
@@ -95,6 +100,31 @@ followed; `/proc /sys /dev /run` are skipped. Events:
 {"entries":[Entry, ...]}                         // batches (path is set)
 {"done":true,"count":n,"truncated":bool}         // truncated when maxResults (default 200, max 5000) was reached
 ```
+
+### files.searchText (stream)
+
+Literal content search for a selected project directory, under the same user/root bridge permissions as other
+file reads. Params: `{root, query, caseSensitive?, includeGenerated?, maxResults?}`. `query` must be a non-empty
+single line of at most 256 UTF-8 bytes; it is never interpreted as a regular expression or shell command.
+
+```json
+{"matches":[{"path":"/srv/app/main.js","line":12,"column":4,"text":"// matching line"}],
+ "files":25,"skipped":2,"bytes":32000,"count":3,"done":false,"truncated":false,"reason":""}
+```
+
+Matches arrive in batches, followed by a final event with `done:true`. Line and column numbers start at one;
+columns use UTF-16 code units for browser editor selections. Snippets contain at most 240 Unicode characters
+around the match (plus optional ellipses); a file contributes one result per matching line.
+
+The default result limit is 300, capped at 500. A search visits at most 10,000 entries, descends at most 40 levels,
+reads at most 1 MiB per regular file and 32 MiB total, and stops after 15 seconds. Truncation reports `reason`
+`results`, `files`, `bytes` or `time`. Inaccessible, binary, large and excluded entries are counted as skipped.
+Directory and file symlinks are skipped. Local access is anchored to the chosen root; pseudo-filesystem
+directories `/proc`, `/sys`, `/dev` and `/run` are not traversed.
+
+By default `.git`, `node_modules`, `vendor`, `.venv`, `venv`, `__pycache__`, `.cache`, `.next`, `dist` and `build`
+are skipped; `includeGenerated:true` includes them. Closing the stream cancels traversal and prevents late
+completion messages. No file contents or results are written to preferences or persistent browser storage.
 
 ### files.places
 `home` is the account's home. `recent` comes from `~/.local/share/recently-used.xbel` (newest 40 that still exist, no

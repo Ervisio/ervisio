@@ -21,6 +21,9 @@ import { TransferBar } from './TransferBar';
 import { fileDownloadUrl, setUnlockProbe } from './fapi';
 import { useRemoteConnections } from './RemoteConnections';
 import { isRemoteLocation } from './remoteLocation';
+import { useRemoteCapacity } from './useRemoteCapacity';
+import { fileKeysEditable, fileShortcut } from './fileShortcuts';
+import { FormatDialog } from './FormatDialog';
 import { copyText } from './filesOps';
 import {
   otherOf,
@@ -30,7 +33,7 @@ import {
   type Side,
 } from './filesPageTypes';
 import { useFilesMenu } from './filesMenu';
-import { isDirLike, type FEntry, type TabState } from './types';
+import { isDirLike, type Disk, type FEntry, type TabState } from './types';
 import { useFilesActions } from './useFilesActions';
 import { useFilesPaneData, usePlaces } from './useFilesData';
 import { useFilesPalette } from './useFilesPalette';
@@ -394,7 +397,7 @@ export default function FilesPage() {
   const { session, host, isUnlocked } = useSession();
   const { prefs: accountPrefs } = usePrefs();
   const native = (accountPrefs['shell.mode'] ?? host?.defaultShell) === 'ervisios';
-  const [computer, setComputer] = useState(false);
+  const [formatDisk, setFormatDisk] = useState<Disk | null>(null);
   const prefs = useFilesPrefs(t);
   const home = session?.home || '/';
   const isRoot = !!session?.isRoot;
@@ -409,12 +412,13 @@ export default function FilesPage() {
     set: prefs.set,
   });
   const { tab, split, side, sel, query, sort, pane, adminOf, updPane, clearSel } = tabs;
+  const computer = pane(side).loc === 'computer:';
 
   useEffect(() => {
     setUnlockProbe(() => isUnlocked || isRoot);
   }, [isUnlocked, isRoot]);
 
-  const places = usePlaces();
+  const places = usePlaces(adminOf(side));
   const { data, selectedEntries } = useFilesPaneData(tabs, prefs.showHidden, prefs.starredList);
   const targets = selectedEntries(side);
   const panel = useFilesPanel(
@@ -437,10 +441,13 @@ export default function FilesPage() {
     native,
   });
   const goPlace = (loc: string) => {
-    setComputer(false);
     tabs.navigate(side, loc);
   };
   const remotes = useRemoteConnections(goPlace, pane(side).loc);
+  const capacity = useRemoteCapacity(
+    remotes.connections,
+    pane('L').loc === 'computer:' || (split && pane('R').loc === 'computer:'),
+  );
   useFilesPalette({
     t,
     home,
@@ -456,53 +463,78 @@ export default function FilesPage() {
     if (v.size === 0) panel.hide();
   };
 
-  const renderPane = (s: Side) => (
-    <Pane
-      key={s}
-      native={native}
-      navigationKey={`${tab.id}:${s}`}
-      label={split ? t(s === 'L' ? 'left' : 'right') : undefined}
-      active={side === s}
-      state={pane(s)}
-      data={data(s)}
-      query={query[s]}
-      onQuery={(q) => {
-        tabs.setQuery((c) => ({ ...c, [s]: q }));
-        clearSel(s);
-      }}
-      sort={sort[s]}
-      onSort={(v) => tabs.setSort((c) => ({ ...c, [s]: v }))}
-      selected={sel[s]}
-      onSelected={onSelected(s)}
-      starred={prefs.starred}
-      onFocus={() => tabs.setAct(s)}
-      onNavigate={(l) => tabs.navigate(s, l)}
-      onView={(v) => updPane(s, { view: v })}
-      onOpen={(e) => actions.openEntry(e, s)}
-      onContext={(e, x, y) => menu.openMenu(s, e, x, y)}
-      onDropFiles={(dt, dest) => void actions.onDropFiles(dt, dest, s)}
-      onDropMove={(paths, dest, copy) => actions.dropMove(paths, dest, copy, s)}
-      onShortcut={(k) => actions.shortcut(s, k)}
-      onLeaveAdmin={() => updPane(s, { admin: false })}
-      onRetryAdmin={() =>
-        data(s).error?.code === 'needs_admin' ? updPane(s, { admin: true }) : data(s).reload()
-      }
-      dragPaths={(e) => (sel[s].has(e.path) ? [...sel[s]] : [e.path])}
-    />
-  );
+  const computerProps = {
+    places,
+    home,
+    bookmarks: prefs.bookmarks,
+    remotes: remotes.connections,
+    capacity,
+    onAddRemote: remotes.add,
+    onEditRemote: remotes.edit,
+    onForgetRemote: remotes.forget,
+    onFormat: setFormatDisk,
+    onRefresh: () => {
+      remotes.refresh();
+      actions.refreshAll();
+    },
+  };
+  const renderPane = (s: Side) =>
+    pane(s).loc === 'computer:' ? (
+      <NativeComputer
+        {...computerProps}
+        onGo={(loc) => tabs.navigate(s, loc)}
+        onActivate={() => tabs.setAct(s)}
+        onRemote={(remote) => void remotes.open(remote, (loc) => tabs.navigate(s, loc))}
+        onFolderEditor={(path) => actions.openFolderEditor(path, s)}
+      />
+    ) : (
+      <Pane
+        key={s}
+        native={native}
+        navigationKey={`${tab.id}:${s}`}
+        label={split ? t(s === 'L' ? 'left' : 'right') : undefined}
+        active={side === s}
+        state={pane(s)}
+        data={data(s)}
+        query={query[s]}
+        onQuery={(q) => {
+          tabs.setQuery((c) => ({ ...c, [s]: q }));
+          clearSel(s);
+        }}
+        sort={sort[s]}
+        onSort={(v) => tabs.setSort((c) => ({ ...c, [s]: v }))}
+        selected={sel[s]}
+        onSelected={onSelected(s)}
+        starred={prefs.starred}
+        onFocus={() => tabs.setAct(s)}
+        onNavigate={(l) => tabs.navigate(s, l)}
+        onView={(v) => updPane(s, { view: v })}
+        onOpen={(e) => actions.openEntry(e, s)}
+        onContext={(e, x, y) => menu.openMenu(s, e, x, y)}
+        onDropFiles={(dt, dest) => void actions.onDropFiles(dt, dest, s)}
+        onDropMove={(paths, dest, copy) => actions.dropMove(paths, dest, copy, s)}
+        onShortcut={(k) => actions.shortcut(s, k)}
+        onLeaveAdmin={() => updPane(s, { admin: false })}
+        onRetryAdmin={() =>
+          data(s).error?.code === 'needs_admin' ? updPane(s, { admin: true }) : data(s).reload()
+        }
+        dragPaths={(e) => (sel[s].has(e.path) ? [...sel[s]] : [e.path])}
+      />
+    );
 
   const placesProps = {
     native,
     computer,
     onComputer: () => {
       clearSel();
-      setComputer(true);
+      tabs.navigate(side, 'computer:');
     },
     data: places,
     home,
     loc: pane(side).loc,
     bookmarks: prefs.bookmarks,
     remotes: remotes.connections,
+    trashAdmin: adminOf(side),
     onRemote: remotes.open,
     onAddRemote: remotes.add,
     onEditRemote: remotes.edit,
@@ -513,7 +545,23 @@ export default function FilesPage() {
   };
 
   return (
-    <div className={`files-root hue-file${native ? ' files-native' : ''}`}>
+    <div
+      className={`files-root hue-file${native ? ' files-native' : ''}`}
+      onKeyDown={(event) => {
+        if (
+          event.defaultPrevented ||
+          fileKeysEditable(event.target) ||
+          !(event.ctrlKey || event.metaKey)
+        )
+          return;
+        const shortcut = fileShortcut(event);
+        if (!shortcut) return;
+        event.preventDefault();
+        if (shortcut === 'selectAll')
+          onSelected(side)(new Set(data(side).entries.map((entry) => entry.path)));
+        else actions.shortcut(side, shortcut);
+      }}
+    >
       {!mobile && !native && (
         <aside className="files-places" aria-label={t('places')}>
           <PlacesList {...placesProps} />
@@ -529,12 +577,10 @@ export default function FilesPage() {
           split={tab.split}
           showHidden={prefs.showHidden}
           onSwitch={(id) => {
-            setComputer(false);
             tabs.switchTab(id);
           }}
           onClose={tabs.closeTab}
           onNewTab={() => {
-            setComputer(false);
             tabs.openTab();
           }}
           onPlaces={() => setPlacesSheet(true)}
@@ -561,19 +607,10 @@ export default function FilesPage() {
               <PlacesList {...placesProps} />
             </aside>
           )}
-          {native && computer ? (
-            <NativeComputer
-              places={places}
-              home={home}
-              bookmarks={prefs.bookmarks}
-              onGo={goPlace}
-            />
-          ) : (
-            <div className={`files-duo${split ? ' is-split' : ''}`}>
-              {renderPane('L')}
-              {split && renderPane('R')}
-            </div>
-          )}
+          <div className={`files-duo${split ? ' is-split' : ''}`}>
+            {renderPane('L')}
+            {split && renderPane('R')}
+          </div>
         </div>
         {native && (
           <div className="files-native-status">
@@ -632,6 +669,13 @@ export default function FilesPage() {
       )}
       <UploadInput inputRef={fileInput} onPick={actions.uploadPicked} />
       {remotes.dialogs}
+      {formatDisk && (
+        <FormatDialog
+          disk={formatDisk}
+          onClose={() => setFormatDisk(null)}
+          onFormatted={actions.refreshAll}
+        />
+      )}
       {menu.menu && (
         <Menu
           items={menu.menu.items}

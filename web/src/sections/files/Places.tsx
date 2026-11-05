@@ -22,6 +22,7 @@ export interface PlacesProps {
   loc: string;
   bookmarks: string[];
   remotes: Remote[];
+  trashAdmin?: boolean;
   onRemote(remote: Remote): void;
   onAddRemote(): void;
   onEditRemote(remote: Remote): void;
@@ -43,8 +44,8 @@ export function PlacesList(p: PlacesProps) {
     <a
       key={`${loc}:${label}`}
       href="#"
-      className={!p.computer && p.loc === loc ? 'is-on' : ''}
-      aria-current={!p.computer && p.loc === loc ? 'page' : undefined}
+      className={p.loc === loc ? 'is-on' : ''}
+      aria-current={p.loc === loc ? 'page' : undefined}
       onClick={(e) => {
         e.preventDefault();
         go(loc);
@@ -71,6 +72,7 @@ export function PlacesList(p: PlacesProps) {
       )}
       {p.native && <div className="files-plt">{t('native.quickAccess')}</div>}
       <div className="files-pg">
+        {item('computer:', 'server', t('native.thisPC'))}
         {item(p.home, 'home', t('place.home'))}
         {item('/', 'server', t('place.root'), <span className="files-muted mono">/</span>)}
         {item('recent:', 'clock', t('place.recent'))}
@@ -78,26 +80,10 @@ export function PlacesList(p: PlacesProps) {
         {item(
           'trash:',
           'trash',
-          t('place.trash'),
+          t(p.trashAdmin ? 'place.adminTrash' : 'place.trash'),
           p.data && p.data.trashCount > 0 ? <Badge>{p.data.trashCount}</Badge> : undefined,
         )}
       </div>
-      {p.native && (
-        <div className="files-pg">
-          <a
-            href="#"
-            className={p.computer ? 'is-on' : ''}
-            onClick={(e) => {
-              e.preventDefault();
-              p.onComputer?.();
-              p.onPicked?.();
-            }}
-          >
-            <Icon name="server" />
-            <span className="files-pl-n">{t('native.thisPC')}</span>
-          </a>
-        </div>
-      )}
       <div className="files-plt">{t('bookmarks')}</div>
       <div className="files-pg">
         {p.bookmarks.length === 0 && (

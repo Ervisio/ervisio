@@ -20,6 +20,13 @@ export function mockRemoteCall(method: string, params: Record<string, any>) {
   const content = read<Record<string, string>>('remoteText', {});
   const connection = connections.find((r) => r.id === (params.conn ?? params.id));
   switch (method) {
+    case 'remote.statfs':
+      return (
+        read<Record<string, unknown>>('remoteCapacity', {})[params.conn] ?? {
+          supported: false,
+          path: params.path,
+        }
+      );
     case 'remote.list':
       return { connections };
     case 'remote.test':

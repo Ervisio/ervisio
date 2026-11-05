@@ -12,6 +12,7 @@ import { usePaneSelection } from './usePaneSelection';
 import { isVirtual, sortEntries } from './util';
 
 export type Shortcut =
+  | 'undo'
   | 'delete'
   | 'permDelete'
   | 'rename'
@@ -87,7 +88,15 @@ export function Pane(p: PaneProps) {
       className={`files-pn${p.active ? ' is-act' : ''}${dnd.drop ? ' is-drop' : ''}`}
       tabIndex={0}
       onKeyDown={onKeyDown}
-      onMouseDown={() => p.onFocus()}
+      onMouseDown={(ev) => {
+        p.onFocus();
+        if (
+          !(ev.target as HTMLElement).closest(
+            'input,textarea,select,button,a,[contenteditable="true"]',
+          )
+        )
+          root.current?.focus({ preventScroll: true });
+      }}
       onDragOver={dnd.onDragOver}
       onDragLeave={dnd.onDragLeave}
       onDrop={dnd.onDrop}

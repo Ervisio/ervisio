@@ -61,11 +61,28 @@
   "folderCreated": "Cartella {name} creata",
   "fileCreated": "File {name} creato",
   "place": {
+    "computer": "Questo PC",
+    "adminTrash": "Cestino amministratore",
     "home": "Home",
     "root": "Radice",
     "recent": "Recenti",
     "starred": "Preferiti",
     "trash": "Cestino"
+  },
+  "computer": {
+    "networkFolders": "Percorsi di rete",
+    "noNetworkFolders": "Aggiungi un server SFTP o una cartella di rete condivisa per trovarla qui.",
+    "capacityLoading": "Verifica dello spazio disponibile…",
+    "capacityUnknown": "Il server non comunica lo spazio disponibile",
+    "connectionUnavailable": "Server non disponibile",
+    "format": "Formatta…",
+    "device": "Dispositivo",
+    "mount": "Punto di montaggio",
+    "filesystem": "File system",
+    "share": "Condivisione",
+    "total": "Capacità",
+    "used": "Spazio utilizzato",
+    "available": "Spazio disponibile"
   },
   "remote": {
     "title": "Remoti",
@@ -177,6 +194,7 @@
     "emptyFile": "(file vuoto)"
   },
   "act": {
+    "openFolderCode": "Apri cartella nell'Editor di codice",
     "terminalHere": "Apri nel terminale",
     "openNotepad": "Apri con Blocco note",
     "openCodeEditor": "Apri con Editor di codice",

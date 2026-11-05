@@ -42,6 +42,7 @@ func register(r *rpc.Registry, m *module) {
 	r.Handle("remote.start", rpc.User, m.hStart)
 	r.Handle("remote.ls", rpc.User, m.hLs)
 	r.Handle("remote.stat", rpc.User, m.hStat)
+	r.Handle("remote.statfs", rpc.User, m.hStatfs)
 	r.Handle("remote.mkdir", rpc.User, m.hMkdir)
 	r.Handle("remote.create", rpc.User, m.hCreate)
 	r.Handle("remote.rename", rpc.User, m.hRename)
@@ -51,6 +52,7 @@ func register(r *rpc.Registry, m *module) {
 	r.Stream("remote.readStream", rpc.User, m.hReadStream)
 	r.Stream("remote.writeStream", rpc.User, m.hWriteStream)
 	r.Stream("remote.copy", rpc.User, m.hCopy)
+	r.Stream("remote.searchText", rpc.User, m.hSearchText)
 }
 
 // remoteErr names an error for the browser. Permission errors become

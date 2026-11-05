@@ -3,6 +3,7 @@ import { b64encode } from '../auth/sshkey/bytes';
 import { wsUrl } from './base';
 import { authEvents, MOCK } from './http';
 import { requestUnlock } from './unlock';
+import { mockStream } from './mockStream';
 
 interface Chan {
   id: number;
@@ -146,6 +147,8 @@ export function stream<T = any>(
   h: StreamHandlers<T> = {},
 ): StreamHandle {
   if (MOCK) {
+    const fixture = mockStream(method, params, h);
+    if (fixture) return fixture;
     queueMicrotask(() =>
       h.onError?.(new ApiError('unavailable', 'Streams are not available in mock mode.')),
     );

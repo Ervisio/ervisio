@@ -43,6 +43,28 @@ Desktop interaction is specific to ErvisiOS:
 
 Icon positions are saved with the account's desktop preferences and survive reloads. A smaller screen reflows icons into visible cells without overwriting the layout saved for a larger screen. Desktop folders continue to organize application shortcuts only; they do not create directories on Ubuntu, Windows or a network share.
 
+## This PC and file actions
+
+File Explorer initially opens **This PC** in both interfaces, with its navigation entry above Home.
+The ErvisiOS desktop's **This PC** shortcut opens this same file manager, with the same drive cards
+and operations. Existing folder tabs remain available after migration; direct file/folder links still
+open their requested location.
+
+Saved network folders appear as drive cards beside local storage. Capacity bars use actual SFTP/SMB
+filesystem information when the server supports it; otherwise the card explicitly reports that
+capacity is unavailable. Right-click the background to add network storage, or a card to open,
+edit, forget or inspect it. Local disks also expose the guarded [Format dialog](api/storage.md);
+system and unsupported devices stay blocked.
+
+Local **Delete** moves files to Trash even in an elevated view. An elevated view labels its separate
+administrator Trash. The Undo toast and **Ctrl+Z** restore the exact deletion through the same bridge;
+**Shift+Delete** shows a compact permanent-delete confirmation. Clipboard selection shortcuts remain
+scoped to the active file view and leave text inputs alone.
+
+Folder context menus place **Open folder in Code editor** below **Open in Terminal**. It opens the
+editor's project tree for the selected local or remote folder; a remote folder does not offer a local
+terminal action.
+
 ## Connect network storage with SFTP or SMB
 
 In either file-manager interface, choose **Add network folder**, select the protocol, enter the connection details, then use **Test connection** and **Save and connect**. Saved connections appear under Remote in File Explorer.

@@ -1,0 +1,53 @@
+.files-computer {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.files-computer > header > .ui-btn {
+  margin-left: auto;
+}
+.files-computer .files-native-drives > button.is-selected {
+  background: color-mix(in srgb, var(--h-file) 12%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--h-file) 40%, transparent);
+}
+.files-network-drive {
+  position: relative;
+}
+.files-network-drive small {
+  position: absolute;
+  bottom: -2px;
+  font-size: 8px;
+  font-weight: 700;
+  background: var(--surface);
+  border-radius: 3px;
+  padding: 1px 3px;
+}
+.files-drive-status {
+  min-height: 22px;
+  display: flex;
+  align-items: center;
+}
+.files-drive-properties {
+  width: min(480px, calc(100vw - 32px));
+}
+.files-drive-details {
+  display: grid;
+  grid-template-columns: minmax(90px, auto) minmax(0, 1fr);
+  gap: 12px 20px;
+  font-size: 12px;
+}
+.files-drive-details dt {
+  color: var(--ink2);
+}
+.files-drive-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 580px) {
+  .files-computer > header {
+    flex-wrap: wrap;
+  }
+  .files-computer > header > .ui-btn {
+    margin-left: 0;
+  }
+}

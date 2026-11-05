@@ -113,7 +113,9 @@ type Server struct {
 	notifier *notify.Service
 	jobPool  *bridgePool
 	// env is the environments feature (envs.go).
-	env *envState
+	env     *envState
+	resetMu sync.Mutex
+	reset   *resetCoordinator
 }
 
 // New validates options and loads the configuration.
@@ -228,6 +230,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/public/host", s.handlePublicHost)
 	mux.HandleFunc("GET /api/public/logo", s.handlePublicLogo)
 	mux.HandleFunc("GET /api/health", s.handleHealth)
+	mux.HandleFunc("GET /api/maintenance/reset/status", s.handleResetPublicStatus)
 	mux.HandleFunc("POST /api/auth/login", s.csrf(s.handleLogin))
 	mux.HandleFunc("POST /api/auth/challenge", s.csrf(s.handleChallenge))
 	mux.HandleFunc("POST /api/auth/login-key", s.csrf(s.handleLoginKey))
@@ -257,7 +260,7 @@ func (s *Server) Handler() http.Handler {
 	// the random token in the path is the credential (docs/api/jobs.md).
 	mux.HandleFunc("POST /hooks/{plugin}/{token}", s.handleHook)
 	mux.Handle("/", s.webHandler())
-	var h http.Handler = mux
+	var h http.Handler = s.resetHTTPGate(mux)
 	if s.opts.Dev {
 		h = s.devHostCheck(h)
 	}

@@ -22,6 +22,8 @@ interface PrefsValue {
   retry(): void;
   /** Instant optimistic save; persists through prefs.set. Pass undefined to remove the key. */
   set(key: string, value: unknown): Promise<void>;
+  /** Clears this account's preferences after every already-queued write. */
+  reset(): Promise<void>;
 }
 const Ctx = createContext<PrefsValue | null>(null);
 const CACHE = 'ervisio.prefs';
@@ -34,7 +36,7 @@ interface Snapshot {
 function readCache(key: string): Prefs {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(key) || '{}');
-    return value && typeof value === 'object' && !Array.isArray(value) ? value as Prefs : {};
+    return value && typeof value === 'object' && !Array.isArray(value) ? (value as Prefs) : {};
   } catch {
     return {};
   }
@@ -52,9 +54,10 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
   const { status, session } = useSession();
   // Never hydrate one account's desktop or settings from another account's cache.
   // The API origin is part of the identity for wrappers using VITE_API_BASE.
-  const owner = status === 'authed' && session
-    ? JSON.stringify([API_BASE, session.uid, session.user])
-    : 'anonymous';
+  const owner =
+    status === 'authed' && session
+      ? JSON.stringify([API_BASE, session.uid, session.user])
+      : 'anonymous';
   const cacheKey = `${CACHE}:${owner}`;
   const current = useRef({ status, owner });
   current.current = { status, owner };
@@ -66,13 +69,18 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
   const ref = useRef(snapshot);
   ref.current = snapshot;
   const writes = useRef<Promise<unknown>>(Promise.resolve());
+  const resetting = useRef(false);
   const prefs = snapshot.owner === owner ? snapshot.values : EMPTY_PREFS;
   const ready = status === 'authed' && loadedOwner === owner;
 
   useEffect(() => {
     let live = true;
     // The old unscoped cache cannot be attributed to a user. Do not import it.
-    try { localStorage.removeItem(CACHE); } catch { /* unavailable */ }
+    try {
+      localStorage.removeItem(CACHE);
+    } catch {
+      /* unavailable */
+    }
     const cached = { owner, values: readCache(cacheKey) };
     ref.current = cached;
     setSnapshot(cached);
@@ -97,10 +105,13 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
           setLoadError(error instanceof Error ? error : new Error(String(error)));
         }
       });
-    return () => { live = false; };
+    return () => {
+      live = false;
+    };
   }, [status, owner, cacheKey, attempt]);
 
   const set = useCallback(async (key: string, value: unknown) => {
+    if (resetting.current) return;
     const identity = current.current;
     const identityKey = `${CACHE}:${identity.owner}`;
     const before = ref.current.owner === identity.owner ? ref.current.values : {};
@@ -114,10 +125,12 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
     if (identity.status !== 'authed') return;
     // Preserve the order of quick desktop edits even when HTTP requests finish
     // at different times, and never send a queued write as a different user.
-    const pending = writes.current.catch(() => undefined).then(async () => {
-      if (current.current.owner !== identity.owner || current.current.status !== 'authed') return;
-      await call('prefs.set', { key, value: value ?? null });
-    });
+    const pending = writes.current
+      .catch(() => undefined)
+      .then(async () => {
+        if (current.current.owner !== identity.owner || current.current.status !== 'authed') return;
+        await call('prefs.set', { key, value: value ?? null });
+      });
     writes.current = pending;
     try {
       await pending;
@@ -135,7 +148,36 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const v = useMemo(() => ({ prefs, ready, set, error: loadError, retry }), [prefs, ready, set, loadError, retry]);
+  const reset = useCallback(async () => {
+    if (resetting.current) return;
+    const identity = current.current;
+    if (identity.status !== 'authed') throw new Error('Sign in before resetting preferences.');
+    resetting.current = true;
+    const pending = writes.current
+      .catch(() => undefined)
+      .then(async () => {
+        if (current.current.owner !== identity.owner || current.current.status !== 'authed')
+          throw new Error('The signed-in account changed. Open Settings again.');
+        await call('prefs.setAll', { values: {}, replace: true });
+        if (current.current.owner === identity.owner) {
+          const cleared = { owner: identity.owner, values: {} };
+          ref.current = cleared;
+          setSnapshot(cleared);
+          writeCache(`${CACHE}:${identity.owner}`, {});
+        }
+      });
+    writes.current = pending;
+    try {
+      await pending;
+    } finally {
+      resetting.current = false;
+    }
+  }, []);
+
+  const v = useMemo(
+    () => ({ prefs, ready, set, reset, error: loadError, retry }),
+    [prefs, ready, set, reset, loadError, retry],
+  );
   return <Ctx.Provider value={v}>{children}</Ctx.Provider>;
 }
 

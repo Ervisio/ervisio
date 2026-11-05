@@ -19,7 +19,7 @@ test('real apps open in independent windows and restore from the taskbar', async
   await expect(page.locator('.eos')).toBeVisible();
   await page.screenshot({ path: 'test-results/desktop.png' });
   await page.locator('.eos-shortcut').filter({ hasText: 'Questo PC' }).dblclick();
-  await expect(page.getByRole('region', { name: 'Questo PC', exact: true })).toBeVisible();
+  await expect(page.locator('.eos-window').and(page.getByRole('region', { name: 'Questo PC', exact: true }))).toBeVisible();
   await page.locator('.eos-shortcut').filter({ hasText: 'Esplora risorse' }).dblclick();
   const explorer = page.getByRole('region', { name: 'Esplora risorse', exact: true });
   await expect(explorer).toBeVisible();
@@ -76,7 +76,7 @@ test('desktop and start fit a touch viewport', async ({ page }) => {
   await page.getByRole('button', { name: 'Start', exact: true }).click();
   await expect(page.locator('.eos-panel--start')).toBeVisible();
   await page.locator('.eos-start-app').filter({ hasText: 'Questo PC' }).click();
-  await expect(page.getByRole('region', { name: 'Questo PC', exact: true })).toBeVisible();
+  await expect(page.locator('.eos-window').and(page.getByRole('region', { name: 'Questo PC', exact: true }))).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
@@ -92,7 +92,7 @@ test('local app commands restore the same window without a provider', async ({ p
       return (await import(module)).runShellCommand(value);
     }, text);
   expect(await command('Apri questo PC')).toMatchObject({ handled: true });
-  await expect(page.getByRole('region', { name: 'Questo PC', exact: true })).toBeVisible();
+  await expect(page.locator('.eos-window').and(page.getByRole('region', { name: 'Questo PC', exact: true }))).toBeVisible();
   expect(await command('Mostra desktop')).toMatchObject({ handled: true });
   await expect(page.locator('.eos-window:visible')).toHaveCount(0);
   expect(await command('Apri questo PC')).toMatchObject({ handled: true });
@@ -154,7 +154,7 @@ test('releasing a dragged window keeps it opaque without replaying its opening a
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.goto('/');
   await page.locator('.eos-shortcut').filter({ hasText: 'Questo PC' }).dblclick();
-  const win = page.getByRole('region', { name: 'Questo PC', exact: true });
+  const win = page.locator('.eos-window').and(page.getByRole('region', { name: 'Questo PC', exact: true }));
   await expect(win).toBeVisible();
   await win.evaluate(async (element) => {
     await Promise.all(element.getAnimations().map((animation) => animation.finished));

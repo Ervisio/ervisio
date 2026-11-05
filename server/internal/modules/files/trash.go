@@ -43,17 +43,19 @@ func ensureTrash() (files, info string, err error) {
 
 func encodeTrashPath(p string) string { return (&url.URL{Path: p}).EscapedPath() }
 
-func moveToTrash(p string) error {
+// moveToTrash returns the precise receipt for Undo, even for repeated deletions
+// of the same original name within one second.
+func moveToTrash(p string) (string, error) {
 	filesDir, infoDir, err := ensureTrash()
 	if err != nil {
-		return err
+		return "", err
 	}
 	if isInside(p, filepath.Dir(filesDir)) {
-		return rpc.Errorf(rpc.Invalid, "This item is already in the Trash.")
+		return "", rpc.Errorf(rpc.Invalid, "This item is already in the Trash.")
 	}
 	name, infoFile, err := createTrashInfo(filesDir, infoDir, filepath.Base(p))
 	if err != nil {
-		return err
+		return "", err
 	}
 	content := "[Trash Info]\nPath=" + encodeTrashPath(p) + "\nDeletionDate=" + time.Now().Format(trashDateLayout) + "\n"
 	_, werr := infoFile.WriteString(content)
@@ -61,13 +63,13 @@ func moveToTrash(p string) error {
 	infoPath := filepath.Join(infoDir, name+".trashinfo")
 	if werr != nil {
 		_ = os.Remove(infoPath)
-		return werr
+		return "", werr
 	}
 	if err := movePath(p, filepath.Join(filesDir, name)); err != nil {
 		_ = os.Remove(infoPath)
-		return err
+		return "", err
 	}
-	return nil
+	return name, nil
 }
 
 // createTrashInfo picks a free name in the Trash and creates its .trashinfo.

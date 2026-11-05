@@ -184,6 +184,18 @@ func TestSFTPTrustTransfersAndSavedCredentials(t *testing.T) {
 	if err != nil || read.(map[string]any)["content"] != "port: 8080\n" {
 		t.Fatalf("text roundtrip failed: %v", err)
 	}
+	capacity, err := m.hStatfs(ctx, remoteCall(map[string]any{"conn": view.ID, "path": "/app"}))
+	if err != nil || capacity.(Capacity).Supported {
+		t.Fatalf("unsupported SFTP statvfs should be honestly unknown: %v %v", capacity, err)
+	}
+	search := &remoteTestStream{}
+	if err := m.hSearchText(ctx, remoteCall(map[string]any{"conn": view.ID, "root": "/app", "query": "8080"}), search); err != nil {
+		t.Fatal(err)
+	}
+	searchData, _ := json.Marshal(search.events)
+	if !bytes.Contains(searchData, []byte(`"path":"/app/config.yml"`)) || !bytes.Contains(searchData, []byte(`"line":1`)) {
+		t.Fatalf("remote project search did not return file and line: %s", searchData)
+	}
 	if _, err := m.hWriteText(ctx, remoteCall(map[string]any{"conn": view.ID, "path": "/app/config.yml", "content": "bad", "expectedMtime": 1})); !rpc.IsCode(err, rpc.Conflict) {
 		t.Fatalf("stale edit was not refused: %v", err)
 	}

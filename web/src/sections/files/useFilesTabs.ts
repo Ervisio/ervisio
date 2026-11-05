@@ -25,19 +25,21 @@ const absolutePath = (path: string) =>
   path.startsWith('/') || /^[a-z]:[\\/]/i.test(path) || path.startsWith('\\\\');
 
 const newPane = (loc: string, view: View = 'grid'): PaneState => ({ loc, view, admin: false });
-const newTab = (home: string, loc = home): TabState => ({
+const newTab = (home: string, loc = 'computer:'): TabState => ({
   id: nextId(),
   left: newPane(loc),
   right: newPane(home),
   split: false,
 });
 
-function sanitizeTabs(raw: unknown, home: string): RestoredTabs | null {
+function sanitizeTabs(raw: unknown, home: string, forceComputer = false): RestoredTabs | null {
   const arr = Array.isArray(raw) ? raw : raw && typeof raw === 'object' ? (raw as any).tabs : null;
   if (!Array.isArray(arr) || arr.length === 0) return null;
   const okLoc = (l: unknown) =>
     typeof l === 'string' &&
-    (absolutePath(l) || isRemoteLocation(l) || ['trash:', 'recent:', 'starred:'].includes(l))
+    (absolutePath(l) ||
+      isRemoteLocation(l) ||
+      ['computer:', 'trash:', 'recent:', 'starred:'].includes(l))
       ? l
       : home;
   const okView = (v: unknown): View => (v === 'list' ? 'list' : 'grid');
@@ -47,13 +49,29 @@ function sanitizeTabs(raw: unknown, home: string): RestoredTabs | null {
     right: { loc: okLoc(x?.right?.loc), view: okView(x?.right?.view), admin: false },
     split: !!x?.split,
   }));
-  const active =
+  let active =
     !Array.isArray(raw) &&
     typeof (raw as any)?.active === 'string' &&
     tabs.some((x) => x.id === (raw as any).active)
       ? (raw as any).active
       : tabs[0].id;
-  return { tabs, active };
+  // One-time landing migration keeps existing folder tabs available, while opening
+  // This PC first. Explicit ?path= links are applied afterwards and take precedence.
+  if (
+    forceComputer ||
+    !raw ||
+    typeof raw !== 'object' ||
+    (raw as { landingVersion?: number }).landingVersion !== 2
+  ) {
+    const existing = tabs.find((x) => x.left.loc === 'computer:');
+    if (existing) active = existing.id;
+    else {
+      const landing = newTab(home);
+      tabs.unshift(landing);
+      active = landing.id;
+    }
+  }
+  return { tabs: tabs.slice(0, 12), active };
 }
 
 /** Applies the saved tabs once prefs are ready; the returned ref is true from then on. */
@@ -62,12 +80,13 @@ function useRestoredTabs(
   saved: unknown,
   home: string,
   apply: (r: RestoredTabs) => void,
+  forceComputer = false,
 ): MutableRefObject<boolean> {
   const restored = useRef(false);
   useEffect(() => {
     if (!ready || restored.current) return;
     restored.current = true;
-    const r = sanitizeTabs(saved, home);
+    const r = sanitizeTabs(saved, home, forceComputer);
     if (r) apply(r);
   }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
   return restored;
@@ -112,6 +131,7 @@ function useSaveTabs(
     if (!restored.current) return;
     const h = window.setTimeout(() => {
       void set('files.tabs', {
+        landingVersion: 2,
         active: activeId,
         tabs: tabs.map((x) => ({
           id: x.id,
@@ -135,6 +155,9 @@ interface TabsArgs {
 
 /** Tabs, the two panes of the active tab, and each pane's selection, search and sort. */
 export function useFilesTabs({ home, mobile, ready, savedTabs, set }: TabsArgs) {
+  // A read-only window landing hint; consuming it would navigate the outer
+  // desktop router and could create an unwanted second Explorer window.
+  const [params] = useSearchParams();
   const [tabs, setTabs] = useState<TabState[]>(() => [newTab(home)]);
   const [activeId, setActiveId] = useState(() => tabs[0].id);
   const [act, setAct] = useState<Side>('L');
@@ -142,10 +165,16 @@ export function useFilesTabs({ home, mobile, ready, savedTabs, set }: TabsArgs) 
   const [query, setQuery] = useState<Record<Side, string>>({ L: '', R: '' });
   const [sort, setSort] = useState<Record<Side, SortState>>({ L: SORT0, R: SORT0 });
 
-  const restored = useRestoredTabs(ready, savedTabs, home, (r) => {
-    setTabs(r.tabs);
-    setActiveId(r.active);
-  });
+  const restored = useRestoredTabs(
+    ready,
+    savedTabs,
+    home,
+    (r) => {
+      setTabs(r.tabs);
+      setActiveId(r.active);
+    },
+    params.get('view') === 'computer',
+  );
   useLinkPath(ready, (dir, select) => {
     const nt = newTab(home, dir);
     setTabs((ts) => {

@@ -13,7 +13,7 @@ import { clampBounds, type WindowBounds } from './model';
 const DRAG_THRESHOLD = 6;
 const SNAP_EDGE = 12;
 
-/** The terminal mounts its tabs here while keeping window drag/resize owned by the desktop. */
+/** Apps can mount document/session tabs here; drag and window controls stay desktop-owned. */
 export const WindowTitlebarSlot = createContext<HTMLDivElement | null>(null);
 
 export interface DesktopWindow {
@@ -54,6 +54,8 @@ export function AppWindow({
   const [dragging, setDragging] = useState(false);
   const [titlebarSlot, setTitlebarSlot] = useState<HTMLDivElement | null>(null);
   const terminal = win.app === 'terminal';
+  const notepad = win.app === 'notepad';
+  const integrated = terminal || notepad;
   const preview = useRef(win.bounds);
   const drag = useRef<{
     pointerId: number;
@@ -185,36 +187,36 @@ export function AppWindow({
         onFocus();
         // Portalled terminal tabs bubble through their React parent (the body),
         // so drag the shared titlebar from this common window ancestor.
-        if (terminal && (event.target as HTMLElement).closest('.terminal-window-titlebar'))
+        if (integrated && (event.target as HTMLElement).closest('.eos-integrated-titlebar'))
           begin(event, false);
       }}
       onPointerMove={
-        terminal
+        integrated
           ? (event) => event.currentTarget.hasPointerCapture(event.pointerId) && move(event)
           : undefined
       }
       onPointerUp={
-        terminal
+        integrated
           ? (event) => event.currentTarget.hasPointerCapture(event.pointerId) && end(event)
           : undefined
       }
       onPointerCancel={
-        terminal
+        integrated
           ? (event) => event.currentTarget.hasPointerCapture(event.pointerId) && end(event, false)
           : undefined
       }
       onLostPointerCapture={
-        terminal
+        integrated
           ? (event) => {
               if (drag.current && !drag.current.resize) end(event, false);
             }
           : undefined
       }
       onDoubleClick={
-        terminal
+        integrated
           ? (event) => {
               if (
-                (event.target as HTMLElement).closest('.terminal-window-titlebar') &&
+                (event.target as HTMLElement).closest('.eos-integrated-titlebar') &&
                 !(event.target as HTMLElement).closest('button')
               )
                 onChange({ maximized: !win.maximized, snap: undefined });
@@ -223,20 +225,23 @@ export function AppWindow({
       }
     >
       <header
-        className={`eos-titlebar${terminal ? ' terminal-window-titlebar' : ''}`}
-        onPointerDown={terminal ? undefined : (e) => begin(e, false)}
-        onPointerMove={terminal ? undefined : move}
-        onPointerUp={terminal ? undefined : (e) => end(e)}
-        onPointerCancel={terminal ? undefined : (e) => end(e, false)}
-        onLostPointerCapture={terminal ? undefined : (e) => end(e, false)}
+        className={`eos-titlebar${integrated ? ' eos-integrated-titlebar' : ''}${terminal ? ' terminal-window-titlebar' : ''}${notepad ? ' notepad-window-titlebar' : ''}`}
+        onPointerDown={integrated ? undefined : (e) => begin(e, false)}
+        onPointerMove={integrated ? undefined : move}
+        onPointerUp={integrated ? undefined : (e) => end(e)}
+        onPointerCancel={integrated ? undefined : (e) => end(e, false)}
+        onLostPointerCapture={integrated ? undefined : (e) => end(e, false)}
         onDoubleClick={(e) =>
-          !terminal &&
+          !integrated &&
           !(e.target as HTMLElement).closest('button') &&
           onChange({ maximized: !win.maximized, snap: undefined })
         }
       >
-        {terminal ? (
-          <div ref={setTitlebarSlot} className="terminal-titlebar-slot" />
+        {integrated ? (
+          <div
+            ref={setTitlebarSlot}
+            className={terminal ? 'terminal-titlebar-slot' : 'notepad-titlebar-slot'}
+          />
         ) : (
           <>
             <span className="eos-title-icon">{icon}</span>
@@ -244,7 +249,7 @@ export function AppWindow({
           </>
         )}
         <div className="eos-window-controls">
-          {!terminal && (
+          {!integrated && (
             <button
               title={t('desktop.snapLeft')}
               aria-label={t('desktop.snapLeft')}

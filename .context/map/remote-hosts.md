@@ -41,6 +41,7 @@ Purpose: reach other machines (SFTP/FTP/SMB/WebDAV file connections, Ervisio-to-
 - `cd server && go test ./internal/modules/remote ./internal/envs ./internal/server` (`pair_test.go`, `envpair_test.go`, `security_test.go`).
 - `docs/api/environments.md` (pairing), `docs/api/plugins.md` (network capability), `docs/api/auth.md` (`public/host`).
 - `docs/api/remote.md` documents connection trust, storage, and file/transfer methods.
+- `remote.statfs` reports actual SFTP StatVFS or SMB2/3 capacity, explicitly unsupported when absent. `remote.searchText` shares the bounded files text-search engine. Dedicated read connections have a four-slot budget and 15-second cancellation/transport shutdown; they do not consume or interrupt persistent transfer pool slots.
 Related: map/auth.md, map/server.md, map/web.md
 
 Sweep helpers (2026-11-05): checkoutPath, bindPathParams (remote.go); server/envpair.go relayPeerLine.
