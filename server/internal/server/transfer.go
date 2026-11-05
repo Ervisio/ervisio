@@ -387,17 +387,9 @@ func (s *Server) handleTransferStart(w http.ResponseWriter, r *http.Request, ses
 		writeError(w, e)
 		return
 	}
-	method, params, ok := req.bridge()
-	if !ok {
-		writeError(w, rpc.Errorf(rpc.Invalid, "Ask for a download of an HTTP API or command, or an upload to an HTTP API."))
-		return
-	}
-	if req.Kind == "upload" && (req.Size < 0 || req.Method != http.MethodPost && req.Method != http.MethodPut) {
-		writeError(w, rpc.Errorf(rpc.Invalid, "An upload needs a size and the method POST or PUT."))
-		return
-	}
-	if req.Kind == "download" && req.Command == "" && req.Method != http.MethodGet {
-		writeError(w, rpc.Errorf(rpc.Invalid, "A download uses GET."))
+	method, params, e := req.checked()
+	if e != nil {
+		writeError(w, e)
 		return
 	}
 	ip := s.realClientIP(r)
@@ -439,17 +431,7 @@ func (s *Server) handleTransferStart(w http.ResponseWriter, r *http.Request, ses
 			cancel()
 		}
 	}()
-	// When the session ends (sign-out, expiry, revalidation), its transfers
-	// end too: a running one is cancelled, a waiting one-time URL dropped
-	// (security review L6).
-	go func() {
-		select {
-		case <-sess.Done():
-			cancel()
-			s.transfers.closeSession(sess)
-		case <-sctx.Done():
-		}
-	}()
+	go s.endWithSession(sctx, sess, cancel)
 	st, err := b.Stream(sctx, method, json.RawMessage(rawParams))
 	if err != nil {
 		fail(rpc.ToError(err, false))
@@ -462,60 +444,28 @@ func (s *Server) handleTransferStart(w http.ResponseWriter, r *http.Request, ses
 	}()
 	t := &transfer{sess: sess, kind: req.Kind, st: st, cancel: cancel, release: release, isAdmin: isAdmin, rec: rec, size: -1}
 
-	// The first event says the request passed the rules: the response
-	// started (download) or the bridge is ready for the file (upload).
-	var first rpc.Event
-	select {
-	case ev, open := <-st.Events():
-		if !open {
-			if err := st.Err(); err != nil {
-				fail(rpc.ToError(err, false))
-			} else {
-				fail(rpc.Errorf(rpc.Internal, "The transfer ended before it started."))
-			}
-			return
+	start, e, ok := awaitTransferStart(r.Context(), st)
+	if !ok {
+		if e != nil {
+			fail(e)
 		}
-		first = ev
-	case <-r.Context().Done():
-		return
-	}
-	var start struct {
-		Ready   bool              `json:"ready"`
-		Status  int               `json:"status"`
-		Headers map[string]string `json:"headers"`
-	}
-	if first.B64 || json.Unmarshal(first.Data, &start) != nil {
-		fail(rpc.Errorf(rpc.Internal, "The transfer did not start properly."))
 		return
 	}
 	resp := map[string]any{}
 	if req.Kind == "download" {
 		if start.Status == 0 {
-			fail(rpc.Errorf(rpc.Internal, "The transfer did not start properly."))
+			fail(errBadStart())
 			return
 		}
 		t.status = start.Status
 		if start.Status < 200 || start.Status > 299 {
-			// Not a file: hand the service's answer to the plugin.
-			msg := readErrorBody(st, errBodyMax)
-			e := rpc.Errorf(rpc.Unavailable, "The service answered %d%s", start.Status, msg).WithData(map[string]any{"status": start.Status})
-			if rec != nil {
-				rec.setCode(start.Status)
-				rec.write()
-			}
-			writeError(w, e)
+			writeServiceAnswer(w, st, rec, start.Status)
 			return
 		}
-		if n, err := strconv.ParseInt(start.Headers["Content-Length"], 10, 64); err == nil && n >= 0 {
-			t.size = n
-			resp["size"] = n
-		}
-		t.name = sanitizeFilename(req.Filename)
-		resp["filename"] = t.name
-		resp["status"] = start.Status
+		describeDownload(t, start, req.Filename, resp)
 	} else {
 		if !start.Ready {
-			fail(rpc.Errorf(rpc.Internal, "The transfer did not start properly."))
+			fail(errBadStart())
 			return
 		}
 		t.size = req.Size
@@ -533,6 +483,90 @@ func (s *Server) handleTransferStart(w http.ResponseWriter, r *http.Request, ses
 	writeJSON(w, http.StatusOK, struct {
 		Result any `json:"result"`
 	}{resp})
+}
+
+// checked returns the bridge method and params of a valid request.
+func (q *transferRequest) checked() (method string, params map[string]any, e *rpc.Error) {
+	method, params, ok := q.bridge()
+	if !ok {
+		return "", nil, rpc.Errorf(rpc.Invalid, "Ask for a download of an HTTP API or command, or an upload to an HTTP API.")
+	}
+	if q.Kind == "upload" && (q.Size < 0 || q.Method != http.MethodPost && q.Method != http.MethodPut) {
+		return "", nil, rpc.Errorf(rpc.Invalid, "An upload needs a size and the method POST or PUT.")
+	}
+	if q.Kind == "download" && q.Command == "" && q.Method != http.MethodGet {
+		return "", nil, rpc.Errorf(rpc.Invalid, "A download uses GET.")
+	}
+	return method, params, nil
+}
+
+// endWithSession ends the session's transfers when it ends (sign-out,
+// expiry, revalidation): a running one is cancelled, a waiting one-time URL
+// dropped (security review L6).
+func (s *Server) endWithSession(sctx context.Context, sess *Session, cancel context.CancelFunc) {
+	select {
+	case <-sess.Done():
+		cancel()
+		s.transfers.closeSession(sess)
+	case <-sctx.Done():
+	}
+}
+
+type transferStart struct {
+	Ready   bool              `json:"ready"`
+	Status  int               `json:"status"`
+	Headers map[string]string `json:"headers"`
+}
+
+func errBadStart() *rpc.Error {
+	return rpc.Errorf(rpc.Internal, "The transfer did not start properly.")
+}
+
+// awaitTransferStart reads the stream's first event, which says the request
+// passed the rules: the response started (download) or the bridge is ready
+// for the file (upload). ok is false when the transfer cannot go on; e is
+// then nil if the client went away.
+func awaitTransferStart(ctx context.Context, st *rpc.ClientStream) (start transferStart, e *rpc.Error, ok bool) {
+	var first rpc.Event
+	select {
+	case ev, open := <-st.Events():
+		if !open {
+			if err := st.Err(); err != nil {
+				return start, rpc.ToError(err, false), false
+			}
+			return start, rpc.Errorf(rpc.Internal, "The transfer ended before it started."), false
+		}
+		first = ev
+	case <-ctx.Done():
+		return start, nil, false
+	}
+	if first.B64 || json.Unmarshal(first.Data, &start) != nil {
+		return start, errBadStart(), false
+	}
+	return start, nil, true
+}
+
+// writeServiceAnswer answers a download whose service did not send a file
+// with the service's own answer, for the plugin.
+func writeServiceAnswer(w http.ResponseWriter, st *rpc.ClientStream, rec *auditRec, status int) {
+	msg := readErrorBody(st, errBodyMax)
+	e := rpc.Errorf(rpc.Unavailable, "The service answered %d%s", status, msg).WithData(map[string]any{"status": status})
+	if rec != nil {
+		rec.setCode(status)
+		rec.write()
+	}
+	writeError(w, e)
+}
+
+// describeDownload sets the download's size and file name on t and resp.
+func describeDownload(t *transfer, start transferStart, filename string, resp map[string]any) {
+	if n, err := strconv.ParseInt(start.Headers["Content-Length"], 10, 64); err == nil && n >= 0 {
+		t.size = n
+		resp["size"] = n
+	}
+	t.name = sanitizeFilename(filename)
+	resp["filename"] = t.name
+	resp["status"] = start.Status
 }
 
 // readErrorBody reads up to max bytes of a failed response from st, as
@@ -837,51 +871,15 @@ func (c *countReader) Read(p []byte) (int, error) {
 func (s *Server) serveUploadStream(w http.ResponseWriter, r *http.Request, t *transfer, cr *countReader, fail func(*rpc.Error)) {
 	rc := http.NewResponseController(w)
 	_ = rc.EnableFullDuplex() // the service may answer while the file is still being read
+	out := &ndjsonWriter{w: w, rc: rc}
 	var (
-		mu      sync.Mutex
-		started bool
-		status  int
-		done    bool
+		status int
+		done   bool
 	)
-	write := func(line []byte) {
-		mu.Lock()
-		defer mu.Unlock()
-		if !started {
-			started = true
-			h := w.Header()
-			h.Set("Content-Type", "application/x-ndjson")
-			h.Set("Cache-Control", "no-store")
-			w.WriteHeader(http.StatusOK)
-		}
-		_, _ = w.Write(append(line, '\n'))
-		_ = rc.Flush()
-	}
 	finished := make(chan struct{})
 	go func() {
 		defer close(finished)
-		for ev := range t.st.Events() {
-			if ev.B64 {
-				write(append(append([]byte(`{"data":`), ev.Data...), '}'))
-				continue
-			}
-			var m struct {
-				Status  int             `json:"status"`
-				Headers json.RawMessage `json:"headers"`
-				Done    bool            `json:"done"`
-			}
-			if json.Unmarshal(ev.Data, &m) != nil {
-				continue
-			}
-			if m.Status != 0 {
-				status = m.Status
-			}
-			if m.Done {
-				done = true
-				write(ev.Data)
-			} else if m.Status != 0 {
-				write(append(append([]byte(`{"start":`), ev.Data...), '}'))
-			}
-		}
+		status, done = relayUploadEvents(t.st.Events(), out)
 	}()
 	sendErr := s.pumpUpload(r.Context(), t.st, cr, func() {
 		if t.isAdmin {
@@ -893,22 +891,13 @@ func (s *Server) serveUploadStream(w http.ResponseWriter, r *http.Request, t *tr
 	}
 	<-finished
 	sent := cr.n
-	err := t.st.Err()
-	if err == nil && sendErr != nil && !errors.Is(sendErr, errStreamEnded) {
-		err = sendErr
-	}
-	if err == nil && !done {
-		err = errors.New("The upload did not complete.")
-	}
+	err := uploadStreamErr(t.st.Err(), sendErr, done)
 	if t.rec != nil {
 		t.rec.e.Bytes = &sent
 	}
 	if err != nil {
 		e := rpc.ToError(err, false)
-		mu.Lock()
-		wasStarted := started
-		mu.Unlock()
-		if !wasStarted {
+		if !out.hasStarted() {
 			fail(e)
 			return
 		}
@@ -917,11 +906,84 @@ func (s *Server) serveUploadStream(w http.ResponseWriter, r *http.Request, t *tr
 			t.rec.write()
 		}
 		b, _ := json.Marshal(map[string]any{"error": map[string]any{"code": e.Code, "message": e.Message}})
-		write(b)
+		out.write(b)
 		return
 	}
 	if t.rec != nil {
 		t.rec.setCode(status)
 		t.rec.write()
 	}
+}
+
+// ndjsonWriter writes the lines of a streamed upload response, starting the
+// response with the first one.
+type ndjsonWriter struct {
+	mu      sync.Mutex
+	w       http.ResponseWriter
+	rc      *http.ResponseController
+	started bool
+}
+
+func (n *ndjsonWriter) write(line []byte) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if !n.started {
+		n.started = true
+		h := n.w.Header()
+		h.Set("Content-Type", "application/x-ndjson")
+		h.Set("Cache-Control", "no-store")
+		n.w.WriteHeader(http.StatusOK)
+	}
+	_, _ = n.w.Write(append(line, '\n'))
+	_ = n.rc.Flush()
+}
+
+func (n *ndjsonWriter) hasStarted() bool {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.started
+}
+
+// relayUploadEvents writes the bridge's events as lines until the stream
+// ends and returns the service's status and whether the done event came.
+func relayUploadEvents(events <-chan rpc.Event, out *ndjsonWriter) (status int, done bool) {
+	for ev := range events {
+		if ev.B64 {
+			out.write(append(append([]byte(`{"data":`), ev.Data...), '}'))
+			continue
+		}
+		var m struct {
+			Status  int             `json:"status"`
+			Headers json.RawMessage `json:"headers"`
+			Done    bool            `json:"done"`
+		}
+		if json.Unmarshal(ev.Data, &m) != nil {
+			continue
+		}
+		if m.Status != 0 {
+			status = m.Status
+		}
+		if m.Done {
+			done = true
+			out.write(ev.Data)
+		} else if m.Status != 0 {
+			out.write(append(append([]byte(`{"start":`), ev.Data...), '}'))
+		}
+	}
+	return status, done
+}
+
+// uploadStreamErr is why a streamed upload failed, or nil: the stream's own
+// error first, then the send's, then a missing done event.
+func uploadStreamErr(streamErr, sendErr error, done bool) error {
+	if streamErr != nil {
+		return streamErr
+	}
+	if sendErr != nil && !errors.Is(sendErr, errStreamEnded) {
+		return sendErr
+	}
+	if !done {
+		return errors.New("The upload did not complete.")
+	}
+	return nil
 }

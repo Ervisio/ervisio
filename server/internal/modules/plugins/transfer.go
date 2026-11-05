@@ -131,25 +131,9 @@ func runExecDownload(ctx context.Context, c *rpc.Call, s rpc.Stream, p ExecParam
 var uploadIdle = 2 * time.Minute
 
 func runHTTPUpload(ctx context.Context, c *rpc.Call, s rpc.Stream, p UploadParams) error {
-	if p.Method != http.MethodPost && p.Method != http.MethodPut {
-		return rpc.Errorf(rpc.Invalid, "An upload uses POST or PUT, not %q.", p.Method)
-	}
-	if p.Body != "" {
-		return rpc.Errorf(rpc.Invalid, "An upload takes its body from the file, not from body.")
-	}
-	pl, err := resolveHTTP(ctx, c, p.HTTPParams)
+	pl, err := resolveUpload(ctx, c, p)
 	if err != nil {
 		return err
-	}
-	limit := pl.api.MaxUpload
-	if limit == 0 {
-		limit = defaultMaxUpload
-	}
-	if p.Size < 0 {
-		return rpc.Errorf(rpc.Invalid, "Give the size of the file.")
-	}
-	if p.Size > limit {
-		return rpc.Errorf(rpc.Invalid, "The file is larger than the %d bytes %s accepts for uploads.", limit, pl.api.Name)
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -186,47 +170,15 @@ func runHTTPUpload(ctx context.Context, c *rpc.Call, s rpc.Stream, p UploadParam
 					pw.CloseWithError(context.Canceled)
 					return
 				}
-				var msg struct {
-					Data string `json:"data"`
-					EOF  bool   `json:"eof"`
-				}
-				if err := json.Unmarshal(in, &msg); err != nil {
-					pw.CloseWithError(rpc.Errorf(rpc.Invalid, "Malformed upload data."))
-					return
-				}
-				if msg.EOF {
-					if got != p.Size {
-						pw.CloseWithError(rpc.Errorf(rpc.Invalid, "The upload ended early (%d of %d bytes). Try again.", got, p.Size))
-						return
-					}
-					pw.Close()
-					return
-				}
-				b, err := base64.StdEncoding.DecodeString(msg.Data)
-				if err != nil {
-					pw.CloseWithError(rpc.Errorf(rpc.Invalid, "Malformed upload data."))
-					return
-				}
-				got += int64(len(b))
-				if got > p.Size {
-					pw.CloseWithError(rpc.Errorf(rpc.Invalid, "The upload is larger than the %d bytes announced.", p.Size))
-					return
-				}
-				if _, err := pw.Write(b); err != nil {
+				var finished bool
+				if got, finished = writeUploadInput(pw, in, got, p.Size); finished {
 					return
 				}
 			}
 		}
 	}()
 
-	req := pl.req.WithContext(ctx)
-	req.ContentLength = p.Size
-	if p.Size == 0 {
-		req.Body = http.NoBody
-	} else {
-		req.Body = io.NopCloser(pr)
-	}
-	resp, err := unixClient(pl.socket, pl.timeout).Do(req)
+	resp, err := doUpload(ctx, pl, pr, p.Size)
 	if err != nil && isStalled.Load() {
 		return stalled
 	}
@@ -240,47 +192,115 @@ func runHTTPUpload(ctx context.Context, c *rpc.Call, s rpc.Stream, p UploadParam
 	}
 	defer resp.Body.Close()
 	if p.Stream {
-		hdr := flatHeaders(resp.Header)
-		if err := s.Send(map[string]any{"status": resp.StatusCode, "headers": hdr}); err != nil {
-			return nil
-		}
-		buf := make([]byte, httpChunk)
-		for {
-			n, rerr := resp.Body.Read(buf)
-			if n > 0 {
-				if err := s.SendBytes(buf[:n]); err != nil {
-					return nil
-				}
-			}
-			if errors.Is(rerr, io.EOF) {
-				break
-			}
-			if rerr != nil {
-				if ctx.Err() != nil {
-					return nil
-				}
-				return rpc.Errorf(rpc.Unavailable, "The response from %s broke off: %v", pl.api.Socket, rerr)
-			}
-		}
-		return s.Send(map[string]any{"done": true, "status": resp.StatusCode, "headers": hdr})
+		return streamUploadResponse(ctx, s, resp, pl)
 	}
-	limitRes := min(pl.maxBody, maxHTTPResult)
-	b, err := io.ReadAll(io.LimitReader(resp.Body, limitRes+1))
+	return sendUploadResponse(ctx, s, resp, pl)
+}
+
+// resolveUpload checks the upload's method, body and size on top of the
+// rules of resolveHTTP.
+func resolveUpload(ctx context.Context, c *rpc.Call, p UploadParams) (*httpPlan, error) {
+	if p.Method != http.MethodPost && p.Method != http.MethodPut {
+		return nil, rpc.Errorf(rpc.Invalid, "An upload uses POST or PUT, not %q.", p.Method)
+	}
+	if p.Body != "" {
+		return nil, rpc.Errorf(rpc.Invalid, "An upload takes its body from the file, not from body.")
+	}
+	pl, err := resolveHTTP(ctx, c, p.HTTPParams)
+	if err != nil {
+		return nil, err
+	}
+	limit := pl.api.MaxUpload
+	if limit == 0 {
+		limit = defaultMaxUpload
+	}
+	if p.Size < 0 {
+		return nil, rpc.Errorf(rpc.Invalid, "Give the size of the file.")
+	}
+	if p.Size > limit {
+		return nil, rpc.Errorf(rpc.Invalid, "The file is larger than the %d bytes %s accepts for uploads.", limit, pl.api.Name)
+	}
+	return pl, nil
+}
+
+// writeUploadInput handles one {"data"} or {"eof"} input. It returns the
+// bytes received so far and whether the pipe is finished (closed, or its
+// reader gone).
+func writeUploadInput(pw *io.PipeWriter, in json.RawMessage, got, size int64) (int64, bool) {
+	var msg struct {
+		Data string `json:"data"`
+		EOF  bool   `json:"eof"`
+	}
+	if err := json.Unmarshal(in, &msg); err != nil {
+		pw.CloseWithError(rpc.Errorf(rpc.Invalid, "Malformed upload data."))
+		return got, true
+	}
+	if msg.EOF {
+		if got != size {
+			pw.CloseWithError(rpc.Errorf(rpc.Invalid, "The upload ended early (%d of %d bytes). Try again.", got, size))
+			return got, true
+		}
+		pw.Close()
+		return got, true
+	}
+	b, err := base64.StdEncoding.DecodeString(msg.Data)
+	if err != nil {
+		pw.CloseWithError(rpc.Errorf(rpc.Invalid, "Malformed upload data."))
+		return got, true
+	}
+	got += int64(len(b))
+	if got > size {
+		pw.CloseWithError(rpc.Errorf(rpc.Invalid, "The upload is larger than the %d bytes announced.", size))
+		return got, true
+	}
+	if _, err := pw.Write(b); err != nil {
+		return got, true
+	}
+	return got, false
+}
+
+// doUpload sends the planned request with body as its size bytes.
+func doUpload(ctx context.Context, pl *httpPlan, body io.Reader, size int64) (*http.Response, error) {
+	req := pl.req.WithContext(ctx)
+	req.ContentLength = size
+	if size == 0 {
+		req.Body = http.NoBody
+	} else {
+		req.Body = io.NopCloser(body)
+	}
+	return unixClient(pl.socket, pl.timeout).Do(req)
+}
+
+// streamUploadResponse sends {"status","headers"}, the body as binary
+// chunks, then {"done":true,"status","headers"}.
+func streamUploadResponse(ctx context.Context, s rpc.Stream, resp *http.Response, pl *httpPlan) error {
+	hdr := flatHeaders(resp.Header)
+	if err := s.Send(map[string]any{"status": resp.StatusCode, "headers": hdr}); err != nil {
+		return nil
+	}
+	if sent, err := streamBody(ctx, s, resp.Body, pl); !sent {
+		return err
+	}
+	return s.Send(map[string]any{"done": true, "status": resp.StatusCode, "headers": hdr})
+}
+
+// sendUploadResponse sends the response as one {"done":true,...} event,
+// its body cut to the result limit.
+func sendUploadResponse(ctx context.Context, s rpc.Stream, resp *http.Response, pl *httpPlan) error {
+	limit := min(pl.maxBody, maxHTTPResult)
+	b, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil {
 		return httpErr(ctx, err, pl)
 	}
-	truncated := int64(len(b)) > limitRes
-	if truncated {
-		b = b[:limitRes]
-	}
 	res := map[string]any{"done": true, "status": resp.StatusCode, "headers": flatHeaders(resp.Header)}
-	if truncated {
+	if int64(len(b)) > limit {
+		b = b[:limit]
 		res["truncated"] = true
 	}
-	if utf8.Valid(b) && jsonTextLen(b) <= jsonTextBudget {
-		res["body"] = string(b)
-	} else {
-		res["body"], res["b64"] = base64.StdEncoding.EncodeToString(b), true
+	body, isB64 := encodeBody(b)
+	res["body"] = body
+	if isB64 {
+		res["b64"] = true
 	}
 	return s.Send(res)
 }

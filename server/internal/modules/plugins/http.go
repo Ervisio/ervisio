@@ -211,78 +211,129 @@ func resolveHTTP(ctx context.Context, c *rpc.Call, p HTTPParams) (*httpPlan, err
 		return nil, err
 	}
 	m := f.M
-	var api *HTTPAPI
-	for i := range m.Capabilities.HTTP {
-		if m.Capabilities.HTTP[i].Name == p.Name {
-			api = &m.Capabilities.HTTP[i]
-		}
-	}
+	api := findHTTPAPI(m, p.Name)
 	if api == nil {
 		return nil, rpc.Errorf(rpc.NotFound, "%s does not declare an HTTP API %q.", m.Name, p.Name)
 	}
-	socket := api.Socket
-	if p.EnvSocket != "" {
-		// An environment replaces the socket; the API must opt in, and the
-		// daemon's tunnel is the user's own, so no administrator rights apply.
-		if api.Remote == "" || c.Admin {
-			return nil, rpc.Errorf(rpc.Forbidden, "%s does not allow %q to target an environment.", m.Name, p.Name)
-		}
-		if err := envSocketOK(p.EnvSocket); err != nil {
-			return nil, err
-		}
-		socket = p.EnvSocket
-	} else {
-		// As for commands: a user-level API is never called from the root bridge.
-		if c.Admin && !api.Admin {
-			return nil, rpc.Errorf(rpc.Forbidden, "%s declares %q as a user API; it is not called with administrator rights.", m.Name, p.Name)
-		}
-		root := c.Admin || os.Geteuid() == 0
-		if api.Admin && !root && !(api.AdminUnlessGroup != "" && who.Groups[api.AdminUnlessGroup]) {
-			return nil, rpc.Errorf(rpc.NeedsAdmin, "%s needs administrator rights to use %q.", m.Name, p.Name)
-		}
+	socket, err := httpSocket(c, m, api, who, p.EnvSocket)
+	if err != nil {
+		return nil, err
 	}
-	if !httpMethods[p.Method] {
-		return nil, rpc.Errorf(rpc.Invalid, "%q is not an allowed HTTP method.", p.Method)
+	dec, err := checkHTTPTarget(m, api, p)
+	if err != nil {
+		return nil, err
 	}
-	dec, ok := cleanHTTPPath(p.Path)
-	if !ok {
-		return nil, rpc.Errorf(rpc.Invalid, "%q is not a valid request path.", p.Path)
-	}
-	if !api.match(p.Method, dec) {
-		return nil, rpc.Errorf(rpc.Invalid, "%s does not declare %s %s for %q.", m.Name, p.Method, dec, p.Name)
-	}
-	if !validQuery(p.Query) {
-		return nil, rpc.Errorf(rpc.Invalid, "The query string is too long or holds characters that are not allowed.")
-	}
-	hdr := http.Header{}
-	if len(p.Headers) > maxHTTPHeaders {
-		return nil, rpc.Errorf(rpc.Invalid, "Too many request headers.")
-	}
-	for k, v := range p.Headers {
-		ck := http.CanonicalHeaderKey(k)
-		allowed := false
-		for _, h := range api.Headers {
-			if http.CanonicalHeaderKey(h) == ck {
-				allowed = true
-			}
-		}
-		if !allowed || !headerNameRe.MatchString(k) || !safeHeader(k) {
-			return nil, rpc.Errorf(rpc.Invalid, "%s may not set the header %q on %q.", m.Name, k, p.Name)
-		}
-		if len(v) > maxHeaderValue || strings.ContainsAny(v, "\r\n\x00") {
-			return nil, rpc.Errorf(rpc.Invalid, "The value of the header %q is not allowed.", k)
-		}
-		hdr.Set(ck, v)
-	}
-	if p.JSON && hdr.Get("Content-Type") == "" {
-		hdr.Set("Content-Type", "application/json")
+	hdr, err := httpHeaders(m, api, p)
+	if err != nil {
+		return nil, err
 	}
 	maxBody := api.MaxBody
 	if maxBody == 0 {
 		maxBody = defaultHTTPBody
 	}
+	body, err := httpBody(p, maxBody)
+	if err != nil {
+		return nil, err
+	}
+	req, err := newHTTPRequest(ctx, p, dec, hdr, body)
+	if err != nil {
+		return nil, err
+	}
+	return &httpPlan{api: api, socket: socket, req: req, maxBody: maxBody, timeout: httpTimeout(api)}, nil
+}
+
+// findHTTPAPI returns the last HTTP API of m named name, or nil.
+func findHTTPAPI(m *Manifest, name string) *HTTPAPI {
+	var api *HTTPAPI
+	for i := range m.Capabilities.HTTP {
+		if m.Capabilities.HTTP[i].Name == name {
+			api = &m.Capabilities.HTTP[i]
+		}
+	}
+	return api
+}
+
+// httpSocket returns the socket the request goes to and checks the level
+// rules for it.
+func httpSocket(c *rpc.Call, m *Manifest, api *HTTPAPI, who caller, envSocket string) (string, error) {
+	if envSocket != "" {
+		// An environment replaces the socket; the API must opt in, and the
+		// daemon's tunnel is the user's own, so no administrator rights apply.
+		if api.Remote == "" || c.Admin {
+			return "", rpc.Errorf(rpc.Forbidden, "%s does not allow %q to target an environment.", m.Name, api.Name)
+		}
+		if err := envSocketOK(envSocket); err != nil {
+			return "", err
+		}
+		return envSocket, nil
+	}
+	// As for commands: a user-level API is never called from the root bridge.
+	if c.Admin && !api.Admin {
+		return "", rpc.Errorf(rpc.Forbidden, "%s declares %q as a user API; it is not called with administrator rights.", m.Name, api.Name)
+	}
+	root := c.Admin || os.Geteuid() == 0
+	if api.Admin && !root && !(api.AdminUnlessGroup != "" && who.Groups[api.AdminUnlessGroup]) {
+		return "", rpc.Errorf(rpc.NeedsAdmin, "%s needs administrator rights to use %q.", m.Name, api.Name)
+	}
+	return api.Socket, nil
+}
+
+// checkHTTPTarget checks the method, path and query against the API's
+// rules and returns the decoded path.
+func checkHTTPTarget(m *Manifest, api *HTTPAPI, p HTTPParams) (string, error) {
+	if !httpMethods[p.Method] {
+		return "", rpc.Errorf(rpc.Invalid, "%q is not an allowed HTTP method.", p.Method)
+	}
+	dec, ok := cleanHTTPPath(p.Path)
+	if !ok {
+		return "", rpc.Errorf(rpc.Invalid, "%q is not a valid request path.", p.Path)
+	}
+	if !api.match(p.Method, dec) {
+		return "", rpc.Errorf(rpc.Invalid, "%s does not declare %s %s for %q.", m.Name, p.Method, dec, p.Name)
+	}
+	if !validQuery(p.Query) {
+		return "", rpc.Errorf(rpc.Invalid, "The query string is too long or holds characters that are not allowed.")
+	}
+	return dec, nil
+}
+
+// httpHeaders builds the request headers from those the API allows.
+func httpHeaders(m *Manifest, api *HTTPAPI, p HTTPParams) (http.Header, error) {
+	hdr := http.Header{}
+	if len(p.Headers) > maxHTTPHeaders {
+		return nil, rpc.Errorf(rpc.Invalid, "Too many request headers.")
+	}
+	for k, v := range p.Headers {
+		if !api.allowsHeader(k) || !headerNameRe.MatchString(k) || !safeHeader(k) {
+			return nil, rpc.Errorf(rpc.Invalid, "%s may not set the header %q on %q.", m.Name, k, p.Name)
+		}
+		if len(v) > maxHeaderValue || strings.ContainsAny(v, "\r\n\x00") {
+			return nil, rpc.Errorf(rpc.Invalid, "The value of the header %q is not allowed.", k)
+		}
+		hdr.Set(http.CanonicalHeaderKey(k), v)
+	}
+	if p.JSON && hdr.Get("Content-Type") == "" {
+		hdr.Set("Content-Type", "application/json")
+	}
+	return hdr, nil
+}
+
+// allowsHeader reports whether the API declares the header name.
+func (h *HTTPAPI) allowsHeader(name string) bool {
+	ck := http.CanonicalHeaderKey(name)
+	for _, declared := range h.Headers {
+		if http.CanonicalHeaderKey(declared) == ck {
+			return true
+		}
+	}
+	return false
+}
+
+// httpBody decodes the request body and checks it against maxBody.
+func httpBody(p HTTPParams, maxBody int64) ([]byte, error) {
 	body := []byte(p.Body)
 	if p.B64 {
+		var err error
 		if body, err = base64.StdEncoding.DecodeString(p.Body); err != nil {
 			return nil, rpc.Errorf(rpc.Invalid, "body is not valid base64.")
 		}
@@ -290,6 +341,10 @@ func resolveHTTP(ctx context.Context, c *rpc.Call, p HTTPParams) (*httpPlan, err
 	if int64(len(body)) > maxBody {
 		return nil, rpc.Errorf(rpc.Invalid, "The request body is larger than %d bytes.", maxBody)
 	}
+	return body, nil
+}
+
+func newHTTPRequest(ctx context.Context, p HTTPParams, dec string, hdr http.Header, body []byte) (*http.Request, error) {
 	u := &url.URL{Scheme: "http", Host: "localhost", Path: dec, RawPath: p.Path, RawQuery: p.Query}
 	var rd io.Reader
 	if len(body) > 0 {
@@ -301,11 +356,14 @@ func resolveHTTP(ctx context.Context, c *rpc.Call, p HTTPParams) (*httpPlan, err
 	}
 	req.Header = hdr
 	req.Host = "localhost"
-	to := defaultTimeout
+	return req, nil
+}
+
+func httpTimeout(api *HTTPAPI) time.Duration {
 	if api.TimeoutSec > 0 {
-		to = time.Duration(api.TimeoutSec) * time.Second
+		return time.Duration(api.TimeoutSec) * time.Second
 	}
-	return &httpPlan{api: api, socket: socket, req: req, maxBody: maxBody, timeout: to}, nil
+	return defaultTimeout
 }
 
 // unixClient talks HTTP to one unix socket: no proxy, no redirects
@@ -384,12 +442,17 @@ func runHTTP(ctx context.Context, c *rpc.Call, p HTTPParams) (*HTTPResult, error
 		return nil, rpc.Errorf(rpc.Unavailable, "The response is larger than %d bytes; use httpStream for large answers.", limit)
 	}
 	res := &HTTPResult{Status: resp.StatusCode, Headers: flatHeaders(resp.Header)}
-	if utf8.Valid(b) && jsonTextLen(b) <= jsonTextBudget {
-		res.Body = string(b)
-	} else {
-		res.Body, res.B64 = base64.StdEncoding.EncodeToString(b), true
-	}
+	res.Body, res.B64 = encodeBody(b)
 	return res, nil
+}
+
+// encodeBody returns b as text when it fits one protocol line as JSON,
+// otherwise as base64 (isB64).
+func encodeBody(b []byte) (body string, isB64 bool) {
+	if utf8.Valid(b) && jsonTextLen(b) <= jsonTextBudget {
+		return string(b), false
+	}
+	return base64.StdEncoding.EncodeToString(b), true
 }
 
 // runHTTPStream sends {"status","headers"} once the response starts, then
@@ -426,22 +489,29 @@ func runHTTPStream(ctx context.Context, c *rpc.Call, s rpc.Stream, p HTTPParams)
 	if err := s.Send(map[string]any{"status": resp.StatusCode, "headers": flatHeaders(resp.Header)}); err != nil {
 		return nil
 	}
+	_, err = streamBody(ctx, s, resp.Body, pl)
+	return err
+}
+
+// streamBody sends body to s as binary chunks. sent is true when all of it
+// went out; otherwise err says why, or is nil when the stream or ctx ended.
+func streamBody(ctx context.Context, s rpc.Stream, body io.Reader, pl *httpPlan) (sent bool, err error) {
 	buf := make([]byte, httpChunk)
 	for {
-		n, err := resp.Body.Read(buf)
+		n, rerr := body.Read(buf)
 		if n > 0 {
 			if serr := s.SendBytes(buf[:n]); serr != nil {
-				return nil
+				return false, nil
 			}
 		}
-		if errors.Is(err, io.EOF) {
-			return nil
+		if errors.Is(rerr, io.EOF) {
+			return true, nil
 		}
-		if err != nil {
+		if rerr != nil {
 			if ctx.Err() != nil {
-				return nil
+				return false, nil
 			}
-			return rpc.Errorf(rpc.Unavailable, "The response from %s broke off: %v", pl.api.Socket, err)
+			return false, rpc.Errorf(rpc.Unavailable, "The response from %s broke off: %v", pl.api.Socket, rerr)
 		}
 	}
 }
