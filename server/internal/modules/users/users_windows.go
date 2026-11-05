@@ -43,8 +43,8 @@ func registerPlatform(r *rpc.Registry) bool {
 	r.Handle("users.create", rpc.Admin, winCreate)
 	r.Handle("users.modify", rpc.Admin, winModify)
 	r.Handle("users.setPassword", rpc.Admin, winSetPassword)
-	r.Handle("users.lock", rpc.Admin, func(ctx context.Context, c *rpc.Call) (any, error) { return winLock(ctx, c, true) })
-	r.Handle("users.unlock", rpc.Admin, func(ctx context.Context, c *rpc.Call) (any, error) { return winLock(ctx, c, false) })
+	r.Handle("users.lock", rpc.Admin, func(ctx context.Context, c *rpc.Call) (any, error) { return winLock(ctx, c) })
+	r.Handle("users.unlock", rpc.Admin, func(ctx context.Context, c *rpc.Call) (any, error) { return winUnlock(ctx, c) })
 	r.Handle("users.delete", rpc.Admin, winDelete)
 	r.Handle("users.setAdmin", rpc.Admin, winSetAdmin)
 	r.Handle("groups.create", rpc.Admin, winGroupCreate)
@@ -242,16 +242,8 @@ func winCreate(ctx context.Context, c *rpc.Call) (any, error) {
 	if err := c.Bind(&p); err != nil {
 		return nil, err
 	}
-	if err := validWinUser(p.Name); err != nil {
+	if err := validWinCreateInput(p); err != nil {
 		return nil, err
-	}
-	if err := validWinText("full name", p.FullName, 128); err != nil {
-		return nil, err
-	}
-	if p.Password != "" {
-		if err := validPassword(p.Password); err != nil {
-			return nil, err
-		}
 	}
 	winMu.Lock()
 	defer winMu.Unlock()
@@ -262,6 +254,31 @@ func winCreate(ctx context.Context, c *rpc.Call) (any, error) {
 	if s.user(p.Name) != nil || s.group(p.Name) != nil {
 		return nil, rpc.Errorf(rpc.Conflict, "A user or group called %s already exists", p.Name)
 	}
+	groups, err := winCreateGroups(s, p)
+	if err != nil {
+		return nil, err
+	}
+	in := map[string]any{"name": p.Name, "fullName": p.FullName, "password": p.Password, "groups": groups}
+	if _, err := runPS(ctx, "Could not create the user", psCreate, in); err != nil {
+		return nil, err
+	}
+	return map[string]any{"ok": true, "name": p.Name}, nil
+}
+
+func validWinCreateInput(p createParams) error {
+	if err := validWinUser(p.Name); err != nil {
+		return err
+	}
+	if err := validWinText("full name", p.FullName, 128); err != nil {
+		return err
+	}
+	if p.Password != "" {
+		return validPassword(p.Password)
+	}
+	return nil
+}
+
+func winCreateGroups(s *winSnapshot, p createParams) ([]string, error) {
 	groups, err := resolveGroups(s, p.Groups)
 	if err != nil {
 		return nil, err
@@ -273,11 +290,7 @@ func winCreate(ctx context.Context, c *rpc.Call) (any, error) {
 		}
 		groups = uniq(append(groups, ag))
 	}
-	in := map[string]any{"name": p.Name, "fullName": p.FullName, "password": p.Password, "groups": groups}
-	if _, err := runPS(ctx, "Could not create the user", psCreate, in); err != nil {
-		return nil, err
-	}
-	return map[string]any{"ok": true, "name": p.Name}, nil
+	return groups, nil
 }
 
 // ---- users.modify ----
@@ -308,17 +321,11 @@ func winModify(ctx context.Context, c *rpc.Call) (any, error) {
 		return nil, winUnavailable("Changing the login shell")
 	}
 	in := map[string]any{"name": p.Name}
-	if p.FullName != nil {
-		if err := validWinText("full name", *p.FullName, 128); err != nil {
-			return nil, err
-		}
-		in["fullName"] = *p.FullName
+	if err := setWinText(in, "fullName", "full name", p.FullName, 128); err != nil {
+		return nil, err
 	}
-	if p.Description != nil {
-		if err := validWinText("description", *p.Description, 256); err != nil {
-			return nil, err
-		}
-		in["description"] = *p.Description
+	if err := setWinText(in, "description", "description", p.Description, 256); err != nil {
+		return nil, err
 	}
 	winMu.Lock()
 	defer winMu.Unlock()
@@ -328,18 +335,9 @@ func winModify(ctx context.Context, c *rpc.Call) (any, error) {
 	}
 	in["name"] = u.Name
 	if p.Groups != nil {
-		add, err := resolveGroups(s, p.Groups.Add)
+		add, rem, err := winPlanGroups(s, u, p.Groups.Add, p.Groups.Remove)
 		if err != nil {
 			return nil, err
-		}
-		rem, err := resolveGroups(s, p.Groups.Remove)
-		if err != nil {
-			return nil, err
-		}
-		for _, g := range rem {
-			if gg := s.group(g); gg != nil && gg.SID == sidAdministrators && s.otherAdmins(u.Name) == 0 {
-				return nil, rpc.Errorf(rpc.Conflict, "%s is the only administrator. Make someone else an administrator first", u.Name)
-			}
 		}
 		in["add"], in["remove"] = add, rem
 	}
@@ -347,6 +345,34 @@ func winModify(ctx context.Context, c *rpc.Call) (any, error) {
 		return nil, err
 	}
 	return okResult(), nil
+}
+
+// setWinText validates an optional text field and stores it in in[key].
+func setWinText(in map[string]any, key, label string, val *string, limit int) error {
+	if val == nil {
+		return nil
+	}
+	if err := validWinText(label, *val, limit); err != nil {
+		return err
+	}
+	in[key] = *val
+	return nil
+}
+
+// winPlanGroups resolves the group lists and refuses to drop the last administrator.
+func winPlanGroups(s *winSnapshot, u *winUser, addIn, remIn []string) (add, rem []string, err error) {
+	if add, err = resolveGroups(s, addIn); err != nil {
+		return nil, nil, err
+	}
+	if rem, err = resolveGroups(s, remIn); err != nil {
+		return nil, nil, err
+	}
+	for _, g := range rem {
+		if gg := s.group(g); gg != nil && gg.SID == sidAdministrators && s.otherAdmins(u.Name) == 0 {
+			return nil, nil, rpc.Errorf(rpc.Conflict, "%s is the only administrator. Make someone else an administrator first", u.Name)
+		}
+	}
+	return add, rem, nil
 }
 
 // ---- password / lock / delete / admin ----
@@ -357,15 +383,8 @@ if ($in.mustChange) { $u = [ADSI]("WinNT://./" + $in.name + ",user"); $u.Passwor
 `
 
 func winSetPassword(ctx context.Context, c *rpc.Call) (any, error) {
-	var p struct {
-		Name       string `json:"name"`
-		Password   string `json:"password"`
-		MustChange bool   `json:"mustChange"`
-	}
-	if err := c.Bind(&p); err != nil {
-		return nil, err
-	}
-	if err := validPassword(p.Password); err != nil {
+	p, err := bindPassword(c)
+	if err != nil {
 		return nil, err
 	}
 	winMu.Lock()
@@ -383,10 +402,16 @@ func winSetPassword(ctx context.Context, c *rpc.Call) (any, error) {
 
 const psEnable = `if ($in.enable) { Enable-LocalUser -Name $in.name } else { Disable-LocalUser -Name $in.name }`
 
-func winLock(ctx context.Context, c *rpc.Call, lock bool) (any, error) {
-	var p struct {
-		Name string `json:"name"`
-	}
+func winLock(ctx context.Context, c *rpc.Call) (any, error) {
+	return winSetEnabled(ctx, c, false)
+}
+
+func winUnlock(ctx context.Context, c *rpc.Call) (any, error) {
+	return winSetEnabled(ctx, c, true)
+}
+
+func winSetEnabled(ctx context.Context, c *rpc.Call, enable bool) (any, error) {
+	var p nameParams
 	if err := c.Bind(&p); err != nil {
 		return nil, err
 	}
@@ -396,11 +421,10 @@ func winLock(ctx context.Context, c *rpc.Call, lock bool) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if lock && u.SID == s.Self {
+	if !enable && u.SID == s.Self {
 		return nil, rpc.Errorf(rpc.Forbidden, "You cannot lock your own account")
 	}
-	_, err = runPS(ctx, "Could not change the account state", psEnable, map[string]any{"name": u.Name, "enable": !lock})
-	if err != nil {
+	if _, err := runPS(ctx, "Could not change the account state", psEnable, map[string]any{"name": u.Name, "enable": enable}); err != nil {
 		return nil, err
 	}
 	return okResult(), nil

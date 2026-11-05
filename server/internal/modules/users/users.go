@@ -35,8 +35,8 @@ func Register(r *rpc.Registry) {
 	r.Handle("users.create", rpc.Admin, create)
 	r.Handle("users.modify", rpc.Admin, modify)
 	r.Handle("users.setPassword", rpc.Admin, setPassword)
-	r.Handle("users.lock", rpc.Admin, func(ctx context.Context, c *rpc.Call) (any, error) { return lock(ctx, c, true) })
-	r.Handle("users.unlock", rpc.Admin, func(ctx context.Context, c *rpc.Call) (any, error) { return lock(ctx, c, false) })
+	r.Handle("users.lock", rpc.Admin, func(ctx context.Context, c *rpc.Call) (any, error) { return lock(ctx, c) })
+	r.Handle("users.unlock", rpc.Admin, func(ctx context.Context, c *rpc.Call) (any, error) { return unlock(ctx, c) })
 	r.Handle("users.delete", rpc.Admin, deleteUser)
 	r.Handle("users.setAdmin", rpc.Admin, setAdmin)
 	r.Handle("users.terminateSession", rpc.Admin, terminateSession)
@@ -312,16 +312,8 @@ func create(ctx context.Context, c *rpc.Call) (any, error) {
 	if err := c.Bind(&p); err != nil {
 		return nil, err
 	}
-	if err := validName("User", p.Name); err != nil {
+	if err := validCreateInput(p); err != nil {
 		return nil, err
-	}
-	if err := validFullName(p.FullName); err != nil {
-		return nil, err
-	}
-	if p.Password != "" {
-		if err := validPassword(p.Password); err != nil {
-			return nil, err
-		}
 	}
 	dbMu.Lock()
 	defer dbMu.Unlock()
@@ -335,24 +327,11 @@ func create(ctx context.Context, c *rpc.Call) (any, error) {
 	if s.groupName[p.Name] != nil {
 		return nil, rpc.Errorf(rpc.Conflict, "A group called %s already exists; choose another user name", p.Name)
 	}
-	if p.Shell == "" {
-		p.Shell = "/bin/bash"
-		if !s.shellAllowed(p.Shell) && len(s.shells) > 0 {
-			p.Shell = s.shells[0]
-		}
+	if p.Shell, err = createShell(s, p.Shell); err != nil {
+		return nil, err
 	}
-	if !s.shellAllowed(p.Shell) {
-		return nil, rpc.Errorf(rpc.Invalid, "%s is not a valid login shell (see /etc/shells)", p.Shell)
-	}
-	groups := uniq(p.Groups)
-	if p.Admin {
-		ag := s.adminGroup()
-		if ag == "" {
-			return nil, rpc.Errorf(rpc.Conflict, "This system has no wheel, sudo or admin group to grant administrator rights")
-		}
-		groups = uniq(append(groups, ag))
-	}
-	if err := checkGroups(s, groups); err != nil {
+	groups, err := createGroups(s, p)
+	if err != nil {
 		return nil, err
 	}
 	home := p.CreateHome == nil || *p.CreateHome
@@ -360,16 +339,72 @@ func create(ctx context.Context, c *rpc.Call) (any, error) {
 		return nil, err
 	}
 	if p.Password != "" {
-		if err := runTool(ctx, "The user was created but the password was rejected", p.Name+":"+p.Password+"\n", "chpasswd"); err != nil {
-			rb := []string{p.Name}
-			if home {
-				rb = []string{"-r", p.Name}
-			}
-			_ = runTool(ctx, "rollback", "", "userdel", rb...)
-			return nil, rpc.Errorf(rpc.Invalid, "The password was rejected, so the user was not created: %s", strings.TrimPrefix(err.Error(), "invalid: "))
+		if err := createPassword(ctx, p.Name, p.Password, home); err != nil {
+			return nil, err
 		}
 	}
 	return map[string]any{"ok": true, "name": p.Name}, nil
+}
+
+func validCreateInput(p createParams) error {
+	if err := validName("User", p.Name); err != nil {
+		return err
+	}
+	if err := validFullName(p.FullName); err != nil {
+		return err
+	}
+	if p.Password != "" {
+		return validPassword(p.Password)
+	}
+	return nil
+}
+
+// createShell returns the requested shell, or the default one when empty.
+func createShell(s *system, shell string) (string, error) {
+	if shell == "" {
+		shell = "/bin/bash"
+		if !s.shellAllowed(shell) && len(s.shells) > 0 {
+			shell = s.shells[0]
+		}
+	}
+	if !s.shellAllowed(shell) {
+		return "", rpc.Errorf(rpc.Invalid, "%s is not a valid login shell (see /etc/shells)", shell)
+	}
+	return shell, nil
+}
+
+func createGroups(s *system, p createParams) ([]string, error) {
+	groups := uniq(p.Groups)
+	if p.Admin {
+		ag, err := requireAdminGroup(s)
+		if err != nil {
+			return nil, err
+		}
+		groups = uniq(append(groups, ag))
+	}
+	return groups, checkGroups(s, groups)
+}
+
+func requireAdminGroup(s *system) (string, error) {
+	ag := s.adminGroup()
+	if ag == "" {
+		return "", rpc.Errorf(rpc.Conflict, "This system has no wheel, sudo or admin group to grant administrator rights")
+	}
+	return ag, nil
+}
+
+// createPassword sets the new user's password and removes the user again if it is rejected.
+func createPassword(ctx context.Context, name, password string, home bool) error {
+	err := runTool(ctx, "The user was created but the password was rejected", name+":"+password+"\n", "chpasswd")
+	if err == nil {
+		return nil
+	}
+	rb := []string{name}
+	if home {
+		rb = []string{"-r", name}
+	}
+	_ = runTool(ctx, "rollback", "", "userdel", rb...)
+	return rpc.Errorf(rpc.Invalid, "The password was rejected, so the user was not created: %s", strings.TrimPrefix(err.Error(), "invalid: "))
 }
 
 // ---- users.modify ----
@@ -401,31 +436,12 @@ func modify(ctx context.Context, c *rpc.Call) (any, error) {
 	}
 	var add, rem []string
 	if p.Groups != nil {
-		add, rem = uniq(p.Groups.Add), uniq(p.Groups.Remove)
-		if err := checkGroups(s, append(append([]string{}, add...), rem...)); err != nil {
-			return nil, err
-		}
-		for _, g := range rem {
-			if s.groupName[g].GID == u.GID {
-				return nil, rpc.Errorf(rpc.Invalid, "%s is the primary group of %s and cannot be removed", g, u.Name)
-			}
-		}
-	}
-	if p.FullName != nil {
-		if err := validFullName(*p.FullName); err != nil {
-			return nil, err
-		}
-		if err := runTool(ctx, "Could not change the full name", "", "usermod", "-c", *p.FullName, u.Name); err != nil {
+		if add, rem, err = planGroupChange(s, u, p.Groups.Add, p.Groups.Remove); err != nil {
 			return nil, err
 		}
 	}
-	if p.Shell != nil && *p.Shell != u.Shell {
-		if !s.shellAllowed(*p.Shell) {
-			return nil, rpc.Errorf(rpc.Invalid, "%s is not a valid login shell (see /etc/shells)", *p.Shell)
-		}
-		if err := runTool(ctx, "Could not change the shell", "", "usermod", "-s", *p.Shell, u.Name); err != nil {
-			return nil, err
-		}
+	if err := modifyProfile(ctx, s, u, p); err != nil {
+		return nil, err
 	}
 	for _, g := range add {
 		if err := memberChange(ctx, s, u.Name, g, true); err != nil {
@@ -438,6 +454,39 @@ func modify(ctx context.Context, c *rpc.Call) (any, error) {
 		}
 	}
 	return okResult(), nil
+}
+
+// planGroupChange validates the group lists and returns them deduplicated.
+func planGroupChange(s *system, u *passwdEntry, addIn, remIn []string) (add, rem []string, err error) {
+	add, rem = uniq(addIn), uniq(remIn)
+	if err := checkGroups(s, append(append([]string{}, add...), rem...)); err != nil {
+		return nil, nil, err
+	}
+	for _, g := range rem {
+		if s.groupName[g].GID == u.GID {
+			return nil, nil, rpc.Errorf(rpc.Invalid, "%s is the primary group of %s and cannot be removed", g, u.Name)
+		}
+	}
+	return add, rem, nil
+}
+
+// modifyProfile applies the full name and shell changes of a modify call.
+func modifyProfile(ctx context.Context, s *system, u *passwdEntry, p modifyParams) error {
+	if p.FullName != nil {
+		if err := validFullName(*p.FullName); err != nil {
+			return err
+		}
+		if err := runTool(ctx, "Could not change the full name", "", "usermod", "-c", *p.FullName, u.Name); err != nil {
+			return err
+		}
+	}
+	if p.Shell != nil && *p.Shell != u.Shell {
+		if !s.shellAllowed(*p.Shell) {
+			return rpc.Errorf(rpc.Invalid, "%s is not a valid login shell (see /etc/shells)", *p.Shell)
+		}
+		return runTool(ctx, "Could not change the shell", "", "usermod", "-s", *p.Shell, u.Name)
+	}
+	return nil
 }
 
 func isMember(s *system, user, group string) bool {
@@ -466,16 +515,24 @@ func memberChange(ctx context.Context, s *system, user, group string, add bool) 
 
 // ---- users.setPassword / lock / delete / setAdmin ----
 
-func setPassword(ctx context.Context, c *rpc.Call) (any, error) {
-	var p struct {
-		Name       string `json:"name"`
-		Password   string `json:"password"`
-		MustChange bool   `json:"mustChange"`
-	}
+type passwordParams struct {
+	Name       string `json:"name"`
+	Password   string `json:"password"`
+	MustChange bool   `json:"mustChange"`
+}
+
+// bindPassword reads and validates the setPassword parameters.
+func bindPassword(c *rpc.Call) (passwordParams, error) {
+	var p passwordParams
 	if err := c.Bind(&p); err != nil {
-		return nil, err
+		return p, err
 	}
-	if err := validPassword(p.Password); err != nil {
+	return p, validPassword(p.Password)
+}
+
+func setPassword(ctx context.Context, c *rpc.Call) (any, error) {
+	p, err := bindPassword(c)
+	if err != nil {
 		return nil, err
 	}
 	dbMu.Lock()
@@ -488,10 +545,8 @@ func setPassword(ctx context.Context, c *rpc.Call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	wasLocked := false
-	if e, ok := s.shadow[u.Name]; ok {
-		wasLocked = passwordState(e.Hash) == "locked"
-	}
+	e, hasShadow := s.shadow[u.Name]
+	wasLocked := hasShadow && passwordState(e.Hash) == "locked"
 	if err := runTool(ctx, "Could not set the password", u.Name+":"+p.Password+"\n", "chpasswd"); err != nil {
 		return nil, err
 	}
@@ -508,29 +563,54 @@ func setPassword(ctx context.Context, c *rpc.Call) (any, error) {
 	return okResult(), nil
 }
 
-func lock(ctx context.Context, c *rpc.Call, lock bool) (any, error) {
-	var p struct {
-		Name string `json:"name"`
-	}
-	if err := c.Bind(&p); err != nil {
-		return nil, err
-	}
-	dbMu.Lock()
-	defer dbMu.Unlock()
+// nameParams is the parameter shape shared by calls that only name a user.
+type nameParams struct {
+	Name string `json:"name"`
+}
+
+// loadPerson loads the system and finds the named person. The caller must hold dbMu.
+func loadPerson(name string) (*system, *passwdEntry, error) {
 	s, err := loadSystem(false)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	u, err := person(s, p.Name, true)
+	u, err := person(s, name, true)
+	return s, u, err
+}
+
+// lockTarget binds a lock/unlock call and loads its target under dbMu; call the returned unlock when done.
+func lockTarget(c *rpc.Call) (*passwdEntry, func(), error) {
+	var p nameParams
+	if err := c.Bind(&p); err != nil {
+		return nil, nil, err
+	}
+	dbMu.Lock()
+	_, u, err := loadPerson(p.Name)
+	if err != nil {
+		dbMu.Unlock()
+		return nil, nil, err
+	}
+	return u, dbMu.Unlock, nil
+}
+
+func lock(ctx context.Context, c *rpc.Call) (any, error) {
+	u, done, err := lockTarget(c)
 	if err != nil {
 		return nil, err
 	}
-	if lock {
-		if u.UID == callerUID() {
-			return nil, rpc.Errorf(rpc.Forbidden, "You cannot lock your own account")
-		}
-		return okResult(), runTool(ctx, "Could not lock the account", "", "usermod", "-L", u.Name)
+	defer done()
+	if u.UID == callerUID() {
+		return nil, rpc.Errorf(rpc.Forbidden, "You cannot lock your own account")
 	}
+	return okResult(), runTool(ctx, "Could not lock the account", "", "usermod", "-L", u.Name)
+}
+
+func unlock(ctx context.Context, c *rpc.Call) (any, error) {
+	u, done, err := lockTarget(c)
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 	return okResult(), runTool(ctx, "Could not unlock the account (set a password first if it has none)", "", "usermod", "-U", u.Name)
 }
 
@@ -544,11 +624,7 @@ func deleteUser(ctx context.Context, c *rpc.Call) (any, error) {
 	}
 	dbMu.Lock()
 	defer dbMu.Unlock()
-	s, err := loadSystem(false)
-	if err != nil {
-		return nil, err
-	}
-	u, err := person(s, p.Name, true)
+	_, u, err := loadPerson(p.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -578,11 +654,7 @@ func setAdmin(ctx context.Context, c *rpc.Call) (any, error) {
 	}
 	dbMu.Lock()
 	defer dbMu.Unlock()
-	s, err := loadSystem(false)
-	if err != nil {
-		return nil, err
-	}
-	u, err := person(s, p.Name, true)
+	s, u, err := loadPerson(p.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -590,12 +662,17 @@ func setAdmin(ctx context.Context, c *rpc.Call) (any, error) {
 		return nil, rpc.Errorf(rpc.Forbidden, "root always has administrator rights")
 	}
 	if p.Admin {
-		ag := s.adminGroup()
-		if ag == "" {
-			return nil, rpc.Errorf(rpc.Conflict, "This system has no wheel, sudo or admin group to grant administrator rights")
+		ag, err := requireAdminGroup(s)
+		if err != nil {
+			return nil, err
 		}
 		return okResult(), memberChange(ctx, s, u.Name, ag, true)
 	}
+	return okResult(), revokeAdmin(ctx, s, u)
+}
+
+// revokeAdmin removes u from every admin group, unless u is the last administrator.
+func revokeAdmin(ctx context.Context, s *system, u *passwdEntry) error {
 	others := 0
 	for i := range s.passwd {
 		q := &s.passwd[i]
@@ -604,17 +681,17 @@ func setAdmin(ctx context.Context, c *rpc.Call) (any, error) {
 		}
 	}
 	if others == 0 {
-		return nil, rpc.Errorf(rpc.Conflict, "%s is the only administrator. Make someone else an administrator first", u.Name)
+		return rpc.Errorf(rpc.Conflict, "%s is the only administrator. Make someone else an administrator first", u.Name)
 	}
 	for _, ag := range adminGroups {
 		if g := s.groupName[ag]; g != nil && g.GID == u.GID {
-			return nil, rpc.Errorf(rpc.Conflict, "%s is the primary group of %s, so it cannot be removed", ag, u.Name)
+			return rpc.Errorf(rpc.Conflict, "%s is the primary group of %s, so it cannot be removed", ag, u.Name)
 		}
 		if err := memberChange(ctx, s, u.Name, ag, false); err != nil {
-			return nil, err
+			return err
 		}
 	}
-	return okResult(), nil
+	return nil
 }
 
 // ---- groups.* ----
@@ -695,24 +772,31 @@ func groupMember(ctx context.Context, c *rpc.Call, add bool) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	g := s.groupName[p.Group]
-	if g == nil {
-		return nil, rpc.Errorf(rpc.NotFound, "There is no group called %s", p.Group)
-	}
-	u := s.byName[p.User]
-	if u == nil {
-		return nil, rpc.Errorf(rpc.NotFound, "There is no user called %s", p.User)
-	}
-	if g.GID == 0 {
-		return nil, rpc.Errorf(rpc.Forbidden, "The root group cannot be changed here")
-	}
-	if !add && g.GID == u.GID {
-		return nil, rpc.Errorf(rpc.Invalid, "%s is the primary group of %s and cannot be removed", p.Group, p.User)
-	}
-	if !s.isPerson(u) {
-		return nil, rpc.Errorf(rpc.Forbidden, "%s is a system account; it cannot be changed here", p.User)
+	if err := checkMemberTarget(s, p.Group, p.User, add); err != nil {
+		return nil, err
 	}
 	return okResult(), memberChange(ctx, s, p.User, p.Group, add)
+}
+
+func checkMemberTarget(s *system, group, user string, add bool) error {
+	g := s.groupName[group]
+	if g == nil {
+		return rpc.Errorf(rpc.NotFound, "There is no group called %s", group)
+	}
+	u := s.byName[user]
+	if u == nil {
+		return rpc.Errorf(rpc.NotFound, "There is no user called %s", user)
+	}
+	if g.GID == 0 {
+		return rpc.Errorf(rpc.Forbidden, "The root group cannot be changed here")
+	}
+	if !add && g.GID == u.GID {
+		return rpc.Errorf(rpc.Invalid, "%s is the primary group of %s and cannot be removed", group, user)
+	}
+	if !s.isPerson(u) {
+		return rpc.Errorf(rpc.Forbidden, "%s is a system account; it cannot be changed here", user)
+	}
+	return nil
 }
 
 // ---- SSH keys ----
