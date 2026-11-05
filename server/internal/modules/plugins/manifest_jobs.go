@@ -292,16 +292,22 @@ func (m *Manifest) JobNeedsAdmin(j *JobDef, isRoot bool, groups map[string]bool)
 		s := &j.Steps[i]
 		switch {
 		case s.Command != "":
-			if c := m.Command(s.Command); c != nil && c.Admin && !(c.AdminUnlessGroup != "" && groups[c.AdminUnlessGroup]) {
+			if c := m.Command(s.Command); c != nil && adminApplies(c.Admin, c.AdminUnlessGroup, groups) {
 				return true
 			}
 		case s.HTTP != nil:
-			if a := m.API(s.HTTP.API); a != nil && a.Admin && !(a.AdminUnlessGroup != "" && groups[a.AdminUnlessGroup]) {
+			if a := m.API(s.HTTP.API); a != nil && adminApplies(a.Admin, a.AdminUnlessGroup, groups) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// adminApplies reports whether an admin-only command or API still needs the
+// root bridge for a user in these groups.
+func adminApplies(admin bool, unlessGroup string, groups map[string]bool) bool {
+	return admin && !(unlessGroup != "" && groups[unlessGroup])
 }
 
 // ---- templates ----
@@ -559,13 +565,19 @@ func validateStepCond(s *JobStep, earlier map[string]*JobStep) error {
 	if needsOutput && ref.Kind() == "notify" {
 		return fmt.Errorf("step %q: a notify step has no output to compare", s.ID)
 	}
+	return validateCondOther(s, comparesTwoSteps, earlier)
+}
+
+// validateCondOther checks if.other: required for differs and same, not
+// allowed otherwise.
+func validateCondOther(s *JobStep, comparesTwoSteps bool, earlier map[string]*JobStep) error {
 	if !comparesTwoSteps {
-		if cnd.Other != "" {
+		if s.If.Other != "" {
 			return fmt.Errorf("step %q: if.other is only for differs and same", s.ID)
 		}
 		return nil
 	}
-	if o := earlier[cnd.Other]; o == nil || o.Kind() == "notify" {
+	if o := earlier[s.If.Other]; o == nil || o.Kind() == "notify" {
 		return fmt.Errorf("step %q: if.other must name an earlier command or http step", s.ID)
 	}
 	return nil
@@ -685,6 +697,22 @@ func (m *Manifest) validateHTTPStep(h *JobHTTP, refs stepRefChecker) error {
 	if h.Path == "" || h.Path[0] != '/' || len(h.Path) > 1024 {
 		return fmt.Errorf("http.path must start with /")
 	}
+	if err := validateHTTPRefs(h, refs); err != nil {
+		return err
+	}
+	if err := validateStepHeaders(h.Headers, api, refs); err != nil {
+		return err
+	}
+	if err := validateFixedPath(h, api); err != nil {
+		return err
+	}
+	if !HasRefs(h.Query) && !validQuery(h.Query) {
+		return fmt.Errorf("http.query holds characters that are not allowed")
+	}
+	return nil
+}
+
+func validateHTTPRefs(h *JobHTTP, refs stepRefChecker) error {
 	if err := refs.check("http.path", h.Path, false); err != nil {
 		return err
 	}
@@ -696,15 +724,6 @@ func (m *Manifest) validateHTTPStep(h *JobHTTP, refs stepRefChecker) error {
 	}
 	if len(h.Body) > 64<<10 {
 		return fmt.Errorf("http.body is larger than 64 KiB")
-	}
-	if err := validateStepHeaders(h.Headers, api, refs); err != nil {
-		return err
-	}
-	if err := validateFixedPath(h, api); err != nil {
-		return err
-	}
-	if !HasRefs(h.Query) && !validQuery(h.Query) {
-		return fmt.Errorf("http.query holds characters that are not allowed")
 	}
 	return nil
 }

@@ -75,18 +75,7 @@ func (a *Auto) Tick(ctx context.Context) {
 	now := a.now()
 	if cfg.Updates.AutoCheck && now.Sub(a.lastCheck) >= a.checkEvery() {
 		a.lastCheck = now
-		rel, _, err := a.Updater.Checker.Latest(ctx, cfg.Updates.Channel, false)
-		switch {
-		case errors.Is(err, ErrNoRelease):
-		case err != nil:
-			a.logf("update check failed: %v", err)
-		case Newer(rel.Version(), a.Updater.Current) && rel.Version() != a.lastNotice:
-			a.lastNotice = rel.Version()
-			a.logf("update available: %s (running %s)", rel.Version(), a.Updater.Current)
-			if a.Notify != nil {
-				a.Notify(rel.Version(), a.Updater.Current)
-			}
-		}
+		a.checkForUpdate(ctx, cfg.Updates.Channel)
 	}
 	// A package manager installs the updates of a packaged Ervisio.
 	if !cfg.Updates.AutoInstall || a.Updater.Layout.ManagedBy() != "" {
@@ -102,16 +91,35 @@ func (a *Auto) Tick(ctx context.Context) {
 		return
 	}
 	a.lastInstall = day
+	a.installUpdate(ctx, cfg.Updates.Channel, now)
+}
+
+func (a *Auto) checkForUpdate(ctx context.Context, channel string) {
+	rel, _, err := a.Updater.Checker.Latest(ctx, channel, false)
+	switch {
+	case errors.Is(err, ErrNoRelease):
+	case err != nil:
+		a.logf("update check failed: %v", err)
+	case Newer(rel.Version(), a.Updater.Current) && rel.Version() != a.lastNotice:
+		a.lastNotice = rel.Version()
+		a.logf("update available: %s (running %s)", rel.Version(), a.Updater.Current)
+		if a.Notify != nil {
+			a.Notify(rel.Version(), a.Updater.Current)
+		}
+	}
+}
+
+func (a *Auto) installUpdate(ctx context.Context, channel string, started time.Time) {
 	ictx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 	defer cancel()
-	v, unit, err := a.Updater.Apply(ictx, cfg.Updates.Channel, "", true, nil)
+	v, unit, err := a.Updater.Apply(ictx, channel, "", true, nil)
 	switch {
 	case errors.Is(err, ErrUpToDate), errors.Is(err, ErrNoRelease):
 		a.logf("automatic update: already up to date (%s)", a.Updater.Current)
 	case err != nil:
 		a.logf("automatic update failed: %v", err)
 		if werr := a.Updater.State.WriteLast(Result{State: StateFailed, Kind: KindUpdate, From: a.Updater.Current,
-			StartedAt: now.UnixMilli(), FinishedAt: nowMs(), Error: fmt.Sprint(err), Auto: true}); werr != nil {
+			StartedAt: started.UnixMilli(), FinishedAt: nowMs(), Error: fmt.Sprint(err), Auto: true}); werr != nil {
 			a.logf("write last.json: %v", werr)
 		}
 	default:

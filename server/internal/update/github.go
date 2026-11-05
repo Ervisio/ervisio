@@ -135,27 +135,13 @@ func (c *Checker) Latest(ctx context.Context, channel string, force bool) (*Rele
 	ent := c.cache[channel]
 	c.mu.Unlock()
 	if ent != nil && !force && c.now().Sub(ent.at) < cacheTTL {
-		if ent.release == nil {
-			return nil, ent.at, ErrNoRelease
-		}
-		return ent.release, ent.at, nil
+		return releaseOrNone(ent.release, ent.at)
 	}
-	path := "/releases/latest"
-	if channel == ChannelPrerelease {
-		path = "/releases?per_page=30"
-	}
-	u := strings.TrimRight(c.API, "/") + "/repos/" + c.Repo + path
 	ctx, cancel := context.WithTimeout(ctx, apiTimeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	req, err := c.newRequest(ctx, channel, ent)
 	if err != nil {
 		return nil, time.Time{}, err
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-	req.Header.Set("User-Agent", userAgentBase+brand.Version)
-	if ent != nil && ent.etag != "" {
-		req.Header.Set("If-None-Match", ent.etag)
 	}
 	resp, err := c.Client.Do(req)
 	if err != nil {
@@ -170,10 +156,7 @@ func (c *Checker) Latest(ctx context.Context, channel string, force bool) (*Rele
 	switch {
 	case resp.StatusCode == http.StatusNotModified && ent != nil:
 		store(ent.release, ent.etag)
-		if ent.release == nil {
-			return nil, c.now(), ErrNoRelease
-		}
-		return ent.release, c.now(), nil
+		return releaseOrNone(ent.release, c.now())
 	case resp.StatusCode == http.StatusNotFound:
 		store(nil, resp.Header.Get("ETag"))
 		return nil, c.now(), ErrNoRelease
@@ -182,18 +165,55 @@ func (c *Checker) Latest(ctx context.Context, channel string, force bool) (*Rele
 	case resp.StatusCode != http.StatusOK:
 		return nil, time.Time{}, fmt.Errorf("GitHub answered %s", resp.Status)
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxAPIBody+1))
+	rel, err := readRelease(resp.Body, channel)
 	if err != nil {
-		return nil, time.Time{}, fmt.Errorf("read GitHub answer: %v", err)
+		return nil, time.Time{}, err
+	}
+	store(rel, resp.Header.Get("ETag"))
+	return releaseOrNone(rel, c.now())
+}
+
+func releaseOrNone(rel *Release, at time.Time) (*Release, time.Time, error) {
+	if rel == nil {
+		return nil, at, ErrNoRelease
+	}
+	return rel, at, nil
+}
+
+func (c *Checker) newRequest(ctx context.Context, channel string, ent *cached) (*http.Request, error) {
+	path := "/releases/latest"
+	if channel == ChannelPrerelease {
+		path = "/releases?per_page=30"
+	}
+	u := strings.TrimRight(c.API, "/") + "/repos/" + c.Repo + path
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	req.Header.Set("User-Agent", userAgentBase+brand.Version)
+	if ent != nil && ent.etag != "" {
+		req.Header.Set("If-None-Match", ent.etag)
+	}
+	return req, nil
+}
+
+// readRelease decodes the API answer into the channel's newest release;
+// nil means none qualifies.
+func readRelease(r io.Reader, channel string) (*Release, error) {
+	body, err := io.ReadAll(io.LimitReader(r, maxAPIBody+1))
+	if err != nil {
+		return nil, fmt.Errorf("read GitHub answer: %v", err)
 	}
 	if len(body) > maxAPIBody {
-		return nil, time.Time{}, errors.New("GitHub answer too large")
+		return nil, errors.New("GitHub answer too large")
 	}
 	var rel *Release
 	if channel == ChannelStable {
 		var r Release
 		if err := json.Unmarshal(body, &r); err != nil {
-			return nil, time.Time{}, fmt.Errorf("unexpected GitHub answer: %v", err)
+			return nil, fmt.Errorf("unexpected GitHub answer: %v", err)
 		}
 		if r.Version() != "" && !r.Draft {
 			rel = &r
@@ -201,18 +221,14 @@ func (c *Checker) Latest(ctx context.Context, channel string, force bool) (*Rele
 	} else {
 		var list []Release
 		if err := json.Unmarshal(body, &list); err != nil {
-			return nil, time.Time{}, fmt.Errorf("unexpected GitHub answer: %v", err)
+			return nil, fmt.Errorf("unexpected GitHub answer: %v", err)
 		}
 		rel = newest(list)
 	}
 	if rel != nil && len(rel.Body) > maxNotes {
 		rel.Body = rel.Body[:maxNotes] + "\n\n…"
 	}
-	store(rel, resp.Header.Get("ETag"))
-	if rel == nil {
-		return nil, c.now(), ErrNoRelease
-	}
-	return rel, c.now(), nil
+	return rel, nil
 }
 
 // newest returns the highest-versioned non-draft release.

@@ -402,27 +402,34 @@ func (m *Manager) pairCheck(ctx context.Context, e *Env) (version, engine, api s
 	if _, err := c.Write(append(b, '\n')); err != nil {
 		return version, "", "", nil
 	}
+	engine, api = readDockerVersion(br)
+	return version, engine, api, nil
+}
+
+// readDockerVersion waits for the reply to the version request; empty
+// strings when the other side has no Docker plugin or answers badly.
+func readDockerVersion(br *bufio.Reader) (engine, api string) {
 	for {
 		line, err := br.ReadBytes('\n')
 		if err != nil {
-			return version, "", "", nil
+			return "", ""
 		}
-		var m rpc.Message
-		if json.Unmarshal(line, &m) != nil || m.ID != 1 {
+		var msg rpc.Message
+		if json.Unmarshal(line, &msg) != nil || msg.ID != 1 {
 			continue
 		}
-		if m.Error != nil {
-			return version, "", "", nil // plugin missing there: reachable all the same
+		if msg.Error != nil {
+			return "", "" // plugin missing there: reachable all the same
 		}
 		var r struct {
 			Status int    `json:"status"`
 			Body   string `json:"body"`
 		}
 		var v struct{ Version, ApiVersion string }
-		if json.Unmarshal(m.Result, &r) == nil && r.Status == 200 && json.Unmarshal([]byte(r.Body), &v) == nil {
-			return version, v.Version, v.ApiVersion, nil
+		if json.Unmarshal(msg.Result, &r) == nil && r.Status == 200 && json.Unmarshal([]byte(r.Body), &v) == nil {
+			return v.Version, v.ApiVersion
 		}
-		return version, "", "", nil
+		return "", ""
 	}
 }
 

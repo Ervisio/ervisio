@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -212,17 +213,24 @@ func parseKV(text string) []Field {
 			}
 			continue
 		}
-		k, v, ok := strings.Cut(line, ":")
-		if !ok {
-			continue
+		if f, ok := kvField(line); ok {
+			out = append(out, f)
 		}
-		k, v = strings.TrimSpace(k), strings.TrimSpace(v)
-		if v == "" || v == "None" || v == "(none)" {
-			continue
-		}
-		out = append(out, Field{k, v})
 	}
 	return out
+}
+
+// kvField reads one "Key: value" line; empty and "none" values are skipped.
+func kvField(line string) (Field, bool) {
+	k, v, ok := strings.Cut(line, ":")
+	if !ok {
+		return Field{}, false
+	}
+	k, v = strings.TrimSpace(k), strings.TrimSpace(v)
+	if v == "" || v == "None" || v == "(none)" {
+		return Field{}, false
+	}
+	return Field{k, v}, true
 }
 
 func fieldValue(f []Field, keys ...string) string {
@@ -242,12 +250,7 @@ var kernelRe = regexp.MustCompile(`^(linux(-(lts|zen|hardened|rt|rt-lts|cachyos[
 func needsReboot(name string) bool { return kernelRe.MatchString(name) }
 
 func hasNote(u Update, note string) bool {
-	for _, n := range u.Notes {
-		if n == note {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(u.Notes, note)
 }
 
 // ttlCache keeps computed values for a while; one mutex per key so parallel

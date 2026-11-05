@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"net/mail"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -166,17 +167,23 @@ func (s *Service) Send(ctx context.Context, msg Message, event string) Delivery 
 	}
 	var targets []Spec
 	for _, c := range list {
-		if !c.Enabled || levelRank[msg.Level] < levelRank[c.minLevel()] {
-			continue
-		}
-		ok := false
-		for _, e := range c.Events {
-			ok = ok || e == event
-		}
-		if ok {
+		if c.wants(msg.Level, event) {
 			targets = append(targets, c)
 		}
 	}
+	return s.deliver(ctx, targets, msg)
+}
+
+// wants reports whether the channel is on, subscribed to the event and
+// accepts the message level.
+func (c Spec) wants(level, event string) bool {
+	if !c.Enabled || levelRank[level] < levelRank[c.minLevel()] {
+		return false
+	}
+	return slices.Contains(c.Events, event)
+}
+
+func (s *Service) deliver(ctx context.Context, targets []Spec, msg Message) Delivery {
 	d := Delivery{Channels: len(targets)}
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -231,14 +238,7 @@ func (s *Service) AllowPlugin(plugin, who string) (bool, time.Duration) {
 	key := plugin + "\x00" + who
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	times := s.sent[key]
-	keep := times[:0]
-	for _, t := range times {
-		if now.Sub(t) < time.Hour {
-			keep = append(keep, t)
-		}
-	}
-	times = keep
+	times := recentSends(s.sent[key], now)
 	inMinute := 0
 	for _, t := range times {
 		if now.Sub(t) < time.Minute {
@@ -256,16 +256,33 @@ func (s *Service) AllowPlugin(plugin, who string) (bool, time.Duration) {
 		return false, wait
 	}
 	s.sent[key] = append(times, now)
-	// Forget senders that stopped sending.
-	if len(s.sent) > 1000 {
-		keys := make([]string, 0, len(s.sent))
-		for k := range s.sent {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys[:len(keys)-500] {
-			delete(s.sent, k)
+	s.forgetIdleSenders()
+	return true, 0
+}
+
+// recentSends keeps the sends of the last hour, reusing the slice.
+func recentSends(times []time.Time, now time.Time) []time.Time {
+	keep := times[:0]
+	for _, t := range times {
+		if now.Sub(t) < time.Hour {
+			keep = append(keep, t)
 		}
 	}
-	return true, 0
+	return keep
+}
+
+// forgetIdleSenders drops all but 500 senders once there are over 1000.
+// The caller holds s.mu.
+func (s *Service) forgetIdleSenders() {
+	if len(s.sent) <= 1000 {
+		return
+	}
+	keys := make([]string, 0, len(s.sent))
+	for k := range s.sent {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys[:len(keys)-500] {
+		delete(s.sent, k)
+	}
 }

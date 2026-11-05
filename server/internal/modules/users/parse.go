@@ -3,6 +3,7 @@ package users
 import (
 	"bufio"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -70,23 +71,29 @@ func parseGroup(data string) []groupEntry {
 		if line == "" || strings.HasPrefix(line, "#") || line[0] == '+' || line[0] == '-' {
 			continue
 		}
-		f := strings.Split(line, ":")
-		if len(f) < 4 {
-			continue
+		if g, ok := parseGroupLine(line); ok {
+			out = append(out, g)
 		}
-		gid, err := strconv.Atoi(f[2])
-		if err != nil || f[0] == "" {
-			continue
-		}
-		g := groupEntry{Name: f[0], GID: gid, Members: []string{}}
-		for _, m := range strings.Split(f[3], ",") {
-			if m = strings.TrimSpace(m); m != "" {
-				g.Members = append(g.Members, m)
-			}
-		}
-		out = append(out, g)
 	}
 	return out
+}
+
+func parseGroupLine(line string) (groupEntry, bool) {
+	f := strings.Split(line, ":")
+	if len(f) < 4 {
+		return groupEntry{}, false
+	}
+	gid, err := strconv.Atoi(f[2])
+	if err != nil || f[0] == "" {
+		return groupEntry{}, false
+	}
+	g := groupEntry{Name: f[0], GID: gid, Members: []string{}}
+	for _, m := range strings.Split(f[3], ",") {
+		if m = strings.TrimSpace(m); m != "" {
+			g.Members = append(g.Members, m)
+		}
+	}
+	return g, true
 }
 
 func parseShadow(data string) map[string]shadowEntry {
@@ -285,10 +292,5 @@ func (s *system) isAdmin(p *passwdEntry) bool {
 }
 
 func (s *system) shellAllowed(sh string) bool {
-	for _, x := range s.shells {
-		if x == sh {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(s.shells, sh)
 }
