@@ -41,57 +41,63 @@ func main() {
 		check(err)
 		fmt.Println("public key:", base64.StdEncoding.EncodeToString(pk))
 	case *verify && flag.NArg() == 1:
-		keys := update.TrustedKeys
-		if *pub != "" {
-			k, err := signkey.ParsePublic(*pub)
-			check(err)
-			keys = []ed25519.PublicKey{k}
-		}
-		sums, err := os.ReadFile(flag.Arg(0))
-		check(err)
-		sp := *sigPath
-		if sp == "" {
-			sp = flag.Arg(0) + ".sig"
-		}
-		sig, err := os.ReadFile(sp)
-		check(err)
-		check(update.VerifySums(sums, sig, keys))
-		list, err := update.ParseSums(sums)
-		check(err)
-		if *dir != "" {
-			names := make([]string, 0, len(list))
-			for n := range list {
-				names = append(names, n)
-			}
-			sort.Strings(names)
-			for _, n := range names {
-				check(update.VerifyFile(list, n, filepath.Join(*dir, n)))
-				fmt.Println("ok", n)
-			}
-		}
-		fmt.Println("signature ok")
+		verifySums(flag.Arg(0), *sigPath, *pub, *dir)
 	case *key != "" && flag.NArg() == 1:
-		sk, err := signkey.Load(*key)
-		check(err)
-		sums, err := os.ReadFile(flag.Arg(0))
-		check(err)
-		if _, err := update.ParseSums(sums); err != nil {
-			check(err)
-		}
-		dst := *out
-		if dst == "" {
-			dst = flag.Arg(0) + ".sig"
-		}
-		sig := update.SignSums(sums, sk)
-		// Self-check against the public half of the key used.
-		check(update.VerifySums(sums, sig, []ed25519.PublicKey{sk.Public().(ed25519.PublicKey)}))
-		check(os.WriteFile(dst, sig, 0o644))
-		fmt.Println("signed", flag.Arg(0), "->", dst)
-		fmt.Println("public key:", base64.StdEncoding.EncodeToString(sk.Public().(ed25519.PublicKey)))
+		signSums(flag.Arg(0), *key, *out)
 	default:
 		fmt.Fprintln(os.Stderr, "usage: release-sign -genkey FILE | release-sign -key FILE [-out SIG] SUMS | release-sign -verify [-pub KEY] [-sig SIG] [-dir DIR] SUMS")
 		os.Exit(2)
 	}
+}
+
+func verifySums(sumsPath, sigPath, pub, dir string) {
+	keys := update.TrustedKeys
+	if pub != "" {
+		k, err := signkey.ParsePublic(pub)
+		check(err)
+		keys = []ed25519.PublicKey{k}
+	}
+	sums, err := os.ReadFile(sumsPath)
+	check(err)
+	if sigPath == "" {
+		sigPath = sumsPath + ".sig"
+	}
+	sig, err := os.ReadFile(sigPath)
+	check(err)
+	check(update.VerifySums(sums, sig, keys))
+	list, err := update.ParseSums(sums)
+	check(err)
+	if dir != "" {
+		names := make([]string, 0, len(list))
+		for n := range list {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		for _, n := range names {
+			check(update.VerifyFile(list, n, filepath.Join(dir, n)))
+			fmt.Println("ok", n)
+		}
+	}
+	fmt.Println("signature ok")
+}
+
+func signSums(sumsPath, keyFile, dst string) {
+	sk, err := signkey.Load(keyFile)
+	check(err)
+	sums, err := os.ReadFile(sumsPath)
+	check(err)
+	_, err = update.ParseSums(sums)
+	check(err)
+	if dst == "" {
+		dst = sumsPath + ".sig"
+	}
+	sig := update.SignSums(sums, sk)
+	pk := sk.Public().(ed25519.PublicKey)
+	// Self-check against the public half of the key used.
+	check(update.VerifySums(sums, sig, []ed25519.PublicKey{pk}))
+	check(os.WriteFile(dst, sig, 0o644))
+	fmt.Println("signed", sumsPath, "->", dst)
+	fmt.Println("public key:", base64.StdEncoding.EncodeToString(pk))
 }
 
 func check(err error) {

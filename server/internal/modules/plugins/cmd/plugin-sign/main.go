@@ -32,33 +32,11 @@ func main() {
 
 	switch {
 	case *catalog != "" && flag.NArg() == 0 && (*verify || *key != ""):
-		data, err := os.ReadFile(*catalog)
-		check(err)
-		sigPath := strings.TrimSuffix(*catalog, ".json") + ".sig"
 		if *verify {
-			keys := plugins.TrustedKeys
-			if *pub != "" {
-				b, err := signkey.ParsePublic(*pub)
-				if err != nil {
-					check(fmt.Errorf("-pub: %v", err))
-				}
-				keys = []ed25519.PublicKey{b}
-			}
-			sig, err := os.ReadFile(sigPath)
-			check(err)
-			if err := plugins.VerifyCatalog(data, sig, keys); err != nil {
-				fmt.Println("INVALID:", err)
-				os.Exit(1)
-			}
-			fmt.Println("catalog signature ok")
-			return
+			verifyCatalog(*catalog, *pub)
+		} else {
+			signCatalog(*catalog, *key)
 		}
-		sk, err := signkey.Load(*key)
-		check(err)
-		sig, err := plugins.SignCatalog(data, sk)
-		check(err)
-		check(os.WriteFile(sigPath, sig, 0o644))
-		fmt.Println("signed", *catalog, "->", sigPath)
 	case *genkey != "":
 		pk, err := signkey.GenerateFile(*genkey)
 		check(err)
@@ -67,24 +45,7 @@ func main() {
 		if flag.NArg() != 1 {
 			usage()
 		}
-		keys := plugins.TrustedKeys
-		if *pub != "" {
-			b, err := signkey.ParsePublic(*pub)
-			if err != nil {
-				check(fmt.Errorf("-pub: %v", err))
-			}
-			keys = []ed25519.PublicKey{b}
-		}
-		s := plugins.CheckSignature(flag.Arg(0), keys)
-		switch {
-		case !s.Signed:
-			fmt.Println("not signed")
-			os.Exit(1)
-		case !s.Verified:
-			fmt.Println("INVALID:", s.Err)
-			os.Exit(1)
-		}
-		fmt.Println("signature ok")
+		verifyFolder(flag.Arg(0), *pub)
 	case *key != "" && flag.NArg() == 1:
 		sk, err := signkey.Load(*key)
 		check(err)
@@ -93,6 +54,62 @@ func main() {
 	default:
 		usage()
 	}
+}
+
+// catalogSigPath is where the signature of a catalog.json lives.
+func catalogSigPath(catalog string) string {
+	return strings.TrimSuffix(catalog, ".json") + ".sig"
+}
+
+// verifyKeys returns the keys to verify against: the one in pub, or the
+// embedded team keys when pub is empty.
+func verifyKeys(pub string) []ed25519.PublicKey {
+	if pub == "" {
+		return plugins.TrustedKeys
+	}
+	b, err := signkey.ParsePublic(pub)
+	if err != nil {
+		check(fmt.Errorf("-pub: %v", err))
+	}
+	return []ed25519.PublicKey{b}
+}
+
+func verifyCatalog(catalog, pub string) {
+	data, err := os.ReadFile(catalog)
+	check(err)
+	keys := verifyKeys(pub)
+	sig, err := os.ReadFile(catalogSigPath(catalog))
+	check(err)
+	if err := plugins.VerifyCatalog(data, sig, keys); err != nil {
+		fmt.Println("INVALID:", err)
+		os.Exit(1)
+	}
+	fmt.Println("catalog signature ok")
+}
+
+func signCatalog(catalog, keyFile string) {
+	data, err := os.ReadFile(catalog)
+	check(err)
+	sigPath := catalogSigPath(catalog)
+	sk, err := signkey.Load(keyFile)
+	check(err)
+	sig, err := plugins.SignCatalog(data, sk)
+	check(err)
+	check(os.WriteFile(sigPath, sig, 0o644))
+	fmt.Println("signed", catalog, "->", sigPath)
+}
+
+func verifyFolder(folder, pub string) {
+	s := plugins.CheckSignature(folder, verifyKeys(pub))
+	switch {
+	case !s.Signed:
+		fmt.Println("not signed")
+		os.Exit(1)
+	case !s.Verified:
+		fmt.Println("INVALID:", s.Err)
+		os.Exit(1)
+	}
+	fmt.Println("signature ok")
 }
 
 func usage() {

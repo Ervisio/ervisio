@@ -67,10 +67,7 @@ func backwardLines(ctx context.Context, f *os.File, size, maxBytes int64, fn fun
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		n := int64(bs)
-		if pos < n {
-			n = pos
-		}
+		n := min(int64(bs), pos)
 		pos -= n
 		buf := make([]byte, int(n)+len(carry))
 		if _, err := f.ReadAt(buf[:n], pos); err != nil && err != io.EOF {
@@ -85,15 +82,9 @@ func backwardLines(ctx context.Context, f *os.File, size, maxBytes int64, fn fun
 				end--
 			}
 		}
-		for {
-			i := bytes.LastIndexByte(buf[:end], '\n')
-			if i < 0 {
-				break
-			}
-			if !fn(string(buf[i+1 : end])) {
-				return nil
-			}
-			end = i
+		end, more := emitBackward(buf, end, fn)
+		if !more {
+			return nil
 		}
 		carry = append([]byte(nil), buf[:end]...)
 		if pos > 0 && maxBytes > 0 && total >= maxBytes {
@@ -104,6 +95,21 @@ func backwardLines(ctx context.Context, f *os.File, size, maxBytes int64, fn fun
 	return nil
 }
 
+// emitBackward calls fn with every complete line of buf[:end], last first, and
+// returns the end of the unconsumed head. False means fn asked to stop.
+func emitBackward(buf []byte, end int, fn func(string) bool) (int, bool) {
+	for {
+		i := bytes.LastIndexByte(buf[:end], '\n')
+		if i < 0 {
+			return end, true
+		}
+		if !fn(string(buf[i+1 : end])) {
+			return end, false
+		}
+		end = i
+	}
+}
+
 // scanFile reads a log file from the end and calls fn with each entry,
 // newest first, until fn returns false, the file is exhausted, an entry older
 // than sinceUs shows up or about maxBytes were read. Lines without a
@@ -111,18 +117,11 @@ func backwardLines(ctx context.Context, f *os.File, size, maxBytes int64, fn fun
 // have no level of their own, the level of the nearest earlier line that has
 // one; the file's modification time is the last resort.
 func scanFile(ctx context.Context, path, label, format string, maxBytes, sinceUs int64, fn func(*Entry) bool) error {
-	f, err := os.Open(path)
+	f, st, err := openRegular(path)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	st, err := f.Stat()
-	if err != nil {
-		return err
-	}
-	if !st.Mode().IsRegular() {
-		return rpc.Errorf(rpc.Invalid, "%s is not a regular file", path)
-	}
 	size := st.Size()
 	known := false
 	no := 0
@@ -149,6 +148,21 @@ func scanFile(ctx context.Context, path, label, format string, maxBytes, sinceUs
 		pending = pending[:0]
 		return true
 	}
+	// handle takes one parsed line; false stops the backward scan.
+	handle := func(e *Entry, hasTs bool) bool {
+		if !hasTs {
+			pending = append(pending, e)
+			return len(pending) < maxPending || flush(fallback, LvInfo)
+		}
+		if e.TsUs < sinceUs {
+			pending = pending[:0]
+			return false
+		}
+		if e.Level == "" {
+			e.Level = LvInfo
+		}
+		return flush(e.TsUs, e.Level) && fn(e)
+	}
 	err = backwardLines(ctx, f, size, maxBytes, func(text string) bool {
 		n := no
 		no--
@@ -160,25 +174,7 @@ func scanFile(ctx context.Context, path, label, format string, maxBytes, sinceUs
 			n = 0
 		}
 		e, hasTs := lineEntry(text, label, path, n, format, now, loc)
-		if !hasTs {
-			pending = append(pending, e)
-			if len(pending) >= maxPending {
-				if !flush(fallback, LvInfo) {
-					stopped = true
-					return false
-				}
-			}
-			return true
-		}
-		if e.TsUs < sinceUs {
-			pending = pending[:0]
-			stopped = true
-			return false
-		}
-		if e.Level == "" {
-			e.Level = LvInfo
-		}
-		if !flush(e.TsUs, e.Level) || !fn(e) {
+		if !handle(e, hasTs) {
 			stopped = true
 			return false
 		}
@@ -191,6 +187,24 @@ func scanFile(ctx context.Context, path, label, format string, maxBytes, sinceUs
 		flush(fallback, LvInfo)
 	}
 	return nil
+}
+
+// openRegular opens path and checks that it is a regular file.
+func openRegular(path string) (*os.File, os.FileInfo, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	st, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return nil, nil, err
+	}
+	if !st.Mode().IsRegular() {
+		f.Close()
+		return nil, nil, rpc.Errorf(rpc.Invalid, "%s is not a regular file", path)
+	}
+	return f, st, nil
 }
 
 // fetchFile returns up to want matching entries with TsUs <= until, newest first.
@@ -241,33 +255,36 @@ func listLogFiles(root string, max int) []LogFile {
 				}
 				continue
 			}
-			if binaryLog[name] || rotatedRe.MatchString(name) {
-				continue
+			if lf, ok := candidateLog(d, p); ok {
+				out = append(out, lf)
 			}
-			info, err := d.Info()
-			if err != nil || !info.Mode().IsRegular() {
-				continue
-			}
-			lf := LogFile{Path: p, Size: info.Size()}
-			fh, err := os.Open(p)
-			if err != nil {
-				if !os.IsPermission(err) {
-					continue
-				}
-				lf.NeedsAdmin = true
-			} else {
-				head := make([]byte, 1024)
-				n, _ := fh.Read(head)
-				fh.Close()
-				if bytes.IndexByte(head[:n], 0) >= 0 {
-					continue
-				}
-			}
-			out = append(out, lf)
 		}
 	}
 	walk(root, 0)
 	return out
+}
+
+// candidateLog reports whether the non-directory entry d at p is a readable
+// (or admin-only) text log file.
+func candidateLog(d os.DirEntry, p string) (LogFile, bool) {
+	name := d.Name()
+	if binaryLog[name] || rotatedRe.MatchString(name) {
+		return LogFile{}, false
+	}
+	info, err := d.Info()
+	if err != nil || !info.Mode().IsRegular() {
+		return LogFile{}, false
+	}
+	lf := LogFile{Path: p, Size: info.Size()}
+	fh, err := os.Open(p)
+	if err != nil {
+		lf.NeedsAdmin = os.IsPermission(err)
+		return lf, lf.NeedsAdmin
+	}
+	head := make([]byte, 1024)
+	n, _ := fh.Read(head)
+	fh.Close()
+	return lf, bytes.IndexByte(head[:n], 0) < 0
 }
 
 // ---------- following ----------
@@ -447,26 +464,34 @@ func forwardLines(ctx context.Context, f *os.File, fn func(string) bool) error {
 		}
 		n, err := f.ReadAt(buf, pos)
 		pos += int64(n)
-		data := append(carry, buf[:n]...)
-		for {
-			i := bytes.IndexByte(data, '\n')
-			if i < 0 {
-				break
-			}
-			if !fn(string(data[:i])) {
-				return nil
-			}
-			data = data[i+1:]
+		data, more := emitForward(append(carry, buf[:n]...), fn)
+		if !more {
+			return nil
 		}
 		carry = append([]byte(nil), data...)
 		if err != nil || n == 0 {
 			if len(carry) > 0 {
 				fn(string(carry))
 			}
-			if err == io.EOF || err == nil {
-				return nil
+			if err == io.EOF {
+				err = nil
 			}
 			return err
 		}
+	}
+}
+
+// emitForward calls fn with every complete line of data and returns the
+// remaining tail. False means fn asked to stop.
+func emitForward(data []byte, fn func(string) bool) ([]byte, bool) {
+	for {
+		i := bytes.IndexByte(data, '\n')
+		if i < 0 {
+			return data, true
+		}
+		if !fn(string(data[:i])) {
+			return data, false
+		}
+		data = data[i+1:]
 	}
 }
