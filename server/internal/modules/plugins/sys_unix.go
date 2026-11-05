@@ -12,7 +12,6 @@ import (
 	"syscall"
 )
 
-// fileUID returns the owner of fi.
 func fileUID(fi fs.FileInfo) (int, bool) {
 	st, ok := fi.Sys().(*syscall.Stat_t)
 	if !ok {

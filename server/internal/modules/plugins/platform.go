@@ -59,8 +59,6 @@ func platformProblem(name string, declared []string) string {
 	return fmt.Sprintf("%s works only on Windows.", name)
 }
 
-// ---- entries for some systems only ----
-//
 // capabilities.commands, capabilities.http and the files folders may say
 // "platforms" too, so one manifest carries the Linux and the Windows form of
 // the same command (two entries with one name, for systems that do not
