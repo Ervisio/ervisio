@@ -38,20 +38,8 @@ func RunningAsServiceIdentity() bool {
 // Forbidden; a wrong password gets Invalid. The token is closed when the
 // bridge exits (lock, idle stop, or crash).
 func startAdminToken(ctx context.Context, s *Spec, password string) (*Proc, error) {
-	if password == "" {
-		return nil, rpc.Errorf(rpc.Forbidden, "administrator rights on Windows need the account's password")
-	}
-	if len(password) > 4096 {
-		return nil, rpc.Errorf(rpc.Invalid, "invalid password")
-	}
-	if err := pam.Authenticate(pam.Service(), s.Account.Name, password, ""); err != nil {
-		switch {
-		case errors.Is(err, pam.ErrAuth):
-			return nil, rpc.Errorf(rpc.Invalid, "wrong password")
-		case errors.Is(err, pam.ErrAccount):
-			return nil, rpc.Errorf(rpc.Forbidden, "this account may not sign in")
-		}
-		return nil, rpc.Errorf(rpc.Unavailable, "%v", err)
+	if err := checkAdminPassword(s, password); err != nil {
+		return nil, err
 	}
 	tok, err := pam.AdminToken(s.Account.Name)
 	if err != nil {
@@ -60,6 +48,41 @@ func startAdminToken(ctx context.Context, s *Spec, password string) (*Proc, erro
 		}
 		return nil, rpc.Errorf(rpc.Unavailable, "elevated token: %v", err)
 	}
+	p, err := startWithToken(s, tok)
+	if err != nil {
+		return nil, err
+	}
+	go func() { // close the token once the bridge is gone
+		<-p.waited
+		_ = tok.Close()
+	}()
+	return awaitTokenHello(ctx, p)
+}
+
+// checkAdminPassword re-verifies the account's password and maps PAM failures
+// to RPC errors.
+func checkAdminPassword(s *Spec, password string) *rpc.Error {
+	if password == "" {
+		return rpc.Errorf(rpc.Forbidden, "administrator rights on Windows need the account's password")
+	}
+	if len(password) > 4096 {
+		return rpc.Errorf(rpc.Invalid, "invalid password")
+	}
+	err := pam.Authenticate(pam.Service(), s.Account.Name, password, "")
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, pam.ErrAuth):
+		return rpc.Errorf(rpc.Invalid, "wrong password")
+	case errors.Is(err, pam.ErrAccount):
+		return rpc.Errorf(rpc.Forbidden, "this account may not sign in")
+	}
+	return rpc.Errorf(rpc.Unavailable, "%v", err)
+}
+
+// startWithToken starts `bridge --admin` with the elevated token; the token
+// is closed here when the start fails.
+func startWithToken(s *Spec, tok windows.Token) (*Proc, error) {
 	cmd := s.command(s.Bridge, s.bridgeArgs(true)...)
 	if cmd.Err != nil { // no logon token / unsupported: do not elevate
 		_ = tok.Close()
@@ -71,18 +94,15 @@ func startAdminToken(ctx context.Context, s *Spec, password string) (*Proc, erro
 		_ = tok.Close()
 		return nil, rpc.Errorf(rpc.Unavailable, "%v", err)
 	}
-	go func() { // close the token once the bridge is gone
-		<-p.waited
-		_ = tok.Close()
-	}()
+	return p, nil
+}
 
+// awaitTokenHello waits for the admin bridge's hello and kills it unless it
+// has administrator rights.
+func awaitTokenHello(ctx context.Context, p *Proc) (*Proc, error) {
 	ctx, cancel := context.WithTimeout(ctx, HelloTimeout)
 	defer cancel()
-	helloCh := make(chan *rpc.Hello, 1)
-	go func() {
-		h, _ := p.Client.Hello(ctx)
-		helloCh <- h
-	}()
+	helloCh := helloAsync(ctx, p)
 	fail := func(e *rpc.Error) (*Proc, error) {
 		_ = p.cmd.Process.Kill()
 		p.Stop()

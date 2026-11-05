@@ -204,12 +204,9 @@ func StartUser(ctx context.Context, s *Spec) (*Proc, error) {
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, HelloTimeout)
-	defer cancel()
-	h, err := p.Client.Hello(ctx)
+	h, err := awaitHello(ctx, p, "bridge")
 	if err != nil {
-		p.Stop()
-		return nil, fmt.Errorf("bridge did not start: %w", err)
+		return nil, err
 	}
 	if uint32(h.UID) != s.Account.UID && s.SwitchUser {
 		p.Stop()
@@ -331,16 +328,35 @@ func (e *sudoStderr) summary() string {
 	return strings.Join(e.tail, "; ")
 }
 
+// awaitHello waits up to HelloTimeout for p's hello; on failure it stops p.
+func awaitHello(ctx context.Context, p *Proc, what string) (*rpc.Hello, error) {
+	ctx, cancel := context.WithTimeout(ctx, HelloTimeout)
+	defer cancel()
+	h, err := p.Client.Hello(ctx)
+	if err != nil {
+		p.Stop()
+		return nil, fmt.Errorf("%s did not start: %w", what, err)
+	}
+	return h, nil
+}
+
+// helloAsync asks p for its hello in the background; the channel yields nil
+// when the call fails.
+func helloAsync(ctx context.Context, p *Proc) <-chan *rpc.Hello {
+	ch := make(chan *rpc.Hello, 1)
+	go func() {
+		h, _ := p.Client.Hello(ctx)
+		ch <- h
+	}()
+	return ch
+}
+
 // awaitAdminHello waits for the root bridge's hello or a sudo verdict,
 // whichever comes first, and kills the process group on failure.
 func awaitAdminHello(ctx context.Context, p *Proc, stderr *sudoStderr) (*Proc, error) {
 	ctx, cancel := context.WithTimeout(ctx, HelloTimeout)
 	defer cancel()
-	helloCh := make(chan *rpc.Hello, 1)
-	go func() {
-		h, _ := p.Client.Hello(ctx)
-		helloCh <- h
-	}()
+	helloCh := helloAsync(ctx, p)
 	fail := func(e *rpc.Error) (*Proc, error) {
 		killGroup(p)
 		p.Stop()

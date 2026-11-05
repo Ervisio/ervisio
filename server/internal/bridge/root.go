@@ -23,12 +23,9 @@ func StartRoot(ctx context.Context, s *Spec) (*Proc, error) {
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, HelloTimeout)
-	defer cancel()
-	h, err := p.Client.Hello(ctx)
+	h, err := awaitHello(ctx, p, "root bridge")
 	if err != nil {
-		p.Stop()
-		return nil, fmt.Errorf("root bridge did not start: %w", err)
+		return nil, err
 	}
 	if !h.Admin || !rootHello(h) {
 		p.Stop()
