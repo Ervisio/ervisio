@@ -99,17 +99,7 @@ func (m *manager) updates(ctx context.Context, force bool) ([]Update, time.Time,
 	}
 	v, at, err := m.cache.get("updates", cacheTTL, force, func() (any, error) {
 		bs := m.backends()
-		results := make([][]Update, len(bs))
-		errs := make([]error, len(bs))
-		var wg sync.WaitGroup
-		for i, b := range bs {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				results[i], errs[i] = b.ListUpdates(ctx)
-			}()
-		}
-		wg.Wait()
+		results, errs := queryBackends(bs, func(b Backend) ([]Update, error) { return b.ListUpdates(ctx) })
 		out := res{ups: []Update{}}
 		failed := 0
 		for i, b := range bs {
@@ -212,6 +202,23 @@ func (m *manager) backendFor(source string) (Backend, error) {
 	return m.primary, nil
 }
 
+// queryBackends runs query on every backend in parallel and returns each
+// backend's results and error, in backend order.
+func queryBackends[T any](bs []Backend, query func(Backend) ([]T, error)) ([][]T, []error) {
+	results := make([][]T, len(bs))
+	errs := make([]error, len(bs))
+	var wg sync.WaitGroup
+	for i, b := range bs {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			results[i], errs[i] = query(b)
+		}()
+	}
+	wg.Wait()
+	return results, errs
+}
+
 // search queries every backend in parallel.
 func (m *manager) search(ctx context.Context, q string) ([]Result, error) {
 	q = strings.TrimSpace(q)
@@ -222,17 +229,7 @@ func (m *manager) search(ctx context.Context, q string) ([]Result, error) {
 		return nil, rpc.Errorf(rpc.Invalid, "The search text is too long.")
 	}
 	bs := m.backends()
-	results := make([][]Result, len(bs))
-	errs := make([]error, len(bs))
-	var wg sync.WaitGroup
-	for i, b := range bs {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			results[i], errs[i] = b.Search(ctx, q)
-		}()
-	}
-	wg.Wait()
+	results, errs := queryBackends(bs, func(b Backend) ([]Result, error) { return b.Search(ctx, q) })
 	all, err := collectResults(bs, results, errs)
 	if err != nil {
 		return nil, err
@@ -343,25 +340,25 @@ func (m *manager) suggest(ctx context.Context, category string) ([]Result, error
 		out := []Result{}
 		var wg sync.WaitGroup
 		var mu sync.Mutex
-		if lk, ok := m.primary.(lookuper); ok && m.primary != nil {
+		lookup := func(b Backend, names []string) {
+			lk, ok := b.(lookuper)
+			if !ok {
+				return
+			}
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				r, _ := lk.Lookup(ctx, c.pkgs)
+				r, _ := lk.Lookup(ctx, names)
 				mu.Lock()
 				out = append(out, r...)
 				mu.Unlock()
 			}()
 		}
-		if lk, ok := m.flatpak.(lookuper); ok && m.flatpak != nil && len(c.flatpaks) > 0 {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				r, _ := lk.Lookup(ctx, c.flatpaks)
-				mu.Lock()
-				out = append(out, r...)
-				mu.Unlock()
-			}()
+		if m.primary != nil {
+			lookup(m.primary, c.pkgs)
+		}
+		if m.flatpak != nil && len(c.flatpaks) > 0 {
+			lookup(m.flatpak, c.flatpaks)
 		}
 		wg.Wait()
 		sort.SliceStable(out, func(i, j int) bool { return kindOrder[out[i].Kind] < kindOrder[out[j].Kind] })

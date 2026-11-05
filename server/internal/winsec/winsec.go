@@ -114,7 +114,6 @@ func Aces(acl *windows.ACL) ([]Ace, error) {
 	return out, nil
 }
 
-// Well-known SIDs.
 func wk(t windows.WELL_KNOWN_SID_TYPE) *windows.SID {
 	s, err := windows.CreateWellKnownSid(t)
 	if err != nil {
@@ -152,9 +151,8 @@ type Entry struct {
 	Inherit uint32 // windows.NO_INHERITANCE, SUB_CONTAINERS_AND_OBJECTS_INHERIT...
 }
 
-// SetProtectedDACL replaces the DACL of path with exactly entries and stops
-// it inheriting from the parent.
-func SetProtectedDACL(path string, entries []Entry) error {
+// explicitAccess turns entries into the grant ACEs of a DACL.
+func explicitAccess(entries []Entry) []windows.EXPLICIT_ACCESS {
 	ea := make([]windows.EXPLICIT_ACCESS, len(entries))
 	for i, e := range entries {
 		ea[i] = windows.EXPLICIT_ACCESS{
@@ -168,7 +166,13 @@ func SetProtectedDACL(path string, entries []Entry) error {
 			},
 		}
 	}
-	acl, err := windows.ACLFromEntries(ea, nil)
+	return ea
+}
+
+// SetProtectedDACL replaces the DACL of path with exactly entries and stops
+// it inheriting from the parent.
+func SetProtectedDACL(path string, entries []Entry) error {
+	acl, err := windows.ACLFromEntries(explicitAccess(entries), nil)
 	if err != nil {
 		return err
 	}
@@ -230,20 +234,7 @@ func EnablePrivileges(names ...string) error {
 // SeTakeOwnershipPrivilege and SeRestorePrivilege (EnablePrivileges) when the
 // current DACL denies it.
 func TakeOwnership(path string, owner *windows.SID, entries []Entry) error {
-	ea := make([]windows.EXPLICIT_ACCESS, len(entries))
-	for i, e := range entries {
-		ea[i] = windows.EXPLICIT_ACCESS{
-			AccessPermissions: windows.ACCESS_MASK(e.Mask),
-			AccessMode:        windows.GRANT_ACCESS,
-			Inheritance:       e.Inherit,
-			Trustee: windows.TRUSTEE{
-				TrusteeForm:  windows.TRUSTEE_IS_SID,
-				TrusteeType:  windows.TRUSTEE_IS_UNKNOWN,
-				TrusteeValue: windows.TrusteeValueFromSID(e.SID),
-			},
-		}
-	}
-	acl, err := windows.ACLFromEntries(ea, nil)
+	acl, err := windows.ACLFromEntries(explicitAccess(entries), nil)
 	if err != nil {
 		return err
 	}
