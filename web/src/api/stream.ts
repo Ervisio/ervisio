@@ -1,5 +1,5 @@
 import { ApiError, type StreamHandle, type StreamHandlers } from './types';
-import { b64encode } from '../auth/sshkey/bytes.ts';
+import { b64encode } from '../auth/sshkey/bytes';
 import { wsUrl } from './base';
 import { authEvents, MOCK } from './http';
 import { requestUnlock } from './unlock';

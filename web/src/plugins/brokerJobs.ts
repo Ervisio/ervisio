@@ -82,22 +82,24 @@ function authorizeNotify(m: BrokerManifest, a: Record<string, unknown>): Plan {
   const title = str(a.title, 1000);
   if (!title) return deny('A notification needs a title.');
   const params: Record<string, unknown> = { plugin: m.id, title };
-  const denied = addNotifyText(a, params) ?? addNotifyLevel(a, params);
+  const denied = addNotifyBody(a, params) ?? addNotifyLevel(a, params) ?? addNotifyLink(a, params);
   if (denied) return denied;
   return { kind: 'call', method: 'plugins.notify', params, admin: false };
 }
 
-function addNotifyText(a: Record<string, unknown>, params: Record<string, unknown>): Plan | null {
-  if (a.body !== undefined) {
-    const body = str(a.body, 20000);
-    if (body === null) return deny('The body must be text.');
-    params.body = body;
-  }
-  if (a.link !== undefined) {
-    const link = str(a.link, 500);
-    if (link === null) return deny('The link must be text.');
-    params.link = link;
-  }
+function addNotifyBody(a: Record<string, unknown>, params: Record<string, unknown>): Plan | null {
+  if (a.body === undefined) return null;
+  const body = str(a.body, 20000);
+  if (body === null) return deny('The body must be text.');
+  params.body = body;
+  return null;
+}
+
+function addNotifyLink(a: Record<string, unknown>, params: Record<string, unknown>): Plan | null {
+  if (a.link === undefined) return null;
+  const link = str(a.link, 500);
+  if (link === null) return deny('The link must be text.');
+  params.link = link;
   return null;
 }
 

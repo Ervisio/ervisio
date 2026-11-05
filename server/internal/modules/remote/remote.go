@@ -433,7 +433,7 @@ func cleanRenamePaths(rawFrom, rawTo string) (from, to string, err error) {
 	if err := validName(path.Base(to)); err != nil {
 		return "", "", err
 	}
-	if from != to && strings.HasPrefix(to, from+"/") {
+	if strings.HasPrefix(to, from+"/") {
 		return "", "", rpc.Errorf(rpc.Invalid, "A folder cannot be moved into itself.")
 	}
 	return from, to, nil

@@ -2,7 +2,6 @@ package server
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io/fs"
@@ -203,7 +202,10 @@ func readDevAsset(st *rpc.ClientStream) (meta fileMeta, body []byte, ok bool) {
 			buf.Grow(int(meta.Size))
 			continue
 		}
-		chunk, valid := decodeDevChunk(ev)
+		if !ev.B64 {
+			return meta, nil, false
+		}
+		chunk, valid := decodeChunk(ev)
 		if !valid || int64(buf.Len()+len(chunk)) > meta.Size {
 			return meta, nil, false
 		}
@@ -213,15 +215,6 @@ func readDevAsset(st *rpc.ClientStream) (meta fileMeta, body []byte, ok bool) {
 		return meta, nil, false
 	}
 	return meta, buf.Bytes(), true
-}
-
-func decodeDevChunk(ev rpc.Event) ([]byte, bool) {
-	var b64 string
-	if !ev.B64 || json.Unmarshal(ev.Data, &b64) != nil {
-		return nil, false
-	}
-	chunk, err := base64.StdEncoding.DecodeString(b64)
-	return chunk, err == nil
 }
 
 // redirectHandler answers plain-HTTP requests on the HTTPS port.

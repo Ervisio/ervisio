@@ -43,7 +43,7 @@ const isValidPtySize = (r: { cols: number; rows: number } | undefined): r is { c
 
 /** The download id the frame passed to hear when the browser's download ends; 0 when it did not ask. */
 const downloadId = (args: Record<string, unknown> | undefined): number =>
-  args && typeof (args as { did?: unknown }).did === 'number' ? ((args as { did: number }).did as number) : 0;
+  args && typeof (args as { did?: unknown }).did === 'number' ? (args as { did: number }).did : 0;
 
 function saveAsDownload(data: Blob | Uint8Array | string, mime: string, filename: string) {
   const url = URL.createObjectURL(new Blob([data as BlobPart], { type: mime }));

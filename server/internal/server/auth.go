@@ -1,10 +1,10 @@
 package server
 
 import (
-	"fmt"
 	"context"
 	"crypto/subtle"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"

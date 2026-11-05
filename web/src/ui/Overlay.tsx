@@ -1,8 +1,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { errorMessage } from '../api';
 import { createPortal } from 'react-dom';
 import { useT } from '../i18n';
-import { ApiError } from '../api/types';
+import { ApiError, errorMessage } from '../api/types';
 import { Button, IconButton } from './Button';
 import { hueClass, type HueId } from './Display';
 import { Input } from './Form';

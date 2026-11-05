@@ -7,7 +7,7 @@
  * goes through the app's broker (channel.ts); the frame itself has an opaque origin and no network.
  */
 import * as React from 'react';
-import { errorMessage } from '../../api';
+import { errorMessage } from '../../api/types';
 import { Component, useEffect, useRef, useSyncExternalStore, type ComponentType, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import tokensCss from '../../styles/tokens.css?inline';
