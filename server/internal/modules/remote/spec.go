@@ -70,12 +70,21 @@ func validHost(h string) bool {
 		return true
 	}
 	for _, r := range h {
-		ok := r == '.' || r == '-' || r == '_' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
-		if !ok {
+		if !hostRune(r) {
 			return false
 		}
 	}
 	return !strings.HasPrefix(h, "-") && !strings.HasPrefix(h, ".")
+}
+
+func hostRune(r rune) bool {
+	switch {
+	case r == '.' || r == '-' || r == '_':
+		return true
+	case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		return true
+	}
+	return false
 }
 
 // build turns params into a validated connection. old is the saved
@@ -130,10 +139,8 @@ func validateBasics(c *Conn) error {
 	if !plainText(c.User, 256) || !plainText(c.Domain, 256) {
 		return rpc.Errorf(rpc.Invalid, "The user name contains characters that are not allowed.")
 	}
-	for k, v := range c.secrets {
-		if len(v) > 64<<10 || strings.ContainsRune(v, 0) || (k != secKey && strings.ContainsAny(v, "\r\n")) {
-			return rpc.Errorf(rpc.Invalid, "The %s is not valid.", k)
-		}
+	if err := validateSecrets(c.secrets); err != nil {
+		return err
 	}
 	if c.Path == "" {
 		return nil
@@ -143,6 +150,15 @@ func validateBasics(c *Conn) error {
 		return rpc.Errorf(rpc.Invalid, "The start folder must begin with /.")
 	}
 	c.Path = cp
+	return nil
+}
+
+func validateSecrets(secrets map[string]string) error {
+	for k, v := range secrets {
+		if len(v) > 64<<10 || strings.ContainsRune(v, 0) || (k != secKey && strings.ContainsAny(v, "\r\n")) {
+			return rpc.Errorf(rpc.Invalid, "The %s is not valid.", k)
+		}
+	}
 	return nil
 }
 
@@ -162,7 +178,7 @@ func resolveAddress(c *Conn) error {
 
 func resolveWebDAVAddress(c *Conn) error {
 	u, err := url.Parse(c.URL)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+	if err != nil || !plainWebDAVURL(u) {
 		return rpc.Errorf(rpc.Invalid, "Enter the WebDAV address as https://server/path (without a user name, query or #).")
 	}
 	if len(c.URL) > 2048 || !validHost(u.Hostname()) {
@@ -173,6 +189,10 @@ func resolveWebDAVAddress(c *Conn) error {
 		c.Port, _ = strconv.Atoi(u.Port())
 	}
 	return nil
+}
+
+func plainWebDAVURL(u *url.URL) bool {
+	return (u.Scheme == "http" || u.Scheme == "https") && u.Host != "" && u.User == nil && u.RawQuery == "" && u.Fragment == ""
 }
 
 func resolveHostAddress(c *Conn) error {
