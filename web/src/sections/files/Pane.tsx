@@ -62,19 +62,26 @@ const hasFiles = (dt: DataTransfer) => Array.from(dt.types).includes('Files');
 const hasInternal = (dt: DataTransfer) => Array.from(dt.types).includes(DRAG_TYPE);
 const nextSort = (sort: SortState, key: SortKey): SortState => ({ key, dir: sort.key === key && sort.dir === 'asc' ? 'desc' : 'asc' });
 
+const PLAIN_KEY_SHORTCUTS: Record<string, Shortcut> = { F2: 'rename', F5: 'refresh', Backspace: 'up' };
+const MOD_KEY_SHORTCUTS: Record<string, Shortcut> = { c: 'copy', x: 'cut', v: 'paste' };
+
 function keyShortcut(ev: KeyboardEvent, mod: boolean): Shortcut | null {
   const k = ev.key;
-  const lower = k.toLowerCase();
   if (k === 'Delete') return ev.shiftKey ? 'permDelete' : 'delete';
-  if (k === 'F2') return 'rename';
-  if (k === 'F5') return 'refresh';
-  if (k === 'Enter' && !mod) return 'open';
-  if (k === 'Backspace' || (ev.altKey && k === 'ArrowUp')) return 'up';
-  if (mod && lower === 'c') return 'copy';
-  if (mod && lower === 'x') return 'cut';
-  if (mod && lower === 'v') return 'paste';
-  if (mod && ev.shiftKey && lower === 'n') return 'newFolder';
-  return null;
+  if (k === 'Enter') return mod ? null : 'open';
+  if (ev.altKey && k === 'ArrowUp') return 'up';
+  if (PLAIN_KEY_SHORTCUTS[k]) return PLAIN_KEY_SHORTCUTS[k];
+  if (!mod) return null;
+  const lower = k.toLowerCase();
+  if (ev.shiftKey && lower === 'n') return 'newFolder';
+  return MOD_KEY_SHORTCUTS[lower] ?? null;
+}
+
+function rangePaths(rows: FEntry[], fromPath: string, toPath: string): string[] | null {
+  const a = rows.findIndex((r) => r.path === fromPath);
+  const b = rows.findIndex((r) => r.path === toPath);
+  if (a < 0 || b < 0) return null;
+  return rows.slice(Math.min(a, b), Math.max(a, b) + 1).map((r) => r.path);
 }
 
 export function Pane(p: PaneProps) {
@@ -94,19 +101,13 @@ export function Pane(p: PaneProps) {
   const pick = (e: FEntry, ev: PickKeys) => {
     p.onFocus();
     const next = new Set(ev.ctrlKey || ev.metaKey ? p.selected : []);
-    if (ev.shiftKey && anchor.current) {
-      const a = rows.findIndex((r) => r.path === anchor.current);
-      const b = rows.findIndex((r) => r.path === e.path);
-      if (a >= 0 && b >= 0) {
-        next.clear();
-        for (let i = Math.min(a, b); i <= Math.max(a, b); i++) next.add(rows[i].path);
-      }
-    } else if (ev.ctrlKey || ev.metaKey) {
-      if (next.has(e.path)) next.delete(e.path);
+    const range = ev.shiftKey && anchor.current ? rangePaths(rows, anchor.current, e.path) : null;
+    if (range) {
+      next.clear();
+      range.forEach((path) => next.add(path));
+    } else if (!(ev.shiftKey && anchor.current)) {
+      if ((ev.ctrlKey || ev.metaKey) && next.has(e.path)) next.delete(e.path);
       else next.add(e.path);
-      anchor.current = e.path;
-    } else {
-      next.add(e.path);
       anchor.current = e.path;
     }
     p.onSelected(next);
@@ -128,22 +129,15 @@ export function Pane(p: PaneProps) {
     if (shortcut) {
       ev.preventDefault();
       p.onShortcut(shortcut);
-      return;
-    }
-    if (mod && k.toLowerCase() === 'a') {
+    } else if (mod && k.toLowerCase() === 'a') {
       ev.preventDefault();
       p.onSelected(new Set(rows.map((r) => r.path)));
-      return;
-    }
-    if (k === 'Escape') {
+    } else if (k === 'Escape') {
       if (p.selected.size) p.onSelected(new Set());
       else if (p.query) p.onQuery('');
-      return;
-    }
-    const step = ARROW_STEP[k];
-    if (step && rows.length) {
+    } else if (ARROW_STEP[k] && rows.length) {
       ev.preventDefault();
-      moveSelection(step, ev);
+      moveSelection(ARROW_STEP[k], ev);
     }
   };
 

@@ -88,6 +88,27 @@ interface AttachOptions {
   setExitCode(code: number): void;
 }
 
+function typeInitialInput(o: AttachOptions, isClosed: () => boolean) {
+  const { term, live } = o;
+  const init = live.current.initialInput;
+  if (!init) return;
+  live.current.onInitialInputUsed?.();
+  // after the prompt has been drawn
+  window.setTimeout(() => {
+    if (!isClosed()) {
+      term.paste(init);
+      term.focus();
+    }
+  }, PROMPT_DRAW_DELAY_MS);
+}
+
+function announceExit(o: AttachOptions, code: number) {
+  o.setExitCode(code);
+  o.setStatus('exited');
+  o.term.write(`\r\n\x1b[2m[${o.t('exited', { code })}]\x1b[0m\r\n`);
+  o.live.current.onEnded();
+}
+
 /** Attaches to the session and re-attaches with backoff until it ends. Returns the stop function. */
 function attachSession(o: AttachOptions): () => void {
   const { term, live, handleRef } = o;
@@ -97,41 +118,36 @@ function attachSession(o: AttachOptions): () => void {
   let retry = 0;
   let timer: number | undefined;
 
-  const typeInitialInput = () => {
-    const init = live.current.initialInput;
-    if (!init) return;
-    live.current.onInitialInputUsed?.();
-    // after the prompt has been drawn
-    window.setTimeout(() => {
-      if (!closed) {
-        term.paste(init);
-        term.focus();
-      }
-    }, PROMPT_DRAW_DELAY_MS);
-  };
-
   const onData = (d: any) => {
     retry = 0;
     o.setStatus((s) => (s === 'reconnecting' ? 'ok' : s));
     if (d instanceof Uint8Array) {
       term.write(d);
       o.gotData.current = true;
-      typeInitialInput();
-    }
-    else if (d && d.type === 'exit') {
+      typeInitialInput(o, () => closed);
+    } else if (d && d.type === 'exit') {
       ended = true;
-      o.setExitCode(d.code ?? 0);
-      o.setStatus('exited');
-      term.write(`\r\n\x1b[2m[${o.t('exited', { code: d.code ?? 0 })}]\x1b[0m\r\n`);
-      live.current.onEnded();
+      announceExit(o, d.code ?? 0);
     }
+  };
+
+  const onError = (e: { code?: string }) => {
+    handleRef.current = null;
+    if (closed || ended) return;
+    if (e.code !== 'not_found') {
+      schedule();
+      return;
+    }
+    ended = true;
+    o.setStatus('gone');
+    live.current.onEnded();
   };
 
   const connect = () => {
     if (closed) return;
     if (!first) term.reset();
     first = false;
-    const h = stream<any>(
+    handleRef.current = stream<any>(
       'terminal.attach',
       { id: o.id, cols: term.cols, rows: term.rows },
       {
@@ -140,20 +156,9 @@ function attachSession(o: AttachOptions): () => void {
         onEnd: () => {
           if (!ended) schedule();
         },
-        onError: (e) => {
-          handleRef.current = null;
-          if (closed || ended) return;
-          if (e.code === 'not_found') {
-            ended = true;
-            o.setStatus('gone');
-            live.current.onEnded();
-            return;
-          }
-          schedule();
-        },
+        onError,
       },
     );
-    handleRef.current = h;
   };
   const schedule = () => {
     if (closed || ended) return;
@@ -170,11 +175,9 @@ function attachSession(o: AttachOptions): () => void {
   };
 }
 
-/** Wires keyboard, paste, resize and selection events of the terminal to the session stream. */
-function bindTerminalEvents(
+function bindInput(
   term: Terminal,
   live: MutableRefObject<Props>,
-  handleRef: MutableRefObject<StreamHandle | null>,
   sendRaw: (s: string) => void,
 ) {
   term.onData((d) => {
@@ -188,11 +191,9 @@ function bindTerminalEvents(
     }
     sendRaw(out);
   });
-  term.onBinary((d) => handleRef.current?.send({ type: 'input', data: toBase64(Uint8Array.from(d, (c) => c.charCodeAt(0))) }));
-  term.onResize(({ cols, rows }) => handleRef.current?.send({ type: 'resize', cols, rows }));
-  term.onSelectionChange(() => {
-    if (live.current.copyOnSelect && term.hasSelection()) copySilently(term.getSelection());
-  });
+}
+
+function bindShortcutKeys(term: Terminal) {
   term.attachCustomKeyEventHandler((e) => {
     if (e.type !== 'keydown' || !e.ctrlKey || !e.shiftKey) return true;
     if (e.code === 'KeyP') return false; // page palette
@@ -204,6 +205,22 @@ function bindTerminalEvents(
     if (e.code === 'KeyV') return false; // the browser pastes into the helper textarea
     return true;
   });
+}
+
+/** Wires keyboard, paste, resize and selection events of the terminal to the session stream. */
+function bindTerminalEvents(
+  term: Terminal,
+  live: MutableRefObject<Props>,
+  handleRef: MutableRefObject<StreamHandle | null>,
+  sendRaw: (s: string) => void,
+) {
+  bindInput(term, live, sendRaw);
+  term.onBinary((d) => handleRef.current?.send({ type: 'input', data: toBase64(Uint8Array.from(d, (c) => c.charCodeAt(0))) }));
+  term.onResize(({ cols, rows }) => handleRef.current?.send({ type: 'resize', cols, rows }));
+  term.onSelectionChange(() => {
+    if (live.current.copyOnSelect && term.hasSelection()) copySilently(term.getSelection());
+  });
+  bindShortcutKeys(term);
 }
 
 /** Refits on host resize (once per frame) and after the web font loads. Returns the stop function. */

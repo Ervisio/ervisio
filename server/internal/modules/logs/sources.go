@@ -125,6 +125,59 @@ func (w Watcher) source() Source {
 	return Source{ID: "file:" + w.Path, Kind: "file", Group: "watchers", Label: name, Hint: w.Path, Path: w.Path, Format: w.Format, Notify: w.Notify}
 }
 
+func topUnitSources(units map[string]*unitStat) []Source {
+	names := make([]string, 0, len(units))
+	for u := range units {
+		names = append(names, u)
+	}
+	sort.Slice(names, func(i, j int) bool {
+		a, b := units[names[i]], units[names[j]]
+		if a.n != b.n {
+			return a.n > b.n
+		}
+		return names[i] < names[j]
+	})
+	if len(names) > topUnits {
+		names = names[:topUnits]
+	}
+	out := make([]Source, 0, len(names))
+	for _, u := range names {
+		out = append(out, Source{
+			ID: "unit:" + u, Kind: "unit", Group: "services", Label: strings.TrimSuffix(u, ".service"),
+			Hint: "journal: " + u, Unit: u, Count24h: units[u].n, Errors24h: units[u].errs,
+		})
+	}
+	return out
+}
+
+// watcherSource fills size and access flags for a watched file.
+func watcherSource(w Watcher) (s Source, readable bool) {
+	s = w.source()
+	st, err := os.Stat(w.Path)
+	if err != nil {
+		s.NeedsAdmin = os.IsPermission(err)
+		return s, false
+	}
+	s.Size = st.Size()
+	fh, err := os.Open(w.Path)
+	if err != nil {
+		s.NeedsAdmin = os.IsPermission(err)
+		return s, false
+	}
+	fh.Close()
+	return s, true
+}
+
+func sortSources(g *SourceGroup, byCount bool) {
+	sort.Slice(g.Sources, func(i, j int) bool {
+		a, b := g.Sources[i], g.Sources[j]
+		if byCount && a.Count24h != b.Count24h {
+			return a.Count24h > b.Count24h
+		}
+		return a.Label < b.Label
+	})
+}
+
 func listSources(ctx context.Context, watchers []Watcher, admin bool) (*SourcesResult, error) {
 	if onWindows {
 		return listSourcesWindows(ctx, watchers, admin)
@@ -152,26 +205,7 @@ func listSources(ctx context.Context, watchers []Watcher, admin bool) (*SourcesR
 			res.Total24h, res.Errors24h, res.Approx = total, errs, capped
 			journal.Count24h, journal.Errors24h = total, errs
 			kernel.Count24h, kernel.Errors24h = kn, kerrs
-			names := make([]string, 0, len(units))
-			for u := range units {
-				names = append(names, u)
-			}
-			sort.Slice(names, func(i, j int) bool {
-				a, b := units[names[i]], units[names[j]]
-				if a.n != b.n {
-					return a.n > b.n
-				}
-				return names[i] < names[j]
-			})
-			if len(names) > topUnits {
-				names = names[:topUnits]
-			}
-			for _, u := range names {
-				services.Sources = append(services.Sources, Source{
-					ID: "unit:" + u, Kind: "unit", Group: "services", Label: strings.TrimSuffix(u, ".service"),
-					Hint: "journal: " + u, Unit: u, Count24h: units[u].n, Errors24h: units[u].errs,
-				})
-			}
+			services.Sources = append(services.Sources, topUnitSources(units)...)
 		}()
 	}
 
@@ -189,20 +223,7 @@ func listSources(ctx context.Context, watchers []Watcher, admin bool) (*SourcesR
 	skip := map[string]bool{}
 	for _, w := range watchers {
 		skip[w.Path] = true
-		s := w.source()
-		readable := true
-		if st, err := os.Stat(w.Path); err != nil {
-			readable = false
-			s.NeedsAdmin = os.IsPermission(err)
-		} else {
-			s.Size = st.Size()
-			if fh, err := os.Open(w.Path); err != nil {
-				readable = false
-				s.NeedsAdmin = os.IsPermission(err)
-			} else {
-				fh.Close()
-			}
-		}
+		s, readable := watcherSource(w)
 		wg.Add(1)
 		go addFile(&watchG, s, readable, w.Format)
 	}
@@ -220,18 +241,9 @@ func listSources(ctx context.Context, watchers []Watcher, admin bool) (*SourcesR
 		return nil, err
 	}
 	system.Sources = []Source{journal, kernel, boot}
-	byLabel := func(g *SourceGroup, byCount bool) {
-		sort.Slice(g.Sources, func(i, j int) bool {
-			a, b := g.Sources[i], g.Sources[j]
-			if byCount && a.Count24h != b.Count24h {
-				return a.Count24h > b.Count24h
-			}
-			return a.Label < b.Label
-		})
-	}
-	byLabel(&services, true)
-	byLabel(&filesG, false)
-	byLabel(&watchG, false)
+	sortSources(&services, true)
+	sortSources(&filesG, false)
+	sortSources(&watchG, false)
 	res.Groups = []SourceGroup{system, services, filesG, watchG}
 	return res, nil
 }
