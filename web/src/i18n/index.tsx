@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { usePrefs } from '../api';
 import { setRegion } from '../lib/format';
+import { flatten, type Dict } from './flatten';
 
 export const LANGUAGES = [
   { id: 'en', name: 'English' },
@@ -12,20 +13,10 @@ export const NAMESPACES = [
   'overview', 'terminal', 'files', 'logs', 'services', 'software', 'users', 'plugins', 'envs',
 ] as const;
 
-type Dict = Record<string, string>;
 const loaders = import.meta.glob<{ default: Record<string, unknown> }>('./*/*.json');
 const cache = new Map<string, Dict>();
 const inflight = new Map<string, Promise<void>>();
 const listeners = new Set<() => void>();
-
-function flatten(o: Record<string, unknown>, prefix = '', out: Dict = {}): Dict {
-  for (const [k, v] of Object.entries(o)) {
-    const key = prefix ? `${prefix}.${k}` : k;
-    if (v && typeof v === 'object') flatten(v as Record<string, unknown>, key, out);
-    else out[key] = String(v);
-  }
-  return out;
-}
 
 function load(lang: string, ns: string): Promise<void> {
   const id = `${lang}/${ns}`;
