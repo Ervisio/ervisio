@@ -255,6 +255,27 @@ func StartAdmin(ctx context.Context, s *Spec, password string) (*Proc, error) {
 	if strings.ContainsAny(password, "\n\r\x00") || len(password) > 4096 {
 		return nil, rpc.Errorf(rpc.Invalid, "invalid password")
 	}
+	cmd, err := s.sudoCommand(password)
+	if err != nil {
+		return nil, err
+	}
+	stderr := newSudoStderr()
+	p, stdin, err := s.start(cmd, "root bridge "+s.Account.Name, stderr.onLine)
+	if err != nil {
+		return nil, rpc.Errorf(rpc.Unavailable, "%v", err)
+	}
+	if password != "" {
+		if _, err := io.WriteString(stdin, password+"\n"); err != nil {
+			p.Stop()
+			return nil, rpc.Errorf(rpc.Unavailable, "sudo: %v", err)
+		}
+	}
+	return awaitAdminHello(ctx, p, stderr)
+}
+
+// sudoCommand builds the sudo invocation of the root bridge; an empty
+// password selects non-interactive sudo.
+func (s *Spec) sudoCommand(password string) (*exec.Cmd, error) {
 	sudo := s.Sudo
 	if sudo == "" {
 		var err error
@@ -273,34 +294,46 @@ func StartAdmin(ctx context.Context, s *Spec, password string) (*Proc, error) {
 	cmd.Dir = "/"
 	// English messages so failures can be classified.
 	cmd.Env = append(cmd.Env, "LC_ALL=C")
+	return cmd, nil
+}
 
-	verdict := make(chan rpc.Code, 1)
-	var stderrMu sync.Mutex
-	var stderrTail []string
-	onStderr := func(line string) {
-		stderrMu.Lock()
-		if len(stderrTail) < 20 {
-			stderrTail = append(stderrTail, line)
-		}
-		stderrMu.Unlock()
-		if code := classifySudo(line); code != "" {
-			select {
-			case verdict <- code:
-			default:
-			}
-		}
-	}
-	p, stdin, err := s.start(cmd, "root bridge "+s.Account.Name, onStderr)
-	if err != nil {
-		return nil, rpc.Errorf(rpc.Unavailable, "%v", err)
-	}
-	if password != "" {
-		if _, err := io.WriteString(stdin, password+"\n"); err != nil {
-			p.Stop()
-			return nil, rpc.Errorf(rpc.Unavailable, "sudo: %v", err)
-		}
-	}
+// sudoStderr keeps the first stderr lines of sudo and reports the first
+// line that classifies as a sudo refusal on verdict.
+type sudoStderr struct {
+	verdict chan rpc.Code
+	mu      sync.Mutex
+	tail    []string
+}
 
+const sudoStderrTailLines = 20
+
+func newSudoStderr() *sudoStderr {
+	return &sudoStderr{verdict: make(chan rpc.Code, 1)}
+}
+
+func (e *sudoStderr) onLine(line string) {
+	e.mu.Lock()
+	if len(e.tail) < sudoStderrTailLines {
+		e.tail = append(e.tail, line)
+	}
+	e.mu.Unlock()
+	if code := classifySudo(line); code != "" {
+		select {
+		case e.verdict <- code:
+		default:
+		}
+	}
+}
+
+func (e *sudoStderr) summary() string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return strings.Join(e.tail, "; ")
+}
+
+// awaitAdminHello waits for the root bridge's hello or a sudo verdict,
+// whichever comes first, and kills the process group on failure.
+func awaitAdminHello(ctx context.Context, p *Proc, stderr *sudoStderr) (*Proc, error) {
 	ctx, cancel := context.WithTimeout(ctx, HelloTimeout)
 	defer cancel()
 	helloCh := make(chan *rpc.Hello, 1)
@@ -316,28 +349,30 @@ func StartAdmin(ctx context.Context, s *Spec, password string) (*Proc, error) {
 	select {
 	case h := <-helloCh:
 		if h == nil {
-			// Exited (or timed out) before hello: let stderr settle, classify.
-			select {
-			case code := <-verdict:
-				return fail(sudoError(code))
-			case <-time.After(200 * time.Millisecond):
-			}
-			if ctx.Err() != nil {
-				return fail(rpc.Errorf(rpc.Unavailable, "sudo did not answer in time"))
-			}
-			stderrMu.Lock()
-			msg := strings.Join(stderrTail, "; ")
-			stderrMu.Unlock()
-			return fail(rpc.Errorf(rpc.Unavailable, "sudo failed: %s", msg))
+			return fail(noHelloError(ctx, stderr))
 		}
 		if !h.Admin || h.UID != 0 {
 			return fail(rpc.Errorf(rpc.Forbidden, "sudo did not grant root rights"))
 		}
 		p.Hello = h
 		return p, nil
-	case code := <-verdict:
+	case code := <-stderr.verdict:
 		return fail(sudoError(code))
 	}
+}
+
+// noHelloError explains a bridge that exited (or timed out) before hello:
+// it lets stderr settle, then classifies.
+func noHelloError(ctx context.Context, stderr *sudoStderr) *rpc.Error {
+	select {
+	case code := <-stderr.verdict:
+		return sudoError(code)
+	case <-time.After(200 * time.Millisecond):
+	}
+	if ctx.Err() != nil {
+		return rpc.Errorf(rpc.Unavailable, "sudo did not answer in time")
+	}
+	return rpc.Errorf(rpc.Unavailable, "sudo failed: %s", stderr.summary())
 }
 
 func sudoError(code rpc.Code) *rpc.Error {

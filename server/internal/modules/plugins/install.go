@@ -37,85 +37,12 @@ func ExtractTarGz(r io.Reader, dest string) error {
 		return fmt.Errorf("the file is not a .tar.gz archive")
 	}
 	defer gz.Close()
-	tr := tar.NewReader(gz)
 
-	type entry struct {
-		name string
-		dir  bool
-		exec bool
-		data []byte
+	entries, err := readArchiveEntries(tar.NewReader(gz))
+	if err != nil {
+		return err
 	}
-	// Read everything into memory first (bounded) so the top-level folder can be detected.
-	var entries []entry
-	var total int64
-	for {
-		h, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return fmt.Errorf("the archive is damaged: %v", err)
-		}
-		if len(entries) >= maxEntries {
-			return fmt.Errorf("the archive holds more than %d entries", maxEntries)
-		}
-		name := h.Name
-		if strings.ContainsAny(name, "\\\x00") {
-			return fmt.Errorf("archive entry %q has an invalid name", name)
-		}
-		name = strings.TrimPrefix(name, "./")
-		if name == "" || name == "." {
-			continue
-		}
-		clean := strings.TrimSuffix(name, "/")
-		if path.IsAbs(clean) || path.Clean(clean) != clean || clean == ".." || strings.HasPrefix(clean, "../") {
-			return fmt.Errorf("archive entry %q would leave the plugin folder", h.Name)
-		}
-		switch h.Typeflag {
-		case tar.TypeDir:
-			entries = append(entries, entry{name: clean, dir: true})
-		case tar.TypeReg:
-			if h.Size > maxFileBytes {
-				return fmt.Errorf("archive entry %q is larger than %d MiB", h.Name, maxFileBytes>>20)
-			}
-			total += h.Size
-			if total > maxTotalBytes {
-				return fmt.Errorf("the archive expands to more than %d MiB", maxTotalBytes>>20)
-			}
-			data, err := io.ReadAll(io.LimitReader(tr, h.Size+1))
-			if err != nil || int64(len(data)) != h.Size {
-				return fmt.Errorf("archive entry %q is damaged", h.Name)
-			}
-			entries = append(entries, entry{name: clean, exec: h.Mode&0o111 != 0, data: data})
-		case tar.TypeXGlobalHeader:
-		default:
-			return fmt.Errorf("archive entry %q is a link or special file, which plugins may not contain", h.Name)
-		}
-	}
-	if len(entries) == 0 {
-		return fmt.Errorf("the archive is empty")
-	}
-	// Strip a single top-level folder.
-	strip := ""
-	top := ""
-	multi := false
-	for _, e := range entries {
-		first, rest, hasRest := strings.Cut(e.name, "/")
-		if !hasRest && !e.dir {
-			multi = true // a file at the top level
-			break
-		}
-		_ = rest
-		if top == "" {
-			top = first
-		} else if top != first {
-			multi = true
-			break
-		}
-	}
-	if !multi && top != "" {
-		strip = top + "/"
-	}
+	top, strip := sharedTopFolder(entries)
 	for _, e := range entries {
 		name := e.name
 		if strip != "" {
@@ -124,37 +51,131 @@ func ExtractTarGz(r io.Reader, dest string) error {
 			}
 			name = strings.TrimPrefix(name, strip)
 		}
-		target := filepath.Join(dest, filepath.FromSlash(name))
-		if rel, err := filepath.Rel(dest, target); err != nil || rel == ".." || strings.HasPrefix(rel, "../") {
-			return fmt.Errorf("archive entry %q would leave the plugin folder", e.name)
-		}
-		if e.dir {
-			if err := os.MkdirAll(target, 0o755); err != nil {
-				return err
-			}
-			continue
-		}
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			return err
-		}
-		mode := os.FileMode(0o644)
-		if e.exec {
-			mode = 0o755
-		}
-		// O_EXCL: a duplicate entry (or a file through a planted link) fails instead of overwriting.
-		f, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
-		if err != nil {
-			return fmt.Errorf("could not unpack %q: %v", e.name, cleanErr(err))
-		}
-		if _, err := f.Write(e.data); err != nil {
-			f.Close()
-			return err
-		}
-		if err := f.Close(); err != nil {
+		if err := writeArchiveEntry(dest, name, e); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+type archiveEntry struct {
+	name string
+	dir  bool
+	exec bool
+	data []byte
+}
+
+// readArchiveEntries reads everything into memory first (bounded) so the
+// top-level folder can be detected before anything is written.
+func readArchiveEntries(tr *tar.Reader) ([]archiveEntry, error) {
+	var entries []archiveEntry
+	var total int64
+	for {
+		h, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("the archive is damaged: %v", err)
+		}
+		if len(entries) >= maxEntries {
+			return nil, fmt.Errorf("the archive holds more than %d entries", maxEntries)
+		}
+		clean, skip, err := cleanEntryName(h.Name)
+		if err != nil {
+			return nil, err
+		}
+		if skip {
+			continue
+		}
+		switch h.Typeflag {
+		case tar.TypeDir:
+			entries = append(entries, archiveEntry{name: clean, dir: true})
+		case tar.TypeReg:
+			if h.Size > maxFileBytes {
+				return nil, fmt.Errorf("archive entry %q is larger than %d MiB", h.Name, maxFileBytes>>20)
+			}
+			total += h.Size
+			if total > maxTotalBytes {
+				return nil, fmt.Errorf("the archive expands to more than %d MiB", maxTotalBytes>>20)
+			}
+			data, err := io.ReadAll(io.LimitReader(tr, h.Size+1))
+			if err != nil || int64(len(data)) != h.Size {
+				return nil, fmt.Errorf("archive entry %q is damaged", h.Name)
+			}
+			entries = append(entries, archiveEntry{name: clean, exec: h.Mode&0o111 != 0, data: data})
+		case tar.TypeXGlobalHeader:
+		default:
+			return nil, fmt.Errorf("archive entry %q is a link or special file, which plugins may not contain", h.Name)
+		}
+	}
+	if len(entries) == 0 {
+		return nil, fmt.Errorf("the archive is empty")
+	}
+	return entries, nil
+}
+
+// cleanEntryName normalises a tar header name; skip is true for the archive root.
+func cleanEntryName(raw string) (clean string, skip bool, err error) {
+	if strings.ContainsAny(raw, "\\\x00") {
+		return "", false, fmt.Errorf("archive entry %q has an invalid name", raw)
+	}
+	name := strings.TrimPrefix(raw, "./")
+	if name == "" || name == "." {
+		return "", true, nil
+	}
+	clean = strings.TrimSuffix(name, "/")
+	if path.IsAbs(clean) || path.Clean(clean) != clean || clean == ".." || strings.HasPrefix(clean, "../") {
+		return "", false, fmt.Errorf("archive entry %q would leave the plugin folder", raw)
+	}
+	return clean, false, nil
+}
+
+// sharedTopFolder returns the single top-level folder every entry lives under
+// and the prefix to strip, or empty strings when there is none.
+func sharedTopFolder(entries []archiveEntry) (top, strip string) {
+	for _, e := range entries {
+		first, _, hasRest := strings.Cut(e.name, "/")
+		if !hasRest && !e.dir {
+			return top, "" // a file at the top level
+		}
+		if top == "" {
+			top = first
+		} else if top != first {
+			return top, ""
+		}
+	}
+	if top == "" {
+		return "", ""
+	}
+	return top, top + "/"
+}
+
+func writeArchiveEntry(dest, name string, e archiveEntry) error {
+	target := filepath.Join(dest, filepath.FromSlash(name))
+	if rel, err := filepath.Rel(dest, target); err != nil || rel == ".." || strings.HasPrefix(rel, "../") {
+		return fmt.Errorf("archive entry %q would leave the plugin folder", e.name)
+	}
+	if e.dir {
+		return os.MkdirAll(target, 0o755)
+	}
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return err
+	}
+	mode := os.FileMode(0o644)
+	if e.exec {
+		mode = 0o755
+	}
+	// O_EXCL: a duplicate entry (or a file through a planted link) fails instead of overwriting.
+	f, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
+	if err != nil {
+		return fmt.Errorf("could not unpack %q: %v", e.name, cleanErr(err))
+	}
+	if _, err := f.Write(e.data); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
 }
 
 // downloadClient downloads plugin packages (tests replace it).
