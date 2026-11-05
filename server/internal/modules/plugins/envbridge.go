@@ -56,7 +56,40 @@ func envCheck(_ context.Context, c *rpc.Call) (any, error) {
 	if err := c.Bind(&p); err != nil {
 		return nil, err
 	}
-	var q struct {
+	q := envCheckQuery(p.Params)
+	f, _, err := authorize(c, q.Plugin)
+	if err != nil {
+		return nil, err
+	}
+	m := f.M
+	var family string
+	switch {
+	case fileMethods[p.Method]:
+		family, err = fileFamily(m, p.Kind)
+	case q.Command != "":
+		family, err = commandFamily(m, q.Command)
+	case q.Name != "":
+		family, err = httpFamily(m, q.Name)
+	default:
+		return nil, rpc.Errorf(rpc.Invalid, "Give an HTTP API name or a command.")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !envs.ServesFamily(p.Kind, family) {
+		return nil, rpc.Errorf(rpc.Forbidden, "%s cannot use an environment of this kind for %q.", m.Name, family)
+	}
+	return map[string]string{"family": family}, nil
+}
+
+// envCheckQuery reads the plugin, name and command out of the original
+// params of the call.
+func envCheckQuery(params json.RawMessage) (q struct {
+	Plugin  string
+	Name    string
+	Command string
+}) {
+	var raw struct {
 		Plugin  string `json:"plugin"`
 		Name    string `json:"name"`
 		Command string `json:"command"`
@@ -68,70 +101,72 @@ func envCheck(_ context.Context, c *rpc.Call) (any, error) {
 			Name string `json:"name"`
 		} `json:"request"`
 	}
-	if len(p.Params) > 0 {
-		_ = json.Unmarshal(p.Params, &q)
+	if len(params) > 0 {
+		_ = json.Unmarshal(params, &raw)
 	}
-	if q.Name == "" && q.Req != nil {
-		q.Name = q.Req.Name
+	if raw.Name == "" && raw.Req != nil {
+		raw.Name = raw.Req.Name
 	}
-	if q.Name == "" && q.Request != nil {
-		q.Name = q.Request.Name
+	if raw.Name == "" && raw.Request != nil {
+		raw.Name = raw.Request.Name
 	}
-	f, _, err := authorize(c, q.Plugin)
-	if err != nil {
-		return nil, err
+	q.Plugin, q.Name, q.Command = raw.Plugin, raw.Name, raw.Command
+	return q
+}
+
+// fileFamily is the family for a files call. Files are not tunnelled: only
+// another Ervisio server can run them (its bridge applies its own
+// manifest). The plugin must be one that uses environments at all.
+func fileFamily(m *Manifest, kind string) (string, error) {
+	if kind != envs.KindErvisio {
+		return "", rpc.Errorf(rpc.Invalid, "Files are local for this kind of environment: leave out env for files calls (only an environment of kind Ervisio, a paired server, can read and write files).")
 	}
-	m := f.M
+	if len(m.Capabilities.Files.Read)+len(m.Capabilities.Files.Write) == 0 {
+		return "", rpc.Errorf(rpc.Forbidden, "%s declares no files.", m.Name)
+	}
 	family := ""
-	switch {
-	case fileMethods[p.Method]:
-		// Files are not tunnelled: only another Ervisio server can run them
-		// (its bridge applies its own manifest). The plugin must be one that
-		// uses environments at all.
-		if p.Kind != envs.KindErvisio {
-			return nil, rpc.Errorf(rpc.Invalid, "Files are local for this kind of environment: leave out env for files calls (only an environment of kind Ervisio, a paired server, can read and write files).")
+	for i := range m.Capabilities.HTTP {
+		if m.Capabilities.HTTP[i].Remote != "" {
+			family = m.Capabilities.HTTP[i].Remote
 		}
-		if len(m.Capabilities.Files.Read)+len(m.Capabilities.Files.Write) == 0 {
-			return nil, rpc.Errorf(rpc.Forbidden, "%s declares no files.", m.Name)
-		}
-		for i := range m.Capabilities.HTTP {
-			if m.Capabilities.HTTP[i].Remote != "" {
-				family = m.Capabilities.HTTP[i].Remote
-			}
-		}
-		for i := range m.Capabilities.Commands {
-			if m.Capabilities.Commands[i].Remote != "" {
-				family = m.Capabilities.Commands[i].Remote
-			}
-		}
-		if family == "" {
-			return nil, rpc.Errorf(rpc.Forbidden, "%s does not allow targeting an environment.", m.Name)
-		}
-	case q.Command != "":
-		for i := range m.Capabilities.Commands {
-			if m.Capabilities.Commands[i].Name == q.Command {
-				family = m.Capabilities.Commands[i].Remote
-			}
-		}
-		if family == "" {
-			return nil, rpc.Errorf(rpc.Forbidden, "%s does not allow the command %q to run on an environment.", m.Name, q.Command)
-		}
-	case q.Name != "":
-		for i := range m.Capabilities.HTTP {
-			if m.Capabilities.HTTP[i].Name == q.Name {
-				family = m.Capabilities.HTTP[i].Remote
-			}
-		}
-		if family == "" {
-			return nil, rpc.Errorf(rpc.Forbidden, "%s does not allow %q to target an environment.", m.Name, q.Name)
-		}
-	default:
-		return nil, rpc.Errorf(rpc.Invalid, "Give an HTTP API name or a command.")
 	}
-	if !envs.ServesFamily(p.Kind, family) {
-		return nil, rpc.Errorf(rpc.Forbidden, "%s cannot use an environment of this kind for %q.", m.Name, family)
+	for i := range m.Capabilities.Commands {
+		if m.Capabilities.Commands[i].Remote != "" {
+			family = m.Capabilities.Commands[i].Remote
+		}
 	}
-	return map[string]string{"family": family}, nil
+	if family == "" {
+		return "", rpc.Errorf(rpc.Forbidden, "%s does not allow targeting an environment.", m.Name)
+	}
+	return family, nil
+}
+
+// commandFamily is the family the command may run on.
+func commandFamily(m *Manifest, command string) (string, error) {
+	family := ""
+	for i := range m.Capabilities.Commands {
+		if m.Capabilities.Commands[i].Name == command {
+			family = m.Capabilities.Commands[i].Remote
+		}
+	}
+	if family == "" {
+		return "", rpc.Errorf(rpc.Forbidden, "%s does not allow the command %q to run on an environment.", m.Name, command)
+	}
+	return family, nil
+}
+
+// httpFamily is the family the HTTP API may target.
+func httpFamily(m *Manifest, name string) (string, error) {
+	family := ""
+	for i := range m.Capabilities.HTTP {
+		if m.Capabilities.HTTP[i].Name == name {
+			family = m.Capabilities.HTTP[i].Remote
+		}
+	}
+	if family == "" {
+		return "", rpc.Errorf(rpc.Forbidden, "%s does not allow %q to target an environment.", m.Name, name)
+	}
+	return family, nil
 }
 
 // remoteArgv replaces the {env} item of a remote command: with the tunnel

@@ -78,20 +78,11 @@ func (d *Downloader) Fetch(ctx context.Context, rawURL, dst string, max int64, p
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	resp, err := d.get(ctx, u)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", userAgentBase+"download")
-	req.Header.Set("Accept", "application/octet-stream")
-	resp, err := d.Client.Do(req)
-	if err != nil {
-		return fmt.Errorf("download: %v", cleanNetErr(err))
-	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("download: server answered %s", resp.Status)
-	}
 	total := resp.ContentLength
 	if total > max {
 		return fmt.Errorf("download is %d bytes, more than the %d allowed", total, max)
@@ -109,34 +100,9 @@ func (d *Downloader) Fetch(ctx context.Context, rawURL, dst string, max int64, p
 	}()
 	stall := time.AfterFunc(stallTimeout, cancel)
 	defer stall.Stop()
-	buf := make([]byte, 64<<10)
-	var done int64
-	last := time.Time{}
-	for {
-		n, rerr := resp.Body.Read(buf)
-		if n > 0 {
-			stall.Reset(stallTimeout)
-			done += int64(n)
-			if done > max {
-				return fmt.Errorf("download is larger than the %d bytes allowed", max)
-			}
-			if _, err := f.Write(buf[:n]); err != nil {
-				return err
-			}
-			if progress != nil && time.Since(last) > 200*time.Millisecond {
-				last = time.Now()
-				progress(done, total)
-			}
-		}
-		if errors.Is(rerr, io.EOF) {
-			break
-		}
-		if rerr != nil {
-			if ctx.Err() != nil && ctx.Err() != context.Canceled {
-				return ctx.Err()
-			}
-			return fmt.Errorf("download interrupted: %v", rerr)
-		}
+	done, err := copyLimited(ctx, resp.Body, f, max, total, stall, progress)
+	if err != nil {
+		return err
 	}
 	if total >= 0 && done != total {
 		return fmt.Errorf("download incomplete (%d of %d bytes)", done, total)
@@ -149,4 +115,58 @@ func (d *Downloader) Fetch(ctx context.Context, rawURL, dst string, max int64, p
 	}
 	ok = true
 	return nil
+}
+
+// get starts the GET of u and returns the response when it is a 200.
+func (d *Downloader) get(ctx context.Context, u *url.URL) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", userAgentBase+"download")
+	req.Header.Set("Accept", "application/octet-stream")
+	resp, err := d.Client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("download: %v", cleanNetErr(err))
+	}
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return nil, fmt.Errorf("download: server answered %s", resp.Status)
+	}
+	return resp, nil
+}
+
+// copyLimited copies src to dst, refusing more than max bytes, resetting
+// the stall timer on every read and reporting progress. It returns the
+// bytes copied.
+func copyLimited(ctx context.Context, src io.Reader, dst io.Writer, max, total int64, stall *time.Timer, progress func(done, total int64)) (int64, error) {
+	buf := make([]byte, 64<<10)
+	var done int64
+	last := time.Time{}
+	for {
+		n, rerr := src.Read(buf)
+		if n > 0 {
+			stall.Reset(stallTimeout)
+			done += int64(n)
+			if done > max {
+				return done, fmt.Errorf("download is larger than the %d bytes allowed", max)
+			}
+			if _, err := dst.Write(buf[:n]); err != nil {
+				return done, err
+			}
+			if progress != nil && time.Since(last) > 200*time.Millisecond {
+				last = time.Now()
+				progress(done, total)
+			}
+		}
+		if errors.Is(rerr, io.EOF) {
+			return done, nil
+		}
+		if rerr != nil {
+			if ctx.Err() != nil && ctx.Err() != context.Canceled {
+				return done, ctx.Err()
+			}
+			return done, fmt.Errorf("download interrupted: %v", rerr)
+		}
+	}
 }

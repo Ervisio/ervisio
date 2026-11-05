@@ -54,33 +54,13 @@ func main() {
 		log.Fatal("--config must be an absolute path")
 	}
 	configmod.Path = filepath.Clean(*configPath)
-	// ~/.config/linuxadmin of this account becomes ~/.config/ervisio (once).
-	if u, err := user.LookupId(strconv.Itoa(os.Geteuid())); err == nil {
-		if moved, err := legacy.MigrateUserDir(u.HomeDir); err != nil {
-			log.Printf("copy %s to %s: %v", brand.LegacyUserDataDir, brand.UserDataDir, err)
-		} else if moved {
-			log.Printf("copied ~/%s to ~/%s", brand.LegacyUserDataDir, brand.UserDataDir)
-		}
-	}
+	migrateUserDir()
 	// A versioned install lists the plugins shipped with its own version.
 	if vdir, ok := update.RunningVersionDir(); ok {
 		plugins.SystemDir = filepath.Join(vdir, "plugins")
 	}
 	if *dev {
-		plugins.DaemonDev = true
-		updates.DaemonDev = true
-		if *devPluginsFile != "" {
-			if !filepath.IsAbs(*devPluginsFile) {
-				log.Fatal("--dev-plugins-file must be an absolute path")
-			}
-			plugins.DevFile = filepath.Clean(*devPluginsFile)
-		}
-		if *devPlugins != "" {
-			if !filepath.IsAbs(*devPlugins) {
-				log.Fatal("--dev-plugins must be an absolute path")
-			}
-			plugins.DaemonPluginsDir = filepath.Clean(*devPlugins)
-		}
+		applyDevFlags(*devPluginsFile, *devPlugins)
 	}
 
 	// Commands are resolved in a fixed PATH; the environment we were given
@@ -106,6 +86,39 @@ func main() {
 	})
 	if err != nil && err != context.Canceled {
 		log.Fatal(err)
+	}
+}
+
+// migrateUserDir turns ~/.config/linuxadmin of this account into
+// ~/.config/ervisio (once).
+func migrateUserDir() {
+	u, err := user.LookupId(strconv.Itoa(os.Geteuid()))
+	if err != nil {
+		return
+	}
+	moved, err := legacy.MigrateUserDir(u.HomeDir)
+	if err != nil {
+		log.Printf("copy %s to %s: %v", brand.LegacyUserDataDir, brand.UserDataDir, err)
+	} else if moved {
+		log.Printf("copied ~/%s to ~/%s", brand.LegacyUserDataDir, brand.UserDataDir)
+	}
+}
+
+// applyDevFlags sets the --dev switches and the optional dev plugin paths.
+func applyDevFlags(pluginsFile, pluginsDir string) {
+	plugins.DaemonDev = true
+	updates.DaemonDev = true
+	if pluginsFile != "" {
+		if !filepath.IsAbs(pluginsFile) {
+			log.Fatal("--dev-plugins-file must be an absolute path")
+		}
+		plugins.DevFile = filepath.Clean(pluginsFile)
+	}
+	if pluginsDir != "" {
+		if !filepath.IsAbs(pluginsDir) {
+			log.Fatal("--dev-plugins must be an absolute path")
+		}
+		plugins.DaemonPluginsDir = filepath.Clean(pluginsDir)
 	}
 }
 
