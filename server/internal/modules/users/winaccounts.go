@@ -103,7 +103,6 @@ func ridOf(sid string) int {
 	return n
 }
 
-// isBuiltinGroupSID reports BUILTIN (S-1-5-32-*) groups.
 func isBuiltinGroupSID(sid string) bool { return strings.HasPrefix(sid, "S-1-5-32-") }
 
 // localName strips a COMPUTER\ prefix; other domains are returned unchanged.
@@ -219,18 +218,18 @@ func (s *winSnapshot) groupsResult() []groupInfo {
 }
 
 func (s *winSnapshot) user(name string) *winUser {
-	for i := range s.Users {
-		if strings.EqualFold(s.Users[i].Name, name) {
-			return &s.Users[i]
-		}
-	}
-	return nil
+	return findByName(s.Users, name, func(u *winUser) string { return u.Name })
 }
 
 func (s *winSnapshot) group(name string) *winGroup {
-	for i := range s.Groups {
-		if strings.EqualFold(s.Groups[i].Name, name) {
-			return &s.Groups[i]
+	return findByName(s.Groups, name, func(g *winGroup) string { return g.Name })
+}
+
+// findByName returns the element whose name matches case-insensitively, or nil.
+func findByName[T any](items []T, name string, nameOf func(*T) string) *T {
+	for i := range items {
+		if strings.EqualFold(nameOf(&items[i]), name) {
+			return &items[i]
 		}
 	}
 	return nil
@@ -249,8 +248,6 @@ func (s *winSnapshot) otherAdmins(skip string) int {
 	}
 	return n
 }
-
-// ---- validation ----
 
 const winBadNameChars = "\"/\\[]:;|=,+*?<>@"
 
@@ -283,8 +280,6 @@ func validWinText(what, s string, max int) error {
 	}
 	return nil
 }
-
-// ---- script input / error mapping ----
 
 // asciiJSON marshals v with every non-ASCII character escaped, so the text
 // survives the console code page when piped to powershell's stdin.

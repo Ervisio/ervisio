@@ -225,6 +225,15 @@ func (m *Manager) readRunsLocked(id string) []Run {
 
 func notFound() error { return rpc.Errorf(rpc.NotFound, "There is no such job instance.") }
 
+// instanceLocked returns the instance with id; the caller holds m.mu.
+func (m *Manager) instanceLocked(id string) (*Instance, error) {
+	in := m.findLocked(id)
+	if in == nil {
+		return nil, notFound()
+	}
+	return in, nil
+}
+
 // access finds an instance the caller may use: its owner, or an
 // administrator. Anything else is "not found", so ids do not leak.
 func (m *Manager) access(c Caller, id, plugin string) (*Instance, error) {
@@ -655,9 +664,9 @@ func (m *Manager) CreateWebhook(c Caller, plugin, id, label string) (*WebhookCre
 	token, hash := NewToken()
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	in := m.findLocked(id)
-	if in == nil {
-		return nil, notFound()
+	in, err := m.instanceLocked(id)
+	if err != nil {
+		return nil, err
 	}
 	if len(in.Webhooks) >= MaxWebhooks {
 		return nil, rpc.Errorf(rpc.Unavailable, "An instance can have %d webhook URLs. Revoke one first.", MaxWebhooks)
@@ -678,9 +687,9 @@ func (m *Manager) RegenerateWebhook(c Caller, plugin, id, hookID string) (*Webho
 	token, hash := NewToken()
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	in := m.findLocked(id)
-	if in == nil {
-		return nil, notFound()
+	in, err := m.instanceLocked(id)
+	if err != nil {
+		return nil, err
 	}
 	for i := range in.Webhooks {
 		if in.Webhooks[i].ID == hookID {

@@ -165,8 +165,6 @@ func markFlatpak(a *App, path string) {
 	}
 }
 
-// ---- icons ----
-
 // Icon is the answer of software.icon.
 type Icon struct {
 	Mime string `json:"mime"`
@@ -248,17 +246,24 @@ func searchIcon(name string, size int) string {
 
 func searchIconIn(bases []string, name string, size int) string {
 	dirs := iconDirs(size)
-	exts := []string{".png", ".svg"}
 	for _, th := range iconThemes {
 		for _, base := range bases {
 			for _, d := range dirs {
-				for _, e := range exts {
-					p := filepath.Join(base, th, d, name+e)
-					if fi, err := os.Stat(p); err == nil && fi.Mode().IsRegular() {
-						return p
-					}
+				if p := regularIconIn(filepath.Join(base, th, d), name); p != "" {
+					return p
 				}
 			}
+		}
+	}
+	return ""
+}
+
+// regularIconIn returns the first regular <name>.png or <name>.svg in dir, or "".
+func regularIconIn(dir, name string) string {
+	for _, e := range []string{".png", ".svg"} {
+		p := filepath.Join(dir, name+e)
+		if fi, err := os.Stat(p); err == nil && fi.Mode().IsRegular() {
+			return p
 		}
 	}
 	return ""
