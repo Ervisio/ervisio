@@ -18,42 +18,57 @@ type Tab = 'all' | 'running' | 'failed' | 'stopped' | 'timers' | 'sockets';
 const TAB_IDS: Tab[] = ['all', 'running', 'failed', 'stopped', 'timers', 'sockets'];
 type Purpose = 'all' | (typeof PURPOSES)[number];
 const PURPOSE_HUE = { web: 'term', containers: 'plg', system: 'ov' } as const;
+type T = ReturnType<typeof useT>;
+type View = 'table' | 'cards';
+type CpuSample = { ns: number; at: number };
+type WatchEvent = { units: Unit[]; removed: string[] };
 
 const kindOf = (tab: Tab): UnitKind => (tab === 'timers' ? 'timer' : tab === 'sockets' ? 'socket' : 'service');
+const isRunning = (u: Unit) => u.state === 'running' || u.state === 'finished';
+const SOCKET_TYPE_SUFFIX = / \((Stream|Datagram|SequentialPacket|Netlink|Special|FIFO)\)$/;
 
-export default function ServicesPage() {
-  const t = useT('services');
-  const { lang } = useI18n();
-  const mobile = useIsMobile();
-  const wide = useMediaQuery('(min-width: 1241px)');
-  const nav = useNavigate();
-  const [params, setParams] = useSearchParams();
-  const { prefs, set: setPref } = usePrefs();
-  const win = useSession().session?.os === 'windows';
-  const view: 'table' | 'cards' = prefs['services.view'] === 'cards' ? 'cards' : 'table';
+/** CPU % per unit since its previous sample; records the new samples in prev. */
+function sampleCpu(units: Unit[], prev: Record<string, CpuSample>, now: number): Record<string, number> {
+  const pct: Record<string, number> = {};
+  for (const u of units) {
+    if (u.cpuNs == null) continue;
+    const p = prev[u.name];
+    if (p && now > p.at && u.cpuNs >= p.ns) pct[u.name] = ((u.cpuNs - p.ns) / ((now - p.at) * 1e6)) * 100;
+    prev[u.name] = { ns: u.cpuNs, at: now };
+  }
+  return pct;
+}
 
-  // ?unit=nginx or ?unit=nginx.service (links from Overview / Logs); ?state=failed|running|… picks the tab.
-  const unitParam = params.get('unit');
-  const selected = unitParam ? (win || /\.[a-z]+$/.test(unitParam) ? unitParam : `${unitParam}.service`) : null;
-  const rawTab = (params.get('tab') as PanelTab | null) ?? 'info';
-  const panelTab: PanelTab = win && (rawTab === 'logs' || rawTab === 'unit') ? 'info' : rawTab;
+function mergeWatchEvent(cur: Unit[], ev: WatchEvent): Unit[] {
+  const map = new Map(cur.map((u) => [u.name, u]));
+  for (const n of ev.removed ?? []) {
+    const old = map.get(n);
+    // Gone from systemd's loaded set: still installed units stay as stopped.
+    if (old) map.set(n, { ...old, load: 'not-loaded', active: 'inactive', sub: 'dead', state: 'stopped', pid: 0, memory: null, cpuNs: null });
+  }
+  for (const u of ev.units ?? []) map.set(u.name, { ...map.get(u.name), ...u, enabled: u.enabled || map.get(u.name)?.enabled || '' });
+  return [...map.values()].sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+}
 
-  const stateParam = params.get('state');
-  const tabOk = (v: string | null): v is Tab => TAB_IDS.includes(v as Tab) && !(win && (v === 'timers' || v === 'sockets'));
-  const [tab, setTab] = useState<Tab>(() => (tabOk(stateParam) ? stateParam : 'all'));
-  useEffect(() => {
-    if (tabOk(stateParam)) setTab(stateParam);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stateParam, win]);
-  const [purpose, setPurpose] = useState<Purpose>('all');
-  const [q, setQ] = useState('');
-  const kind = kindOf(tab);
+function filterUnits(all: Unit[], kind: UnitKind, tab: Tab, purpose: Purpose, q: string): Unit[] {
+  const needle = q.trim().toLowerCase();
+  return all.filter((u) => {
+    if (kind === 'service') {
+      if (tab === 'running' && u.state !== 'running' && u.state !== 'finished') return false;
+      if (tab === 'failed' && u.state !== 'failed') return false;
+      if (tab === 'stopped' && u.state !== 'stopped') return false;
+    }
+    if (purpose !== 'all' && u.purpose !== purpose) return false;
+    return !needle || u.name.toLowerCase().includes(needle) || u.description.toLowerCase().includes(needle);
+  });
+}
 
+function useUnitData(kind: UnitKind) {
   const [lists, setLists] = useState<Partial<Record<UnitKind, Unit[]>>>({});
   const [summary, setSummary] = useState<Summary | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [cpu, setCpu] = useState<Record<string, number>>({});
-  const cpuPrev = useRef<Record<string, { ns: number; at: number }>>({});
+  const cpuPrev = useRef<Record<string, CpuSample>>({});
   const [panelRev, setPanelRev] = useState(0);
 
   const loadSummary = useCallback(async () => {
@@ -69,14 +84,7 @@ export default function ServicesPage() {
   const loadList = useCallback(async (k: UnitKind, fresh = false) => {
     try {
       const r = await call<{ units: Unit[] }>('services.list', { type: k, fresh });
-      const now = Date.now();
-      const pct: Record<string, number> = {};
-      for (const u of r.units) {
-        if (u.cpuNs == null) continue;
-        const p = cpuPrev.current[u.name];
-        if (p && now > p.at && u.cpuNs >= p.ns) pct[u.name] = ((u.cpuNs - p.ns) / ((now - p.at) * 1e6)) * 100;
-        cpuPrev.current[u.name] = { ns: u.cpuNs, at: now };
-      }
+      const pct = sampleCpu(r.units, cpuPrev.current, Date.now());
       setCpu((c) => ({ ...c, ...pct }));
       setLists((l) => ({ ...l, [k]: r.units }));
       if (k === 'service') publishRunning(r.units);
@@ -101,20 +109,13 @@ export default function ServicesPage() {
   // Live state changes pushed by the daemon.
   useEffect(() => {
     let timer: number | undefined;
-    const s = stream<{ units: Unit[]; removed: string[] }>('services.watch', { type: kind }, {
+    const s = stream<WatchEvent>('services.watch', { type: kind }, {
       reopen: true,
       onData: (ev) => {
         setLists((l) => {
           const cur = l[kind];
           if (!cur) return l;
-          const map = new Map(cur.map((u) => [u.name, u]));
-          for (const n of ev.removed ?? []) {
-            const old = map.get(n);
-            // Gone from systemd's loaded set: still installed units stay as stopped.
-            if (old) map.set(n, { ...old, load: 'not-loaded', active: 'inactive', sub: 'dead', state: 'stopped', pid: 0, memory: null, cpuNs: null });
-          }
-          for (const u of ev.units ?? []) map.set(u.name, { ...map.get(u.name), ...u, enabled: u.enabled || map.get(u.name)?.enabled || '' });
-          const next = [...map.values()].sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+          const next = mergeWatchEvent(cur, ev);
           if (kind === 'service') publishRunning(next);
           return { ...l, [kind]: next };
         });
@@ -132,6 +133,85 @@ export default function ServicesPage() {
     };
   }, [kind, loadSummary]);
 
+  return { lists, summary, error, setError, cpu, panelRev, setPanelRev, loadList, loadSummary };
+}
+
+type MenuDeps = { win: boolean; t: T; run: (name: string, a: Action) => void; openUnit: (name: string, tab: PanelTab) => void; openLogs: (name: string) => void };
+
+function unitMenu(u: Unit, { win, t, run, openUnit, openLogs }: MenuDeps): MenuItem[] {
+  const running = isRunning(u);
+  const isMasked = win ? u.enabled === 'masked' : u.load === 'masked';
+  return [
+    running ? { id: 'stop', label: t('actions.stop'), icon: 'power', onSelect: () => run(u.name, 'stop') } : { id: 'start', label: t('actions.start'), icon: 'play', onSelect: () => run(u.name, 'start') },
+    { id: 'restart', label: t('actions.restart'), icon: 'refresh', onSelect: () => run(u.name, 'restart') },
+    ...(win
+      ? [
+          u.sub === 'paused'
+            ? { id: 'continue', label: t('actions.continue'), icon: 'play' as const, onSelect: () => run(u.name, 'continue') }
+            : { id: 'pause', label: t('actions.pause'), icon: 'power' as const, disabled: !running, onSelect: () => run(u.name, 'pause') },
+        ]
+      : [
+          { id: 'reload', label: t('actions.reload'), icon: 'refresh' as const, disabled: !running, onSelect: () => run(u.name, 'reload') },
+          { type: 'separator' as const },
+          { id: 'logs', label: t('rowMenu.logs'), icon: 'logs' as const, onSelect: () => openUnit(u.name, 'logs') },
+          { id: 'file', label: t('rowMenu.unitFile'), icon: 'file' as const, onSelect: () => openUnit(u.name, 'unit') },
+          { id: 'inlogs', label: t('openInLogs'), icon: 'externallink' as const, onSelect: () => openLogs(u.name) },
+        ]),
+    { type: 'separator' },
+    isMasked
+      ? { id: 'unmask', label: win ? t('win.unmask') : t('actions.unmask'), icon: 'unlock', onSelect: () => run(u.name, 'unmask') }
+      : { id: 'mask', label: win ? t('win.mask') : t('actions.mask'), icon: 'lock', danger: true, onSelect: () => run(u.name, 'mask') },
+  ];
+}
+
+/** Columns between "boot" and the row actions; they depend on the unit kind and the room left. */
+function kindColumns(kind: UnitKind, compact: boolean, cpu: Record<string, number>, lang: string, t: T, dash: React.ReactNode): Column<Unit>[] {
+  if (kind === 'service') {
+    if (compact) return [];
+    return [
+      { key: 'mem', header: t('col.memory'), sortable: true, mono: true, value: (u) => u.memory ?? -1, render: (u) => (u.memory != null ? formatBytes(u.memory) : dash) },
+      { key: 'cpu', header: t('col.cpu'), sortable: true, mono: true, value: (u) => cpu[u.name] ?? -1, render: (u) => (cpu[u.name] != null && u.state === 'running' ? `${cpu[u.name].toFixed(1)}%` : dash) },
+    ];
+  }
+  if (kind === 'timer') {
+    const next: Column<Unit> = { key: 'next', header: t('col.next'), sortable: true, value: (u) => u.next ?? 0, render: (u) => (u.next ? relativeTime(u.next * 1000, lang) : dash) };
+    if (compact) return [next];
+    return [next, { key: 'last', header: t('col.last'), sortable: true, value: (u) => u.last ?? 0, render: (u) => (u.last ? relativeTime(u.last * 1000, lang) : dash) }];
+  }
+  if (compact) return [];
+  return [{ key: 'listen', header: t('col.listen'), mono: true, render: (u) => (u.listen?.length ? u.listen.map((l) => l.replace(SOCKET_TYPE_SUFFIX, '')).join(', ') : dash) }];
+}
+
+export default function ServicesPage() {
+  const t = useT('services');
+  const { lang } = useI18n();
+  const mobile = useIsMobile();
+  const wide = useMediaQuery('(min-width: 1241px)');
+  const nav = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const { prefs, set: setPref } = usePrefs();
+  const win = useSession().session?.os === 'windows';
+  const view: View = prefs['services.view'] === 'cards' ? 'cards' : 'table';
+
+  // ?unit=nginx or ?unit=nginx.service (links from Overview / Logs); ?state=failed|running|… picks the tab.
+  const unitParam = params.get('unit');
+  const selected = unitParam ? (win || /\.[a-z]+$/.test(unitParam) ? unitParam : `${unitParam}.service`) : null;
+  const rawTab = (params.get('tab') as PanelTab | null) ?? 'info';
+  const panelTab: PanelTab = win && (rawTab === 'logs' || rawTab === 'unit') ? 'info' : rawTab;
+
+  const stateParam = params.get('state');
+  const tabOk = (v: string | null): v is Tab => TAB_IDS.includes(v as Tab) && !(win && (v === 'timers' || v === 'sockets'));
+  const [tab, setTab] = useState<Tab>(() => (tabOk(stateParam) ? stateParam : 'all'));
+  useEffect(() => {
+    if (tabOk(stateParam)) setTab(stateParam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stateParam, win]);
+  const [purpose, setPurpose] = useState<Purpose>('all');
+  const [q, setQ] = useState('');
+  const kind = kindOf(tab);
+
+  const { lists, summary, error, setError, cpu, panelRev, setPanelRev, loadList, loadSummary } = useUnitData(kind);
+
   const failed = summary?.failed ?? [];
   useRailBadge('services', failed.length);
 
@@ -141,7 +221,7 @@ export default function ServicesPage() {
       void loadSummary();
       setPanelRev((n) => n + 1);
     },
-    [kind, loadList, loadSummary],
+    [kind, loadList, loadSummary, setPanelRev],
   );
   const { run, busy, dialog } = useActions(refreshAfter);
 
@@ -161,19 +241,7 @@ export default function ServicesPage() {
   const setPanelTab = (tb: PanelTab) => openUnit(selected ?? '', tb, true);
 
   const all = lists[kind];
-  const rows = useMemo(() => {
-    if (!all) return [];
-    const needle = q.trim().toLowerCase();
-    return all.filter((u) => {
-      if (kind === 'service') {
-        if (tab === 'running' && u.state !== 'running' && u.state !== 'finished') return false;
-        if (tab === 'failed' && u.state !== 'failed') return false;
-        if (tab === 'stopped' && u.state !== 'stopped') return false;
-      }
-      if (purpose !== 'all' && u.purpose !== purpose) return false;
-      return !needle || u.name.toLowerCase().includes(needle) || u.description.toLowerCase().includes(needle);
-    });
-  }, [all, kind, tab, purpose, q]);
+  const rows = useMemo(() => (all ? filterUnits(all, kind, tab, purpose, q) : []), [all, kind, tab, purpose, q]);
 
   const allTabs = [
     { id: 'all' as const, label: t('tabs.all'), count: summary?.total },
@@ -184,7 +252,6 @@ export default function ServicesPage() {
     { id: 'sockets' as const, label: t('tabs.sockets'), count: summary?.sockets },
   ];
   const tabs = win ? allTabs.filter((x) => x.id !== 'timers' && x.id !== 'sockets') : allTabs;
-  const showPurpose = !win;
   const bootLabel = (v: string) => (win ? t(`win.boot.${v}`) || t(`boot.${v}`) : v ? t(`boot.${v}`) : '');
 
   const toggleBoot = (u: Unit) => run(u.name, bootMode(u.enabled) === 'on' ? 'disable' : 'enable');
@@ -195,31 +262,7 @@ export default function ServicesPage() {
     return <Switch checked={m === 'on'} disabled={busy.has(u.name)} onChange={() => toggleBoot(u)} aria-label={t('boot.label', { name: short(u.name) })} />;
   };
 
-  const menuFor = (u: Unit): MenuItem[] => {
-    const running = u.state === 'running' || u.state === 'finished';
-    const isMasked = win ? u.enabled === 'masked' : u.load === 'masked';
-    return [
-      running ? { id: 'stop', label: t('actions.stop'), icon: 'power', onSelect: () => run(u.name, 'stop') } : { id: 'start', label: t('actions.start'), icon: 'play', onSelect: () => run(u.name, 'start') },
-      { id: 'restart', label: t('actions.restart'), icon: 'refresh', onSelect: () => run(u.name, 'restart') },
-      ...(win
-        ? [
-            u.sub === 'paused'
-              ? { id: 'continue', label: t('actions.continue'), icon: 'play' as const, onSelect: () => run(u.name, 'continue') }
-              : { id: 'pause', label: t('actions.pause'), icon: 'power' as const, disabled: !running, onSelect: () => run(u.name, 'pause') },
-          ]
-        : [
-            { id: 'reload', label: t('actions.reload'), icon: 'refresh' as const, disabled: !running, onSelect: () => run(u.name, 'reload') },
-            { type: 'separator' as const },
-            { id: 'logs', label: t('rowMenu.logs'), icon: 'logs' as const, onSelect: () => openUnit(u.name, 'logs') },
-            { id: 'file', label: t('rowMenu.unitFile'), icon: 'file' as const, onSelect: () => openUnit(u.name, 'unit') },
-            { id: 'inlogs', label: t('openInLogs'), icon: 'externallink' as const, onSelect: () => nav(`/logs?unit=${encodeURIComponent(u.name)}`) },
-          ]),
-      { type: 'separator' },
-      isMasked
-        ? { id: 'unmask', label: win ? t('win.unmask') : t('actions.unmask'), icon: 'unlock', onSelect: () => run(u.name, 'unmask') }
-        : { id: 'mask', label: win ? t('win.mask') : t('actions.mask'), icon: 'lock', danger: true, onSelect: () => run(u.name, 'mask') },
-    ];
-  };
+  const menuFor = (u: Unit) => unitMenu(u, { win, t, run, openUnit, openLogs: (n) => nav(`/logs?unit=${encodeURIComponent(n)}`) });
 
   const rowActions = (u: Unit) => (
     <span className="svc-rowact" onClick={(e) => e.stopPropagation()}>
@@ -237,98 +280,44 @@ export default function ServicesPage() {
   const stateCell = (u: Unit) => <Badge tone={stateTone(u)}>{t(`state.${stateKey(u)}`)}</Badge>;
   const dash = <span className="svc-muted">—</span>;
 
+  const compact = mobile || (!!selected && wide);
   const columns: Column<Unit>[] = [
     { key: 'name', header: t('col.name'), sortable: true, value: (u) => u.name, render: nameCell },
     { key: 'state', header: t('col.state'), sortable: true, value: (u) => u.state, render: stateCell },
     { key: 'boot', header: t('col.boot'), render: bootCell },
+    ...kindColumns(kind, compact, cpu, lang, t, dash),
+    { key: 'act', header: '', align: 'right', render: rowActions },
   ];
-  const compact = mobile || (!!selected && wide);
-  if (kind === 'service') {
-    if (!compact) {
-      columns.push(
-        { key: 'mem', header: t('col.memory'), sortable: true, mono: true, value: (u) => u.memory ?? -1, render: (u) => (u.memory != null ? formatBytes(u.memory) : dash) },
-        { key: 'cpu', header: t('col.cpu'), sortable: true, mono: true, value: (u) => cpu[u.name] ?? -1, render: (u) => (cpu[u.name] != null && u.state === 'running' ? `${cpu[u.name].toFixed(1)}%` : dash) },
-      );
-    }
-  } else if (kind === 'timer') {
-    columns.push({ key: 'next', header: t('col.next'), sortable: true, value: (u) => u.next ?? 0, render: (u) => (u.next ? relativeTime(u.next * 1000, lang) : dash) });
-    if (!compact) columns.push({ key: 'last', header: t('col.last'), sortable: true, value: (u) => u.last ?? 0, render: (u) => (u.last ? relativeTime(u.last * 1000, lang) : dash) });
-  } else if (!compact) {
-    columns.push({ key: 'listen', header: t('col.listen'), mono: true, render: (u) => (u.listen?.length ? u.listen.map((l) => l.replace(/ \((Stream|Datagram|SequentialPacket|Netlink|Special|FIFO)\)$/, '')).join(', ') : dash) });
-  }
-  columns.push({ key: 'act', header: '', align: 'right', render: rowActions });
 
   const banner = failed.length > 0 && kind === 'service' && <FailedBanner failed={failed} t={t} win={win} onLog={(n) => openUnit(n, 'logs')} onRestart={(n) => run(n, 'restart')} onDisable={(n) => run(n, 'disable')} onShow={() => setTab('failed')} />;
 
-  const grouped: { p: (typeof PURPOSES)[number] | null; units: Unit[] }[] = win
-    ? [{ p: null, units: rows }]
-    : PURPOSES.map((p) => ({ p, units: rows.filter((u) => u.purpose === p) })).filter((g) => g.units.length);
+  const retry = () => {
+    setError(null);
+    void loadList(kind);
+    void loadSummary();
+  };
+  const emptyState = <EmptyState icon="services" hue="svc" title={t('empty.title')} text={t('empty.text')} />;
+
+  const body = (() => {
+    if (error && !all) return <EmptyState icon="alert" hue="svc" title={t('error.title')} text={error.message} action={<Button onClick={retry}>{t('retry')}</Button>} />;
+    if (!all) return <div className="svc-skel"><Skeleton lines={8} height={44} /></div>;
+    if (view === 'table') return <Table columns={columns} rows={rows} rowKey={(u) => u.name} activeKey={selected ?? undefined} onRowClick={(u) => openUnit(u.name)} caption={t('title')} empty={emptyState} />;
+    if (rows.length === 0) return emptyState;
+    return (
+      <UnitCards rows={rows} win={win} t={t} renderCard={(u) => (
+        <UnitCard key={u.name} u={u} bad={u.state === 'failed'} busy={busy.has(u.name)} active={selected === u.name} mem={u.memory} cpu={cpu[u.name]} t={t} boot={bootCell(u)} menu={menuFor(u)}
+          onOpen={() => openUnit(u.name)} onAct={(a) => run(u.name, a)} onLogs={win ? undefined : () => openUnit(u.name, 'logs')} />
+      )} />
+    );
+  })();
 
   return (
     <Page flush hue="svc">
       <div className={`svc-root ${selected && wide ? 'svc-has-panel' : ''}`}>
         <div className="svc-main">
-          <div className="svc-bar">
-            <Tabs variant="pill" hue="svc" items={tabs} value={tab} onChange={(id) => setTab(id)} aria-label={t('title')} />
-            <div className="svc-sp" />
-            {kind === 'service' && showPurpose && (
-              <div className="svc-chips" role="group" aria-label={t('purpose.label')}>
-                <Chip hue="svc" pressed={purpose === 'all'} onClick={() => setPurpose('all')}>{t('purpose.all')}</Chip>
-                {PURPOSES.map((p) => (
-                  <Chip key={p} hue={PURPOSE_HUE[p]} pressed={purpose === p} onClick={() => setPurpose(p)}>
-                    <span className={`svc-dot svc-dot--${p}`} />
-                    {t(`purpose.${p}`)}
-                  </Chip>
-                ))}
-              </div>
-            )}
-            <div className="svc-filter">
-              <Input icon="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('filter')} aria-label={t('filter')} />
-            </div>
-            <Segmented
-              value={view}
-              onChange={(v) => void setPref('services.view', v)}
-              aria-label={t('view.label')}
-              options={[
-                { value: 'table', icon: 'list', label: t('view.table') },
-                { value: 'cards', icon: 'grid', label: t('view.cards') },
-              ]}
-            />
-          </div>
+          <ServicesToolbar t={t} tabs={tabs} tab={tab} onTab={setTab} showPurpose={kind === 'service' && !win} purpose={purpose} onPurpose={setPurpose} q={q} onQ={setQ} view={view} onView={(v) => void setPref('services.view', v)} />
           {banner}
-          <div className="svc-body">
-            {error && !all ? (
-              <EmptyState icon="alert" hue="svc" title={t('error.title')} text={error.message} action={<Button onClick={() => { setError(null); void loadList(kind); void loadSummary(); }}>{t('retry')}</Button>} />
-            ) : !all ? (
-              <div className="svc-skel"><Skeleton lines={8} height={44} /></div>
-            ) : view === 'table' ? (
-              <Table
-                columns={columns}
-                rows={rows}
-                rowKey={(u) => u.name}
-                activeKey={selected ?? undefined}
-                onRowClick={(u) => openUnit(u.name)}
-                caption={t('title')}
-                empty={<EmptyState icon="services" hue="svc" title={t('empty.title')} text={t('empty.text')} />}
-              />
-            ) : rows.length === 0 ? (
-              <EmptyState icon="services" hue="svc" title={t('empty.title')} text={t('empty.text')} />
-            ) : (
-              <div className="svc-cards-wrap">
-                {grouped.map((g) => (
-                  <section key={g.p ?? 'all'}>
-                    {g.p && <h3 className="svc-gt"><span className={`svc-dot svc-dot--${g.p}`} />{t(`purpose.${g.p}`)} <span className="svc-muted">{g.units.length}</span></h3>}
-                    <div className="svc-cards">
-                      {g.units.map((u) => (
-                        <UnitCard key={u.name} u={u} bad={u.state === 'failed'} busy={busy.has(u.name)} active={selected === u.name} mem={u.memory} cpu={cpu[u.name]} t={t} boot={bootCell(u)} menu={menuFor(u)}
-                          onOpen={() => openUnit(u.name)} onAct={(a) => run(u.name, a)} onLogs={win ? undefined : () => openUnit(u.name, 'logs')} />
-                      ))}
-                    </div>
-                  </section>
-                ))}
-              </div>
-            )}
-          </div>
+          <div className="svc-body">{body}</div>
         </div>
         {selected && (
           <UnitPanel
@@ -349,6 +338,69 @@ export default function ServicesPage() {
       </div>
       {dialog}
     </Page>
+  );
+}
+
+type ToolbarProps = {
+  t: T;
+  tabs: { id: Tab; label: string; count?: number }[];
+  tab: Tab;
+  onTab: (tab: Tab) => void;
+  showPurpose: boolean;
+  purpose: Purpose;
+  onPurpose: (p: Purpose) => void;
+  q: string;
+  onQ: (q: string) => void;
+  view: View;
+  onView: (v: View) => void;
+};
+
+function ServicesToolbar({ t, tabs, tab, onTab, showPurpose, purpose, onPurpose, q, onQ, view, onView }: ToolbarProps) {
+  return (
+    <div className="svc-bar">
+      <Tabs variant="pill" hue="svc" items={tabs} value={tab} onChange={(id) => onTab(id)} aria-label={t('title')} />
+      <div className="svc-sp" />
+      {showPurpose && (
+        <div className="svc-chips" role="group" aria-label={t('purpose.label')}>
+          <Chip hue="svc" pressed={purpose === 'all'} onClick={() => onPurpose('all')}>{t('purpose.all')}</Chip>
+          {PURPOSES.map((p) => (
+            <Chip key={p} hue={PURPOSE_HUE[p]} pressed={purpose === p} onClick={() => onPurpose(p)}>
+              <span className={`svc-dot svc-dot--${p}`} />
+              {t(`purpose.${p}`)}
+            </Chip>
+          ))}
+        </div>
+      )}
+      <div className="svc-filter">
+        <Input icon="search" value={q} onChange={(e) => onQ(e.target.value)} placeholder={t('filter')} aria-label={t('filter')} />
+      </div>
+      <Segmented
+        value={view}
+        onChange={onView}
+        aria-label={t('view.label')}
+        options={[
+          { value: 'table', icon: 'list', label: t('view.table') },
+          { value: 'cards', icon: 'grid', label: t('view.cards') },
+        ]}
+      />
+    </div>
+  );
+}
+
+/** Card view: one section per purpose (a single flat section on Windows). */
+function UnitCards({ rows, win, t, renderCard }: { rows: Unit[]; win: boolean; t: T; renderCard: (u: Unit) => React.ReactNode }) {
+  const grouped: { p: (typeof PURPOSES)[number] | null; units: Unit[] }[] = win
+    ? [{ p: null, units: rows }]
+    : PURPOSES.map((p) => ({ p, units: rows.filter((u) => u.purpose === p) })).filter((g) => g.units.length);
+  return (
+    <div className="svc-cards-wrap">
+      {grouped.map((g) => (
+        <section key={g.p ?? 'all'}>
+          {g.p && <h3 className="svc-gt"><span className={`svc-dot svc-dot--${g.p}`} />{t(`purpose.${g.p}`)} <span className="svc-muted">{g.units.length}</span></h3>}
+          <div className="svc-cards">{g.units.map(renderCard)}</div>
+        </section>
+      ))}
+    </div>
   );
 }
 

@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { ApiError, readRecentUsers, rememberRecentUser, useSession } from '../api';
+import { ApiError, readRecentUsers, rememberRecentUser, useSession, type RecentUser } from '../api';
 import { SshKeyError, type SshKeyErrorCode } from '../auth/sshkey';
 import { KeyStep, type LoadedKey } from './KeyStep';
-import { useT } from '../i18n';
+import { useT, type TFn } from '../i18n';
 import { useTheme } from '../theme';
 import { Button, Checkbox, Icon, IconButton, Input, BrandLockup } from '../ui';
 import { DistroLogo } from '../shell/DistroLogo';
@@ -56,6 +56,101 @@ const KEY_MSG: Record<SshKeyErrorCode, { icon: string; hue: string }> = {
   server_error: { icon: 'alert', hue: 'hue-svc' },
 };
 
+type Message = { icon: string; hue: string; body: ReactNode };
+
+function keyWaitVars(t: TFn, seconds?: number) {
+  if (seconds && seconds > 90) return { wait: t('key.waitMinutes', { minutes: Math.ceil(seconds / 60) }) };
+  if (seconds) return { wait: t('key.waitSeconds', { seconds: Math.ceil(seconds) }) };
+  return { wait: t('key.waitLater') };
+}
+
+function problemMessage(problem: Problem, t: TFn): Message | null {
+  if (!problem) return null;
+  switch (problem.kind) {
+    case 'key': {
+      const code = problem.code ?? 'server_error';
+      const k = KEY_MSG[code];
+      return { icon: k.icon, hue: k.hue, body: t(`err.key.${code}`, keyWaitVars(t, problem.seconds)) };
+    }
+    case 'wrong': return { icon: 'alert', hue: 'hue-svc', body: t('err.wrong') };
+    case 'root': return { icon: 'shield', hue: 'hue-log', body: <>{t('err.root.before')} <code>allow_root = true</code> {t('err.root.after')}</> };
+    case 'busy': return { icon: 'clock', hue: 'hue-log', body: t('err.busy') };
+    case 'rate': return { icon: 'clock', hue: 'hue-log', body: problem.minutes ? t('err.rateMinutes', { minutes: problem.minutes }) : t('err.rate') };
+    case 'forbidden': return { icon: 'lock', hue: 'hue-svc', body: problem.text || t('err.forbidden') };
+    case 'network': return { icon: 'alert', hue: 'hue-svc', body: t('err.network') };
+    default: return { icon: 'alert', hue: 'hue-svc', body: problem.text || t('err.other') };
+  }
+}
+
+type Host = ReturnType<typeof useSession>['host'];
+
+function HostArt({ host }: { host: Host }) {
+  return (
+    <section className="lb-art" aria-label={host?.hostname}>
+      <span className="glow" />
+      <DistroLogo className="big" id={host?.distro.id} logo={host?.distro.logo} url={host?.distro.logoUrl} />
+      <div className="nm">
+        <h2>{host?.hostname ?? '...'}</h2>
+        {host?.ip && <p className="ip">{host.ip}</p>}
+        {host?.distro.name && <p className="os">{host.distro.name}</p>}
+      </div>
+    </section>
+  );
+}
+
+type RecentAccountsProps = {
+  t: TFn;
+  recent: RecentUser[];
+  user: string;
+  other: boolean;
+  onPick: (r: RecentUser) => void;
+  onOther: () => void;
+};
+
+function RecentAccounts({ t, recent, user, other, onPick, onOther }: RecentAccountsProps) {
+  return (
+    <div className="ugrid" role="group" aria-label={t('recent')}>
+      {recent.map((r, i) => (
+        <button
+          key={r.user}
+          type="button"
+          className={`ut hue-${TILE_HUES[i % TILE_HUES.length]}`}
+          aria-pressed={!other && user === r.user}
+          onClick={() => onPick(r)}
+        >
+          <span className="av">{r.user.slice(0, 1)}</span>
+          <b>{r.user}</b>
+          <small>{r.isAdmin ? t('role.admin') : t('role.user')}</small>
+        </button>
+      ))}
+      <button type="button" className="ut other" aria-pressed={other} onClick={onOther}>
+        <span className="av"><Icon name="plus" /></span>
+        <b>{t('other')}</b>
+        <small>{t('otherHint')}</small>
+      </button>
+    </div>
+  );
+}
+
+type Method = 'password' | 'key';
+
+function MethodSwitch({ t, keyMode, busy, onSwitch }: { t: TFn; keyMode: boolean; busy: boolean; onSwitch: (m: Method) => void }) {
+  return (
+    <>
+      <div className="sk-or" aria-hidden="true">{t('or')}</div>
+      {keyMode ? (
+        <button type="button" className="sk-alt" onClick={() => onSwitch('password')} disabled={busy}>
+          <Icon name="shield" />{t('usePassword')}
+        </button>
+      ) : (
+        <button type="button" className="sk-alt" onClick={() => onSwitch('key')}>
+          <Icon name="key" />{t('useKey')}
+        </button>
+      )}
+    </>
+  );
+}
+
 export default function LoginPage() {
   const t = useT('auth');
   const { status, host, signIn, signInWithKey } = useSession();
@@ -70,7 +165,7 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<Problem>(null);
   const keysOn = host?.sshKeys === true;
-  const [method, setMethod] = useState<'password' | 'key'>(recent[0]?.method === 'key' ? 'key' : 'password');
+  const [method, setMethod] = useState<Method>(recent[0]?.method === 'key' ? 'key' : 'password');
   const keyMode = keysOn && method === 'key';
   const [loadedKey, setLoadedKey] = useState<LoadedKey | null>(null);
   const [passphrase, setPassphrase] = useState('');
@@ -138,87 +233,37 @@ export default function LoginPage() {
       setBusy(false);
     }
   };
-  const switchMethod = (m: 'password' | 'key') => {
+  const switchMethod = (m: Method) => {
     setMethod(m);
     setProblem(null);
     setLoadedKey(null);
     setPassphrase('');
     setPw('');
   };
+  const pickRecent = (r: RecentUser) => {
+    setOther(false);
+    setUser(r.user);
+    setProblem(null);
+    if (r.method === 'key' && keysOn) switchMethod('key');
+    else if (method === 'key' && r.method !== 'key') switchMethod('password');
+    else pwRef.current?.focus();
+  };
+  const pickOther = () => {
+    setOther(true);
+    setUser('');
+    setProblem(null);
+  };
 
-  const msg = (() => {
-    if (!problem) return null;
-    switch (problem.kind) {
-      case 'key': {
-        const code = problem.code ?? 'server_error';
-        const k = KEY_MSG[code];
-        const s = problem.seconds;
-        const vars = s && s > 90 ? { wait: t('key.waitMinutes', { minutes: Math.ceil(s / 60) }) } : s ? { wait: t('key.waitSeconds', { seconds: Math.ceil(s) }) } : { wait: t('key.waitLater') };
-        return { icon: k.icon, hue: k.hue, body: t(`err.key.${code}`, vars) };
-      }
-      case 'wrong': return { icon: 'alert', hue: 'hue-svc', body: t('err.wrong') };
-      case 'root': return { icon: 'shield', hue: 'hue-log', body: <>{t('err.root.before')} <code>allow_root = true</code> {t('err.root.after')}</> };
-      case 'busy': return { icon: 'clock', hue: 'hue-log', body: t('err.busy') };
-      case 'rate': return { icon: 'clock', hue: 'hue-log', body: problem.minutes ? t('err.rateMinutes', { minutes: problem.minutes }) : t('err.rate') };
-      case 'forbidden': return { icon: 'lock', hue: 'hue-svc', body: problem.text || t('err.forbidden') };
-      case 'network': return { icon: 'alert', hue: 'hue-svc', body: t('err.network') };
-      default: return { icon: 'alert', hue: 'hue-svc', body: problem.text || t('err.other') };
-    }
-  })();
+  const msg = problemMessage(problem, t);
 
   return (
     <div className="login">
-      <section className="lb-art" aria-label={host?.hostname}>
-        <span className="glow" />
-        <DistroLogo className="big" id={host?.distro.id} logo={host?.distro.logo} url={host?.distro.logoUrl} />
-        <div className="nm">
-          <h2>{host?.hostname ?? '...'}</h2>
-          {host?.ip && <p className="ip">{host.ip}</p>}
-          {host?.distro.name && <p className="os">{host.distro.name}</p>}
-        </div>
-      </section>
+      <HostArt host={host} />
       <section className="lb-form">
         <div className="lb-in">
           <h1>{t('title')}</h1>
           <p>{recent.length ? t('pick') : t('enter')}</p>
-          {recent.length > 0 && (
-            <div className="ugrid" role="group" aria-label={t('recent')}>
-              {recent.map((r, i) => (
-                <button
-                  key={r.user}
-                  type="button"
-                  className={`ut hue-${TILE_HUES[i % TILE_HUES.length]}`}
-                  aria-pressed={!other && user === r.user}
-                  onClick={() => {
-                    setOther(false);
-                    setUser(r.user);
-                    setProblem(null);
-                    if (r.method === 'key' && keysOn) switchMethod('key');
-                    else if (method === 'key' && r.method !== 'key') switchMethod('password');
-                    else pwRef.current?.focus();
-                  }}
-                >
-                  <span className="av">{r.user.slice(0, 1)}</span>
-                  <b>{r.user}</b>
-                  <small>{r.isAdmin ? t('role.admin') : t('role.user')}</small>
-                </button>
-              ))}
-              <button
-                type="button"
-                className="ut other"
-                aria-pressed={other}
-                onClick={() => {
-                  setOther(true);
-                  setUser('');
-                  setProblem(null);
-                }}
-              >
-                <span className="av"><Icon name="plus" /></span>
-                <b>{t('other')}</b>
-                <small>{t('otherHint')}</small>
-              </button>
-            </div>
-          )}
+          {recent.length > 0 && <RecentAccounts t={t} recent={recent} user={user} other={other} onPick={pickRecent} onOther={pickOther} />}
           <form className="lf" onSubmit={keyMode ? (e) => { e.preventDefault(); void submitKey(); } : submit} noValidate>
             {other && (
               <Input ref={userRef} label={t('username')} icon="user" id="u" name="username" autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder={t('usernamePlaceholder')} value={user} onChange={(e) => setUser(e.target.value)} />
@@ -263,20 +308,7 @@ export default function LoginPage() {
             <Button type="submit" variant="primary" size="lg" block loading={busy} disabled={keyMode && !keyReady}>
               {busy && keyMode ? t('key.signingIn') : t('submit')}
             </Button>
-            {keysOn && (
-              <>
-                <div className="sk-or" aria-hidden="true">{t('or')}</div>
-                {keyMode ? (
-                  <button type="button" className="sk-alt" onClick={() => switchMethod('password')} disabled={busy}>
-                    <Icon name="shield" />{t('usePassword')}
-                  </button>
-                ) : (
-                  <button type="button" className="sk-alt" onClick={() => switchMethod('key')}>
-                    <Icon name="key" />{t('useKey')}
-                  </button>
-                )}
-              </>
-            )}
+            {keysOn && <MethodSwitch t={t} keyMode={keyMode} busy={busy} onSwitch={switchMethod} />}
             {keyMode && (
               <p className="sk-note">
                 <Icon name="shield" />

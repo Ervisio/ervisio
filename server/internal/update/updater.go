@@ -157,23 +157,8 @@ func (u *Updater) Apply(ctx context.Context, channel, want string, auto bool, pr
 	if progress == nil {
 		progress = func(Event) {}
 	}
-	if by := u.Layout.ManagedBy(); by != "" {
-		return "", "", managedErr(by)
-	}
-	if runtime.GOOS == "windows" {
-		return "", "", ErrWindows
-	}
-	if u.Layout.Kind() == KindNone {
-		return "", "", ErrNotInstalled
-	}
-	if u.State.Running() {
-		return "", "", ErrBusy
-	}
-	if u.State.PackageTransactionRunning() {
-		return "", "", ErrPackages
-	}
-	if err := u.State.Prepare(); err != nil {
-		return "", "", fmt.Errorf("prepare %s: %w", u.State.Dir, err)
+	if err := u.checkApplyAllowed(); err != nil {
+		return "", "", err
 	}
 	unlock, err := u.State.Lock()
 	if err != nil {
@@ -187,28 +172,11 @@ func (u *Updater) Apply(ctx context.Context, channel, want string, auto bool, pr
 	}()
 
 	progress(Event{Phase: "check"})
-	rel, _, err := u.Checker.Latest(ctx, channel, false)
+	plan, err := u.resolveRelease(ctx, channel, want)
 	if err != nil {
 		return "", "", err
 	}
-	v := rel.Version()
-	if want != "" && DirName(want) != v {
-		return "", "", ErrChanged
-	}
-	if !Newer(v, u.Current) {
-		return "", "", ErrUpToDate
-	}
-	archive := ArchiveName(v, u.Arch)
-	aArch, aSums, aSig := rel.Asset(archive), rel.Asset(SumsFile), rel.Asset(SigFile)
-	if aArch == nil {
-		return "", "", fmt.Errorf("%w (%s missing)", ErrNoBuild, archive)
-	}
-	if aSums == nil || aSig == nil {
-		return "", "", errors.New("the release is not signed (" + SumsFile + " or " + SigFile + " missing)")
-	}
-	if aArch.Size > MaxArchive {
-		return "", "", fmt.Errorf("%s is %d bytes, more than the %d allowed", archive, aArch.Size, MaxArchive)
-	}
+	v := plan.version
 
 	stage, err := os.MkdirTemp(u.State.StagingDir(), v+"-")
 	if err != nil {
@@ -217,48 +185,12 @@ func (u *Updater) Apply(ctx context.Context, channel, want string, auto bool, pr
 	defer os.RemoveAll(stage)
 
 	progress(Event{Phase: "download", File: SumsFile})
-	sumsPath, sigPath, arcPath := filepath.Join(stage, SumsFile), filepath.Join(stage, SigFile), filepath.Join(stage, archive)
-	if err := u.Download.Fetch(ctx, aSums.URL, sumsPath, maxSumsFile, nil); err != nil {
-		return "", "", err
-	}
-	if err := u.Download.Fetch(ctx, aSig.URL, sigPath, maxSigFile, nil); err != nil {
-		return "", "", err
-	}
-	progress(Event{Phase: "verify", File: SumsFile})
-	sumsRaw, err := os.ReadFile(sumsPath)
+	arcPath := filepath.Join(stage, plan.archive)
+	sums, err := u.fetchSignedSums(ctx, stage, plan, progress)
 	if err != nil {
 		return "", "", err
 	}
-	sigRaw, err := os.ReadFile(sigPath)
-	if err != nil {
-		return "", "", err
-	}
-	if err := VerifySums(sumsRaw, sigRaw, u.Keys); err != nil {
-		return "", "", err
-	}
-	sums, err := ParseSums(sumsRaw)
-	if err != nil {
-		return "", "", err
-	}
-	if _, ok := sums[archive]; !ok {
-		return "", "", fmt.Errorf("%s is not listed in the signed %s", archive, SumsFile)
-	}
-
-	err = u.Download.Fetch(ctx, aArch.URL, arcPath, MaxArchive, func(done, total int64) {
-		if total <= 0 {
-			total = aArch.Size
-		}
-		pct := 0
-		if total > 0 {
-			pct = int(done * 100 / total)
-		}
-		progress(Event{Phase: "download", File: archive, Done: done, Total: total, Percent: pct})
-	})
-	if err != nil {
-		return "", "", err
-	}
-	progress(Event{Phase: "verify", File: archive})
-	if err := VerifyFile(sums, archive, arcPath); err != nil {
+	if err := u.fetchArchive(ctx, arcPath, sums, plan, progress); err != nil {
 		return "", "", err
 	}
 
@@ -273,38 +205,18 @@ func (u *Updater) Apply(ctx context.Context, channel, want string, auto bool, pr
 			os.RemoveAll(partial)
 		}
 	}()
-	lim := u.Limits
-	if lim.MaxEntries == 0 {
-		lim = DefaultLimits
-	}
-	if err := ExtractTarGz(arcPath, partial, ArchivePrefix(v, u.Arch), lim); err != nil {
-		return "", "", err
-	}
-	if err := checkTree(partial, v); err != nil {
+	if err := u.extractRelease(arcPath, partial, v); err != nil {
 		return "", "", err
 	}
 
 	progress(Event{Phase: "test"})
-	for _, bin := range []string{brand.DaemonBinary, brand.BridgeBinary} {
-		got, err := u.Probe(ctx, filepath.Join(partial, "bin", bin))
-		if err != nil {
-			return "", "", fmt.Errorf("the new %s does not run on this machine: %v", bin, err)
-		}
-		if DirName(got) != v {
-			return "", "", fmt.Errorf("the new %s reports version %q, expected %s", bin, got, v)
-		}
+	if err := u.probeBinaries(ctx, partial, v); err != nil {
+		return "", "", err
 	}
 
 	progress(Event{Phase: "install", Version: v})
-	if u.Layout.Kind() == KindFlat {
-		if _, err := u.Layout.Migrate(DirName(u.Current)); err != nil {
-			return "", "", err
-		}
-	} else if _, err := u.Layout.Migrate(""); err != nil { // repairs entry links
+	if err := u.installPartial(partial, v); err != nil {
 		return "", "", err
-	}
-	if err := u.Layout.InstallFrom(partial, v); err != nil {
-		return "", "", fmt.Errorf("install %s: %w", v, err)
 	}
 	installed = true
 
@@ -320,6 +232,158 @@ func (u *Updater) Apply(ctx context.Context, channel, want string, auto bool, pr
 		return "", "", err
 	}
 	return v, unit, nil
+}
+
+// releasePlan is the release Apply is about to install and its assets.
+type releasePlan struct {
+	version   string
+	archive   string
+	arcAsset  *Asset
+	sumsAsset *Asset
+	sigAsset  *Asset
+}
+
+func (u *Updater) checkApplyAllowed() error {
+	if by := u.Layout.ManagedBy(); by != "" {
+		return managedErr(by)
+	}
+	if runtime.GOOS == "windows" {
+		return ErrWindows
+	}
+	if u.Layout.Kind() == KindNone {
+		return ErrNotInstalled
+	}
+	if u.State.Running() {
+		return ErrBusy
+	}
+	if u.State.PackageTransactionRunning() {
+		return ErrPackages
+	}
+	if err := u.State.Prepare(); err != nil {
+		return fmt.Errorf("prepare %s: %w", u.State.Dir, err)
+	}
+	return nil
+}
+
+func (u *Updater) resolveRelease(ctx context.Context, channel, want string) (releasePlan, error) {
+	rel, _, err := u.Checker.Latest(ctx, channel, false)
+	if err != nil {
+		return releasePlan{}, err
+	}
+	v := rel.Version()
+	if want != "" && DirName(want) != v {
+		return releasePlan{}, ErrChanged
+	}
+	if !Newer(v, u.Current) {
+		return releasePlan{}, ErrUpToDate
+	}
+	archive := ArchiveName(v, u.Arch)
+	plan := releasePlan{
+		version:   v,
+		archive:   archive,
+		arcAsset:  rel.Asset(archive),
+		sumsAsset: rel.Asset(SumsFile),
+		sigAsset:  rel.Asset(SigFile),
+	}
+	if plan.arcAsset == nil {
+		return releasePlan{}, fmt.Errorf("%w (%s missing)", ErrNoBuild, archive)
+	}
+	if plan.sumsAsset == nil || plan.sigAsset == nil {
+		return releasePlan{}, errors.New("the release is not signed (" + SumsFile + " or " + SigFile + " missing)")
+	}
+	if plan.arcAsset.Size > MaxArchive {
+		return releasePlan{}, fmt.Errorf("%s is %d bytes, more than the %d allowed", archive, plan.arcAsset.Size, MaxArchive)
+	}
+	return plan, nil
+}
+
+// fetchSignedSums downloads SHA256SUMS and its signature into stage,
+// verifies the signature and checks the archive is listed.
+func (u *Updater) fetchSignedSums(ctx context.Context, stage string, plan releasePlan, progress func(Event)) (map[string]string, error) {
+	sumsPath, sigPath := filepath.Join(stage, SumsFile), filepath.Join(stage, SigFile)
+	if err := u.Download.Fetch(ctx, plan.sumsAsset.URL, sumsPath, maxSumsFile, nil); err != nil {
+		return nil, err
+	}
+	if err := u.Download.Fetch(ctx, plan.sigAsset.URL, sigPath, maxSigFile, nil); err != nil {
+		return nil, err
+	}
+	progress(Event{Phase: "verify", File: SumsFile})
+	sumsRaw, err := os.ReadFile(sumsPath)
+	if err != nil {
+		return nil, err
+	}
+	sigRaw, err := os.ReadFile(sigPath)
+	if err != nil {
+		return nil, err
+	}
+	if err := VerifySums(sumsRaw, sigRaw, u.Keys); err != nil {
+		return nil, err
+	}
+	sums, err := ParseSums(sumsRaw)
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := sums[plan.archive]; !ok {
+		return nil, fmt.Errorf("%s is not listed in the signed %s", plan.archive, SumsFile)
+	}
+	return sums, nil
+}
+
+func (u *Updater) fetchArchive(ctx context.Context, arcPath string, sums map[string]string, plan releasePlan, progress func(Event)) error {
+	err := u.Download.Fetch(ctx, plan.arcAsset.URL, arcPath, MaxArchive, func(done, total int64) {
+		if total <= 0 {
+			total = plan.arcAsset.Size
+		}
+		pct := 0
+		if total > 0 {
+			pct = int(done * 100 / total)
+		}
+		progress(Event{Phase: "download", File: plan.archive, Done: done, Total: total, Percent: pct})
+	})
+	if err != nil {
+		return err
+	}
+	progress(Event{Phase: "verify", File: plan.archive})
+	return VerifyFile(sums, plan.archive, arcPath)
+}
+
+func (u *Updater) extractRelease(arcPath, partial, v string) error {
+	lim := u.Limits
+	if lim.MaxEntries == 0 {
+		lim = DefaultLimits
+	}
+	if err := ExtractTarGz(arcPath, partial, ArchivePrefix(v, u.Arch), lim); err != nil {
+		return err
+	}
+	return checkTree(partial, v)
+}
+
+// probeBinaries runs both new binaries and checks they report version v.
+func (u *Updater) probeBinaries(ctx context.Context, partial, v string) error {
+	for _, bin := range []string{brand.DaemonBinary, brand.BridgeBinary} {
+		got, err := u.Probe(ctx, filepath.Join(partial, "bin", bin))
+		if err != nil {
+			return fmt.Errorf("the new %s does not run on this machine: %v", bin, err)
+		}
+		if DirName(got) != v {
+			return fmt.Errorf("the new %s reports version %q, expected %s", bin, got, v)
+		}
+	}
+	return nil
+}
+
+func (u *Updater) installPartial(partial, v string) error {
+	if u.Layout.Kind() == KindFlat {
+		if _, err := u.Layout.Migrate(DirName(u.Current)); err != nil {
+			return err
+		}
+	} else if _, err := u.Layout.Migrate(""); err != nil { // repairs entry links
+		return err
+	}
+	if err := u.Layout.InstallFrom(partial, v); err != nil {
+		return fmt.Errorf("install %s: %w", v, err)
+	}
+	return nil
 }
 
 // Rollback starts the switch helper towards the previous version. The
