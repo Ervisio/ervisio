@@ -47,8 +47,6 @@ func (p *pacman) db() string {
 	return p.dbPath
 }
 
-// ---- installed ----
-
 // parseLocalDesc reads one /var/lib/pacman/local/<pkg>/desc file.
 func parseLocalDesc(r string) Package {
 	p := Package{Reason: "explicit", Kind: KindRepo}
@@ -132,8 +130,6 @@ func (p *pacman) ListInstalled(ctx context.Context) ([]Package, error) {
 	sort.Slice(pkgs, func(i, j int) bool { return pkgs[i].Name < pkgs[j].Name })
 	return pkgs, nil
 }
-
-// ---- updates ----
 
 // checkDBBase returns the folder that holds the private sync copy: root's
 // /var/cache/ervisio, or the user's own cache folder. Never a shared
@@ -476,8 +472,6 @@ func activeUnits(ctx context.Context, units []string) map[string]bool {
 	return res
 }
 
-// ---- search / info ----
-
 // parseSearch parses `pacman -Ss` / `yay -Ss` output.
 func parseSearch(out string, kind string) []Result {
 	var res []Result
@@ -598,8 +592,6 @@ func parseOwned(out string) map[string]string {
 	return m
 }
 
-// ---- plans ----
-
 var (
 	pacmanStepRe  = regexp.MustCompile(`^\((\d+)/(\d+)\) (installing|upgrading|removing|reinstalling|downgrading) (\S+)`)
 	pacmanTotalRe = regexp.MustCompile(`^(?:Packages|Targets) \((\d+)\)`)
@@ -655,8 +647,6 @@ func orInvalid(err error) error {
 	}
 	return rpc.Errorf(rpc.Invalid, "Choose at least one package.")
 }
-
-// ---- AUR ----
 
 // aur lists, searches and describes AUR packages through yay or paru. AUR
 // builds must run as the unprivileged user and need sudo for the final

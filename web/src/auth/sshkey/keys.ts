@@ -49,8 +49,6 @@ export function needsPassphrase(text: string): boolean {
   return false;
 }
 
-// ---------------------------------------------------------------- text → block
-
 interface Block {
   label: string;
   headers: Record<string, string>;
@@ -114,8 +112,6 @@ export async function parsePrivateKey(text: string, passphrase = ''): Promise<Pr
       throw new SshKeyError('unsupported_format', `"${block.label}" keys are not supported.`);
   }
 }
-
-// ---------------------------------------------------------------- OpenSSH format
 
 const AUTH_MAGIC = 'openssh-key-v1\0';
 
@@ -265,8 +261,6 @@ function checkType(t: string): asserts t is KeyType {
   }
 }
 
-// ---------------------------------------------------------------- AES via WebCrypto
-
 async function aesDecrypt(mode: 'ctr' | 'cbc' | 'gcm', key: Bytes, iv: Bytes, data: Bytes): Promise<Bytes> {
   const s = crypto.subtle;
   if (mode === 'ctr') {
@@ -292,8 +286,6 @@ async function cbcNoPadding(key: Bytes, iv: Bytes, data: Bytes): Promise<Bytes> 
   const extra = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-CBC', iv: last }, k, new Uint8Array(16).fill(16))).slice(0, 16);
   return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-CBC', iv }, k, concat(data, extra)));
 }
-
-// ---------------------------------------------------------------- PEM / PKCS#8
 
 const OID_RSA = '1.2.840.113549.1.1.1';
 const OID_EC = '1.2.840.10045.2.1';
@@ -341,15 +333,15 @@ async function fromSec1(der: Bytes, curveHint: (typeof CURVES)[string] | null): 
   const curve = params ? CURVES[asn1.oid(params.children![0])] : curveHint;
   if (!curve) throw new SshKeyError('unsupported_key_type', 'This elliptic curve is not supported (P-256, P-384 and P-521 are).');
   const pubNode = asn1.context(s, 1);
-  let Q: Bytes;
+  let publicPoint: Bytes;
   if (pubNode) {
-    Q = asn1.bits(pubNode.children![0]).slice();
+    publicPoint = asn1.bits(pubNode.children![0]).slice();
   } else {
     // No public point stored: let WebCrypto derive it.
     const jwk = await deriveEcPublic(curve.jwk, d, curve.size);
-    Q = concat(new Uint8Array([4]), b64decode(jwk.x!), b64decode(jwk.y!));
+    publicPoint = concat(new Uint8Array([4]), b64decode(jwk.x!), b64decode(jwk.y!));
   }
-  return build(ecMaterial(curve.type, curve.ssh, Q, d), '');
+  return build(ecMaterial(curve.type, curve.ssh, publicPoint, d), '');
 }
 
 async function deriveEcPublic(crv: string, d: Bytes, size: number): Promise<JsonWebKey> {
@@ -475,8 +467,6 @@ async function decryptPkcs8(der: Bytes, passphrase: string): Promise<Bytes> {
     wipe(bits);
   }
 }
-
-// ---------------------------------------------------------------- key material → PrivateKey
 
 type Material =
   | { kind: 'ed25519'; seed: Bytes; pub: Bytes }

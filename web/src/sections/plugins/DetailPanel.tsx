@@ -24,33 +24,31 @@ export function DetailPanel({ p, onClose, onToggle, onUpdate, refresh, busy }: P
   const [working, setWorking] = useState(false);
   const page = p.contributes.pages[0];
 
-  const uninstall = async () => {
+  const runWork = async (work: () => Promise<void>) => {
     setWorking(true);
     try {
+      await work();
+    } catch (e) {
+      toast.err(t('removeFailed', { name: p.name }), errorMessage(e));
+    } finally {
+      setWorking(false);
+    }
+  };
+  const uninstall = () =>
+    runWork(async () => {
       await call('plugins.uninstall', { id: p.id });
       toast.ok(t('removed', { name: p.name }));
       setConfirm(false);
       onClose();
       await refresh(true);
-    } catch (e) {
-      toast.err(t('removeFailed', { name: p.name }), errorMessage(e));
-    } finally {
-      setWorking(false);
-    }
-  };
-  const unload = async () => {
-    setWorking(true);
-    try {
+    });
+  const unload = () =>
+    runWork(async () => {
       await call('plugins.unloadDev', { path: p.dir });
       toast.ok(t('unloaded', { name: p.name }));
       onClose();
       await refresh(true);
-    } catch (e) {
-      toast.err(t('removeFailed', { name: p.name }), errorMessage(e));
-    } finally {
-      setWorking(false);
-    }
-  };
+    });
 
   return (
     <Panel
