@@ -324,6 +324,7 @@ func TestSubstitute(t *testing.T) {
 func setup(t *testing.T) (system, installed string) {
 	t.Helper()
 	root := t.TempDir()
+	setTestProfile(t, filepath.Join(root, "profile"))
 	SystemDir = filepath.Join(root, "share")
 	InstalledDir = filepath.Join(root, "lib")
 	StatePath = filepath.Join(root, "state.json")
@@ -567,7 +568,7 @@ func TestLoadDevNeedsDevMode(t *testing.T) {
 	setup(t)
 	DevDirs = nil
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setTestProfile(t, home)
 	dir := filepath.Join(t.TempDir(), "demo")
 	writePlugin(t, dir, goodManifest, map[string]string{"index.js": "x"})
 	if _, err := loadDev(dir); !rpc.IsCode(err, rpc.Forbidden) {
@@ -651,7 +652,7 @@ func (f *assetStream) Input() <-chan json.RawMessage { return nil }
 func TestDevAsset(t *testing.T) {
 	setup(t)
 	DevDirs = nil
-	t.Setenv("HOME", t.TempDir())
+	setTestProfile(t, t.TempDir())
 	outside := filepath.Join(t.TempDir(), "secret.txt")
 	_ = os.WriteFile(outside, []byte("secret"), 0o644)
 	dir := filepath.Join(t.TempDir(), "demo")

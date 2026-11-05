@@ -756,8 +756,8 @@ func TestHTTPLargeEscapedTextGoesBase64(t *testing.T) {
 
 func TestFilesFIFOAndPrivateMode(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
 	e := setupV3(t)
+	setTestProfile(t, home)
 	fifo := filepath.Join(e.rw, "pipe")
 	if err := mkfifo(fifo, 0o644); err != nil {
 		t.Skip("mkfifo:", err)

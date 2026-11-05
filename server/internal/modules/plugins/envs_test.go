@@ -337,7 +337,7 @@ func TestUploadUsesTheEnvironmentTunnel(t *testing.T) {
 
 func TestDevFileOverrideKeepsLoadDevOutOfTheHome(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setTestProfile(t, home)
 	DevFile = filepath.Join(t.TempDir(), "state", "plugins-dev.json")
 	t.Cleanup(func() { DevFile = "" })
 	if err := saveDev(devState{Folders: []string{"/x/y"}}); err != nil {
