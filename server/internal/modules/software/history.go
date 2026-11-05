@@ -79,6 +79,15 @@ func parsePacmanLog(content string) []HistoryEntry {
 
 var aptPkgRe = regexp.MustCompile(`(\S+?)(?::\w+)? \(([^)]*)\)`)
 
+var aptActions = map[string]string{
+	"Install":   "installed",
+	"Upgrade":   "upgraded",
+	"Remove":    "removed",
+	"Purge":     "removed",
+	"Downgrade": "downgraded",
+	"Reinstall": "reinstalled",
+}
+
 // parseAptHistory parses /var/log/apt/history.log.
 func parseAptHistory(content string) []HistoryEntry {
 	var out []HistoryEntry
@@ -87,45 +96,46 @@ func parseAptHistory(content string) []HistoryEntry {
 	for _, line := range strings.Split(content, "\n") {
 		if v, ok := strings.CutPrefix(line, "Start-Date:"); ok {
 			tx++
-			t, err := time.ParseInLocation("2006-01-02  15:04:05", strings.TrimSpace(v), time.Local)
-			if err != nil {
-				t, _ = time.ParseInLocation("2006-01-02 15:04:05", strings.Join(strings.Fields(v), " "), time.Local)
-			}
-			when = t.UnixMilli()
+			when = parseAptStart(v)
 			continue
 		}
 		key, rest, ok := strings.Cut(line, ": ")
 		if !ok {
 			continue
 		}
-		var action string
-		switch key {
-		case "Install":
-			action = "installed"
-		case "Upgrade":
-			action = "upgraded"
-		case "Remove", "Purge":
-			action = "removed"
-		case "Downgrade":
-			action = "downgraded"
-		case "Reinstall":
-			action = "reinstalled"
-		default:
+		action, ok := aptActions[key]
+		if !ok {
 			continue
 		}
-		for _, g := range aptPkgRe.FindAllStringSubmatch(rest, -1) {
-			vers := strings.Split(g[2], ", ")
-			e := HistoryEntry{Time: when, Action: action, Name: g[1], Tx: tx}
-			switch {
-			case action == "removed":
-				e.From = vers[0]
-			case len(vers) >= 2 && (action == "upgraded" || action == "downgraded"):
-				e.From, e.To = vers[0], vers[1]
-			default:
-				e.To = vers[0]
-			}
-			out = append(out, e)
+		out = append(out, aptEntries(action, rest, when, tx)...)
+	}
+	return out
+}
+
+// parseAptStart reads a Start-Date value in unix ms.
+func parseAptStart(v string) int64 {
+	t, err := time.ParseInLocation("2006-01-02  15:04:05", strings.TrimSpace(v), time.Local)
+	if err != nil {
+		t, _ = time.ParseInLocation("2006-01-02 15:04:05", strings.Join(strings.Fields(v), " "), time.Local)
+	}
+	return t.UnixMilli()
+}
+
+// aptEntries expands one "Name (versions), ..." list into entries.
+func aptEntries(action, list string, when int64, tx int) []HistoryEntry {
+	var out []HistoryEntry
+	for _, g := range aptPkgRe.FindAllStringSubmatch(list, -1) {
+		vers := strings.Split(g[2], ", ")
+		e := HistoryEntry{Time: when, Action: action, Name: g[1], Tx: tx}
+		switch {
+		case action == "removed":
+			e.From = vers[0]
+		case len(vers) >= 2 && (action == "upgraded" || action == "downgraded"):
+			e.From, e.To = vers[0], vers[1]
+		default:
+			e.To = vers[0]
 		}
+		out = append(out, e)
 	}
 	return out
 }
@@ -171,6 +181,14 @@ func parseZypperHistory(content string) []HistoryEntry {
 var dnfLogRe = regexp.MustCompile(`^(\S+) \w+ (Installed|Upgrade|Erase|Downgrade|Reinstall): (.+)$`)
 var rpmNEVRARe = regexp.MustCompile(`^(.+)-([^-]+-[^-]+)\.\w+$`)
 
+var dnfActions = map[string]string{
+	"Installed": "installed",
+	"Upgrade":   "upgraded",
+	"Erase":     "removed",
+	"Downgrade": "downgraded",
+	"Reinstall": "reinstalled",
+}
+
 // parseDnfLog parses /var/log/dnf.rpm.log.
 func parseDnfLog(content string) []HistoryEntry {
 	var out []HistoryEntry
@@ -181,12 +199,9 @@ func parseDnfLog(content string) []HistoryEntry {
 		if g == nil {
 			continue
 		}
-		t, err := time.Parse("2006-01-02T15:04:05Z0700", g[1])
-		if err != nil {
-			t, err = time.Parse("2006-01-02T15:04:05Z", g[1])
-			if err != nil {
-				continue
-			}
+		t, ok := parseDnfTime(g[1])
+		if !ok {
+			continue
 		}
 		if t.Unix()-last > 120 {
 			tx++
@@ -196,42 +211,45 @@ func parseDnfLog(content string) []HistoryEntry {
 		if nv == nil {
 			continue
 		}
-		e := HistoryEntry{Time: t.UnixMilli(), Name: nv[1], Tx: tx}
-		switch g[2] {
-		case "Installed":
-			e.Action, e.To = "installed", nv[2]
-		case "Upgrade":
-			e.Action, e.To = "upgraded", nv[2]
-		case "Erase":
-			e.Action, e.From = "removed", nv[2]
-		case "Downgrade":
-			e.Action, e.To = "downgraded", nv[2]
-		default:
-			e.Action, e.To = "reinstalled", nv[2]
+		e := HistoryEntry{Time: t.UnixMilli(), Action: dnfActions[g[2]], Name: nv[1], Tx: tx}
+		if e.Action == "removed" {
+			e.From = nv[2]
+		} else {
+			e.To = nv[2]
 		}
 		out = append(out, e)
 	}
 	return out
 }
 
+// parseDnfTime accepts the offset and the Z timestamp forms.
+func parseDnfTime(s string) (time.Time, bool) {
+	t, err := time.Parse("2006-01-02T15:04:05Z0700", s)
+	if err != nil {
+		t, err = time.Parse("2006-01-02T15:04:05Z", s)
+	}
+	return t, err == nil
+}
+
+// historyLogs maps a package manager to its log file and parser.
+var historyLogs = map[string]struct {
+	path  string
+	parse func(string) []HistoryEntry
+}{
+	"pacman": {"/var/log/pacman.log", parsePacmanLog},
+	"apt":    {"/var/log/apt/history.log", parseAptHistory},
+	"zypper": {"/var/log/zypp/history", parseZypperHistory},
+	"dnf":    {"/var/log/dnf.rpm.log", parseDnfLog},
+}
+
 // history returns the newest entries first.
 func (m *manager) history(ctx context.Context, limit int) ([]HistoryEntry, error) {
 	var entries []HistoryEntry
-	read := func(path string, parse func(string) []HistoryEntry) {
-		if s, err := readTail(path); err == nil {
-			entries = parse(s)
-		}
-	}
 	if m.primary != nil {
-		switch m.primary.Name() {
-		case "pacman":
-			read("/var/log/pacman.log", parsePacmanLog)
-		case "apt":
-			read("/var/log/apt/history.log", parseAptHistory)
-		case "zypper":
-			read("/var/log/zypp/history", parseZypperHistory)
-		case "dnf":
-			read("/var/log/dnf.rpm.log", parseDnfLog)
+		if src, ok := historyLogs[m.primary.Name()]; ok {
+			if s, err := readTail(src.path); err == nil {
+				entries = src.parse(s)
+			}
 		}
 	}
 	// newest first
