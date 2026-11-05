@@ -294,23 +294,28 @@ func (pr *pairRelay) peerToBridge(in *bufio.Reader) {
 		if err != nil {
 			return
 		}
-		var m rpc.Message
-		if json.Unmarshal(line, &m) != nil {
-			continue
-		}
-		if m.Method != "" {
-			if !pairAllowed[m.Method] {
-				if pr.refuse(m) != nil {
-					return
-				}
-				continue
-			}
-			line = pr.forwardCall(m)
-		}
-		if _, err := pr.raw.Stdin.Write(append(bytes.TrimRight(line, "\n"), '\n')); err != nil {
+		if pr.relayPeerLine(line) != nil {
 			return
 		}
 	}
+}
+
+// relayPeerLine handles one line from the other server: calls outside
+// pairAllowed are refused, allowed ones are forwarded to the bridge. Lines
+// that are not JSON are skipped.
+func (pr *pairRelay) relayPeerLine(line []byte) error {
+	var m rpc.Message
+	if json.Unmarshal(line, &m) != nil {
+		return nil
+	}
+	if m.Method != "" {
+		if !pairAllowed[m.Method] {
+			return pr.refuse(m)
+		}
+		line = pr.forwardCall(m)
+	}
+	_, err := pr.raw.Stdin.Write(append(bytes.TrimRight(line, "\n"), '\n'))
+	return err
 }
 
 func (pr *pairRelay) refuse(m rpc.Message) error {

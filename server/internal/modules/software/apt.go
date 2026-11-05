@@ -75,7 +75,6 @@ func (a *apt) ListInstalled(ctx context.Context) ([]Package, error) {
 
 var aptUpgradableRe = regexp.MustCompile(`^(\S+?)/(\S+) (\S+) \S+ \[upgradable from: ([^\]]+)\]`)
 
-// parseAptUpgradable parses `apt list --upgradable`.
 func parseAptUpgradable(out string) []Update {
 	var ups []Update
 	for _, line := range strings.Split(out, "\n") {
@@ -296,18 +295,20 @@ func aptStep(title string, args ...string) Step {
 	return Step{Title: title, Name: "apt-get", Args: append(opts, args...), Env: aptEnv, Parse: parseAptLine}
 }
 
-func (a *apt) Install(pkgs []string) (Plan, error) {
+// aptPackagePlan builds a one-step plan that runs `apt-get <action> -- <pkgs>`.
+func aptPackagePlan(action string, pkgs []string) (Plan, error) {
 	if err := validNames(pkgs); err != nil || len(pkgs) == 0 {
 		return Plan{}, orInvalid(err)
 	}
-	return Plan{Steps: []Step{aptStep("install", append([]string{"install", "--"}, pkgs...)...)}}, nil
+	return Plan{Steps: []Step{aptStep(action, append([]string{action, "--"}, pkgs...)...)}}, nil
+}
+
+func (a *apt) Install(pkgs []string) (Plan, error) {
+	return aptPackagePlan("install", pkgs)
 }
 
 func (a *apt) Remove(pkgs []string) (Plan, error) {
-	if err := validNames(pkgs); err != nil || len(pkgs) == 0 {
-		return Plan{}, orInvalid(err)
-	}
-	return Plan{Steps: []Step{aptStep("remove", append([]string{"remove", "--"}, pkgs...)...)}}, nil
+	return aptPackagePlan("remove", pkgs)
 }
 
 func (a *apt) Upgrade(pkgs []string) (Plan, error) {

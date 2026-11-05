@@ -4,18 +4,13 @@ package files
 
 // File system access that stays safe when the bridge runs as root.
 //
-// Every operation that changes something works on directory file descriptors:
-// the parent directory of the target is opened once, and the target is then
-// reached with *at() system calls on its bare name, never following a link.
-// Recursive walks open each directory with O_NOFOLLOW|O_DIRECTORY and act on
-// the opened descriptors, so another user who owns part of the tree cannot
-// swap a directory for a link while the walk runs and redirect root's change
-// outside the tree (docs/SECURITY-REVIEW.md, H1).
+// Changes work on directory file descriptors: the parent is opened once and the
+// target is reached with *at() calls on its bare name, so links are not
+// followed. Walks act on the descriptor of each opened directory, so a user
+// cannot swap a directory for a link mid-walk (docs/SECURITY-REVIEW.md, H1).
 //
-// In the root bridge (strictLinks) the parent directory itself is resolved
-// one component at a time, and the only links followed on the way are links
-// owned by root: a user's link in the middle of a path is refused. In the user
-// bridge paths resolve normally: the user can only reach what they may reach.
+// The root bridge (strictLinks) resolves parents one component at a time and
+// follows only links owned by root. The user bridge resolves paths normally.
 
 import (
 	"context"
@@ -232,8 +227,6 @@ func lstatPath(path string) (unix.Stat_t, error) {
 	return st, pathErr("lstat", path, err)
 }
 
-// ---- chmod ----
-
 // unixMode turns permission and special bits into the chmod argument.
 func unixMode(m os.FileMode) uint32 {
 	v := uint32(m.Perm())
@@ -330,8 +323,6 @@ func walkDir(ctx context.Context, e entryRef, visit visitFunc, onErr func(error)
 	return nil
 }
 
-// ---- remove ----
-
 // removeAllAt removes name below dirfd and everything inside it without
 // following links. A missing name is not an error.
 func removeAllAt(dirfd int, name, full string) error {
@@ -395,8 +386,6 @@ func removePath(path string) error {
 	return removeAllAt(dfd(d), name, path)
 }
 
-// ---- create ----
-
 // tempName returns a fresh name for a hidden temporary file.
 func tempName(prefix string) string {
 	return prefix + strconv.FormatUint(rand.Uint64(), 36)
@@ -449,8 +438,6 @@ func mkdirAll(path string, perm uint32) error {
 	}
 	return nil
 }
-
-// ---- rename / copy ----
 
 // renameNoReplace renames without ever replacing an existing target.
 func renameNoReplace(sdir int, sname string, ddir int, dname, dfull string) error {
