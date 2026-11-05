@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, call, stream, usePrefs, useSession, type StreamHandle } from '../../api';
-import { useT } from '../../i18n';
+import { useT, type TFn } from '../../i18n';
 import { usePaletteActions } from '../index';
 import { Badge, Button, Page, Sheet, toast, useIsMobile, useMediaQuery } from '../../ui';
 import { Details } from './Details';
@@ -23,32 +23,23 @@ function toEntry(e: Omit<Entry, 'key'>): Entry {
 
 const message = (e: unknown) => (e instanceof ApiError ? e.message : e instanceof Error ? e.message : String(e));
 
-export default function LogsPage() {
-  const t = useT('logs');
-  const nav = useNavigate();
-  const mobile = useIsMobile();
-  const wide = useMediaQuery('(min-width: 1100px)');
-  const inlineDetails = useMediaQuery('(min-width: 1360px)');
-  const [params, setParams] = useSearchParams();
-  const { prefs, set } = usePrefs();
-  const { session, isUnlocked } = useSession();
-  const win = session?.os === 'windows';
+type LogsCall = <T>(method: string, params: unknown, signal?: AbortSignal) => Promise<T>;
 
-  const filter = useMemo(() => parseFilter(params, win), [params, win]);
-  const setFilter = useCallback((patch: Partial<Filter>) => setParams((prev) => writeFilter(prev, patch, win), { replace: true }), [setParams, win]);
-
-  const watchers = useMemo(() => normalizeWatchers(prefs['logs.watchers']), [prefs]);
-  const watchersKey = JSON.stringify(watchers);
-
-  // ---- admin: ask as the user first, escalate when the bridge says needs_admin ----
+// Ask as the user first, escalate when the bridge says needs_admin, and stay
+// admin until the session locks.
+function useAdminEscalation(isUnlocked: boolean, isRoot: boolean | undefined) {
   const adminRef = useRef(false);
   const [admin, setAdmin] = useState(false);
   useEffect(() => {
-    if (!isUnlocked && !session?.isRoot && adminRef.current) {
+    if (!isUnlocked && !isRoot && adminRef.current) {
       adminRef.current = false;
       setAdmin(false);
     }
-  }, [isUnlocked, session?.isRoot]);
+  }, [isUnlocked, isRoot]);
+  const markAdmin = useCallback(() => {
+    adminRef.current = true;
+    setAdmin(true);
+  }, []);
   const lcall = useCallback(async <T,>(method: string, p: unknown, signal?: AbortSignal): Promise<T> => {
     if (adminRef.current) return call<T>(method, p, { admin: true, signal });
     try {
@@ -56,22 +47,14 @@ export default function LogsPage() {
     } catch (e) {
       if (!(e instanceof ApiError) || e.code !== 'needs_admin') throw e;
       const r = await call<T>(method, p, { admin: true, signal });
-      adminRef.current = true;
-      setAdmin(true);
+      markAdmin();
       return r;
     }
-  }, []);
-  const unlockAndReload = useCallback(() => {
-    void call('logs.sources', { watchers }, { admin: true })
-      .then(() => {
-        adminRef.current = true;
-        setAdmin(true);
-        setTick((n) => n + 1);
-      })
-      .catch(() => undefined);
-  }, [watchers]);
+  }, [markAdmin]);
+  return { adminRef, admin, markAdmin, lcall };
+}
 
-  // ---- sources ----
+function useLogSources(lcall: LogsCall, watchers: Watcher[], watchersKey: string, admin: boolean) {
   const [sources, setSources] = useState<SourcesResult | null>(null);
   const [srcError, setSrcError] = useState<string>();
   const loadSources = useCallback(
@@ -93,13 +76,10 @@ export default function LogsPage() {
       window.clearInterval(id);
     };
   }, [loadSources, admin]);
+  return { sources, srcError, loadSources };
+}
 
-  // ---- query ----
-  const [tick, setTick] = useState(0);
-  const anchor = useMemo(() => Date.now(), [filter.range, filter.from, filter.to, tick]); // eslint-disable-line react-hooks/exhaustive-deps
-  const b = useMemo(() => bounds(filter, anchor), [filter, anchor]);
-  const qkey = JSON.stringify([filter.sources, filter.levels, filter.q, filter.range, filter.from, filter.to, tick, watchersKey]);
-
+function useLogQuery(lcall: LogsCall, filter: Filter, b: ReturnType<typeof bounds>, watchers: Watcher[], qkey: string) {
   const [rows, setRows] = useState<Entry[]>([]);
   const rowsRef = useRef<Entry[]>([]);
   rowsRef.current = rows;
@@ -171,7 +151,10 @@ export default function LogsPage() {
       .finally(() => id === gen.current && setMoreLoading(false));
   }, [next, moreLoading, lcall, baseParams]);
 
-  // ---- histogram ----
+  return { rows, setRows, rowsRef, hasMore, loading, moreLoading, error, skipped, loadedKey, sel, setSel, loadMore };
+}
+
+function useLogHistogram(lcall: LogsCall, filter: Filter, anchor: number, tick: number, watchers: Watcher[], watchersKey: string) {
   const [hist, setHist] = useState<HistogramResult | null>(null);
   const [histLoading, setHistLoading] = useState(false);
   const [hTick, setHTick] = useState(0);
@@ -195,22 +178,38 @@ export default function LogsPage() {
     return () => ac.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter.sources, filter.q, filter.range, filter.from, filter.to, filter.live, tick, hTick, watchersKey]);
+  return { hist, histLoading };
+}
 
-  const counts = useMemo<Record<Level, number> | null>(() => {
-    if (!hist) return null;
-    const c: Record<Level, number> = { err: 0, warn: 0, info: 0, debug: 0 };
-    for (const x of hist.buckets) {
-      c.err += x.err;
-      c.warn += x.warn;
-      c.info += x.info;
-      c.debug += x.debug;
-    }
-    return c;
-  }, [hist]);
+function levelCounts(hist: HistogramResult | null): Record<Level, number> | null {
+  if (!hist) return null;
+  const c: Record<Level, number> = { err: 0, warn: 0, info: 0, debug: 0 };
+  for (const x of hist.buckets) {
+    c.err += x.err;
+    c.warn += x.warn;
+    c.info += x.info;
+    c.debug += x.debug;
+  }
+  return c;
+}
 
-  // ---- live ----
+type LiveFollowOptions = {
+  filter: Filter;
+  setFilter: (patch: Partial<Filter>) => void;
+  watchers: Watcher[];
+  qkey: string;
+  isLoaded: boolean;
+  adminRef: MutableRefObject<boolean>;
+  markAdmin: () => void;
+  rowsRef: MutableRefObject<Entry[]>;
+  setRows: Dispatch<SetStateAction<Entry[]>>;
+  t: TFn;
+};
+
+// Live mode prepends followed entries once the current query has loaded.
+function useLiveFollow({ filter, setFilter, watchers, qkey, isLoaded, adminRef, markAdmin, rowsRef, setRows, t }: LiveFollowOptions) {
   useEffect(() => {
-    if (!filter.live || loadedKey !== qkey) return;
+    if (!filter.live || !isLoaded) return;
     let h: StreamHandle | undefined;
     let closed = false;
     const ingest = (batch: Omit<Entry, 'key'>[]) => {
@@ -234,8 +233,7 @@ export default function LogsPage() {
           onError: (e) => {
             if (closed) return;
             if (e.code === 'needs_admin' && !adm) {
-              adminRef.current = true;
-              setAdmin(true);
+              markAdmin();
               open(true);
               return;
             }
@@ -250,13 +248,71 @@ export default function LogsPage() {
       closed = true;
       h?.close();
     };
+    // qkey covers the filter fields and watchers the stream reads; reopen only when it changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter.live, loadedKey === qkey, qkey]);
+  }, [filter.live, isLoaded, qkey]);
+}
+
+function sourcesLabelOf(ids: string[], sources: SourcesResult | null, t: TFn): string {
+  if (ids.length === 1 && ids[0] === 'all') return t('sources.all');
+  if (ids.length > 1) return `${ids.length} ${t('sources.title').toLowerCase()}`;
+  const id = ids[0];
+  for (const g of sources?.groups ?? []) {
+    const s = g.sources.find((x) => x.id === id);
+    if (s) return s.label;
+  }
+  return id.replace(/^(unit|file):/, '').replace(/\.service$/, '').replace(/^.*\//, '');
+}
+
+function contextSourceFor(selected: Entry | null, sourceIds: string[], win: boolean): string {
+  if (!selected) return win ? 'all' : 'journal';
+  const onlySource = sourceIds.length === 1 ? sourceIds[0] : '';
+  return onlySource.startsWith('unit:') || onlySource === 'kernel' ? onlySource : selected.srcId;
+}
+
+export default function LogsPage() {
+  const t = useT('logs');
+  const nav = useNavigate();
+  const mobile = useIsMobile();
+  const wide = useMediaQuery('(min-width: 1100px)');
+  const inlineDetails = useMediaQuery('(min-width: 1360px)');
+  const [params, setParams] = useSearchParams();
+  const { prefs, set } = usePrefs();
+  const { session, isUnlocked } = useSession();
+  const win = session?.os === 'windows';
+
+  const filter = useMemo(() => parseFilter(params, win), [params, win]);
+  const setFilter = useCallback((patch: Partial<Filter>) => setParams((prev) => writeFilter(prev, patch, win), { replace: true }), [setParams, win]);
+
+  const watchers = useMemo(() => normalizeWatchers(prefs['logs.watchers']), [prefs]);
+  const watchersKey = JSON.stringify(watchers);
+
+  const { adminRef, admin, markAdmin, lcall } = useAdminEscalation(isUnlocked, session?.isRoot);
+  const [tick, setTick] = useState(0);
+  const unlockAndReload = useCallback(() => {
+    void call('logs.sources', { watchers }, { admin: true })
+      .then(() => {
+        markAdmin();
+        setTick((n) => n + 1);
+      })
+      .catch(() => undefined);
+  }, [watchers, markAdmin]);
+
+  const { sources, srcError, loadSources } = useLogSources(lcall, watchers, watchersKey, admin);
+
+  const anchor = useMemo(() => Date.now(), [filter.range, filter.from, filter.to, tick]); // eslint-disable-line react-hooks/exhaustive-deps
+  const b = useMemo(() => bounds(filter, anchor), [filter, anchor]);
+  const qkey = JSON.stringify([filter.sources, filter.levels, filter.q, filter.range, filter.from, filter.to, tick, watchersKey]);
+  const { rows, setRows, rowsRef, hasMore, loading, moreLoading, error, skipped, loadedKey, sel, setSel, loadMore } = useLogQuery(lcall, filter, b, watchers, qkey);
+
+  const { hist, histLoading } = useLogHistogram(lcall, filter, anchor, tick, watchers, watchersKey);
+  const counts = useMemo(() => levelCounts(hist), [hist]);
+
+  useLiveFollow({ filter, setFilter, watchers, qkey, isLoaded: loadedKey === qkey, adminRef, markAdmin, rowsRef, setRows, t });
 
   // ---- selection and navigation ----
   const selected = useMemo(() => (sel ? rows.find((r) => r.key === sel) ?? null : null), [rows, sel]);
-  const onlySource = filter.sources.length === 1 ? filter.sources[0] : '';
-  const contextSource = selected ? (onlySource.startsWith('unit:') || onlySource === 'kernel' ? onlySource : selected.srcId) : win ? 'all' : 'journal';
+  const contextSource = contextSourceFor(selected, filter.sources, win);
 
   const addWatcher = (w: Watcher) => {
     void set('logs.watchers', [...watchers, w]);
@@ -276,16 +332,7 @@ export default function LogsPage() {
     setFilter({ sources: ids });
     if (!wide) setSheet(false);
   };
-  const sourcesLabel = useMemo(() => {
-    if (filter.sources.length === 1 && filter.sources[0] === 'all') return t('sources.all');
-    if (filter.sources.length > 1) return `${filter.sources.length} ${t('sources.title').toLowerCase()}`;
-    const id = filter.sources[0];
-    for (const g of sources?.groups ?? []) {
-      const s = g.sources.find((x) => x.id === id);
-      if (s) return s.label;
-    }
-    return id.replace(/^(unit|file):/, '').replace(/\.service$/, '').replace(/^.*\//, '');
-  }, [filter.sources, sources, t]);
+  const sourcesLabel = useMemo(() => sourcesLabelOf(filter.sources, sources, t), [filter.sources, sources, t]);
 
   const sourcesEl = (
     <Sources

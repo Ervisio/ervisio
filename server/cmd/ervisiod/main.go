@@ -43,15 +43,114 @@ func main() {
 // run is the daemon: it serves until ctx is cancelled (a signal in console
 // mode, a Stop/Shutdown request when running as a Windows service).
 func run(ctx context.Context) {
+	runInternalMode()
+	f := parseFlags()
+	if f.version {
+		fmt.Println(brand.Version)
+		return
+	}
+	if f.check {
+		path := f.configPath
+		if flag.NArg() > 0 {
+			path = flag.Arg(0)
+		}
+		os.Exit(checkConfig(path))
+	}
+	log.SetFlags(log.LstdFlags)
+	log.SetPrefix(brand.DaemonBinary + ": ")
+
+	if f.noAuth && !f.dev {
+		log.Fatal("--dev-insecure-noauth requires --dev")
+	}
+	if f.noAuth && bridge.RunningAsServiceIdentity() {
+		log.Fatal("--dev-insecure-noauth refuses to run as root")
+	}
+	// A machine that ran LinuxAdmin: its configuration, certificate, plugins
+	// and state are copied to the Ervisio locations before they are read
+	// (once; a no-op afterwards). See internal/legacy.
+	if !f.dev && bridge.Privileged() && f.configPath == brand.ConfigPath {
+		importLegacyData()
+	}
+	cfgAbs, err := filepath.Abs(f.configPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	bp := resolveBridgePath(f.bridgePath)
+	// A versioned install (/usr/lib/ervisio/versions/<v>/bin) serves the
+	// web app and packaged plugins of its own version.
+	versionDir, versioned := update.RunningVersionDir()
+	webDir := resolveWebDir(f.web, f.dev, versionDir, versioned)
+	pluginDirs := []string{brand.PackagedPluginsDir, brand.InstalledPluginsDir}
+	if versioned {
+		pluginDirs[0] = filepath.Join(versionDir, "plugins")
+	}
+	// Plugins work in this process (as root) uses the same configuration
+	// and packaged folder as the bridges.
+	configmod.Path = cfgAbs
+	plugins.SystemDir = pluginDirs[0]
+	if f.installPlugin != "" || f.skipMoved {
+		os.Exit(pluginCommand(f.installPlugin, f.skipMoved))
+	}
+	devPlugins := ""
+	if f.dev {
+		devPlugins, pluginDirs = setupDevPlugins(pluginDirs)
+	}
+	state := resolveStatePaths(f.devState, f.dev)
+
+	helper := ""
+	if !f.dev && runtime.GOOS != "windows" {
+		helper = sessionHelperPath()
+	}
+
+	srv, err := server.New(server.Options{
+		ConfigPath:        cfgAbs,
+		Dev:               f.dev,
+		NoAuth:            f.noAuth,
+		Listen:            f.listen,
+		WebDir:            webDir,
+		ViteURL:           f.vite,
+		Bridge:            bp,
+		PluginDirs:        pluginDirs,
+		DevPluginsDir:     devPlugins,
+		DevPluginsFile:    state.devPluginsFile,
+		SessionHelper:     helper,
+		DevAuthorizedKeys: f.devKeys,
+		StateDir:          state.dir,
+		NotifyFile:        state.notifyFile,
+		EnvsDir:           f.envsDir,
+		TunnelDir:         f.tunnelDir,
+		Logger:            log.Default(),
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	if !f.dev {
+		startUpdates(ctx, srv)
+	}
+	if !f.dev && bridge.Privileged() {
+		startMovedPluginsMigration(ctx)
+	}
+	if err := srv.Run(ctx); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// runInternalMode exits the process when the arguments ask for one of the
+// helper modes the daemon binary also serves; otherwise it returns.
+func runInternalMode() {
+	if len(os.Args) < 2 {
+		return
+	}
+	mode := os.Args[1]
 	// Internal mode: the root helper that opens a PAM session around a user
 	// bridge (started by the daemon itself, never by hand).
-	if len(os.Args) > 1 && os.Args[1] == bridge.HelperFlag {
+	if mode == bridge.HelperFlag {
 		os.Exit(bridge.RunSessionHelper(os.Args[2:]))
 	}
 	// Internal mode: switch to another installed version, restart the
 	// service and roll back if it does not answer (started by updates.apply
 	// in a transient systemd unit, never by hand).
-	if len(os.Args) > 1 && os.Args[1] == update.HelperFlag {
+	if mode == update.HelperFlag {
 		// Started by LinuxAdmin's updater from its own layout: this release
 		// moves the installation to Ervisio instead of a plain switch.
 		if _, ok := legacyExe(); ok {
@@ -61,14 +160,35 @@ func run(ctx context.Context) {
 	}
 	// Internal mode: move a LinuxAdmin installation to Ervisio (started in a
 	// transient unit by a daemon that runs from LinuxAdmin's layout).
-	if len(os.Args) > 1 && os.Args[1] == legacy.TransitionFlag {
+	if mode == legacy.TransitionFlag {
 		os.Exit(legacy.RunHelper(os.Args[2:]))
 	}
 	// Installer and package scripts: import LinuxAdmin's data, or remove
 	// what is left of it.
-	if len(os.Args) > 1 && (os.Args[1] == legacy.MigrateFlag || os.Args[1] == legacy.RemoveFlag) {
-		os.Exit(legacy.RunMigrate(os.Args[1], os.Args[2:]))
+	if mode == legacy.MigrateFlag || mode == legacy.RemoveFlag {
+		os.Exit(legacy.RunMigrate(mode, os.Args[2:]))
 	}
+}
+
+type daemonFlags struct {
+	configPath    string
+	dev           bool
+	listen        string
+	web           string
+	vite          string
+	bridgePath    string
+	noAuth        bool
+	devKeys       string
+	devState      string
+	envsDir       string
+	tunnelDir     string
+	check         bool
+	version       bool
+	installPlugin string
+	skipMoved     bool
+}
+
+func parseFlags() daemonFlags {
 	configPath := flag.String("config", brand.ConfigPath, "configuration file")
 	dev := flag.Bool("dev", false, "development mode: plain HTTP on 127.0.0.1:9090, no root, only your own user")
 	listen := flag.String("listen", "", "listen address (overrides the config; dev default 127.0.0.1:9090)")
@@ -84,69 +204,57 @@ func run(ctx context.Context) {
 	version := flag.Bool("version", false, "print the version and exit")
 	installPlugin := flag.String("install-plugin", "", "install (or update) this plugin from the signed marketplace catalog, then exit (root)")
 	skipMoved := flag.Bool("skip-moved-plugins", false, "do not install the plugins that left "+brand.Name+" (Docker) from the marketplace on start, then exit (root)")
-	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [flags]\n", brand.DaemonBinary)
-		flag.VisitAll(func(f *flag.Flag) {
-			if hiddenFlags[f.Name] {
-				return
-			}
-			fmt.Fprintf(flag.CommandLine.Output(), "  -%s\n    \t%s\n", f.Name, f.Usage)
-		})
-	}
+	flag.Usage = printUsage
 	flag.Parse()
-	if *version {
-		fmt.Println(brand.Version)
+	return daemonFlags{
+		configPath:    *configPath,
+		dev:           *dev,
+		listen:        *listen,
+		web:           *web,
+		vite:          *vite,
+		bridgePath:    *bridgePath,
+		noAuth:        *noAuth,
+		devKeys:       *devKeys,
+		devState:      *devState,
+		envsDir:       *envsDir,
+		tunnelDir:     *tunnelDir,
+		check:         *check,
+		version:       *version,
+		installPlugin: *installPlugin,
+		skipMoved:     *skipMoved,
+	}
+}
+
+func printUsage() {
+	fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [flags]\n", brand.DaemonBinary)
+	flag.VisitAll(func(f *flag.Flag) {
+		if hiddenFlags[f.Name] {
+			return
+		}
+		fmt.Fprintf(flag.CommandLine.Output(), "  -%s\n    \t%s\n", f.Name, f.Usage)
+	})
+}
+
+func importLegacyData() {
+	res, err := legacy.ImportOnStart(legacy.Paths{}, log.Printf)
+	if err != nil {
+		log.Printf("copy %s's data: %v", brand.LegacyName, err)
 		return
 	}
-	if *check {
-		path := *configPath
-		if flag.NArg() > 0 {
-			path = flag.Arg(0)
-		}
-		os.Exit(checkConfig(path))
+	if res.Any() {
+		log.Printf("%s's data was copied to the %s locations (see %s/%s)", brand.LegacyName, brand.Name, brand.LegacyConfigDir, legacy.NoteFile)
 	}
-	log.SetFlags(log.LstdFlags)
-	log.SetPrefix(brand.DaemonBinary + ": ")
+}
 
-	if *noAuth && !*dev {
-		log.Fatal("--dev-insecure-noauth requires --dev")
-	}
-	if *noAuth && bridge.RunningAsServiceIdentity() {
-		log.Fatal("--dev-insecure-noauth refuses to run as root")
-	}
-	// A machine that ran LinuxAdmin: its configuration, certificate, plugins
-	// and state are copied to the Ervisio locations before they are read
-	// (once; a no-op afterwards). See internal/legacy.
-	if !*dev && bridge.Privileged() && *configPath == brand.ConfigPath {
-		if res, err := legacy.ImportOnStart(legacy.Paths{}, log.Printf); err != nil {
-			log.Printf("copy %s's data: %v", brand.LegacyName, err)
-		} else if res.Any() {
-			log.Printf("%s's data was copied to the %s locations (see %s/%s)", brand.LegacyName, brand.Name, brand.LegacyConfigDir, legacy.NoteFile)
-		}
-	}
-	cfgAbs, err := filepath.Abs(*configPath)
-	if err != nil {
-		log.Fatal(err)
-	}
-	bp := *bridgePath
+// resolveBridgePath returns the absolute, symlink-free path of the bridge
+// binary: the flag value, else the one installed next to this daemon.
+func resolveBridgePath(flagPath string) string {
+	bp := flagPath
 	if bp == "" {
-		exe, err := os.Executable()
-		if err != nil {
-			log.Fatal(err)
-		}
-		bp = filepath.Join(filepath.Dir(exe), brand.BridgeBinary+exeSuffix)
-		// Packages (flat layout) install the daemon as /usr/bin/ervisiod
-		// and the bridge as /usr/lib/ervisio/ervisio-bridge.
-		if _, err := os.Stat(bp); err != nil {
-			if alt := filepath.Join(brand.LibDir, brand.BridgeBinary); isFile(alt) {
-				bp = alt
-			} else if alt := filepath.Join(filepath.Dir(exe), brand.LegacyBridgeBinary); isFile(alt) {
-				// Started from LinuxAdmin's layout (compatibility archive).
-				bp = alt
-			}
-		}
+		bp = defaultBridgePath()
 	}
-	if bp, err = filepath.Abs(bp); err != nil {
+	bp, err := filepath.Abs(bp)
+	if err != nil {
 		log.Fatal(err)
 	}
 	// Pin the bridge of this version: with the versioned layout the path
@@ -154,153 +262,170 @@ func run(ctx context.Context) {
 	if r, err := filepath.EvalSymlinks(bp); err == nil {
 		bp = r
 	}
-	// A versioned install (/usr/lib/ervisio/versions/<v>/bin) serves the
-	// web app and packaged plugins of its own version.
-	versionDir, versioned := update.RunningVersionDir()
-	webDir := *web
-	if webDir == "" && !*dev {
+	return bp
+}
+
+func defaultBridgePath() string {
+	exe, err := os.Executable()
+	if err != nil {
+		log.Fatal(err)
+	}
+	bp := filepath.Join(filepath.Dir(exe), brand.BridgeBinary+exeSuffix)
+	// Packages (flat layout) install the daemon as /usr/bin/ervisiod
+	// and the bridge as /usr/lib/ervisio/ervisio-bridge.
+	if _, err := os.Stat(bp); err == nil {
+		return bp
+	}
+	if alt := filepath.Join(brand.LibDir, brand.BridgeBinary); isFile(alt) {
+		return alt
+	}
+	if alt := filepath.Join(filepath.Dir(exe), brand.LegacyBridgeBinary); isFile(alt) {
+		// Started from LinuxAdmin's layout (compatibility archive).
+		return alt
+	}
+	return bp
+}
+
+func resolveWebDir(flagDir string, dev bool, versionDir string, versioned bool) string {
+	webDir := flagDir
+	if webDir == "" && !dev {
 		webDir = brand.WebDir
 		if versioned {
 			webDir = filepath.Join(versionDir, "web")
 		}
 	}
-	if webDir != "" {
-		if webDir, err = filepath.Abs(webDir); err != nil {
-			log.Fatal(err)
-		}
+	if webDir == "" {
+		return ""
 	}
-	pluginDirs := []string{brand.PackagedPluginsDir, brand.InstalledPluginsDir}
-	if versioned {
-		pluginDirs[0] = filepath.Join(versionDir, "plugins")
-	}
-	// Plugins work in this process (as root) uses the same configuration
-	// and packaged folder as the bridges.
-	configmod.Path = cfgAbs
-	plugins.SystemDir = pluginDirs[0]
-	if *installPlugin != "" || *skipMoved {
-		os.Exit(pluginCommand(*installPlugin, *skipMoved))
-	}
-	devPlugins := ""
-	if *dev {
-		if wd, err := os.Getwd(); err == nil {
-			devPlugins = filepath.Join(wd, "plugins")
-			pluginDirs = append([]string{devPlugins}, pluginDirs...)
-		}
-		// The daemon itself resolves plugins for background jobs and
-		// notifications, as the bridges do (--dev, --dev-plugins).
-		plugins.DaemonDev = true
-		plugins.DaemonPluginsDir = devPlugins
-	}
-	stateDir, notifyFile, devPluginsFile := "", "", ""
-	if *devState != "" {
-		if !*dev {
-			log.Fatal("--dev-state-dir requires --dev")
-		}
-		if stateDir, err = filepath.Abs(*devState); err != nil {
-			log.Fatal(err)
-		}
-		notifyFile = filepath.Join(stateDir, "notify.json")
-		devPluginsFile = filepath.Join(stateDir, "plugins-dev.json")
-		plugins.DevFile = devPluginsFile
-	} else if *dev {
-		stateDir = filepath.Join(os.TempDir(), fmt.Sprintf("ervisio-dev-state-%d", os.Getuid()))
-		notifyFile = filepath.Join(stateDir, "notify.json")
-	}
-
-	helper := ""
-	if !*dev && runtime.GOOS != "windows" {
-		// The daemon's own binary serves as the PAM session helper. Windows has
-		// no PAM session: the bridge starts directly with the user's token.
-		exe, err := os.Executable()
-		if err != nil {
-			log.Fatal(err)
-		}
-		if helper, err = filepath.EvalSymlinks(exe); err != nil {
-			log.Fatal(err)
-		}
-	}
-
-	srv, err := server.New(server.Options{
-		ConfigPath:        cfgAbs,
-		Dev:               *dev,
-		NoAuth:            *noAuth,
-		Listen:            *listen,
-		WebDir:            webDir,
-		ViteURL:           *vite,
-		Bridge:            bp,
-		PluginDirs:        pluginDirs,
-		DevPluginsDir:     devPlugins,
-		DevPluginsFile:    devPluginsFile,
-		SessionHelper:     helper,
-		DevAuthorizedKeys: *devKeys,
-		StateDir:          stateDir,
-		NotifyFile:        notifyFile,
-		EnvsDir:           *envsDir,
-		TunnelDir:         *tunnelDir,
-		Logger:            log.Default(),
-	})
+	abs, err := filepath.Abs(webDir)
 	if err != nil {
 		log.Fatal(err)
 	}
-	if !*dev {
-		// Automatic update checks and installs ([updates] in the config).
-		u := update.New(update.NewChecker())
-		exe, _ := os.Executable()
-		if r, err := filepath.EvalSymlinks(exe); err == nil {
-			exe = r
+	return abs
+}
+
+// setupDevPlugins puts the working directory's plugins folder first and
+// lets the daemon itself resolve plugins for background jobs and
+// notifications, as the bridges do (--dev, --dev-plugins).
+func setupDevPlugins(pluginDirs []string) (string, []string) {
+	devPlugins := ""
+	if wd, err := os.Getwd(); err == nil {
+		devPlugins = filepath.Join(wd, "plugins")
+		pluginDirs = append([]string{devPlugins}, pluginDirs...)
+	}
+	plugins.DaemonDev = true
+	plugins.DaemonPluginsDir = devPlugins
+	return devPlugins, pluginDirs
+}
+
+type statePaths struct {
+	dir            string
+	notifyFile     string
+	devPluginsFile string
+}
+
+func resolveStatePaths(devState string, dev bool) statePaths {
+	if devState != "" {
+		if !dev {
+			log.Fatal("--dev-state-dir requires --dev")
 		}
-		ok, why := u.Supported(exe, false)
-		if !ok {
-			log.Printf("self-update disabled: %s", why)
+		dir, err := filepath.Abs(devState)
+		if err != nil {
+			log.Fatal(err)
 		}
-		// A packaged install still checks (and logs) new releases; Auto
-		// never installs them there.
-		if ok || u.Layout.ManagedBy() != "" {
-			auto := &update.Auto{Updater: u, Config: srv.Config, Logf: log.Printf}
-			// A new release also goes to the notification channels that
-			// subscribe to "updates" (Settings > Notification channels).
-			auto.Notify = func(version, current string) {
-				srv.NotifyCore(notify.Message{
-					Title:  fmt.Sprintf("%s %s is available", brand.Name, version),
-					Body:   fmt.Sprintf("This server runs %s. Update it in Settings > About.", current),
-					Level:  "info",
-					Source: brand.Name,
-					Link:   "/settings#about",
-				}, notify.EventUpdates)
-			}
-			go auto.Run(ctx)
-		}
-		// Started by linuxadmin.service from LinuxAdmin's layout: move to
-		// ervisio.service. The transition stops this process.
-		if v, ok := legacyExe(); ok && bridge.Privileged() {
-			go func() {
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(3 * time.Second):
-				}
-				log.Printf("running from %s's layout: moving this installation to %s", brand.LegacyName, brand.Name)
-				if err := legacy.StartTransition(ctx, legacy.Paths{}, exe, v, update.SystemdRun); err != nil {
-					log.Printf("not moving to %s: %v", brand.Name, err)
-				}
-			}()
+		devPluginsFile := filepath.Join(dir, "plugins-dev.json")
+		plugins.DevFile = devPluginsFile
+		return statePaths{
+			dir:            dir,
+			notifyFile:     filepath.Join(dir, "notify.json"),
+			devPluginsFile: devPluginsFile,
 		}
 	}
-	if !*dev && bridge.Privileged() {
-		// Plugins that moved out of the core (Docker): keep them on machines
-		// that use them (internal/modules/plugins/moved.go).
-		go func() {
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(10 * time.Second):
-			}
-			plugins.MigrateMoved(ctx, log.Printf)
-		}()
+	if dev {
+		dir := filepath.Join(os.TempDir(), fmt.Sprintf("ervisio-dev-state-%d", os.Getuid()))
+		return statePaths{dir: dir, notifyFile: filepath.Join(dir, "notify.json")}
 	}
-	if err := srv.Run(ctx); err != nil {
+	return statePaths{}
+}
+
+// sessionHelperPath returns the daemon's own binary, which serves as the PAM
+// session helper. Windows has no PAM session: the bridge starts directly
+// with the user's token.
+func sessionHelperPath() string {
+	exe, err := os.Executable()
+	if err != nil {
 		log.Fatal(err)
 	}
+	helper, err := filepath.EvalSymlinks(exe)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return helper
+}
+
+// startUpdates runs automatic update checks and installs ([updates] in the
+// config), and moves a LinuxAdmin-layout installation to Ervisio.
+func startUpdates(ctx context.Context, srv *server.Server) {
+	u := update.New(update.NewChecker())
+	exe, _ := os.Executable()
+	if r, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = r
+	}
+	ok, why := u.Supported(exe, false)
+	if !ok {
+		log.Printf("self-update disabled: %s", why)
+	}
+	// A packaged install still checks (and logs) new releases; Auto
+	// never installs them there.
+	if ok || u.Layout.ManagedBy() != "" {
+		startAutoUpdate(ctx, srv, u)
+	}
+	// Started by linuxadmin.service from LinuxAdmin's layout: move to
+	// ervisio.service. The transition stops this process.
+	if v, ok := legacyExe(); ok && bridge.Privileged() {
+		go startLegacyTransition(ctx, exe, v)
+	}
+}
+
+func startAutoUpdate(ctx context.Context, srv *server.Server, u *update.Updater) {
+	auto := &update.Auto{Updater: u, Config: srv.Config, Logf: log.Printf}
+	// A new release also goes to the notification channels that
+	// subscribe to "updates" (Settings > Notification channels).
+	auto.Notify = func(version, current string) {
+		srv.NotifyCore(notify.Message{
+			Title:  fmt.Sprintf("%s %s is available", brand.Name, version),
+			Body:   fmt.Sprintf("This server runs %s. Update it in Settings > About.", current),
+			Level:  "info",
+			Source: brand.Name,
+			Link:   "/settings#about",
+		}, notify.EventUpdates)
+	}
+	go auto.Run(ctx)
+}
+
+func startLegacyTransition(ctx context.Context, exe, legacyVersion string) {
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(3 * time.Second):
+	}
+	log.Printf("running from %s's layout: moving this installation to %s", brand.LegacyName, brand.Name)
+	if err := legacy.StartTransition(ctx, legacy.Paths{}, exe, legacyVersion, update.SystemdRun); err != nil {
+		log.Printf("not moving to %s: %v", brand.Name, err)
+	}
+}
+
+// startMovedPluginsMigration keeps the plugins that moved out of the core
+// (Docker) on machines that use them (internal/modules/plugins/moved.go).
+func startMovedPluginsMigration(ctx context.Context) {
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(10 * time.Second):
+		}
+		plugins.MigrateMoved(ctx, log.Printf)
+	}()
 }
 
 // pluginCommand implements --install-plugin and --skip-moved-plugins.

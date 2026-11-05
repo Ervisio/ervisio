@@ -307,12 +307,26 @@ func (in *Input) Validate(existing *Env) (*Env, error) {
 		return nil, errf("The kind of an environment cannot change. Remove it and add a new one.")
 	}
 	e.Kind = in.Kind
+	if err := in.applyAccess(e, existing == nil); err != nil {
+		return nil, err
+	}
+	pin := strings.TrimSpace(in.Fingerprint)
+	if pin != "" && !fpRe.MatchString(pin) {
+		return nil, errf("The fingerprint is not valid. Copy it exactly as shown.")
+	}
+	if err := in.applyKind(e, pin, existing == nil); err != nil {
+		return nil, err
+	}
+	return e, nil
+}
+
+func (in *Input) applyAccess(e *Env, isNew bool) error {
 	if in.Access != nil {
 		if err := validAccess(in.Access); err != nil {
-			return nil, err
+			return err
 		}
 		e.Access = *in.Access
-	} else if existing == nil {
+	} else if isNew {
 		e.Access = Access{Mode: "all"}
 	}
 	if e.Access.Users == nil {
@@ -321,129 +335,149 @@ func (in *Input) Validate(existing *Env) (*Env, error) {
 	if e.Access.Groups == nil {
 		e.Access.Groups = []string{}
 	}
-	set := func(name, v string) {
-		if v != "" {
-			e.secrets[name] = v
-		}
-	}
-	pin := strings.TrimSpace(in.Fingerprint)
-	if pin != "" && !fpRe.MatchString(pin) {
-		return nil, errf("The fingerprint is not valid. Copy it exactly as shown.")
-	}
+	return nil
+}
+
+func (in *Input) applyKind(e *Env, pin string, isNew bool) error {
 	switch in.Kind {
 	case KindTCPTLS:
-		if _, _, err := SplitHostPort(in.Address); err != nil {
-			return nil, err
-		}
-		e.Address = in.Address
-		e.Insecure = in.Insecure
-		e.SkipVerify = in.SkipVerify
-		e.CA, e.ClientCert = strings.TrimSpace(in.CA), strings.TrimSpace(in.ClientCert)
-		if e.Insecure {
-			e.CA, e.ClientCert, e.Fingerprint, e.SkipVerify = "", "", "", false
-			delete(e.secrets, SecretClientKey)
-			break
-		}
-		if e.CA != "" {
-			if err := validPEM("CA certificate", e.CA); err != nil {
-				return nil, err
-			}
-		}
-		if e.ClientCert != "" {
-			if err := validPEM("client certificate", e.ClientCert); err != nil {
-				return nil, err
-			}
-		}
-		if in.ClientKey != "" {
-			if err := validPEM("client key", in.ClientKey); err != nil {
-				return nil, err
-			}
-		}
-		set(SecretClientKey, in.ClientKey)
-		if (e.ClientCert == "") != (e.secrets[SecretClientKey] == "") {
-			return nil, errf("Give both the client certificate and the client key, or neither.")
-		}
-		e.Fingerprint = pin
-		if e.SkipVerify && e.Fingerprint != "" {
-			return nil, errf("Choose either a pinned fingerprint or skipping verification, not both.")
-		}
-		if e.ClientCert != "" {
-			if err := checkKeyPair(e.ClientCert, e.secrets[SecretClientKey]); err != nil {
-				return nil, errf("The client certificate and key do not match or are not valid: %v", err)
-			}
-		}
+		return in.applyTCPTLS(e, pin)
 	case KindSSH:
-		if _, _, err := SplitHostPort(in.Address); err != nil {
-			return nil, err
-		}
-		e.Address = in.Address
-		if !sshUserRe.MatchString(in.User) {
-			return nil, errf("Give the SSH user name, for example docker.")
-		}
-		e.User = in.User
-		e.SocketPath = in.SocketPath
-		if e.SocketPath == "" {
-			e.SocketPath = DefaultSSHSock
-		}
-		if !sockPathRe.MatchString(e.SocketPath) || strings.Contains(e.SocketPath, "..") {
-			return nil, errf("The remote Docker socket must be an absolute path such as /var/run/docker.sock.")
-		}
-		if in.SSHKey != "" {
-			if err := validPEM("private key", in.SSHKey); err != nil {
-				return nil, err
-			}
-		}
-		set(SecretSSHKey, in.SSHKey)
-		set(SecretPassphrase, in.Passphrase)
-		if e.secrets[SecretSSHKey] == "" {
-			return nil, errf("Add the private key used to sign in over SSH.")
-		}
-		if _, err := ParseSSHKey(e.secrets[SecretSSHKey], e.secrets[SecretPassphrase]); err != nil {
-			return nil, err
-		}
-		if hk := strings.TrimSpace(in.HostKey); hk != "" {
-			k, err := ParseHostKey(hk)
-			if err != nil {
-				return nil, errf("The host key is not valid: %v", err)
-			}
-			e.HostKey = hk
-			e.Fingerprint = SSHFingerprint(k)
-		}
-		if e.HostKey == "" {
-			return nil, errf("Confirm the server's host key fingerprint first (Check connection).")
-		}
+		return in.applySSH(e)
 	case KindPortainerAgent:
-		if _, _, err := SplitHostPort(in.Address); err != nil {
-			return nil, err
-		}
-		e.Address = in.Address
-		set(SecretAgent, in.AgentSecret)
-		if pin != "" {
-			e.Fingerprint = pin
-		}
-		if e.Fingerprint == "" {
-			return nil, errf("Confirm the agent's certificate fingerprint first (Check connection).")
-		}
+		return in.applyPortainerAgent(e, pin)
 	case KindErvisio:
-		u, err := ParseServerURL(in.Address, in.Insecure)
-		if err != nil {
-			return nil, err
-		}
-		e.Address = u
-		e.Insecure = in.Insecure
-		if existing == nil && in.Token == "" {
-			return nil, errf("Paste the pairing token created on the other server.")
-		}
-		if pin != "" {
-			e.Fingerprint = pin
-		}
-		if strings.HasPrefix(u, "https://") && e.Fingerprint == "" {
-			return nil, errf("Confirm the other server's certificate fingerprint first (Check connection).")
-		}
+		return in.applyErvisio(e, pin, isNew)
 	default:
-		return nil, errf("Unknown kind %q.", in.Kind)
+		return errf("Unknown kind %q.", in.Kind)
 	}
-	return e, nil
+}
+
+// setSecretIfGiven keeps the stored secret when the input leaves it empty.
+func (e *Env) setSecretIfGiven(name, v string) {
+	if v != "" {
+		e.secrets[name] = v
+	}
+}
+
+func validOptionalPEM(label, s string) error {
+	if s == "" {
+		return nil
+	}
+	return validPEM(label, s)
+}
+
+func (in *Input) applyTCPTLS(e *Env, pin string) error {
+	if _, _, err := SplitHostPort(in.Address); err != nil {
+		return err
+	}
+	e.Address = in.Address
+	e.Insecure = in.Insecure
+	e.SkipVerify = in.SkipVerify
+	e.CA, e.ClientCert = strings.TrimSpace(in.CA), strings.TrimSpace(in.ClientCert)
+	if e.Insecure {
+		e.CA, e.ClientCert, e.Fingerprint, e.SkipVerify = "", "", "", false
+		delete(e.secrets, SecretClientKey)
+		return nil
+	}
+	if err := validOptionalPEM("CA certificate", e.CA); err != nil {
+		return err
+	}
+	if err := validOptionalPEM("client certificate", e.ClientCert); err != nil {
+		return err
+	}
+	if err := validOptionalPEM("client key", in.ClientKey); err != nil {
+		return err
+	}
+	e.setSecretIfGiven(SecretClientKey, in.ClientKey)
+	if (e.ClientCert == "") != (e.secrets[SecretClientKey] == "") {
+		return errf("Give both the client certificate and the client key, or neither.")
+	}
+	e.Fingerprint = pin
+	if e.SkipVerify && e.Fingerprint != "" {
+		return errf("Choose either a pinned fingerprint or skipping verification, not both.")
+	}
+	if e.ClientCert != "" {
+		if err := checkKeyPair(e.ClientCert, e.secrets[SecretClientKey]); err != nil {
+			return errf("The client certificate and key do not match or are not valid: %v", err)
+		}
+	}
+	return nil
+}
+
+func (in *Input) applySSH(e *Env) error {
+	if _, _, err := SplitHostPort(in.Address); err != nil {
+		return err
+	}
+	e.Address = in.Address
+	if !sshUserRe.MatchString(in.User) {
+		return errf("Give the SSH user name, for example docker.")
+	}
+	e.User = in.User
+	e.SocketPath = in.SocketPath
+	if e.SocketPath == "" {
+		e.SocketPath = DefaultSSHSock
+	}
+	if !sockPathRe.MatchString(e.SocketPath) || strings.Contains(e.SocketPath, "..") {
+		return errf("The remote Docker socket must be an absolute path such as /var/run/docker.sock.")
+	}
+	if err := validOptionalPEM("private key", in.SSHKey); err != nil {
+		return err
+	}
+	e.setSecretIfGiven(SecretSSHKey, in.SSHKey)
+	e.setSecretIfGiven(SecretPassphrase, in.Passphrase)
+	if e.secrets[SecretSSHKey] == "" {
+		return errf("Add the private key used to sign in over SSH.")
+	}
+	if _, err := ParseSSHKey(e.secrets[SecretSSHKey], e.secrets[SecretPassphrase]); err != nil {
+		return err
+	}
+	if hk := strings.TrimSpace(in.HostKey); hk != "" {
+		k, err := ParseHostKey(hk)
+		if err != nil {
+			return errf("The host key is not valid: %v", err)
+		}
+		e.HostKey = hk
+		e.Fingerprint = SSHFingerprint(k)
+	}
+	if e.HostKey == "" {
+		return errf("Confirm the server's host key fingerprint first (Check connection).")
+	}
+	return nil
+}
+
+func (in *Input) applyPortainerAgent(e *Env, pin string) error {
+	if _, _, err := SplitHostPort(in.Address); err != nil {
+		return err
+	}
+	e.Address = in.Address
+	e.setSecretIfGiven(SecretAgent, in.AgentSecret)
+	if pin != "" {
+		e.Fingerprint = pin
+	}
+	if e.Fingerprint == "" {
+		return errf("Confirm the agent's certificate fingerprint first (Check connection).")
+	}
+	return nil
+}
+
+func (in *Input) applyErvisio(e *Env, pin string, isNew bool) error {
+	u, err := ParseServerURL(in.Address, in.Insecure)
+	if err != nil {
+		return err
+	}
+	e.Address = u
+	e.Insecure = in.Insecure
+	if isNew && in.Token == "" {
+		return errf("Paste the pairing token created on the other server.")
+	}
+	if pin != "" {
+		e.Fingerprint = pin
+	}
+	if strings.HasPrefix(u, "https://") && e.Fingerprint == "" {
+		return errf("Confirm the other server's certificate fingerprint first (Check connection).")
+	}
+	return nil
 }
 
 // ParseServerURL checks the base URL of another Ervisio server: https, or
