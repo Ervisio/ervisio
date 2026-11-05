@@ -204,15 +204,7 @@ func writeFile(ctx context.Context, f FS, ops pathOps, p string, r io.Reader, si
 	if err := validName(ops.base(p)); err != nil {
 		return 0, err
 	}
-	name := ops.base(p)
-	if e, err := f.Stat(ctx, p); err == nil {
-		if !overwrite {
-			return 0, rpc.Errorf(rpc.Conflict, "%s already exists.", name)
-		}
-		if isDirLike(e) {
-			return 0, rpc.Errorf(rpc.Invalid, "%s is a folder and cannot be replaced by a file.", name)
-		}
-	} else if !errors.Is(err, fs.ErrNotExist) {
+	if err := checkTarget(ctx, f, p, ops.base(p), overwrite); err != nil {
 		return 0, err
 	}
 	tmp := ops.join(ops.dir(p), randName(".ervisio-upload-"))
@@ -230,30 +222,54 @@ func writeFile(ctx context.Context, f FS, ops pathOps, p string, r io.Reader, si
 		} else {
 			_ = w.Close()
 		}
-		_ = f.Remove(context.WithoutCancel(ctx), tmp, false)
+		removeTemp(ctx, f, tmp)
 		return n, err
 	}
 	if err := w.Close(); err != nil {
-		_ = f.Remove(context.WithoutCancel(ctx), tmp, false)
+		removeTemp(ctx, f, tmp)
 		return n, err
 	}
-	if overwrite {
-		if ok, _ := exists(ctx, f, p); ok {
-			if err := f.Remove(ctx, p, false); err != nil {
-				_ = f.Remove(context.WithoutCancel(ctx), tmp, false)
-				return n, err
-			}
-		}
-	} else if ok, _ := exists(ctx, f, p); ok {
-		// It appeared while the data was being sent.
-		_ = f.Remove(context.WithoutCancel(ctx), tmp, false)
-		return n, rpc.Errorf(rpc.Conflict, "%s already exists.", name)
-	}
-	if err := f.Rename(ctx, tmp, p); err != nil {
-		_ = f.Remove(context.WithoutCancel(ctx), tmp, false)
+	if err := replaceTarget(ctx, f, tmp, p, ops.base(p), overwrite); err != nil {
+		removeTemp(ctx, f, tmp)
 		return n, err
 	}
 	return n, nil
+}
+
+// checkTarget rejects an existing p that may not be written over.
+func checkTarget(ctx context.Context, f FS, p, name string, overwrite bool) error {
+	e, err := f.Stat(ctx, p)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !overwrite {
+		return rpc.Errorf(rpc.Conflict, "%s already exists.", name)
+	}
+	if isDirLike(e) {
+		return rpc.Errorf(rpc.Invalid, "%s is a folder and cannot be replaced by a file.", name)
+	}
+	return nil
+}
+
+// replaceTarget moves the finished tmp onto p.
+func replaceTarget(ctx context.Context, f FS, tmp, p, name string, overwrite bool) error {
+	if ok, _ := exists(ctx, f, p); ok {
+		if !overwrite {
+			// It appeared while the data was being sent.
+			return rpc.Errorf(rpc.Conflict, "%s already exists.", name)
+		}
+		if err := f.Remove(ctx, p, false); err != nil {
+			return err
+		}
+	}
+	return f.Rename(ctx, tmp, p)
+}
+
+func removeTemp(ctx context.Context, f FS, tmp string) {
+	_ = f.Remove(context.WithoutCancel(ctx), tmp, false)
 }
 
 // copyCtx copies in 64 KiB steps, stopping when ctx ends.

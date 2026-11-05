@@ -82,21 +82,30 @@ function authorizeNotify(m: BrokerManifest, a: Record<string, unknown>): Plan {
   const title = str(a.title, 1000);
   if (!title) return deny('A notification needs a title.');
   const params: Record<string, unknown> = { plugin: m.id, title };
+  const denied = addNotifyText(a, params) ?? addNotifyLevel(a, params);
+  if (denied) return denied;
+  return { kind: 'call', method: 'plugins.notify', params, admin: false };
+}
+
+function addNotifyText(a: Record<string, unknown>, params: Record<string, unknown>): Plan | null {
   if (a.body !== undefined) {
     const body = str(a.body, 20000);
     if (body === null) return deny('The body must be text.');
     params.body = body;
-  }
-  if (a.level !== undefined) {
-    if (a.level !== 'info' && a.level !== 'success' && a.level !== 'warn' && a.level !== 'error') return deny('The level must be info, success, warn or error.');
-    params.level = a.level;
   }
   if (a.link !== undefined) {
     const link = str(a.link, 500);
     if (link === null) return deny('The link must be text.');
     params.link = link;
   }
-  return { kind: 'call', method: 'plugins.notify', params, admin: false };
+  return null;
+}
+
+function addNotifyLevel(a: Record<string, unknown>, params: Record<string, unknown>): Plan | null {
+  if (a.level === undefined) return null;
+  if (a.level !== 'info' && a.level !== 'success' && a.level !== 'warn' && a.level !== 'error') return deny('The level must be info, success, warn or error.');
+  params.level = a.level;
+  return null;
 }
 
 /** The job (list, create) or the instance id (every other action) the call is about. */
@@ -118,6 +127,10 @@ function addTarget(m: BrokerManifest, jobs: { name: string }[], action: string, 
 /** The editable fields of an instance (create, update). */
 function addInstanceFields(action: string, a: Record<string, unknown>, params: Record<string, unknown>): Plan | null {
   if (action !== 'create' && action !== 'update') return null;
+  return addNameAndParams(a, params) ?? addScheduleAndEnabled(action, a, params) ?? addRunAs(action, a, params);
+}
+
+function addNameAndParams(a: Record<string, unknown>, params: Record<string, unknown>): Plan | null {
   if (a.name !== undefined) {
     const name = str(a.name, 60);
     if (name === null) return deny('The name must be text of at most 60 characters.');
@@ -128,6 +141,10 @@ function addInstanceFields(action: string, a: Record<string, unknown>, params: R
     if (!p) return deny('params must be an object of short strings.');
     params.params = p;
   }
+  return null;
+}
+
+function addScheduleAndEnabled(action: string, a: Record<string, unknown>, params: Record<string, unknown>): Plan | null {
   if (a.schedule !== undefined) {
     if (a.schedule === null && action === 'update') params.schedule = null;
     else {
@@ -140,31 +157,42 @@ function addInstanceFields(action: string, a: Record<string, unknown>, params: R
     if (typeof a.enabled !== 'boolean') return deny('enabled must be true or false.');
     params.enabled = a.enabled;
   }
-  // confirmAdmin is never passed on: a plugin cannot approve a job that runs steps as root. Such an instance
-  // waits for an administrator, who approves it in Settings > Plugin jobs (jobs.approve, admin level).
-  if (action === 'create' && a.runAs !== undefined) {
-    const runAs = str(a.runAs, 64);
-    if (runAs === null) return deny('runAs must be a user name.');
-    params.runAs = runAs;
-  }
+  return null;
+}
+
+// confirmAdmin is never passed on: a plugin cannot approve a job that runs steps as root. Such an instance
+// waits for an administrator, who approves it in Settings > Plugin jobs (jobs.approve, admin level).
+function addRunAs(action: string, a: Record<string, unknown>, params: Record<string, unknown>): Plan | null {
+  if (action !== 'create' || a.runAs === undefined) return null;
+  const runAs = str(a.runAs, 64);
+  if (runAs === null) return deny('runAs must be a user name.');
+  params.runAs = runAs;
   return null;
 }
 
 /** The arguments specific to history and the webhook actions. */
 function addActionFields(action: string, a: Record<string, unknown>, params: Record<string, unknown>): Plan | null {
-  if (action === 'history' && a.limit !== undefined) {
-    if (!Number.isInteger(a.limit) || (a.limit as number) < 1 || (a.limit as number) > 100) return deny('limit is a number from 1 to 100.');
-    params.limit = a.limit;
-  }
-  if (action === 'webhookCreate' && a.label !== undefined) {
-    const label = str(a.label, 60);
-    if (label === null) return deny('The label must be text of at most 60 characters.');
-    params.label = label;
-  }
+  if (action === 'history') return addLimit(a, params);
+  if (action === 'webhookCreate') return addLabel(a, params);
   if (action === 'webhookRegenerate' || action === 'webhookRevoke') {
     const w = str(a.webhook, 8);
     if (!w || !ID.test(w)) return deny('Give the id of a webhook.');
     params.webhook = w;
   }
+  return null;
+}
+
+function addLimit(a: Record<string, unknown>, params: Record<string, unknown>): Plan | null {
+  if (a.limit === undefined) return null;
+  if (!Number.isInteger(a.limit) || (a.limit as number) < 1 || (a.limit as number) > 100) return deny('limit is a number from 1 to 100.');
+  params.limit = a.limit;
+  return null;
+}
+
+function addLabel(a: Record<string, unknown>, params: Record<string, unknown>): Plan | null {
+  if (a.label === undefined) return null;
+  const label = str(a.label, 60);
+  if (label === null) return deny('The label must be text of at most 60 characters.');
+  params.label = label;
   return null;
 }
