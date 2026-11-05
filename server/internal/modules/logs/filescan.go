@@ -220,8 +220,6 @@ func fetchFile(ctx context.Context, s spec, f filter, until int64, want int) ([]
 	return out, err
 }
 
-// ---------- listing /var/log ----------
-
 var (
 	rotatedRe = regexp.MustCompile(`(\.(gz|xz|zst|bz2|zip|old|journal~?|bak|tmp)|\.\d+|-\d{6,8}|\.\d+\.(gz|xz|zst|bz2))$`)
 	binaryLog = map[string]bool{"wtmp": true, "btmp": true, "utmp": true, "lastlog": true, "faillog": true, "tallylog": true}
@@ -286,8 +284,6 @@ func candidateLog(d os.DirEntry, p string) (LogFile, bool) {
 	fh.Close()
 	return lf, bytes.IndexByte(head[:n], 0) < 0
 }
-
-// ---------- following ----------
 
 type lineState struct {
 	ts  int64

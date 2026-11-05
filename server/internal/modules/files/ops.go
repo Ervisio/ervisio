@@ -187,8 +187,6 @@ func (r *copyReporter) finish(msg map[string]any) error {
 	return r.s.Send(msg)
 }
 
-// ---- delete / trash ----
-
 func hDelete(ctx context.Context, c *rpc.Call) (any, error) {
 	var p struct {
 		Paths []string `json:"paths"`
@@ -270,8 +268,6 @@ func homeDir() (string, error) {
 	}
 	return filepath.Clean(h), nil
 }
-
-// ---- chmod / chown ----
 
 func parseMode(s string) (os.FileMode, error) {
 	s = strings.TrimSpace(s)
