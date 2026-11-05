@@ -84,7 +84,7 @@ func evtLevel(l int) string {
 	return LvInfo // 0 (LogAlways), 4 and unknown
 }
 
-// entryFromEvent converts a decoded <Event>.
+// entryFromEvent converts a decoded <Event>; ok is false without a valid timestamp or record id.
 func entryFromEvent(ev *evtXML, channel string) (*Entry, bool) {
 	ts, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(ev.System.TimeCreated.SystemTime))
 	if err != nil || ev.System.RecordID <= 0 {
