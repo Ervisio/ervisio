@@ -217,7 +217,6 @@ func OpenSession(service, user, rhost string) (*Session, error) {
 	return &Session{}, nil
 }
 
-// Env returns nil.
 func (s *Session) Env() []string { return nil }
 
 // Close does nothing.

@@ -311,8 +311,6 @@ func (s *Server) auditCore(user, ip, action, target, result, detail string) {
 	}
 }
 
-// ---- reading ----
-
 // auditParams are the params of audit.list / plugins.audit.list.
 type auditParams struct {
 	Plugin string `json:"plugin"`

@@ -26,7 +26,6 @@ func OpenSession(service, user, rhost string) (*Session, error) {
 	return nil, &Error{Kind: ErrAccount, Msg: errUnsupported.Error()}
 }
 
-// Env returns nil.
 func (s *Session) Env() []string { return nil }
 
 // Close does nothing.
