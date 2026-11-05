@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, type NavigateFunction } from 'react-router-dom';
 import { ApiError, call, fromBase64, stream, toBase64, useSession, type StreamHandle } from '../api';
 import { apiUrl, consoleOrigin, FETCH_CREDENTIALS } from '../api/base';
-import { saveDownload, sendUpload, startTransfer, watchDownloadEnd } from '../api/transfer';
+import { saveDownload, sendUpload, startTransfer, watchDownloadEnd, type TransferStart } from '../api/transfer';
 import { useI18n, useT } from '../i18n';
 import { themeVars, useTheme } from '../theme';
 import { EmptyState, Skeleton, toast } from '../ui';
@@ -19,6 +19,9 @@ const MAX_PENDING = 32;
 const MAX_UPLOADS = 4;
 const WIDGET_MIN = 48;
 const WIDGET_MAX = 720;
+const MAX_PTY_INPUT = 256 << 10;
+const MAX_PTY_SIZE = 1000;
+const SAVE_URL_TTL_MS = 60_000;
 
 const toFrameError = (e: unknown): FrameError =>
   e instanceof ApiError ? { code: String(e.code), message: e.message } : { code: 'internal', message: e instanceof Error ? e.message : String(e) };
@@ -28,6 +31,119 @@ const encodeAsset = (p: string) => p.split('/').map(encodeURIComponent).join('/'
 /** plugins.http result → what the frame gets: text for UTF-8 bodies, a Uint8Array for binary ones. */
 const toHttpResult = (r: { status: number; headers?: Record<string, string>; body?: string; b64?: boolean }): FrameHttpResult =>
   r.b64 ? { status: r.status, headers: r.headers ?? {}, bytes: fromBase64(r.body ?? '') } : { status: r.status, headers: r.headers ?? {}, text: r.body ?? '' };
+
+type HttpCallResult = { status: number; headers?: Record<string, string>; body?: string; b64?: boolean };
+type StreamKind = 'exec' | 'http' | 'pty';
+type StreamOpen = Extract<FrameToHost, { t: 'stream-open' }>;
+
+const clampWidgetHeight = (h: number) => Math.max(WIDGET_MIN, Math.min(WIDGET_MAX, Math.ceil(h)));
+
+const isValidPtySize = (r: { cols: number; rows: number } | undefined): r is { cols: number; rows: number } =>
+  !!r && Number.isInteger(r.cols) && Number.isInteger(r.rows) && r.cols >= 1 && r.rows >= 1 && r.cols <= MAX_PTY_SIZE && r.rows <= MAX_PTY_SIZE;
+
+/** The download id the frame passed to hear when the browser's download ends; 0 when it did not ask. */
+const downloadId = (args: Record<string, unknown> | undefined): number =>
+  args && typeof (args as { did?: unknown }).did === 'number' ? ((args as { did: number }).did as number) : 0;
+
+function saveAsDownload(data: Blob | Uint8Array | string, mime: string, filename: string) {
+  const url = URL.createObjectURL(new Blob([data as BlobPart], { type: mime }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener';
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  window.setTimeout(() => {
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, SAVE_URL_TTL_MS);
+}
+
+const fetchAsset = (pluginId: string, path: string) =>
+  fetch(apiUrl(`/plugins/${pluginId}/${encodeAsset(path)}`), { credentials: FETCH_CREDENTIALS }).then(async (r) => {
+    if (!r.ok) throw new ApiError(r.status === 404 ? 'not_found' : 'unavailable', `${path}: HTTP ${r.status}`);
+    return { data: await r.arrayBuffer(), type: r.headers.get('Content-Type') ?? 'application/octet-stream' };
+  });
+
+interface PlanContext {
+  plugin: PluginManifest;
+  args: Record<string, unknown>;
+  go: NavigateFunction;
+  saves: SaveLimiter;
+  watchDownload(did: number, start: TransferStart): void;
+}
+
+/** Carries out an authorized request plan; the promise settles with the reply the frame gets. */
+function runPlan(plan: Plan, ctx: PlanContext): Promise<unknown> {
+  const p = ctx.plugin;
+  switch (plan.kind) {
+    case 'deny':
+      return Promise.reject(new ApiError(plan.code, plan.message));
+    case 'call':
+      return plan.method === 'plugins.http'
+        ? call<HttpCallResult>(plan.method, plan.params, { admin: plan.admin }).then(toHttpResult)
+        : call(plan.method, plan.params, { admin: plan.admin });
+    case 'transfer':
+      // plugins.download: the daemon checks the request, then the app (not the sandboxed frame) starts the browser's download.
+      return startTransfer(plan.body, plan.admin).then((r) => {
+        saveDownload(r);
+        // The browser fetches the file by itself: the daemon says how that ended, and the frame hears it.
+        const did = downloadId(ctx.args);
+        if (did) ctx.watchDownload(did, r);
+        return { filename: r.filename ?? 'download', size: r.size, status: r.status };
+      });
+    case 'save':
+      // Data the plugin holds in memory, saved from the app (the sandboxed frame may not download).
+      if (!ctx.saves.allow(plan.size)) {
+        return Promise.reject(new ApiError('unavailable', 'Too many files saved at once. Wait a few seconds and try again.'));
+      }
+      saveAsDownload(plan.data, plan.mime, plan.filename);
+      return Promise.resolve({ filename: plan.filename, size: plan.size });
+    case 'asset':
+      return fetchAsset(p.id, plan.path);
+    case 'toast':
+      toast[plan.tone](`${p.name}: ${plan.title}`, plan.detail);
+      return Promise.resolve(null);
+    case 'open':
+      ctx.go(plan.to);
+      return Promise.resolve(null);
+    case 'openUrl':
+      // The frame has no allow-popups; the app opens the tab, detached from both the app and the frame.
+      // With noopener window.open always returns null, so a blocked pop-up cannot be detected here.
+      window.open(plan.url, '_blank', 'noopener,noreferrer');
+      return Promise.resolve(null);
+    case 'network':
+      return askNetwork({ id: p.id, name: p.name }, plan.host, plan.scheme);
+    case 'stream':
+      return Promise.reject(new ApiError('invalid', 'Use stream-open.'));
+  }
+}
+
+function authorizeStreamOpen(m: StreamOpen, p: PluginManifest, user: BrokerUser): Plan {
+  if (m.kind === 'http') return authorizeHttpStream(p, m.req, user);
+  if (m.kind === 'pty') return authorizePty(p, m.command, m.args, m.cols, m.rows, user, m.env);
+  return authorizeStream(p, m.command, m.args, user, m.env);
+}
+
+/** One stream event from the daemon → the message the frame gets, or null when the frame does not hear about it. */
+function toStreamMessage(kind: StreamKind, sid: number, d: unknown): { msg: HostToFrame; transfer?: Transferable[] } | null {
+  if (!d || typeof d !== 'object') return null;
+  if (d instanceof Uint8Array) {
+    // httpStream body chunks and pty output arrive as bytes; handed over, not copied.
+    return kind !== 'exec' ? { msg: { la: 'plugin', t: 'stream', sid, ev: 'data', chunk: d }, transfer: [d.buffer] } : null;
+  }
+  const e = d as { stream?: string; line?: string; exit?: number; type?: string; code?: number; status?: number; headers?: Record<string, string> };
+  if (kind === 'exec') {
+    if (typeof e.exit === 'number') return { msg: { la: 'plugin', t: 'stream', sid, ev: 'exit', code: e.exit } };
+    if (typeof e.line === 'string') return { msg: { la: 'plugin', t: 'stream', sid, ev: 'line', stream: e.stream === 'stderr' ? 'stderr' : 'stdout', line: e.line } };
+    return null;
+  }
+  if (kind === 'pty') {
+    return e.type === 'exit' && typeof e.code === 'number' ? { msg: { la: 'plugin', t: 'stream', sid, ev: 'exit', code: e.code } } : null;
+  }
+  return typeof e.status === 'number' ? { msg: { la: 'plugin', t: 'stream', sid, ev: 'start', status: e.status, headers: e.headers ?? {} } } : null;
+}
 
 /**
  * Hosts one view (page or widget) of a plugin in an <iframe sandbox="allow-scripts allow-forms"> served by the daemon at
@@ -87,21 +203,25 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
     let started = false;
     let pending = 0;
     // Every stream the frame opened; all are closed when the frame fails or goes away.
-    const streams = new Map<number, { h: StreamHandle; kind: 'exec' | 'http' | 'pty' }>();
+    const streams = new Map<number, { h: StreamHandle; kind: StreamKind }>();
     const saves = new SaveLimiter();
     // Uploads in progress; aborted with the frame.
     const uploads = new Map<number, AbortController>();
     // Downloads whose end the frame wants to hear about; stopped with the frame.
     const watchers = new AbortController();
 
-    const fail = (msg: string) => {
-      if (dead) return;
-      dead = true;
+    const stopAll = () => {
       for (const s of streams.values()) s.h.close();
       streams.clear();
       for (const u of uploads.values()) u.abort();
       uploads.clear();
       watchers.abort();
+    };
+
+    const fail = (msg: string) => {
+      if (dead) return;
+      dead = true;
+      stopAll();
       setFailure(msg);
       setPhase('failed');
       reportError(plugin.id, msg);
@@ -134,6 +254,12 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
       ).finally(() => pending--);
     };
 
+    const watchDownload = (did: number, r: TransferStart) => {
+      void watchDownloadEnd(r, watchers.signal).then((o) => {
+        if (!dead) post({ la: 'plugin', t: 'download-done', did, ...o });
+      });
+    };
+
     const onRequest = (m: Extract<FrameToHost, { t: 'req' }>) => {
       if (typeof m.id !== 'number') return;
       if (pending >= MAX_PENDING) {
@@ -142,86 +268,7 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
       }
       const { user, plugin: p, nav: go } = live.current;
       const plan = authorize(p, m.op, m.args, user);
-      switch (plan.kind) {
-        case 'deny':
-          reply(m.id, Promise.reject(new ApiError(plan.code, plan.message)));
-          return;
-        case 'call':
-          reply(
-            m.id,
-            plan.method === 'plugins.http'
-              ? call<{ status: number; headers?: Record<string, string>; body?: string; b64?: boolean }>(plan.method, plan.params, { admin: plan.admin }).then(toHttpResult)
-              : call(plan.method, plan.params, { admin: plan.admin }),
-          );
-          return;
-        case 'transfer':
-          // plugins.download: the daemon checks the request, then the app (not the sandboxed frame) starts the browser's download.
-          reply(
-            m.id,
-            startTransfer(plan.body, plan.admin).then((r) => {
-              saveDownload(r);
-              // The browser fetches the file by itself: the daemon says how that ended, and the frame hears it.
-              const did = m.args && typeof (m.args as { did?: unknown }).did === 'number' ? ((m.args as { did: number }).did as number) : 0;
-              if (did) {
-                void watchDownloadEnd(r, watchers.signal).then((o) => {
-                  if (!dead) post({ la: 'plugin', t: 'download-done', did, ...o });
-                });
-              }
-              return { filename: r.filename ?? 'download', size: r.size, status: r.status };
-            }),
-          );
-          return;
-        case 'save': {
-          // Data the plugin holds in memory, saved from the app (the sandboxed frame may not download).
-          if (!saves.allow(plan.size)) {
-            reply(m.id, Promise.reject(new ApiError('unavailable', 'Too many files saved at once. Wait a few seconds and try again.')));
-            return;
-          }
-          const url = URL.createObjectURL(new Blob([plan.data as BlobPart], { type: plan.mime }));
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = plan.filename;
-          a.rel = 'noopener';
-          a.style.display = 'none';
-          document.body.appendChild(a);
-          a.click();
-          window.setTimeout(() => {
-            a.remove();
-            URL.revokeObjectURL(url);
-          }, 60_000);
-          reply(m.id, Promise.resolve({ filename: plan.filename, size: plan.size }));
-          return;
-        }
-        case 'asset':
-          reply(
-            m.id,
-            fetch(apiUrl(`/plugins/${p.id}/${encodeAsset(plan.path)}`), { credentials: FETCH_CREDENTIALS }).then(async (r) => {
-              if (!r.ok) throw new ApiError(r.status === 404 ? 'not_found' : 'unavailable', `${plan.path}: HTTP ${r.status}`);
-              return { data: await r.arrayBuffer(), type: r.headers.get('Content-Type') ?? 'application/octet-stream' };
-            }),
-          );
-          return;
-        case 'toast':
-          toast[plan.tone](`${p.name}: ${plan.title}`, plan.detail);
-          reply(m.id, Promise.resolve(null));
-          return;
-        case 'open':
-          go(plan.to);
-          reply(m.id, Promise.resolve(null));
-          return;
-        case 'openUrl': {
-          // The frame has no allow-popups; the app opens the tab, detached from both the app and the frame.
-          // With noopener window.open always returns null, so a blocked pop-up cannot be detected here.
-          window.open(plan.url, '_blank', 'noopener,noreferrer');
-          reply(m.id, Promise.resolve(null));
-          return;
-        }
-        case 'network':
-          reply(m.id, askNetwork({ id: p.id, name: p.name }, plan.host, plan.scheme));
-          return;
-        case 'stream':
-          reply(m.id, Promise.reject(new ApiError('invalid', 'Use stream-open.')));
-      }
+      reply(m.id, runPlan(plan, { plugin: p, args: m.args, go, saves, watchDownload }));
     };
 
     const onStreamOpen = (m: Extract<FrameToHost, { t: 'stream-open' }>) => {
@@ -231,27 +278,12 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
       if (streams.size >= MAX_STREAMS) return err({ code: 'unavailable', message: 'Too many streams open.' });
       const { user, plugin: p } = live.current;
       const kind = m.kind === 'http' || m.kind === 'pty' ? m.kind : 'exec';
-      let plan: Plan;
-      if (m.kind === 'http') plan = authorizeHttpStream(p, m.req, user);
-      else if (m.kind === 'pty') plan = authorizePty(p, m.command, m.args, m.cols, m.rows, user, m.env);
-      else plan = authorizeStream(p, m.command, m.args, user, m.env);
+      const plan = authorizeStreamOpen(m, p, user);
       if (plan.kind !== 'stream') return err(plan.kind === 'deny' ? { code: plan.code, message: plan.message } : { code: 'invalid', message: 'bad stream' });
       const onData = (d: unknown) => {
-        if (dead || !d || typeof d !== 'object') return;
-        if (d instanceof Uint8Array) {
-          // httpStream body chunks and pty output arrive as bytes; handed over, not copied.
-          if (kind !== 'exec') post({ la: 'plugin', t: 'stream', sid, ev: 'data', chunk: d }, [d.buffer]);
-          return;
-        }
-        const e = d as { stream?: string; line?: string; exit?: number; type?: string; code?: number; status?: number; headers?: Record<string, string> };
-        if (kind === 'exec') {
-          if (typeof e.exit === 'number') post({ la: 'plugin', t: 'stream', sid, ev: 'exit', code: e.exit });
-          else if (typeof e.line === 'string') post({ la: 'plugin', t: 'stream', sid, ev: 'line', stream: e.stream === 'stderr' ? 'stderr' : 'stdout', line: e.line });
-        } else if (kind === 'pty') {
-          if (e.type === 'exit' && typeof e.code === 'number') post({ la: 'plugin', t: 'stream', sid, ev: 'exit', code: e.code });
-        } else if (typeof e.status === 'number') {
-          post({ la: 'plugin', t: 'stream', sid, ev: 'start', status: e.status, headers: e.headers ?? {} });
-        }
+        if (dead) return;
+        const out = toStreamMessage(kind, sid, d);
+        if (out) post(out.msg, out.transfer);
       };
       const h = stream(plan.method, plan.params, {
         admin: plan.admin,
@@ -271,11 +303,9 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
     const onStreamInput = (m: Extract<FrameToHost, { t: 'stream-input' }>) => {
       const s = streams.get(m.sid);
       if (!s || s.kind !== 'pty') return;
-      if (m.data instanceof Uint8Array && m.data.length > 0 && m.data.length <= 256 << 10) s.h.send({ type: 'input', data: toBase64(m.data) });
+      if (m.data instanceof Uint8Array && m.data.length > 0 && m.data.length <= MAX_PTY_INPUT) s.h.send({ type: 'input', data: toBase64(m.data) });
       const r = m.resize;
-      if (r && Number.isInteger(r.cols) && Number.isInteger(r.rows) && r.cols >= 1 && r.rows >= 1 && r.cols <= 1000 && r.rows <= 1000) {
-        s.h.send({ type: 'resize', cols: r.cols, rows: r.rows });
-      }
+      if (isValidPtySize(r)) s.h.send({ type: 'resize', cols: r.cols, rows: r.rows });
     };
 
     const onUploadOpen = (m: Extract<FrameToHost, { t: 'upload-open' }>) => {
@@ -336,7 +366,7 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
           fail(String(m.message).slice(0, 500));
           break;
         case 'size':
-          if (view.kind === 'widget' && Number.isFinite(m.height)) setHeight(Math.max(WIDGET_MIN, Math.min(WIDGET_MAX, Math.ceil(m.height))));
+          if (view.kind === 'widget' && Number.isFinite(m.height)) setHeight(clampWidgetHeight(m.height));
           break;
         case 'req':
           onRequest(m);
@@ -375,11 +405,7 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
       dead = true;
       window.removeEventListener('message', onMessage);
       el?.removeEventListener('load', onLoad);
-      for (const s of streams.values()) s.h.close();
-      streams.clear();
-      for (const u of uploads.values()) u.abort();
-      uploads.clear();
-      watchers.abort();
+      stopAll();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

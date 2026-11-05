@@ -295,56 +295,116 @@ func runTransaction(ctx context.Context, c *rpc.Call, s rpc.Stream, user bool) e
 	if err != nil {
 		return err
 	}
+	if err := acquireTx(m); err != nil {
+		return err
+	}
 
+	touchesSystem := p.Source != KindFlatpak
+	reboot := updatesNeedReboot(ctx, m, p, touchesSystem)
+
+	sender := &streamSender{stream: s, alive: true}
+	full, public := statePaths(c.Admin)
+	run := &txRun{path: full, public: public, send: sender.send}
+	startTransaction(run, p, countSteps(plans))
+
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		ok, msg := executePlans(plans, run, p.Op)
+		m.invalidate()
+		final := recordOutcome(run, ok, msg, reboot, touchesSystem && p.Op == "upgrade")
+		releaseTx()
+		run.send(map[string]any{"type": "done", "ok": ok, "message": msg, "hint": final.Hint, "rebootNeeded": final.RebootNeeded})
+	}()
+
+	select {
+	case <-finished:
+	case <-ctx.Done():
+		sender.stop()
+	}
+	return nil
+}
+
+// acquireTx claims the single-run guard, refusing while another change or an
+// external package manager holds the database.
+func acquireTx(m *manager) error {
 	txMu.Lock()
+	defer txMu.Unlock()
 	if txRunning {
-		txMu.Unlock()
 		return rpc.Errorf(rpc.Conflict, "Another software change is already running. Wait for it to finish.")
 	}
 	if lockedByOther(m) {
-		txMu.Unlock()
 		return rpc.Errorf(rpc.Conflict, "The package database is locked by another process (an update may already be running). Try again in a minute.")
 	}
 	txRunning = true
+	return nil
+}
+
+func releaseTx() {
+	txMu.Lock()
+	txRunning = false
 	txMu.Unlock()
+}
 
-	// Which pending updates need a reboot?
-	reboot := false
-	touchesSystem := p.Source != KindFlatpak
-	if p.Op != "remove" && touchesSystem {
-		if ups, _, _, err := m.updates(ctx, false); err == nil {
-			sel := map[string]bool{}
-			for _, n := range p.Packages {
-				sel[n] = true
-			}
-			for _, u := range ups {
-				if u.Kind == KindRepo && hasNote(u, "reboot") && (len(p.Packages) == 0 || sel[u.Name]) {
-					reboot = true
-				}
-			}
+// updatesNeedReboot reports whether any selected pending repo update carries
+// the reboot note.
+func updatesNeedReboot(ctx context.Context, m *manager, p TxParams, touchesSystem bool) bool {
+	if p.Op == "remove" || !touchesSystem {
+		return false
+	}
+	ups, _, _, err := m.updates(ctx, false)
+	if err != nil {
+		return false
+	}
+	selected := map[string]bool{}
+	for _, n := range p.Packages {
+		selected[n] = true
+	}
+	for _, u := range ups {
+		if u.Kind == KindRepo && hasNote(u, "reboot") && (len(p.Packages) == 0 || selected[u.Name]) {
+			return true
 		}
 	}
+	return false
+}
 
-	var sendMu sync.Mutex
-	alive := true
-	full, public := statePaths(c.Admin)
-	run := &txRun{path: full, public: public}
-	run.send = func(v any) bool {
-		sendMu.Lock()
-		defer sendMu.Unlock()
-		if !alive {
-			return false
-		}
-		if s.Send(v) != nil {
-			alive = false
-			return false
-		}
-		return true
+// streamSender forwards events to the client until the first send error or
+// until the client goes away; later sends are dropped.
+type streamSender struct {
+	mu     sync.Mutex
+	stream rpc.Stream
+	alive  bool
+}
+
+func (ss *streamSender) send(v any) bool {
+	ss.mu.Lock()
+	defer ss.mu.Unlock()
+	if !ss.alive {
+		return false
 	}
+	if ss.stream.Send(v) != nil {
+		ss.alive = false
+		return false
+	}
+	return true
+}
+
+func (ss *streamSender) stop() {
+	ss.mu.Lock()
+	ss.alive = false
+	ss.mu.Unlock()
+}
+
+func countSteps(plans []Plan) int {
 	steps := 0
 	for _, pl := range plans {
 		steps += len(pl.Steps)
 	}
+	return steps
+}
+
+// startTransaction writes the initial state file and sends the start event.
+func startTransaction(run *txRun, p TxParams, steps int) {
 	src := p.Source
 	if src == "" {
 		src = KindRepo
@@ -353,38 +413,24 @@ func runTransaction(ctx context.Context, c *rpc.Call, s rpc.Stream, user bool) e
 		StartedAt: time.Now().UnixMilli(), Steps: steps, Log: []string{}}
 	run.save(true)
 	run.send(map[string]any{"type": "start", "op": p.Op, "source": src, "packages": run.st.Packages, "steps": steps})
+}
 
-	finished := make(chan struct{})
-	go func() {
-		defer close(finished)
-		ok, msg := executePlans(plans, run, p.Op)
-		m.invalidate()
-		run.mu.Lock()
-		run.st.Running, run.st.OK, run.st.Message = false, ok, msg
-		run.st.FinishedAt = time.Now().UnixMilli()
-		if ok {
-			run.st.Done = run.st.Total
-			run.st.RebootNeeded = reboot || (touchesSystem && p.Op == "upgrade" && rebootPending())
-		} else {
-			run.st.Hint = hintFor(run.st.Log)
-		}
-		final := run.st
-		run.save(true)
-		run.mu.Unlock()
-		txMu.Lock()
-		txRunning = false
-		txMu.Unlock()
-		run.send(map[string]any{"type": "done", "ok": ok, "message": msg, "hint": final.Hint, "rebootNeeded": final.RebootNeeded})
-	}()
-
-	select {
-	case <-finished:
-	case <-ctx.Done():
-		sendMu.Lock()
-		alive = false
-		sendMu.Unlock()
+// recordOutcome stores the final result in the state file and returns it.
+// checkPending asks the OS whether a reboot is pending after a system upgrade.
+func recordOutcome(run *txRun, ok bool, msg string, reboot, checkPending bool) txState {
+	run.mu.Lock()
+	defer run.mu.Unlock()
+	run.st.Running, run.st.OK, run.st.Message = false, ok, msg
+	run.st.FinishedAt = time.Now().UnixMilli()
+	if ok {
+		run.st.Done = run.st.Total
+		run.st.RebootNeeded = reboot || (checkPending && rebootPending())
+	} else {
+		run.st.Hint = hintFor(run.st.Log)
 	}
-	return nil
+	final := run.st
+	run.save(true)
+	return final
 }
 
 // executePlans runs every step in order and stops at the first failure.
