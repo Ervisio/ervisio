@@ -355,272 +355,335 @@ type pluginRef struct {
 	Plugin string `json:"plugin"`
 }
 
-var localMethods = map[string]localMethod{}
+// localMethods are the daemon-side RPC methods.
+//
+// The plugin-scoped ones (the SDK: sdk.api.jobs, sdk.api.notify) get
+// "plugin" from the broker, which fills it in from the frame's manifest;
+// the daemon checks the caller's rights and the manifest again. The rest
+// are settings for administrators.
+var localMethods = map[string]localMethod{
+	"plugins.jobs.create":              {run: pluginJobsCreate},
+	"plugins.jobs.list":                {run: pluginJobsList},
+	"plugins.jobs.get":                 {run: pluginJobsGet},
+	"plugins.jobs.update":              {run: pluginJobsUpdate},
+	"plugins.jobs.delete":              {run: pluginJobsDelete},
+	"plugins.jobs.runNow":              {run: pluginJobsRunNow},
+	"plugins.jobs.history":             {run: pluginJobsHistory},
+	"plugins.jobs.webhooks.create":     {run: pluginWebhookCreate},
+	"plugins.jobs.webhooks.regenerate": {run: pluginWebhookRegenerate},
+	"plugins.jobs.webhooks.revoke":     {run: pluginWebhookRevoke},
+	"plugins.notify":                   {run: pluginNotify},
 
-func init() {
-	// Plugin-scoped (the SDK: sdk.api.jobs, sdk.api.notify). The broker
-	// fills in "plugin" from the frame's manifest; the daemon checks the
-	// caller's rights and the manifest again.
-	localMethods["plugins.jobs.create"] = localMethod{run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
-		var p jobs.CreateReq
-		if err := bind(raw, &p); err != nil {
-			return nil, err
-		}
-		return s.jobs.Create(s.jobCaller(sess), p)
-	}}
-	localMethods["plugins.jobs.list"] = localMethod{run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
-		var p struct {
-			Plugin string `json:"plugin"`
-			Job    string `json:"job"`
-		}
-		if err := bind(raw, &p); err != nil {
-			return nil, err
-		}
-		if p.Plugin == "" {
-			return nil, rpc.Errorf(rpc.Invalid, "Give the plugin id.")
-		}
-		return map[string]any{"instances": s.jobs.List(s.jobCaller(sess), p.Plugin, p.Job)}, nil
-	}}
-	localMethods["plugins.jobs.get"] = localMethod{run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
-		var p struct{ Plugin, ID string }
-		if err := bind(raw, &p); err != nil {
-			return nil, err
-		}
-		return s.jobs.Get(s.jobCaller(sess), need(p.Plugin), p.ID)
-	}}
-	localMethods["plugins.jobs.update"] = localMethod{run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
-		var p jobs.UpdateReq
-		if err := bind(raw, &p); err != nil {
-			return nil, err
-		}
-		p.Plugin = need(p.Plugin)
-		return s.jobs.Update(s.jobCaller(sess), p)
-	}}
-	localMethods["plugins.jobs.delete"] = localMethod{run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
-		var p struct{ Plugin, ID string }
-		if err := bind(raw, &p); err != nil {
-			return nil, err
-		}
-		return struct{}{}, s.jobs.Delete(s.jobCaller(sess), need(p.Plugin), p.ID)
-	}}
-	localMethods["plugins.jobs.runNow"] = localMethod{run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
-		var p struct{ Plugin, ID string }
-		if err := bind(raw, &p); err != nil {
-			return nil, err
-		}
-		id, err := s.jobs.RunNow(s.jobCaller(sess), need(p.Plugin), p.ID)
-		return map[string]string{"run": id}, err
-	}}
-	localMethods["plugins.jobs.history"] = localMethod{run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
-		var p struct {
-			Plugin, ID string
-			Limit      int
-		}
-		if err := bind(raw, &p); err != nil {
-			return nil, err
-		}
-		runs, err := s.jobs.Runs(s.jobCaller(sess), need(p.Plugin), p.ID, p.Limit)
-		return map[string]any{"runs": runs}, err
-	}}
-	localMethods["plugins.jobs.webhooks.create"] = localMethod{run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
-		var p struct{ Plugin, ID, Label string }
-		if err := bind(raw, &p); err != nil {
-			return nil, err
-		}
-		return s.jobs.CreateWebhook(s.jobCaller(sess), need(p.Plugin), p.ID, p.Label)
-	}}
-	localMethods["plugins.jobs.webhooks.regenerate"] = localMethod{run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
-		var p struct {
-			Plugin, ID string
-			Webhook    string
-		}
-		if err := bind(raw, &p); err != nil {
-			return nil, err
-		}
-		return s.jobs.RegenerateWebhook(s.jobCaller(sess), need(p.Plugin), p.ID, p.Webhook)
-	}}
-	localMethods["plugins.jobs.webhooks.revoke"] = localMethod{run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
-		var p struct {
-			Plugin, ID string
-			Webhook    string
-		}
-		if err := bind(raw, &p); err != nil {
-			return nil, err
-		}
-		return struct{}{}, s.jobs.RevokeWebhook(s.jobCaller(sess), need(p.Plugin), p.ID, p.Webhook)
-	}}
-	localMethods["plugins.notify"] = localMethod{run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
-		var p struct {
-			pluginRef
-			notify.Message
-		}
-		if err := bind(raw, &p); err != nil {
-			return nil, err
-		}
-		man, err := plugins.Resolve(p.Plugin)
-		if err != nil {
-			return nil, err
-		}
-		c := s.jobCaller(sess)
-		if !man.CanBeUsedBy(c.Groups, c.CanSudo) {
-			return nil, rpc.Errorf(rpc.Forbidden, "%s is not available to your account.", man.Name)
-		}
-		if !man.Capabilities.Notify {
-			return nil, rpc.Errorf(rpc.Forbidden, "%s does not declare capabilities.notify.", man.Name)
-		}
-		msg := p.Message
-		if msg.Title == "" || len(msg.Title) > 1000 {
-			return nil, rpc.Errorf(rpc.Invalid, "A notification needs a title.")
-		}
-		if msg.Level != "" && !notify.ValidLevel(msg.Level) {
-			return nil, rpc.Errorf(rpc.Invalid, "The level must be info, success, warn or error.")
-		}
-		if !notify.ValidLink(msg.Link) {
-			return nil, rpc.Errorf(rpc.Invalid, "The link must be an http(s) address or a path of this app.")
-		}
-		// The daemon cannot tell a plugin frame (the broker sets plugin)
-		// from a direct /api/rpc call of the same user, so the message
-		// names the user who sent it, and the limit is per user.
-		msg.Source = fmt.Sprintf("%s (%s)", man.Name, sess.Account.Name)
-		d, err := s.sendPlugin(ctx, p.Plugin, "user:"+sess.Account.Name, msg)
-		if err != nil {
-			return nil, err
-		}
-		return d, nil
-	}}
+	"notify.list":              {admin: true, run: notifyList},
+	"notify.save":              {admin: true, run: notifySave},
+	"notify.delete":            {admin: true, run: notifyDelete},
+	"notify.test":              {admin: true, run: notifyTest},
+	"jobs.list":                {admin: true, run: jobsList},
+	"jobs.setEnabled":          {admin: true, run: jobsSetEnabled},
+	"jobs.approve":             {admin: true, run: jobsApprove},
+	"jobs.runNow":              {admin: true, run: jobsRunNow},
+	"jobs.delete":              {admin: true, run: jobsDelete},
+	"jobs.history":             {admin: true, run: jobsHistory},
+	"jobs.webhooks.create":     {admin: true, run: jobsWebhookCreate},
+	"jobs.webhooks.regenerate": {admin: true, run: jobsWebhookRegenerate},
+	"jobs.webhooks.revoke":     {admin: true, run: jobsWebhookRevoke},
+}
 
-	// Settings (administrators).
-	localMethods["notify.list"] = localMethod{admin: true, run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
-		l, err := s.notifier.List()
-		if err != nil {
-			return nil, rpc.Errorf(rpc.Internal, "Could not read the notification channels: %v", err)
-		}
-		if l == nil {
-			l = []notify.Channel{}
-		}
-		return map[string]any{"channels": l, "file": s.notifier.Store.Path}, nil
-	}}
-	localMethods["notify.save"] = localMethod{admin: true, run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
-		var spec notify.Spec
-		if err := bind(raw, &spec); err != nil {
-			return nil, err
-		}
-		act := "notify.channel.add"
-		if spec.ID != "" {
-			act = "notify.channel.change"
-		}
-		c, err := s.notifier.Save(spec)
-		if err != nil {
-			s.auditCore(sess.Account.Name, "", act, spec.Type+" "+spec.Name, audit.Failed, err.Error())
-			return nil, notifyErr(err)
-		}
-		s.auditCore(sess.Account.Name, "", act, spec.Type+" "+c.Name, audit.OK, "")
-		return c, nil
-	}}
-	localMethods["notify.delete"] = localMethod{admin: true, run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
-		var p struct{ ID string }
-		if err := bind(raw, &p); err != nil {
-			return nil, err
-		}
-		err := s.notifier.Delete(p.ID)
-		if err != nil {
-			s.auditCore(sess.Account.Name, "", "notify.channel.delete", p.ID, audit.Failed, err.Error())
-		} else {
-			s.auditCore(sess.Account.Name, "", "notify.channel.delete", p.ID, audit.OK, "")
-		}
-		return struct{}{}, notifyErr(err)
-	}}
-	localMethods["notify.test"] = localMethod{admin: true, run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
-		var spec notify.Spec
-		if err := bind(raw, &spec); err != nil {
-			return nil, err
-		}
-		if err := s.notifier.Test(ctx, spec); err != nil {
-			return nil, notifyErr(err)
-		}
-		return struct{}{}, nil
-	}}
-	localMethods["jobs.list"] = localMethod{admin: true, run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
-		var p pluginRef
-		if err := bind(raw, &p); err != nil {
-			return nil, err
-		}
-		return map[string]any{"instances": s.jobs.List(s.jobCaller(sess), p.Plugin, "")}, nil
-	}}
-	localMethods["jobs.setEnabled"] = localMethod{admin: true, run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
-		var p struct {
-			ID      string
-			Enabled bool
-		}
-		if err := bind(raw, &p); err != nil {
-			return nil, err
-		}
-		return s.jobs.SetEnabled(s.jobCaller(sess), p.ID, p.Enabled)
-	}}
-	// jobs.approve is the only way to approve an instance that runs steps
-	// as root: admin level (the session is root or unlocked, so sudo
-	// accepted this user's password), and not a plugins.* method, so the
-	// broker never lets a plugin frame call it.
-	localMethods["jobs.approve"] = localMethod{admin: true, run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
-		var p struct{ ID string }
-		if err := bind(raw, &p); err != nil {
-			return nil, err
-		}
-		return s.jobs.Approve(s.jobCaller(sess), p.ID)
-	}}
-	localMethods["jobs.runNow"] = localMethod{admin: true, run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
-		var p struct{ ID string }
-		if err := bind(raw, &p); err != nil {
-			return nil, err
-		}
-		id, err := s.jobs.RunNow(s.jobCaller(sess), "", p.ID)
-		return map[string]string{"run": id}, err
-	}}
-	localMethods["jobs.delete"] = localMethod{admin: true, run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
-		var p struct{ ID string }
-		if err := bind(raw, &p); err != nil {
-			return nil, err
-		}
-		return struct{}{}, s.jobs.Delete(s.jobCaller(sess), "", p.ID)
-	}}
-	localMethods["jobs.history"] = localMethod{admin: true, run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
-		var p struct {
-			ID    string
-			Limit int
-		}
-		if err := bind(raw, &p); err != nil {
-			return nil, err
-		}
-		runs, err := s.jobs.Runs(s.jobCaller(sess), "", p.ID, p.Limit)
-		return map[string]any{"runs": runs}, err
-	}}
-	localMethods["jobs.webhooks.create"] = localMethod{admin: true, run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
-		var p struct{ ID, Label string }
-		if err := bind(raw, &p); err != nil {
-			return nil, err
-		}
-		return s.jobs.CreateWebhook(s.jobCaller(sess), "", p.ID, p.Label)
-	}}
-	localMethods["jobs.webhooks.regenerate"] = localMethod{admin: true, run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
-		var p struct {
-			ID      string
-			Webhook string
-		}
-		if err := bind(raw, &p); err != nil {
-			return nil, err
-		}
-		return s.jobs.RegenerateWebhook(s.jobCaller(sess), "", p.ID, p.Webhook)
-	}}
-	localMethods["jobs.webhooks.revoke"] = localMethod{admin: true, run: func(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
-		var p struct {
-			ID      string
-			Webhook string
-		}
-		if err := bind(raw, &p); err != nil {
-			return nil, err
-		}
-		return struct{}{}, s.jobs.RevokeWebhook(s.jobCaller(sess), "", p.ID, p.Webhook)
-	}}
+func pluginJobsCreate(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
+	var p jobs.CreateReq
+	if err := bind(raw, &p); err != nil {
+		return nil, err
+	}
+	return s.jobs.Create(s.jobCaller(sess), p)
+}
+
+func pluginJobsList(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
+	var p struct {
+		Plugin string `json:"plugin"`
+		Job    string `json:"job"`
+	}
+	if err := bind(raw, &p); err != nil {
+		return nil, err
+	}
+	if p.Plugin == "" {
+		return nil, rpc.Errorf(rpc.Invalid, "Give the plugin id.")
+	}
+	return map[string]any{"instances": s.jobs.List(s.jobCaller(sess), p.Plugin, p.Job)}, nil
+}
+
+func pluginJobsGet(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
+	var p struct{ Plugin, ID string }
+	if err := bind(raw, &p); err != nil {
+		return nil, err
+	}
+	return s.jobs.Get(s.jobCaller(sess), need(p.Plugin), p.ID)
+}
+
+func pluginJobsUpdate(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
+	var p jobs.UpdateReq
+	if err := bind(raw, &p); err != nil {
+		return nil, err
+	}
+	p.Plugin = need(p.Plugin)
+	return s.jobs.Update(s.jobCaller(sess), p)
+}
+
+func pluginJobsDelete(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
+	var p struct{ Plugin, ID string }
+	if err := bind(raw, &p); err != nil {
+		return nil, err
+	}
+	return struct{}{}, s.jobs.Delete(s.jobCaller(sess), need(p.Plugin), p.ID)
+}
+
+func pluginJobsRunNow(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
+	var p struct{ Plugin, ID string }
+	if err := bind(raw, &p); err != nil {
+		return nil, err
+	}
+	id, err := s.jobs.RunNow(s.jobCaller(sess), need(p.Plugin), p.ID)
+	return map[string]string{"run": id}, err
+}
+
+func pluginJobsHistory(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
+	var p struct {
+		Plugin, ID string
+		Limit      int
+	}
+	if err := bind(raw, &p); err != nil {
+		return nil, err
+	}
+	runs, err := s.jobs.Runs(s.jobCaller(sess), need(p.Plugin), p.ID, p.Limit)
+	return map[string]any{"runs": runs}, err
+}
+
+func pluginWebhookCreate(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
+	var p struct{ Plugin, ID, Label string }
+	if err := bind(raw, &p); err != nil {
+		return nil, err
+	}
+	return s.jobs.CreateWebhook(s.jobCaller(sess), need(p.Plugin), p.ID, p.Label)
+}
+
+func pluginWebhookRegenerate(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
+	var p struct {
+		Plugin, ID string
+		Webhook    string
+	}
+	if err := bind(raw, &p); err != nil {
+		return nil, err
+	}
+	return s.jobs.RegenerateWebhook(s.jobCaller(sess), need(p.Plugin), p.ID, p.Webhook)
+}
+
+func pluginWebhookRevoke(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
+	var p struct {
+		Plugin, ID string
+		Webhook    string
+	}
+	if err := bind(raw, &p); err != nil {
+		return nil, err
+	}
+	return struct{}{}, s.jobs.RevokeWebhook(s.jobCaller(sess), need(p.Plugin), p.ID, p.Webhook)
+}
+
+func pluginNotify(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
+	var p struct {
+		pluginRef
+		notify.Message
+	}
+	if err := bind(raw, &p); err != nil {
+		return nil, err
+	}
+	man, err := plugins.Resolve(p.Plugin)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkPluginNotify(man, s.jobCaller(sess)); err != nil {
+		return nil, err
+	}
+	msg := p.Message
+	if err := validatePluginMessage(msg); err != nil {
+		return nil, err
+	}
+	// The daemon cannot tell a plugin frame (the broker sets plugin)
+	// from a direct /api/rpc call of the same user, so the message
+	// names the user who sent it, and the limit is per user.
+	msg.Source = fmt.Sprintf("%s (%s)", man.Name, sess.Account.Name)
+	d, err := s.sendPlugin(ctx, p.Plugin, "user:"+sess.Account.Name, msg)
+	if err != nil {
+		return nil, err
+	}
+	return d, nil
+}
+
+// checkPluginNotify reports whether the caller may use the plugin and the
+// plugin declares the notify capability.
+func checkPluginNotify(man *plugins.Manifest, c jobs.Caller) error {
+	if !man.CanBeUsedBy(c.Groups, c.CanSudo) {
+		return rpc.Errorf(rpc.Forbidden, "%s is not available to your account.", man.Name)
+	}
+	if !man.Capabilities.Notify {
+		return rpc.Errorf(rpc.Forbidden, "%s does not declare capabilities.notify.", man.Name)
+	}
+	return nil
+}
+
+func validatePluginMessage(msg notify.Message) error {
+	if msg.Title == "" || len(msg.Title) > 1000 {
+		return rpc.Errorf(rpc.Invalid, "A notification needs a title.")
+	}
+	if msg.Level != "" && !notify.ValidLevel(msg.Level) {
+		return rpc.Errorf(rpc.Invalid, "The level must be info, success, warn or error.")
+	}
+	if !notify.ValidLink(msg.Link) {
+		return rpc.Errorf(rpc.Invalid, "The link must be an http(s) address or a path of this app.")
+	}
+	return nil
+}
+
+func notifyList(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
+	l, err := s.notifier.List()
+	if err != nil {
+		return nil, rpc.Errorf(rpc.Internal, "Could not read the notification channels: %v", err)
+	}
+	if l == nil {
+		l = []notify.Channel{}
+	}
+	return map[string]any{"channels": l, "file": s.notifier.Store.Path}, nil
+}
+
+func notifySave(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
+	var spec notify.Spec
+	if err := bind(raw, &spec); err != nil {
+		return nil, err
+	}
+	act := "notify.channel.add"
+	if spec.ID != "" {
+		act = "notify.channel.change"
+	}
+	c, err := s.notifier.Save(spec)
+	if err != nil {
+		s.auditCore(sess.Account.Name, "", act, spec.Type+" "+spec.Name, audit.Failed, err.Error())
+		return nil, notifyErr(err)
+	}
+	s.auditCore(sess.Account.Name, "", act, spec.Type+" "+c.Name, audit.OK, "")
+	return c, nil
+}
+
+func notifyDelete(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
+	var p struct{ ID string }
+	if err := bind(raw, &p); err != nil {
+		return nil, err
+	}
+	err := s.notifier.Delete(p.ID)
+	if err != nil {
+		s.auditCore(sess.Account.Name, "", "notify.channel.delete", p.ID, audit.Failed, err.Error())
+	} else {
+		s.auditCore(sess.Account.Name, "", "notify.channel.delete", p.ID, audit.OK, "")
+	}
+	return struct{}{}, notifyErr(err)
+}
+
+func notifyTest(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
+	var spec notify.Spec
+	if err := bind(raw, &spec); err != nil {
+		return nil, err
+	}
+	if err := s.notifier.Test(ctx, spec); err != nil {
+		return nil, notifyErr(err)
+	}
+	return struct{}{}, nil
+}
+
+func jobsList(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
+	var p pluginRef
+	if err := bind(raw, &p); err != nil {
+		return nil, err
+	}
+	return map[string]any{"instances": s.jobs.List(s.jobCaller(sess), p.Plugin, "")}, nil
+}
+
+func jobsSetEnabled(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
+	var p struct {
+		ID      string
+		Enabled bool
+	}
+	if err := bind(raw, &p); err != nil {
+		return nil, err
+	}
+	return s.jobs.SetEnabled(s.jobCaller(sess), p.ID, p.Enabled)
+}
+
+// jobsApprove is the only way to approve an instance that runs steps as
+// root: admin level (the session is root or unlocked, so sudo accepted
+// this user's password), and not a plugins.* method, so the broker never
+// lets a plugin frame call it.
+func jobsApprove(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
+	var p struct{ ID string }
+	if err := bind(raw, &p); err != nil {
+		return nil, err
+	}
+	return s.jobs.Approve(s.jobCaller(sess), p.ID)
+}
+
+func jobsRunNow(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
+	var p struct{ ID string }
+	if err := bind(raw, &p); err != nil {
+		return nil, err
+	}
+	id, err := s.jobs.RunNow(s.jobCaller(sess), "", p.ID)
+	return map[string]string{"run": id}, err
+}
+
+func jobsDelete(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
+	var p struct{ ID string }
+	if err := bind(raw, &p); err != nil {
+		return nil, err
+	}
+	return struct{}{}, s.jobs.Delete(s.jobCaller(sess), "", p.ID)
+}
+
+func jobsHistory(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
+	var p struct {
+		ID    string
+		Limit int
+	}
+	if err := bind(raw, &p); err != nil {
+		return nil, err
+	}
+	runs, err := s.jobs.Runs(s.jobCaller(sess), "", p.ID, p.Limit)
+	return map[string]any{"runs": runs}, err
+}
+
+func jobsWebhookCreate(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
+	var p struct{ ID, Label string }
+	if err := bind(raw, &p); err != nil {
+		return nil, err
+	}
+	return s.jobs.CreateWebhook(s.jobCaller(sess), "", p.ID, p.Label)
+}
+
+func jobsWebhookRegenerate(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
+	var p struct {
+		ID      string
+		Webhook string
+	}
+	if err := bind(raw, &p); err != nil {
+		return nil, err
+	}
+	return s.jobs.RegenerateWebhook(s.jobCaller(sess), "", p.ID, p.Webhook)
+}
+
+func jobsWebhookRevoke(ctx context.Context, s *Server, sess *Session, raw json.RawMessage) (any, error) {
+	var p struct {
+		ID      string
+		Webhook string
+	}
+	if err := bind(raw, &p); err != nil {
+		return nil, err
+	}
+	return struct{}{}, s.jobs.RevokeWebhook(s.jobCaller(sess), "", p.ID, p.Webhook)
 }
 
 // need returns the plugin id of a plugin-scoped call; "-" (matches no

@@ -277,119 +277,163 @@ type lineState struct {
 	lvl string
 }
 
+const (
+	followPollInterval = 400 * time.Millisecond
+	followReadSize     = 256 << 10
+)
+
+// fileFollower is the state of one followed file between polls.
+type fileFollower struct {
+	src     spec
+	filter  filter
+	out     chan<- Entry
+	fh      *os.File
+	ino     uint64
+	pos     int64
+	partial []byte
+	last    lineState
+	buf     []byte
+}
+
 // followFile polls a file for new lines (handling rotation and truncation)
 // and sends the matching entries to out until ctx ends.
 func followFile(ctx context.Context, s spec, f filter, out chan<- Entry) error {
-	var (
-		fh      *os.File
-		ino     uint64
-		pos     int64
-		partial []byte
-		st      lineState
-	)
-	defer func() {
-		if fh != nil {
-			fh.Close()
-		}
-	}()
-	open := func(fromStart bool) error {
-		if fh != nil {
-			fh.Close()
-			fh = nil
-		}
-		h, err := openShared(s.Path)
-		if err != nil {
-			return err
-		}
-		info, err := h.Stat()
-		if err != nil {
-			h.Close()
-			return err
-		}
-		if !info.Mode().IsRegular() {
-			h.Close()
-			return rpc.Errorf(rpc.Invalid, "%s is not a regular file", s.Path)
-		}
-		fh = h
-		if id, ok := fileInode(s.Path, info); ok {
-			ino = id
-		}
-		pos = 0
-		if !fromStart {
-			pos = info.Size()
-		}
-		partial = nil
-		return nil
-	}
-	if err := open(false); err != nil {
+	ff := &fileFollower{src: s, filter: f, out: out}
+	defer ff.close()
+	if err := ff.open(false); err != nil {
 		return err
 	}
-	tick := time.NewTicker(400 * time.Millisecond)
+	tick := time.NewTicker(followPollInterval)
 	defer tick.Stop()
-	buf := make([]byte, 256<<10)
+	ff.buf = make([]byte, followReadSize)
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-tick.C:
 		}
-		info, err := os.Stat(s.Path)
-		if err != nil {
-			continue // rotated away; wait for the new file
+		if !ff.reopenIfRotated() {
+			continue
 		}
-		if id, ok := fileInode(s.Path, info); ok && (id != ino || info.Size() < pos) {
-			if open(true) != nil {
-				continue
-			}
-		}
-		for {
-			n, err := fh.ReadAt(buf, pos)
-			if n > 0 {
-				pos += int64(n)
-				partial = append(partial, buf[:n]...)
-				for {
-					i := bytes.IndexByte(partial, '\n')
-					if i < 0 {
-						break
-					}
-					line := strings.TrimRight(string(partial[:i]), "\r")
-					partial = partial[i+1:]
-					if strings.TrimSpace(line) == "" {
-						continue
-					}
-					e, hasTs := lineEntry(line, s.Label, s.Path, 0, s.Format, time.Now(), time.Local)
-					if hasTs {
-						st = lineState{e.TsUs, e.Level}
-						if e.Level == "" {
-							e.Level, st.lvl = LvInfo, LvInfo
-						}
-					} else {
-						if st.ts == 0 {
-							st.ts = nowUs()
-						}
-						e.TsUs, e.Ts = st.ts, st.ts/1000
-						if e.Level == "" {
-							e.Level = st.lvl
-							if e.Level == "" {
-								e.Level = LvInfo
-							}
-						}
-					}
-					if !f.match(e) {
-						continue
-					}
-					select {
-					case out <- *e:
-					case <-ctx.Done():
-						return nil
-					}
-				}
-			}
-			if err != nil || n == 0 {
-				break
-			}
+		if !ff.readNew(ctx) {
+			return nil
 		}
 	}
+}
+
+func (ff *fileFollower) close() {
+	if ff.fh != nil {
+		ff.fh.Close()
+		ff.fh = nil
+	}
+}
+
+// open (re)opens the file at its end, or at its start after a rotation.
+func (ff *fileFollower) open(fromStart bool) error {
+	ff.close()
+	h, err := openShared(ff.src.Path)
+	if err != nil {
+		return err
+	}
+	info, err := h.Stat()
+	if err != nil {
+		h.Close()
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		h.Close()
+		return rpc.Errorf(rpc.Invalid, "%s is not a regular file", ff.src.Path)
+	}
+	ff.fh = h
+	if id, ok := fileInode(ff.src.Path, info); ok {
+		ff.ino = id
+	}
+	ff.pos = 0
+	if !fromStart {
+		ff.pos = info.Size()
+	}
+	ff.partial = nil
+	return nil
+}
+
+// reopenIfRotated reopens the file from the start when it was replaced or
+// truncated. False means there is nothing to read on this tick.
+func (ff *fileFollower) reopenIfRotated() bool {
+	info, err := os.Stat(ff.src.Path)
+	if err != nil {
+		return false // rotated away; wait for the new file
+	}
+	if id, ok := fileInode(ff.src.Path, info); ok && (id != ff.ino || info.Size() < ff.pos) {
+		return ff.open(true) == nil
+	}
+	return true
+}
+
+// readNew reads everything appended since the last poll and sends its
+// complete lines. False means ctx ended.
+func (ff *fileFollower) readNew(ctx context.Context) bool {
+	for {
+		n, err := ff.fh.ReadAt(ff.buf, ff.pos)
+		if n > 0 {
+			ff.pos += int64(n)
+			ff.partial = append(ff.partial, ff.buf[:n]...)
+			if !ff.sendLines(ctx) {
+				return false
+			}
+		}
+		if err != nil || n == 0 {
+			return true
+		}
+	}
+}
+
+// sendLines sends the matching complete lines buffered in partial and keeps
+// the trailing incomplete one. False means ctx ended.
+func (ff *fileFollower) sendLines(ctx context.Context) bool {
+	for {
+		i := bytes.IndexByte(ff.partial, '\n')
+		if i < 0 {
+			return true
+		}
+		line := strings.TrimRight(string(ff.partial[:i]), "\r")
+		ff.partial = ff.partial[i+1:]
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		e := ff.entry(line)
+		if !ff.filter.match(e) {
+			continue
+		}
+		select {
+		case ff.out <- *e:
+		case <-ctx.Done():
+			return false
+		}
+	}
+}
+
+// entry parses one line. A line without a timestamp takes the time and
+// level of the last line that had one.
+func (ff *fileFollower) entry(line string) *Entry {
+	e, hasTs := lineEntry(line, ff.src.Label, ff.src.Path, 0, ff.src.Format, time.Now(), time.Local)
+	if hasTs {
+		ff.last = lineState{e.TsUs, e.Level}
+		if e.Level == "" {
+			e.Level, ff.last.lvl = LvInfo, LvInfo
+		}
+		return e
+	}
+	if ff.last.ts == 0 {
+		ff.last.ts = nowUs()
+	}
+	e.TsUs, e.Ts = ff.last.ts, ff.last.ts/1000
+	if e.Level == "" {
+		e.Level = ff.last.lvl
+		if e.Level == "" {
+			e.Level = LvInfo
+		}
+	}
+	return e
 }
 
 // forwardLines calls fn with each line of f from the start until it returns false.

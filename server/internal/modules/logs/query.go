@@ -143,6 +143,9 @@ func resolveSpecs(ids []string, watchers []Watcher, admin bool) ([]spec, error) 
 
 var cursorRe = regexp.MustCompile(`^(\d+)\.(\d+)$`)
 
+// fetchConcurrency is how many sources are read at the same time.
+const fetchConcurrency = 6
+
 func (q queryParams) run(ctx context.Context, admin bool) (*QueryResult, error) {
 	specs, err := resolveSpecs(q.Sources, q.Watchers, admin)
 	if err != nil {
@@ -152,114 +155,169 @@ func (q queryParams) run(ctx context.Context, admin bool) (*QueryResult, error) 
 	if err != nil {
 		return nil, err
 	}
-	limit := q.Limit
-	if limit <= 0 {
-		limit = defaultLimit
-	}
-	if limit > maxLimit {
-		limit = maxLimit
-	}
-	until, skip := f.untilUs, 0
-	if q.Cursor != "" {
-		m := cursorRe.FindStringSubmatch(q.Cursor)
-		if m == nil {
-			return nil, rpc.Errorf(rpc.Invalid, "invalid cursor")
-		}
-		t, _ := strconv.ParseInt(m[1], 10, 64)
-		skip, _ = strconv.Atoi(m[2])
-		if t < until {
-			until = t
-		}
+	limit := clampOrDefault(q.Limit, defaultLimit, maxLimit)
+	until, skip, err := parseCursor(q.Cursor, f.untilUs)
+	if err != nil {
+		return nil, err
 	}
 	if hasJournal(specs) && !admin && !journalReadable() {
 		return nil, errNeedsAdmin()
 	}
-	want := limit + skip + 1
 	groups := journalGroups(specs)
-	var files []spec
+	results := fetchSources(ctx, groups, specs, f, until, limit+skip+1)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	all, skipped, err := mergeResults(results, len(groups), len(specs), admin)
+	if err != nil {
+		return nil, err
+	}
+	res := &QueryResult{Entries: []Entry{}, Skipped: skipped}
+	page := dropSeen(all, until, skip)
+	if len(page) > limit {
+		res.HasMore = true
+		page = page[:limit]
+	}
+	res.Entries = append(res.Entries, page...)
+	if res.HasMore && len(page) > 0 {
+		res.Next = nextCursor(page, until, skip)
+	}
+	return res, nil
+}
+
+// clampOrDefault returns def when v is not positive, and at most ceiling.
+func clampOrDefault(v, def, ceiling int) int {
+	if v <= 0 {
+		v = def
+	}
+	if v > ceiling {
+		v = ceiling
+	}
+	return v
+}
+
+// parseCursor decodes "<untilUs>.<skip>": the page ends at the cursor time,
+// and skip entries at exactly that time were already returned.
+func parseCursor(cursor string, until int64) (int64, int, error) {
+	if cursor == "" {
+		return until, 0, nil
+	}
+	m := cursorRe.FindStringSubmatch(cursor)
+	if m == nil {
+		return 0, 0, rpc.Errorf(rpc.Invalid, "invalid cursor")
+	}
+	t, _ := strconv.ParseInt(m[1], 10, 64)
+	skip, _ := strconv.Atoi(m[2])
+	if t < until {
+		until = t
+	}
+	return until, skip, nil
+}
+
+func specsOfKind(specs []spec, kind string) []spec {
+	var out []spec
 	for _, s := range specs {
-		if s.Kind == "file" {
-			files = append(files, s)
+		if s.Kind == kind {
+			out = append(out, s)
 		}
 	}
-	var evts []spec
-	for _, s := range specs {
-		if s.Kind == "evt" {
-			evts = append(evts, s)
-		}
-	}
-	type result struct {
-		id   string
-		ents []Entry
-		err  error
-	}
-	results := make([]result, len(groups)+len(files)+len(evts))
+	return out
+}
+
+// runBounded runs the tasks concurrently, at most fetchConcurrency at a
+// time, and waits for all of them.
+func runBounded(tasks []func()) {
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, 6)
-	run := func(i int, id string, fn func() ([]Entry, error)) {
+	sem := make(chan struct{}, fetchConcurrency)
+	for _, task := range tasks {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			ents, err := fn()
-			results[i] = result{id, ents, err}
+			task()
 		}()
 	}
-	for i, g := range groups {
-		g := g
-		run(i, g.name, func() ([]Entry, error) { return fetchJournal(ctx, g, f, until, want) })
-	}
-	for i, s := range files {
-		s := s
-		run(len(groups)+i, s.ID, func() ([]Entry, error) { return fetchFile(ctx, s, f, until, want) })
-	}
-	for i, s := range evts {
-		s := s
-		run(len(groups)+len(files)+i, s.ID, func() ([]Entry, error) { return fetchEventLog(ctx, s.Channel, f, until, want) })
-	}
 	wg.Wait()
-	if err := ctx.Err(); err != nil {
-		return nil, err
+}
+
+type sourceResult struct {
+	id   string
+	ents []Entry
+	err  error
+}
+
+// fetchSources reads the journal groups, then the files, then the event
+// channels; the results keep that order.
+func fetchSources(ctx context.Context, groups []jgroup, specs []spec, f filter, until int64, want int) []sourceResult {
+	files, evts := specsOfKind(specs, "file"), specsOfKind(specs, "evt")
+	results := make([]sourceResult, len(groups)+len(files)+len(evts))
+	tasks := make([]func(), 0, len(results))
+	add := func(id string, fetch func() ([]Entry, error)) {
+		i := len(tasks)
+		tasks = append(tasks, func() {
+			ents, err := fetch()
+			results[i] = sourceResult{id, ents, err}
+		})
 	}
-	res := &QueryResult{Entries: []Entry{}}
+	for _, g := range groups {
+		add(g.name, func() ([]Entry, error) { return fetchJournal(ctx, g, f, until, want) })
+	}
+	for _, s := range files {
+		add(s.ID, func() ([]Entry, error) { return fetchFile(ctx, s, f, until, want) })
+	}
+	for _, s := range evts {
+		add(s.ID, func() ([]Entry, error) { return fetchEventLog(ctx, s.Channel, f, until, want) })
+	}
+	runBounded(tasks)
+	return results
+}
+
+// mergeResults joins the entries of every source, newest first. A failing
+// journal group, or a failing only source, fails the query; other failing
+// sources are reported as skipped.
+func mergeResults(results []sourceResult, groupCount, specCount int, admin bool) ([]Entry, []SkippedSource, error) {
 	var all []Entry
+	var skipped []SkippedSource
 	for i, r := range results {
 		if r.err != nil {
-			if i < len(groups) || len(specs) == 1 {
-				return nil, r.err
+			if i < groupCount || specCount == 1 {
+				return nil, nil, r.err
 			}
 			e := rpc.ToError(r.err, admin)
-			res.Skipped = append(res.Skipped, SkippedSource{ID: r.id, Code: string(e.Code), Message: e.Message})
+			skipped = append(skipped, SkippedSource{ID: r.id, Code: string(e.Code), Message: e.Message})
 			continue
 		}
 		all = append(all, r.ents...)
 	}
 	sort.SliceStable(all, func(a, b int) bool { return all[a].TsUs > all[b].TsUs })
+	return all, skipped, nil
+}
+
+// dropSeen drops the entries at the cursor time that the previous page
+// already returned.
+func dropSeen(all []Entry, until int64, skip int) []Entry {
 	dropped := 0
 	for dropped < skip && dropped < len(all) && all[dropped].TsUs == until {
 		dropped++
 	}
-	all = all[dropped:]
-	if len(all) > limit {
-		res.HasMore = true
-		all = all[:limit]
-	}
-	res.Entries = append(res.Entries, all...)
-	if res.HasMore && len(all) > 0 {
-		last := all[len(all)-1].TsUs
-		n := 0
-		for _, e := range all {
-			if e.TsUs == last {
-				n++
-			}
+	return all[dropped:]
+}
+
+// nextCursor points after page: its last time and how many entries at that
+// time have been returned so far.
+func nextCursor(page []Entry, until int64, skip int) string {
+	last := page[len(page)-1].TsUs
+	n := 0
+	for _, e := range page {
+		if e.TsUs == last {
+			n++
 		}
-		if last == until {
-			n += skip
-		}
-		res.Next = strconv.FormatInt(last, 10) + "." + strconv.Itoa(n)
 	}
-	return res, nil
+	if last == until {
+		n += skip
+	}
+	return strconv.FormatInt(last, 10) + "." + strconv.Itoa(n)
 }
 
 // ---------- histogram ----------
@@ -301,29 +359,20 @@ type histParams struct {
 	Buckets int `json:"buckets"`
 }
 
-const histJournalCap = 300000
+const (
+	histJournalCap    = 300000
+	defaultHistBucket = 60
+	maxHistBuckets    = 500
+	defaultHistSpanMs = 24 * 3600 * 1000
+)
 
 func (h histParams) run(ctx context.Context, admin bool) (*HistogramResult, error) {
 	specs, err := resolveSpecs(h.Sources, h.Watchers, admin)
 	if err != nil {
 		return nil, err
 	}
-	nb := h.Buckets
-	if nb <= 0 {
-		nb = 60
-	}
-	if nb > 500 {
-		nb = 500
-	}
-	now := time.Now().UnixMilli()
-	until := h.Until
-	if until <= 0 {
-		until = now
-	}
-	since := h.Since
-	if since <= 0 || since >= until {
-		since = until - 24*3600*1000
-	}
+	nb := clampOrDefault(h.Buckets, defaultHistBucket, maxHistBuckets)
+	since, until := histWindow(h.Since, h.Until)
 	f, err := newFilter(since, until, nil, h.Text)
 	if err != nil {
 		return nil, err
@@ -331,6 +380,37 @@ func (h histParams) run(ctx context.Context, admin bool) (*HistogramResult, erro
 	if hasJournal(specs) && !admin && !journalReadable() {
 		return nil, errNeedsAdmin()
 	}
+	c := newHistCounter(since, until, nb)
+	runBounded(c.tasks(ctx, specs, f))
+	if c.firstErr != nil {
+		return nil, c.firstErr
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return c.res, nil
+}
+
+// histWindow defaults until to now and since to one day before until.
+func histWindow(since, until int64) (int64, int64) {
+	if until <= 0 {
+		until = time.Now().UnixMilli()
+	}
+	if since <= 0 || since >= until {
+		since = until - defaultHistSpanMs
+	}
+	return since, until
+}
+
+// histCounter fills the buckets of a histogram from sources read
+// concurrently.
+type histCounter struct {
+	mu       sync.Mutex
+	res      *HistogramResult
+	firstErr error
+}
+
+func newHistCounter(since, until int64, nb int) *histCounter {
 	step := (until - since + int64(nb) - 1) / int64(nb)
 	if step < 1 {
 		step = 1
@@ -339,116 +419,114 @@ func (h histParams) run(ctx context.Context, admin bool) (*HistogramResult, erro
 	for i := range res.Buckets {
 		res.Buckets[i].T = since + int64(i)*step
 	}
-	var mu sync.Mutex
-	count := func(tsMs int64, level string) {
-		i := int((tsMs - since) / step)
-		if tsMs < since || i < 0 {
-			return
+	return &histCounter{res: res}
+}
+
+func (c *histCounter) count(tsMs int64, level string) {
+	i := int((tsMs - c.res.Since) / c.res.Step)
+	if tsMs < c.res.Since || i < 0 {
+		return
+	}
+	if nb := len(c.res.Buckets); i >= nb {
+		i = nb - 1
+	}
+	c.mu.Lock()
+	c.res.Buckets[i].add(level)
+	c.mu.Unlock()
+}
+
+func (c *histCounter) fail(err error) {
+	c.mu.Lock()
+	if c.firstErr == nil {
+		c.firstErr = err
+	}
+	c.mu.Unlock()
+}
+
+func (c *histCounter) markTruncated() {
+	c.mu.Lock()
+	c.res.Truncated = true
+	c.mu.Unlock()
+}
+
+func (c *histCounter) tasks(ctx context.Context, specs []spec, f filter) []func() {
+	var tasks []func()
+	for _, g := range journalGroups(specs) {
+		tasks = append(tasks, func() { c.countJournal(ctx, g, f) })
+	}
+	onlySource := len(specs) == 1
+	for _, s := range specsOfKind(specs, "file") {
+		tasks = append(tasks, func() { c.countFile(ctx, s, f, onlySource) })
+	}
+	for _, s := range specsOfKind(specs, "evt") {
+		tasks = append(tasks, func() { c.countEventLog(ctx, s, f) })
+	}
+	return tasks
+}
+
+func (c *histCounter) countJournal(ctx context.Context, g jgroup, f filter) {
+	args := journalArgs(g, f, f.untilUs, "-r", "-n", strconv.Itoa(histJournalCap), "--output-fields=PRIORITY")
+	n := 0
+	err := sys.Stream(ctx, "journalctl", args, func(line string) error {
+		if tsMs, level, ok := parseHistLine(line); ok {
+			c.count(tsMs, level)
+			n++
 		}
-		if i >= nb {
-			i = nb - 1
+		return nil
+	})
+	if n >= histJournalCap {
+		c.markTruncated()
+	}
+	if err = journalErr(err); err != nil {
+		c.fail(err)
+	}
+}
+
+// parseHistLine reads the time (ms) and level of a journalctl JSON line.
+func parseHistLine(line string) (int64, string, bool) {
+	var j struct {
+		T jstr `json:"__REALTIME_TIMESTAMP"`
+		P jstr `json:"PRIORITY"`
+	}
+	if json.Unmarshal([]byte(line), &j) != nil {
+		return 0, "", false
+	}
+	us, err := strconv.ParseInt(string(j.T), 10, 64)
+	if err != nil {
+		return 0, "", false
+	}
+	level := LvInfo
+	if p, err := strconv.Atoi(string(j.P)); err == nil {
+		level = levelFromPriority(p)
+	}
+	return us / 1000, level, true
+}
+
+// countFile counts a file; a file that cannot be read fails the histogram
+// only when it is the only source.
+func (c *histCounter) countFile(ctx context.Context, s spec, f filter, onlySource bool) {
+	err := scanFile(ctx, s.Path, s.Label, s.Format, maxScanBytes, f.sinceUs, func(e *Entry) bool {
+		if e.TsUs <= f.untilUs && f.textOK(e.Message) {
+			c.count(e.Ts, e.Level)
 		}
-		mu.Lock()
-		res.Buckets[i].add(level)
-		mu.Unlock()
+		return true
+	})
+	if err != nil && onlySource {
+		c.fail(err)
 	}
-	var wg sync.WaitGroup
-	var firstErr error
-	var emu sync.Mutex
-	fail := func(err error) {
-		emu.Lock()
-		if firstErr == nil {
-			firstErr = err
-		}
-		emu.Unlock()
+}
+
+func (c *histCounter) countEventLog(ctx context.Context, s spec, f filter) {
+	ents, err := fetchEventLog(ctx, s.Channel, filter{sinceUs: f.sinceUs, untilUs: f.untilUs, text: f.text}, f.untilUs, histEventCap)
+	if len(ents) >= histEventCap {
+		c.markTruncated()
 	}
-	groups := journalGroups(specs)
-	sem := make(chan struct{}, 6)
-	spawn := func(fn func()) {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-			fn()
-		}()
+	for i := range ents {
+		c.count(ents[i].Ts, ents[i].Level)
 	}
-	for _, g := range groups {
-		g := g
-		spawn(func() {
-			args := journalArgs(g, f, f.untilUs, "-r", "-n", strconv.Itoa(histJournalCap), "--output-fields=PRIORITY")
-			n := 0
-			err := sys.Stream(ctx, "journalctl", args, func(line string) error {
-				var j struct {
-					T jstr `json:"__REALTIME_TIMESTAMP"`
-					P jstr `json:"PRIORITY"`
-				}
-				if json.Unmarshal([]byte(line), &j) != nil {
-					return nil
-				}
-				us, err := strconv.ParseInt(string(j.T), 10, 64)
-				if err != nil {
-					return nil
-				}
-				lvl := LvInfo
-				if p, err := strconv.Atoi(string(j.P)); err == nil {
-					lvl = levelFromPriority(p)
-				}
-				count(us/1000, lvl)
-				n++
-				return nil
-			})
-			if n >= histJournalCap {
-				res.Truncated = true
-			}
-			if err = journalErr(err); err != nil {
-				fail(err)
-			}
-		})
+	if err != nil {
+		c.fail(err)
 	}
-	for _, s := range specs {
-		if s.Kind != "file" {
-			continue
-		}
-		s := s
-		spawn(func() {
-			err := scanFile(ctx, s.Path, s.Label, s.Format, maxScanBytes, f.sinceUs, func(e *Entry) bool {
-				if e.TsUs <= f.untilUs && f.textOK(e.Message) {
-					count(e.Ts, e.Level)
-				}
-				return true
-			})
-			if err != nil && len(specs) == 1 {
-				fail(err)
-			}
-		})
-	}
-	for _, s := range specs {
-		if s.Kind != "evt" {
-			continue
-		}
-		s := s
-		spawn(func() {
-			ents, err := fetchEventLog(ctx, s.Channel, filter{sinceUs: f.sinceUs, untilUs: f.untilUs, text: f.text}, f.untilUs, histEventCap)
-			if len(ents) >= histEventCap {
-				res.Truncated = true
-			}
-			for i := range ents {
-				count(ents[i].Ts, ents[i].Level)
-			}
-			if err != nil {
-				fail(err)
-			}
-		})
-	}
-	wg.Wait()
-	if firstErr != nil {
-		return nil, firstErr
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	return res, nil
 }
 
 // ---------- context ----------
