@@ -18,6 +18,41 @@ export function RailItem({ e }: { e: NavEntry }) {
   );
 }
 
+type SessionValue = ReturnType<typeof useSession>;
+type Translate = ReturnType<typeof useT>;
+type UserMenuArgs = Pick<SessionValue, 'session' | 'isUnlocked' | 'unlockLeft' | 'unlockForever' | 'lock' | 'signOut'> & {
+  t: Translate;
+  goSettings(): void;
+};
+
+function userMenuItems({ t, session, isUnlocked, unlockLeft, unlockForever, lock, signOut, goSettings }: UserMenuArgs): MenuItem[] {
+  const sudoItem: MenuItem = isUnlocked
+    ? { id: 'lock', label: unlockForever ? t('sudo.lockNowForever') : t('sudo.lockNow', { time: formatClock(unlockLeft) }), icon: 'lock', onSelect: () => void lock() }
+    : { id: 'unlock', label: t('sudo.unlock'), icon: 'unlock', disabled: session ? !session.canSudo && !session.isAdmin : false, onSelect: () => void requestUnlock().catch(() => undefined) };
+  return [
+    { type: 'heading', label: t('user.signedInAs', { user: session?.user ?? '' }) },
+    sudoItem,
+    { id: 'settings', label: t('nav.settings'), icon: 'cog', onSelect: goSettings },
+    { type: 'separator' },
+    { id: 'out', label: t('user.signOut'), icon: 'logout', danger: true, onSelect: () => void signOut() },
+  ];
+}
+
+function RailList({ main, plugins }: { main: NavEntry[]; plugins: NavEntry[] }) {
+  return (
+    <div className="rail-list">
+      {main.map((e) => (
+        <span key={e.key} style={{ display: 'contents' }}>
+          {e.key === 'plugins' && <div className="rail-gap" />}
+          <RailItem e={e} />
+          {/* plugin pages live under the Plugins item */}
+          {e.key === 'plugins' && plugins.map((p) => <RailItem key={p.key} e={p} />)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function Rail() {
   const t = useT('shell');
   const { host, session, isUnlocked, unlockLeft, unlockForever, lock, signOut } = useSession();
@@ -26,15 +61,7 @@ export function Rail() {
   const avRef = useRef<HTMLButtonElement>(null);
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
 
-  const items: MenuItem[] = [
-    { type: 'heading', label: t('user.signedInAs', { user: session?.user ?? '' }) },
-    isUnlocked
-      ? { id: 'lock', label: unlockForever ? t('sudo.lockNowForever') : t('sudo.lockNow', { time: formatClock(unlockLeft) }), icon: 'lock', onSelect: () => void lock() }
-      : { id: 'unlock', label: t('sudo.unlock'), icon: 'unlock', disabled: session ? !session.canSudo && !session.isAdmin : false, onSelect: () => void requestUnlock().catch(() => undefined) },
-    { id: 'settings', label: t('nav.settings'), icon: 'cog', onSelect: () => nav('/settings') },
-    { type: 'separator' },
-    { id: 'out', label: t('user.signOut'), icon: 'logout', danger: true, onSelect: () => void signOut() },
-  ];
+  const items = userMenuItems({ t, session, isUnlocked, unlockLeft, unlockForever, lock, signOut, goSettings: () => nav('/settings') });
 
   return (
     <nav className="rail" aria-label={t('nav.main')}>
@@ -42,16 +69,7 @@ export function Rail() {
         <span className="lg"><DistroLogo id={host?.distro.id} logo={host?.distro.logo} url={host?.distro.logoUrl} /></span>
         <span className="dn">{host?.hostname ?? ''}</span>
       </Link>
-      <div className="rail-list">
-        {main.map((e, i) => (
-          <span key={e.key} style={{ display: 'contents' }}>
-            {e.key === 'plugins' && <div className="rail-gap" />}
-            <RailItem e={e} />
-            {/* plugin pages live under the Plugins item */}
-            {main[i].key === 'plugins' && plugins.map((p) => <RailItem key={p.key} e={p} />)}
-          </span>
-        ))}
-      </div>
+      <RailList main={main} plugins={plugins} />
       <div className="rail-foot">
         <RailItem e={settings} />
         <button

@@ -96,49 +96,50 @@ function showPanel() {
   goto('/software?tab=installed');
 }
 
-async function runSteps(job: Job) {
-  let lastToast = 0;
-  const push = (line: string) => {
-    const log = state.log.length >= MAX_LOG ? [...state.log.slice(-MAX_LOG + 1), line] : [...state.log, line];
-    set({ log });
-  };
-  for (let i = 0; i < job.steps.length; i++) {
-    const p = job.steps[i];
-    set({ step: i + 1, done: 0, total: 0, current: '', op: p.op });
-    const result = await new Promise<{ ok: boolean; message: string; hint: string; reboot: boolean }>((resolve) => {
-      let finished = false;
-      const end = (r: { ok: boolean; message: string; hint: string; reboot: boolean }) => {
-        if (finished) return;
-        finished = true;
-        handle = null;
-        resolve(r);
-      };
-      const user = p.source === 'flatpak' && p.scope === 'user';
-      handle = stream<TxEvent>(user ? 'software.transactionUser' : 'software.transaction', p, {
-        admin: !user,
-        onData: (e) => {
-          if (e.type === 'log') push(e.line);
-          else if (e.type === 'progress') {
-            const percent = pct(state.step, state.steps, e.done, e.total);
-            set({ done: e.done, total: e.total, current: e.current, percent });
-            if (Date.now() - lastToast > 400) {
-              lastToast = Date.now();
-              toast.update(toastId, { progress: percent, detail: e.current });
-            }
-          } else if (e.type === 'done') end({ ok: e.ok, message: e.message, hint: e.hint, reboot: e.rebootNeeded });
-        },
-        onEnd: () => end({ ok: false, message: translate('tx.lost'), hint: '', reboot: false }),
-        onError: (err: ApiError) => end({ ok: false, message: err.message, hint: err.code === 'conflict' ? 'locked' : '', reboot: false }),
-      });
+type StepResult = { ok: boolean; message: string; hint: string; reboot: boolean };
+
+function pushLog(line: string) {
+  const log = state.log.length >= MAX_LOG ? [...state.log.slice(-MAX_LOG + 1), line] : [...state.log, line];
+  set({ log });
+}
+
+const TOAST_INTERVAL_MS = 400;
+
+function runStep(p: TxParams, onToast: () => boolean): Promise<StepResult> {
+  return new Promise<StepResult>((resolve) => {
+    let finished = false;
+    const end = (r: StepResult) => {
+      if (finished) return;
+      finished = true;
+      handle = null;
+      resolve(r);
+    };
+    const onProgress = (e: { done: number; total: number; current: string }) => {
+      const percent = pct(state.step, state.steps, e.done, e.total);
+      set({ done: e.done, total: e.total, current: e.current, percent });
+      if (onToast()) toast.update(toastId, { progress: percent, detail: e.current });
+    };
+    const user = p.source === 'flatpak' && p.scope === 'user';
+    handle = stream<TxEvent>(user ? 'software.transactionUser' : 'software.transaction', p, {
+      admin: !user,
+      onData: (e) => {
+        if (e.type === 'log') pushLog(e.line);
+        else if (e.type === 'progress') onProgress(e);
+        else if (e.type === 'done') end({ ok: e.ok, message: e.message, hint: e.hint, reboot: e.rebootNeeded });
+      },
+      onEnd: () => end({ ok: false, message: translate('tx.lost'), hint: '', reboot: false }),
+      onError: (err: ApiError) => end({ ok: false, message: err.message, hint: err.code === 'conflict' ? 'locked' : '', reboot: false }),
     });
-    if (!result.ok) {
-      set({ phase: 'failed', message: result.message, hint: result.hint, percent: undefined });
-      toast.update(toastId, { tone: 'err', title: translate('tx.failed'), detail: result.message, progress: undefined, duration: 9000, action: { label: translate('tx.show'), onClick: showPanel } });
-      void reloadAll();
-      return;
-    }
-    if (result.reboot) set({ rebootNeeded: true });
-  }
+  });
+}
+
+function failJob(result: StepResult) {
+  set({ phase: 'failed', message: result.message, hint: result.hint, percent: undefined });
+  toast.update(toastId, { tone: 'err', title: translate('tx.failed'), detail: result.message, progress: undefined, duration: 9000, action: { label: translate('tx.show'), onClick: showPanel } });
+  void reloadAll();
+}
+
+function finishJob(job: Job) {
   set({ phase: 'done', percent: 100, done: state.total, message: '' });
   toast.update(toastId, {
     tone: 'ok', title: translate(`tx.done.${job.title.key}`, job.title.vars),
@@ -146,6 +147,23 @@ async function runSteps(job: Job) {
     progress: undefined, duration: state.rebootNeeded ? 10000 : 5000, action: undefined,
   });
   void reloadAll();
+}
+
+async function runSteps(job: Job) {
+  let lastToast = 0;
+  const toastDue = () => {
+    if (Date.now() - lastToast <= TOAST_INTERVAL_MS) return false;
+    lastToast = Date.now();
+    return true;
+  };
+  for (let i = 0; i < job.steps.length; i++) {
+    const p = job.steps[i];
+    set({ step: i + 1, done: 0, total: 0, current: '', op: p.op });
+    const result = await runStep(p, toastDue);
+    if (!result.ok) return failJob(result);
+    if (result.reboot) set({ rebootNeeded: true });
+  }
+  finishJob(job);
 }
 
 /* ---- attach: a transaction is already running (page reloaded, other session) ---- */

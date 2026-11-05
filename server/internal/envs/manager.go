@@ -287,36 +287,44 @@ func (m *Manager) test(ctx context.Context, id string, full bool) *Status {
 func (m *Manager) check(ctx context.Context, e *Env, full bool) *Status {
 	t0 := time.Now()
 	st := &Status{Checked: t0}
-	fail := func(err error) *Status {
-		st.Reachable, st.Error = false, err.Error()
-		st.LatencyMs = time.Since(t0).Milliseconds()
-		return st
-	}
+	var err error
 	if e.Kind == KindErvisio {
-		if !full {
-			if _, err := m.pairPing(ctx, e); err != nil {
-				return fail(err)
-			}
-			st.Reachable = true
-			st.LatencyMs = time.Since(t0).Milliseconds()
-			return st
-		}
-		_, eng, api, err := m.pairCheck(ctx, e)
-		if err != nil {
-			return fail(err)
-		}
-		st.Reachable, st.EngineVersion, st.APIVersion = true, eng, api
-		st.LatencyMs = time.Since(t0).Milliseconds()
-		return st
+		err = m.checkErvisio(ctx, e, full, st)
+	} else {
+		err = m.checkDocker(ctx, e, st)
 	}
+	st.LatencyMs = time.Since(t0).Milliseconds()
+	if err != nil {
+		st.Reachable, st.Error = false, err.Error()
+	}
+	return st
+}
+
+func (m *Manager) checkErvisio(ctx context.Context, e *Env, full bool, st *Status) error {
+	if !full {
+		if _, err := m.pairPing(ctx, e); err != nil {
+			return err
+		}
+		st.Reachable = true
+		return nil
+	}
+	_, eng, api, err := m.pairCheck(ctx, e)
+	if err != nil {
+		return err
+	}
+	st.Reachable, st.EngineVersion, st.APIVersion = true, eng, api
+	return nil
+}
+
+func (m *Manager) checkDocker(ctx context.Context, e *Env, st *Status) error {
 	cl, err := m.httpClient(e, 15*time.Second)
 	if err != nil {
-		return fail(err)
+		return err
 	}
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://docker/version", nil)
 	resp, err := cl.Do(req)
 	if err != nil {
-		return fail(friendlyTLS(unwrapURLErr(err)))
+		return friendlyTLS(unwrapURLErr(err))
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
@@ -325,18 +333,17 @@ func (m *Manager) check(ctx context.Context, e *Env, full bool) *Status {
 		if resp.StatusCode == 403 && e.Kind == KindPortainerAgent {
 			msg = "The agent refused our signature. If it has no AGENT_SECRET it may already be tied to another Portainer; set AGENT_SECRET on the agent and enter it here."
 		}
-		return fail(errf("%s", msg))
+		return errf("%s", msg)
 	}
 	var v struct {
 		Version    string `json:"Version"`
 		APIVersion string `json:"ApiVersion"`
 	}
 	if json.Unmarshal(body, &v) != nil || v.Version == "" {
-		return fail(errf("That address answered, but it does not look like a Docker engine."))
+		return errf("That address answered, but it does not look like a Docker engine.")
 	}
 	st.Reachable, st.EngineVersion, st.APIVersion = true, v.Version, v.APIVersion
-	st.LatencyMs = time.Since(t0).Milliseconds()
-	return st
+	return nil
 }
 
 // ProbeResult is what "Check connection" learns before anything is stored.
