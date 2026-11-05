@@ -21,19 +21,25 @@ import (
 type copier struct {
 	ctx      context.Context
 	progress func(int64)
-	buf      []byte
-	depth    int
-	madeTop  bool
-	skipped  []string
+	copyBuffer
+	depth   int
+	madeTop bool
+	skipped []string
 }
 
 func newCopier(ctx context.Context, progress func(int64)) *copier {
 	return &copier{ctx: ctx, progress: progress}
 }
 
+func (c *copier) created() {
+	if c.depth == 1 {
+		c.madeTop = true
+	}
+}
+
 func (c *copier) copyAt(src, dst string) error {
 	if err := c.ctx.Err(); err != nil {
-		return rpc.Errorf(rpc.Unavailable, "The copy was cancelled.")
+		return errCopyCancelled()
 	}
 	c.depth++
 	defer func() { c.depth-- }()
@@ -43,33 +49,41 @@ func (c *copier) copyAt(src, dst string) error {
 	}
 	switch {
 	case link:
-		if c.depth == 1 {
-			return rpc.Errorf(rpc.Invalid, "%s is a link and cannot be copied. Copy the item it points to instead.", src)
-		}
-		c.skipped = append(c.skipped, src)
-		return nil
+		return c.skipLink(src)
 	case fi.IsDir():
-		if err := os.Mkdir(dst, 0o777); err != nil {
-			return pathErr("mkdir", dst, err)
-		}
-		if c.depth == 1 {
-			c.madeTop = true
-		}
-		ents, err := os.ReadDir(src)
-		if err != nil {
-			return pathErr("readdir", src, err)
-		}
-		for _, e := range ents {
-			if err := c.copyAt(filepath.Join(src, e.Name()), filepath.Join(dst, e.Name())); err != nil {
-				return err
-			}
-		}
-		return pathErr("chtimes", dst, os.Chtimes(dst, time.Now(), fi.ModTime()))
+		return c.copyDir(src, dst, fi)
 	case fi.Mode().IsRegular():
 		return c.copyFile(src, dst, fi)
 	}
 	c.skipped = append(c.skipped, src) // devices, pipes and the like
 	return nil
+}
+
+// skipLink records a link met inside a copied tree; as the copy source itself
+// it is refused.
+func (c *copier) skipLink(src string) error {
+	if c.depth == 1 {
+		return rpc.Errorf(rpc.Invalid, "%s is a link and cannot be copied. Copy the item it points to instead.", src)
+	}
+	c.skipped = append(c.skipped, src)
+	return nil
+}
+
+func (c *copier) copyDir(src, dst string, fi os.FileInfo) error {
+	if err := os.Mkdir(dst, 0o777); err != nil {
+		return pathErr("mkdir", dst, err)
+	}
+	c.created()
+	ents, err := os.ReadDir(src)
+	if err != nil {
+		return pathErr("readdir", src, err)
+	}
+	for _, e := range ents {
+		if err := c.copyAt(filepath.Join(src, e.Name()), filepath.Join(dst, e.Name())); err != nil {
+			return err
+		}
+	}
+	return pathErr("chtimes", dst, os.Chtimes(dst, time.Now(), fi.ModTime()))
 }
 
 func (c *copier) copyFile(src, dst string, fi os.FileInfo) error {
@@ -82,36 +96,11 @@ func (c *copier) copyFile(src, dst string, fi os.FileInfo) error {
 	if err != nil {
 		return pathErr("create", dst, err)
 	}
-	if c.depth == 1 {
-		c.madeTop = true
-	}
-	fail := func(err error) error {
+	c.created()
+	if err := c.pump(in, out, src); err != nil {
 		out.Close()
 		_ = os.Remove(dst)
 		return err
-	}
-	if c.buf == nil {
-		c.buf = make([]byte, 256<<10)
-	}
-	for {
-		if err := c.ctx.Err(); err != nil {
-			return fail(rpc.Errorf(rpc.Unavailable, "The copy was cancelled."))
-		}
-		n, rerr := in.Read(c.buf)
-		if n > 0 {
-			if _, werr := out.Write(c.buf[:n]); werr != nil {
-				return fail(werr)
-			}
-			if c.progress != nil {
-				c.progress(int64(n))
-			}
-		}
-		if rerr == io.EOF {
-			break
-		}
-		if rerr != nil {
-			return fail(pathErr("read", src, rerr))
-		}
 	}
 	if err := out.Close(); err != nil {
 		_ = os.Remove(dst)
@@ -122,6 +111,35 @@ func (c *copier) copyFile(src, dst string, fi os.FileInfo) error {
 		_ = setReadOnly(dst, true)
 	}
 	return nil
+}
+
+// pump copies everything readable from in into out, reporting progress.
+func (c *copier) pump(in io.Reader, out io.Writer, src string) error {
+	buf := c.buffer()
+	for {
+		if err := c.ctx.Err(); err != nil {
+			return errCopyCancelled()
+		}
+		n, rerr := in.Read(buf)
+		if n > 0 {
+			if _, werr := out.Write(buf[:n]); werr != nil {
+				return werr
+			}
+			if c.progress != nil {
+				c.progress(int64(n))
+			}
+		}
+		if rerr == io.EOF {
+			return nil
+		}
+		if rerr != nil {
+			return pathErr("read", src, rerr)
+		}
+	}
+}
+
+func errMoveSkipped(path string) error {
+	return rpc.Errorf(rpc.Invalid, "%s contains links or special files and cannot be moved to another drive. Copy it instead.", path)
 }
 
 // movePath renames from to to without ever overwriting. Across volumes it
@@ -135,10 +153,10 @@ func movePath(from, to string) error {
 		return pathErr("lstat", from, err)
 	}
 	if _, err := os.Lstat(to); err == nil {
-		return rpc.Errorf(rpc.Conflict, "%s already exists. Choose another name.", to)
+		return errAlreadyExists(to)
 	}
 	if fi.IsDir() && !link && isInside(to, from) {
-		return rpc.Errorf(rpc.Invalid, "A folder cannot be moved into itself.")
+		return errMoveIntoItself()
 	}
 	err = moveNoReplace(from, to)
 	if err == nil || !isCrossVolume(err) {
@@ -147,6 +165,12 @@ func movePath(from, to string) error {
 	if link {
 		return rpc.Errorf(rpc.Invalid, "%s is a link and cannot be moved to another drive.", from)
 	}
+	return moveAcrossVolumes(from, to)
+}
+
+// moveAcrossVolumes copies from to to and then removes from, undoing the copy
+// when it fails.
+func moveAcrossVolumes(from, to string) error {
 	c := newCopier(context.Background(), nil)
 	if err := c.copyAt(from, to); err != nil {
 		if c.madeTop {
@@ -156,115 +180,100 @@ func movePath(from, to string) error {
 	}
 	if len(c.skipped) > 0 { // never delete what was not copied
 		_ = removePath(to)
-		return rpc.Errorf(rpc.Invalid, "%s contains links or special files and cannot be moved to another drive. Copy it instead.", from)
+		return errMoveSkipped(from)
 	}
 	return removePath(from)
 }
 
 func doCopy(ctx context.Context, p copyParams, s rpc.Stream) error {
-	from, err := cleanPaths(p.From)
+	from, to, err := copyTargets(p)
 	if err != nil {
 		return err
 	}
-	to, err := cleanPath(p.To)
+	jobs, total, err := planCopy(ctx, p, from, to)
 	if err != nil {
 		return err
 	}
-	if ti, err := os.Stat(to); err != nil {
-		return err
-	} else if !ti.IsDir() {
-		return rpc.Errorf(rpc.Invalid, "%s is not a folder.", to)
-	}
-	type job struct{ src, dst string }
-	var jobs []job
-	var total int64
-	for _, src := range from {
-		fi, link, err := lstatLink(src)
-		if err != nil {
-			return err
-		}
-		if p.Move {
-			if err := checkNotProtected(src); err != nil {
-				return err
-			}
-		}
-		dst := filepath.Join(to, filepath.Base(src))
-		if fi.IsDir() && !link && isInside(to, src) {
-			return rpc.Errorf(rpc.Invalid, "A folder cannot be copied or moved into itself.")
-		}
-		if p.Move && isInside(filepath.Dir(src), to) && isInside(to, filepath.Dir(src)) {
-			continue // already there
-		}
-		jobs = append(jobs, job{src, uniqueName(dst)})
-		sz, _ := treeSize(ctx, src)
-		total += sz
-	}
-	if err := s.Send(map[string]any{"type": "start", "total": total, "items": len(jobs)}); err != nil {
+	r := &copyReporter{s: s, total: total}
+	if err := r.start(len(jobs)); err != nil {
 		return err
 	}
-	var done int64
-	last := time.Time{}
-	cur := ""
-	emit := func(force bool) error {
-		if force || time.Since(last) > 100*time.Millisecond {
-			last = time.Now()
-			return s.Send(map[string]any{"type": "progress", "done": done, "total": total, "current": cur})
-		}
-		return nil
+	var skipped []string
+	results, err := r.run(jobs, func(j copyJob) error {
+		return copyJobWin(ctx, p.Move, j, r, &skipped)
+	})
+	if err != nil {
+		return err
 	}
-	results := []string{}
-	skipped := []string{}
-	for _, j := range jobs {
-		cur = filepath.Base(j.src)
-		if err := emit(true); err != nil {
-			return err
-		}
-		if err := func() error {
-			if p.Move {
-				err := moveNoReplace(j.src, j.dst)
-				if err == nil {
-					sz, _ := treeSize(ctx, j.dst)
-					done += sz
-					return nil
-				} else if !isCrossVolume(err) {
-					return err
-				}
-			}
-			var perr error
-			c := newCopier(ctx, func(n int64) {
-				done += n
-				if perr == nil {
-					perr = emit(false)
-				}
-			})
-			if cerr := c.copyAt(j.src, j.dst); cerr != nil {
-				if c.madeTop {
-					_ = removePath(j.dst)
-				}
-				return cerr
-			}
-			if perr != nil {
-				return perr
-			}
-			skipped = append(skipped, c.skipped...)
-			if p.Move {
-				if len(c.skipped) > 0 {
-					return rpc.Errorf(rpc.Invalid, "%s contains links or special files and cannot be moved to another drive. Copy it instead.", j.src)
-				}
-				return removePath(j.src)
-			}
-			return nil
-		}(); err != nil {
-			return err
-		}
-		results = append(results, j.dst)
+	if results == nil {
+		results = []string{} // the answer lists paths even when there are none
 	}
-	_ = emit(true)
 	msg := map[string]any{"done": true, "paths": results}
 	if len(skipped) > 0 {
 		msg["skipped"] = skipped // links and special files that were not copied
 	}
-	return s.Send(msg)
+	return r.finish(msg)
+}
+
+// planCopy checks every source and picks its free destination name inside to.
+func planCopy(ctx context.Context, p copyParams, from []string, to string) ([]copyJob, int64, error) {
+	var jobs []copyJob
+	var total int64
+	for _, src := range from {
+		fi, link, err := lstatLink(src)
+		if err != nil {
+			return nil, 0, err
+		}
+		if p.Move {
+			if err := checkNotProtected(src); err != nil {
+				return nil, 0, err
+			}
+		}
+		if fi.IsDir() && !link && isInside(to, src) {
+			return nil, 0, errCopyIntoItself()
+		}
+		if p.Move && isInside(filepath.Dir(src), to) && isInside(to, filepath.Dir(src)) {
+			continue // already there
+		}
+		jobs = append(jobs, copyJob{src, uniqueName(filepath.Join(to, filepath.Base(src)))})
+		sz, _ := treeSize(ctx, src)
+		total += sz
+	}
+	return jobs, total, nil
+}
+
+// copyJobWin copies (or moves) one job; links and special files left out of
+// the copy are added to skipped.
+func copyJobWin(ctx context.Context, move bool, j copyJob, r *copyReporter, skipped *[]string) error {
+	if move {
+		err := moveNoReplace(j.src, j.dst)
+		if err == nil {
+			sz, _ := treeSize(ctx, j.dst)
+			r.done += sz
+			return nil
+		}
+		if !isCrossVolume(err) {
+			return err
+		}
+	}
+	c := newCopier(ctx, r.onBytes)
+	if err := c.copyAt(j.src, j.dst); err != nil {
+		if c.madeTop {
+			_ = removePath(j.dst)
+		}
+		return err
+	}
+	if r.err != nil {
+		return r.err
+	}
+	*skipped = append(*skipped, c.skipped...)
+	if !move {
+		return nil
+	}
+	if len(c.skipped) > 0 {
+		return errMoveSkipped(j.src)
+	}
+	return removePath(j.src)
 }
 
 func setReadOnly(path string, ro bool) error {
@@ -291,19 +300,7 @@ func setReadOnly(path string, ro bool) error {
 // Folders are only changed recursively, and then only the files inside; links
 // are never touched or followed.
 func hChmod(ctx context.Context, c *rpc.Call) (any, error) {
-	var p struct {
-		Path      string `json:"path"`
-		Mode      string `json:"mode"`
-		Recursive bool   `json:"recursive"`
-	}
-	if err := c.Bind(&p); err != nil {
-		return nil, err
-	}
-	path, err := cleanPath(p.Path)
-	if err != nil {
-		return nil, err
-	}
-	mode, err := parseMode(p.Mode)
+	path, mode, recursive, err := bindChmod(c)
 	if err != nil {
 		return nil, err
 	}
@@ -316,7 +313,7 @@ func hChmod(ctx context.Context, c *rpc.Call) (any, error) {
 		return nil, pathErr("lstat", path, err)
 	}
 	if link {
-		return nil, rpc.Errorf(rpc.Invalid, "Permissions cannot be changed on a link. Change the item it points to instead.")
+		return nil, errChmodOnLink()
 	}
 	if !fi.IsDir() {
 		if err := setReadOnly(path, ro); err != nil {
@@ -324,31 +321,29 @@ func hChmod(ctx context.Context, c *rpc.Call) (any, error) {
 		}
 		return map[string]any{"changed": 1}, nil
 	}
-	if !p.Recursive {
+	if !recursive {
 		return nil, rpc.Errorf(rpc.Invalid, "On Windows the read-only attribute applies to files. Choose \"apply to everything inside\" to change the files in this folder.")
 	}
+	return setReadOnlyTree(ctx, path, ro)
+}
+
+// setReadOnlyTree sets the read-only attribute of every regular file below path.
+func setReadOnlyTree(ctx context.Context, path string, ro bool) (any, error) {
 	changed := 0
-	var first error
-	err = filepath.WalkDir(path, func(q string, d os.DirEntry, werr error) error {
+	var first firstErr
+	err := filepath.WalkDir(path, func(q string, d os.DirEntry, werr error) error {
 		if ctx.Err() != nil {
 			return ctxErr(ctx)
 		}
 		if werr != nil {
-			if first == nil {
-				first = werr
-			}
+			first.note(werr)
 			return nil
 		}
-		if d.IsDir() {
-			return nil
-		}
-		if isLinkMode(d.Type()) || !d.Type().IsRegular() {
+		if d.IsDir() || isLinkMode(d.Type()) || !d.Type().IsRegular() {
 			return nil
 		}
 		if err := setReadOnly(q, ro); err != nil {
-			if first == nil {
-				first = pathErr("chmod", q, err)
-			}
+			first.note(pathErr("chmod", q, err))
 			return nil
 		}
 		changed++
@@ -357,14 +352,7 @@ func hChmod(ctx context.Context, c *rpc.Call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if first != nil && changed == 0 {
-		return nil, first
-	}
-	res := map[string]any{"changed": changed}
-	if first != nil {
-		res["warning"] = first.Error()
-	}
-	return res, nil
+	return changeResult(changed, first.err)
 }
 
 func hChown(ctx context.Context, c *rpc.Call) (any, error) {

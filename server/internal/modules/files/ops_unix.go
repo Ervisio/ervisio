@@ -5,10 +5,8 @@ package files
 import (
 	"context"
 	"errors"
-	"os"
 	"path/filepath"
 	"syscall"
-	"time"
 
 	"golang.org/x/sys/unix"
 
@@ -37,151 +35,124 @@ func movePath(from, to string) error {
 	}
 	defer dd.Close()
 	if _, err := lstatAt(dfd(dd), dname); err == nil {
-		return rpc.Errorf(rpc.Conflict, "%s already exists. Choose another name.", to)
+		return errAlreadyExists(to)
 	}
 	if isDir(&st) && isInside(to, from) {
-		return rpc.Errorf(rpc.Invalid, "A folder cannot be moved into itself.")
+		return errMoveIntoItself()
 	}
-	err = renameNoReplace(dfd(sd), sname, dfd(dd), dname, to)
-	if err == nil {
-		return nil
-	}
-	if !errors.Is(err, syscall.EXDEV) {
+	src := entryRef{dfd(sd), sname, from}
+	dst := entryRef{dfd(dd), dname, to}
+	err = renameNoReplace(src.dirfd, src.name, dst.dirfd, dst.name, to)
+	if err == nil || !errors.Is(err, syscall.EXDEV) {
 		return err
 	}
+	return moveAcrossDevices(src, dst)
+}
+
+// moveAcrossDevices copies src to dst and then removes src, undoing the copy
+// when it fails.
+func moveAcrossDevices(src, dst entryRef) error {
 	c := newCopier(context.Background(), nil)
-	if err := c.copyAt(dfd(sd), sname, from, dfd(dd), dname, to); err != nil {
+	if err := c.copyAt(src, dst); err != nil {
 		if c.madeTop {
-			_ = removeAllAt(dfd(dd), dname, to)
+			_ = removeAllAt(dst.dirfd, dst.name, dst.full)
 		}
 		return err
 	}
-	return removeAllAt(dfd(sd), sname, from)
+	return removeAllAt(src.dirfd, src.name, src.full)
 }
 
 func doCopy(ctx context.Context, p copyParams, s rpc.Stream) error {
-	from, err := cleanPaths(p.From)
+	from, to, err := copyTargets(p)
 	if err != nil {
 		return err
-	}
-	to, err := cleanPath(p.To)
-	if err != nil {
-		return err
-	}
-	if ti, err := os.Stat(to); err != nil {
-		return err
-	} else if !ti.IsDir() {
-		return rpc.Errorf(rpc.Invalid, "%s is not a folder.", to)
 	}
 	toDir, err := openDir(to)
 	if err != nil {
 		return err
 	}
 	defer toDir.Close()
-	// Plan.
-	type job struct{ src, dst string }
-	var jobs []job
+	jobs, total, err := planCopy(ctx, p, from, to)
+	if err != nil {
+		return err
+	}
+	r := &copyReporter{s: s, total: total}
+	if err := r.start(len(jobs)); err != nil {
+		return err
+	}
+	results, err := r.run(jobs, func(j copyJob) error {
+		return copyJobTo(ctx, p.Move, dfd(toDir), j, r)
+	})
+	if err != nil {
+		return err
+	}
+	return r.finish(map[string]any{"done": true, "paths": results})
+}
+
+// planCopy checks every source and picks its free destination name inside to.
+func planCopy(ctx context.Context, p copyParams, from []string, to string) ([]copyJob, int64, error) {
+	var jobs []copyJob
 	var total int64
 	for _, src := range from {
 		st, err := lstatPath(src)
 		if err != nil {
-			return err
+			return nil, 0, err
 		}
 		if p.Move {
 			if err := checkNotProtected(src); err != nil {
-				return err
+				return nil, 0, err
 			}
 		}
-		dst := filepath.Join(to, filepath.Base(src))
 		if isDir(&st) && isInside(to, src) {
-			return rpc.Errorf(rpc.Invalid, "A folder cannot be copied or moved into itself.")
+			return nil, 0, errCopyIntoItself()
 		}
 		if p.Move && filepath.Dir(src) == to {
 			continue // already there
 		}
-		jobs = append(jobs, job{src, uniqueName(dst)})
+		jobs = append(jobs, copyJob{src, uniqueName(filepath.Join(to, filepath.Base(src)))})
 		sz, _ := treeSize(ctx, src)
 		total += sz
 	}
-	if err := s.Send(map[string]any{"type": "start", "total": total, "items": len(jobs)}); err != nil {
+	return jobs, total, nil
+}
+
+// copyJobTo copies (or moves) one job into the folder open on toFd.
+func copyJobTo(ctx context.Context, move bool, toFd int, j copyJob, r *copyReporter) error {
+	sd, sname, err := openParent(j.src)
+	if err != nil {
 		return err
 	}
-	var done int64
-	last := time.Time{}
-	cur := ""
-	emit := func(force bool) error {
-		if force || time.Since(last) > 100*time.Millisecond {
-			last = time.Now()
-			return s.Send(map[string]any{"type": "progress", "done": done, "total": total, "current": cur})
-		}
-		return nil
-	}
-	var results []string
-	for _, j := range jobs {
-		cur = filepath.Base(j.src)
-		if err := emit(true); err != nil {
-			return err
-		}
-		if err := func() error {
-			sd, sname, err := openParent(j.src)
-			if err != nil {
-				return err
-			}
-			defer sd.Close()
-			dname := filepath.Base(j.dst)
-			if p.Move {
-				err := renameNoReplace(dfd(sd), sname, dfd(toDir), dname, j.dst)
-				if err == nil {
-					sz, _ := treeSize(ctx, j.dst)
-					done += sz
-					return nil
-				} else if !errors.Is(err, syscall.EXDEV) {
-					return err
-				}
-			}
-			var perr error
-			c := newCopier(ctx, func(n int64) {
-				done += n
-				if perr == nil {
-					perr = emit(false)
-				}
-			})
-			if cerr := c.copyAt(dfd(sd), sname, j.src, dfd(toDir), dname, j.dst); cerr != nil {
-				if c.madeTop {
-					_ = removeAllAt(dfd(toDir), dname, j.dst)
-				}
-				return cerr
-			}
-			if perr != nil {
-				return perr
-			}
-			if p.Move {
-				return removeAllAt(dfd(sd), sname, j.src)
-			}
+	defer sd.Close()
+	dname := filepath.Base(j.dst)
+	if move {
+		err := renameNoReplace(dfd(sd), sname, toFd, dname, j.dst)
+		if err == nil {
+			sz, _ := treeSize(ctx, j.dst)
+			r.done += sz
 			return nil
-		}(); err != nil {
+		}
+		if !errors.Is(err, syscall.EXDEV) {
 			return err
 		}
-		results = append(results, j.dst)
 	}
-	_ = emit(true)
-	return s.Send(map[string]any{"done": true, "paths": results})
+	c := newCopier(ctx, r.onBytes)
+	if err := c.copyAt(entryRef{dfd(sd), sname, j.src}, entryRef{toFd, dname, j.dst}); err != nil {
+		if c.madeTop {
+			_ = removeAllAt(toFd, dname, j.dst)
+		}
+		return err
+	}
+	if r.err != nil {
+		return r.err
+	}
+	if move {
+		return removeAllAt(dfd(sd), sname, j.src)
+	}
+	return nil
 }
 
 func hChmod(ctx context.Context, c *rpc.Call) (any, error) {
-	var p struct {
-		Path      string `json:"path"`
-		Mode      string `json:"mode"`
-		Recursive bool   `json:"recursive"`
-	}
-	if err := c.Bind(&p); err != nil {
-		return nil, err
-	}
-	path, err := cleanPath(p.Path)
-	if err != nil {
-		return nil, err
-	}
-	mode, err := parseMode(p.Mode)
+	path, mode, recursive, err := bindChmod(c)
 	if err != nil {
 		return nil, err
 	}
@@ -194,23 +165,31 @@ func hChmod(ctx context.Context, c *rpc.Call) (any, error) {
 	if err != nil {
 		return nil, pathErr("lstat", path, err)
 	}
-	errLink := rpc.Errorf(rpc.Invalid, "Permissions cannot be changed on a link. Change the item it points to instead.")
 	if isLink(&st) {
-		return nil, errLink
+		return nil, errChmodOnLink()
 	}
 	m := unixMode(mode)
-	if !p.Recursive || !isDir(&st) {
+	if !recursive || !isDir(&st) {
 		if err := chmodNoFollow(dfd(d), name, m); err != nil {
 			if errors.Is(err, errIsLink) {
-				return nil, errLink
+				return nil, errChmodOnLink()
 			}
 			return nil, pathErr("chmod", path, err)
 		}
 		return map[string]any{"changed": 1}, nil
 	}
 	changed := 0
-	var first error
-	err = walkAt(ctx, dfd(d), name, path, func(dirfd int, name string, st *unix.Stat_t, self int) error {
+	var first firstErr
+	err = walkAt(ctx, entryRef{dfd(d), name, path}, chmodVisitor(m, &changed), first.note)
+	if err != nil {
+		return nil, err
+	}
+	return changeResult(changed, first.err)
+}
+
+// chmodVisitor applies mode m to each visited entry and counts the changes.
+func chmodVisitor(m uint32, changed *int) visitFunc {
+	return func(dirfd int, name string, st *unix.Stat_t, self int) error {
 		var err error
 		switch {
 		case self >= 0:
@@ -223,25 +202,10 @@ func hChmod(ctx context.Context, c *rpc.Call) (any, error) {
 			}
 		}
 		if err == nil {
-			changed++
+			*changed++
 		}
 		return err
-	}, func(err error) {
-		if first == nil {
-			first = err
-		}
-	})
-	if err != nil {
-		return nil, err
 	}
-	if first != nil && changed == 0 {
-		return nil, first
-	}
-	res := map[string]any{"changed": changed}
-	if first != nil {
-		res["warning"] = first.Error()
-	}
-	return res, nil
 }
 
 func hChown(ctx context.Context, c *rpc.Call) (any, error) {
@@ -285,8 +249,21 @@ func hChown(ctx context.Context, c *rpc.Call) (any, error) {
 		return map[string]any{"changed": 1}, nil
 	}
 	changed := 0
-	var first error
-	err = walkAt(ctx, dfd(d), name, path, func(dirfd int, name string, st *unix.Stat_t, self int) error {
+	var first firstErr
+	err = walkAt(ctx, entryRef{dfd(d), name, path}, chownVisitor(uid, gid, &changed), first.note)
+	if err != nil {
+		return nil, err
+	}
+	if first.err != nil && changed == 0 {
+		return nil, first.err
+	}
+	return map[string]any{"changed": changed}, nil
+}
+
+// chownVisitor gives each visited entry the owner uid and group gid (-1 keeps
+// the current one) and counts the changes.
+func chownVisitor(uid, gid int, changed *int) visitFunc {
+	return func(dirfd int, name string, _ *unix.Stat_t, self int) error {
 		var err error
 		if self >= 0 {
 			err = unix.Fchown(self, uid, gid)
@@ -294,19 +271,8 @@ func hChown(ctx context.Context, c *rpc.Call) (any, error) {
 			err = unix.Fchownat(dirfd, name, uid, gid, unix.AT_SYMLINK_NOFOLLOW)
 		}
 		if err == nil {
-			changed++
+			*changed++
 		}
 		return err
-	}, func(err error) {
-		if first == nil {
-			first = err
-		}
-	})
-	if err != nil {
-		return nil, err
 	}
-	if first != nil && changed == 0 {
-		return nil, first
-	}
-	return map[string]any{"changed": changed}, nil
 }

@@ -9,8 +9,6 @@ import (
 	"time"
 
 	"golang.org/x/sys/unix"
-
-	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
 // resolveFinal follows the links at the end of path, so saving a link saves
@@ -24,39 +22,52 @@ func resolveFinal(path string) (string, error) {
 		return path, nil
 	}
 	for i := 0; i < maxLinkHops; i++ {
-		d, name, err := openParent(path)
+		target, isSymlink, err := finalLinkTarget(path)
 		if err != nil {
 			return "", err
 		}
-		fd, err := unix.Openat(dfd(d), name, unix.O_PATH|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
-		d.Close()
-		if errors.Is(err, unix.ENOENT) {
+		if !isSymlink {
 			return path, nil
 		}
-		if err != nil {
-			return "", pathErr("open", path, err)
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(filepath.Dir(path), target)
 		}
-		var st unix.Stat_t
-		err = unix.Fstat(fd, &st)
-		if err != nil || !isLink(&st) {
-			unix.Close(fd)
-			return path, pathErr("stat", path, err)
-		}
-		if st.Uid != trustedLinkUID {
-			unix.Close(fd)
-			return "", errUntrustedLink(path)
-		}
-		t, err := readlinkAt(fd, "")
-		unix.Close(fd)
-		if err != nil {
-			return "", pathErr("readlink", path, err)
-		}
-		if !filepath.IsAbs(t) {
-			t = filepath.Join(filepath.Dir(path), t)
-		}
-		path = filepath.Clean(t)
+		path = filepath.Clean(target)
 	}
 	return "", pathErr("open", path, unix.ELOOP)
+}
+
+// finalLinkTarget reads the link at path when it is one owned by root. A
+// missing or non-link path is not an error: isSymlink is false.
+func finalLinkTarget(path string) (target string, isSymlink bool, err error) {
+	d, name, err := openParent(path)
+	if err != nil {
+		return "", false, err
+	}
+	fd, err := unix.Openat(dfd(d), name, unix.O_PATH|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	d.Close()
+	if errors.Is(err, unix.ENOENT) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, pathErr("open", path, err)
+	}
+	defer unix.Close(fd)
+	var st unix.Stat_t
+	if err := unix.Fstat(fd, &st); err != nil {
+		return "", false, pathErr("stat", path, err)
+	}
+	if !isLink(&st) {
+		return "", false, nil
+	}
+	if st.Uid != trustedLinkUID {
+		return "", false, errUntrustedLink(path)
+	}
+	target, err = readlinkAt(fd, "")
+	if err != nil {
+		return "", false, pathErr("readlink", path, err)
+	}
+	return target, true, nil
 }
 
 func writeTextFile(path string, data []byte, expected int64) (any, error) {
@@ -69,75 +80,84 @@ func writeTextFile(path string, data []byte, expected int64) (any, error) {
 		return nil, err
 	}
 	defer d.Close()
-	st, err := lstatAt(dfd(d), name)
-	exists := err == nil
-	if err != nil && !errors.Is(err, unix.ENOENT) {
-		return nil, pathErr("lstat", path, err)
+	st, exists, err := statForSave(dfd(d), name, path, expected)
+	if err != nil {
+		return nil, err
 	}
-	if exists {
-		if !isReg(&st) {
-			return nil, rpc.Errorf(rpc.Invalid, "Only regular files can be saved as text.")
+	terr := saveViaTemp(d, name, path, data, &st, exists)
+	if terr == nil {
+		return saved(path)
+	}
+	// The folder may not be writable although the file is: write in place.
+	if exists && os.IsPermission(terr) {
+		return saveInPlace(d, name, path, data)
+	}
+	return nil, terr
+}
+
+// statForSave looks at the file to be saved and checks it is still what the
+// editor opened.
+func statForSave(dirfd int, name, path string, expected int64) (unix.Stat_t, bool, error) {
+	st, err := lstatAt(dirfd, name)
+	if errors.Is(err, unix.ENOENT) {
+		return st, false, checkExpectedAbsent(expected)
+	}
+	if err != nil {
+		return st, false, pathErr("lstat", path, err)
+	}
+	if !isReg(&st) {
+		return st, true, errNotRegularText()
+	}
+	return st, true, checkExpectedMtime(time.Unix(st.Mtim.Unix()).UnixMilli(), expected)
+}
+
+// saveViaTemp writes data to a temp file next to name and renames it over name.
+func saveViaTemp(d *os.File, name, path string, data []byte, st *unix.Stat_t, exists bool) error {
+	tmp, tname, err := createTempAt(dfd(d), ".save-", filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	err = fillTemp(tmp, data, st, exists)
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		// renameat replaces whatever is at name now, never what a link points to.
+		if err = unix.Renameat(dfd(d), tname, dfd(d), name); err == nil {
+			return nil
 		}
-		mt := time.Unix(st.Mtim.Unix()).UnixMilli()
-		if expected != 0 && mt != expected {
-			return nil, rpc.Errorf(rpc.Conflict, "This file was changed by someone else since you opened it. Reload it, or copy your text first.").
-				WithData(map[string]any{"mtime": mt})
-		}
-	} else if expected != 0 {
-		return nil, rpc.Errorf(rpc.Conflict, "This file was removed since you opened it.")
+		err = pathErr("rename", path, err)
+	}
+	_ = unix.Unlinkat(dfd(d), tname, 0)
+	return err
+}
+
+// fillTemp writes data into tmp and gives it the owner and mode of the file it replaces.
+func fillTemp(tmp *os.File, data []byte, st *unix.Stat_t, exists bool) error {
+	tfd := int(tmp.Fd())
+	if _, err := tmp.Write(data); err != nil {
+		return err
 	}
 	perm := uint32(0o644)
 	if exists {
 		perm = st.Mode & 0o7777
-	}
-	tmp, tname, terr := createTempAt(dfd(d), ".save-", filepath.Dir(path))
-	if terr == nil {
-		tfd := int(tmp.Fd())
-		_, werr := tmp.Write(data)
-		if werr == nil && exists && os.Geteuid() == 0 {
+		if os.Geteuid() == 0 {
 			_ = unix.Fchown(tfd, int(st.Uid), int(st.Gid)) // before chmod: chown clears setuid bits
 		}
-		if werr == nil {
-			werr = unix.Fchmod(tfd, perm)
-		}
-		cerr := tmp.Close()
-		if werr == nil && cerr == nil {
-			// renameat replaces whatever is at name now, never what a link points to.
-			rerr := unix.Renameat(dfd(d), tname, dfd(d), name)
-			if rerr == nil {
-				return saved(path)
-			}
-			werr = pathErr("rename", path, rerr)
-		}
-		_ = unix.Unlinkat(dfd(d), tname, 0)
-		if werr == nil {
-			werr = cerr
-		}
-		terr = werr
 	}
-	// The folder may not be writable although the file is: write in place.
-	if exists && os.IsPermission(terr) {
-		fd, err := unix.Openat(dfd(d), name, unix.O_WRONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_NOCTTY|unix.O_CLOEXEC, 0)
-		if err != nil {
-			return nil, pathErr("open", path, err)
-		}
-		f := os.NewFile(uintptr(fd), path)
-		var now unix.Stat_t
-		if err := unix.Fstat(fd, &now); err != nil || !isReg(&now) {
-			f.Close()
-			return nil, rpc.Errorf(rpc.Invalid, "Only regular files can be saved as text.")
-		}
-		err = unix.Ftruncate(fd, 0)
-		if err == nil {
-			_, err = f.Write(data)
-		}
-		if cerr := f.Close(); err == nil {
-			err = cerr
-		}
-		if err != nil {
-			return nil, pathErr("write", path, err)
-		}
-		return saved(path)
+	return unix.Fchmod(tfd, perm)
+}
+
+func saveInPlace(d *os.File, name, path string, data []byte) (any, error) {
+	fd, err := unix.Openat(dfd(d), name, unix.O_WRONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_NOCTTY|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return nil, pathErr("open", path, err)
 	}
-	return nil, terr
+	f := os.NewFile(uintptr(fd), path)
+	var now unix.Stat_t
+	if err := unix.Fstat(fd, &now); err != nil || !isReg(&now) {
+		f.Close()
+		return nil, errNotRegularText()
+	}
+	return finishInPlaceSave(f, path, data, unix.Ftruncate(fd, 0))
 }

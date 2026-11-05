@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ervisio/ervisio/server/internal/rpc"
 )
@@ -87,6 +88,104 @@ func streamHandler[P any](do func(context.Context, P, rpc.Stream) error) func(co
 }
 
 var hCopy = streamHandler(doCopy)
+
+// copyJob is one planned item of a copy or move.
+type copyJob struct{ src, dst string }
+
+const copyProgressInterval = 100 * time.Millisecond
+
+func errCopyCancelled() error { return rpc.Errorf(rpc.Unavailable, "The copy was cancelled.") }
+
+func errCopyIntoItself() error {
+	return rpc.Errorf(rpc.Invalid, "A folder cannot be copied or moved into itself.")
+}
+
+func errMoveIntoItself() error {
+	return rpc.Errorf(rpc.Invalid, "A folder cannot be moved into itself.")
+}
+
+func errAlreadyExists(path string) error {
+	return rpc.Errorf(rpc.Conflict, "%s already exists. Choose another name.", path)
+}
+
+// copyBuffer lazily allocates the transfer buffer a copier reuses for its files.
+type copyBuffer struct{ buf []byte }
+
+func (b *copyBuffer) buffer() []byte {
+	if b.buf == nil {
+		b.buf = make([]byte, 256<<10)
+	}
+	return b.buf
+}
+
+// copyTargets cleans the sources and the destination folder of a copy.
+func copyTargets(p copyParams) (from []string, to string, err error) {
+	if from, err = cleanPaths(p.From); err != nil {
+		return nil, "", err
+	}
+	if to, err = cleanPath(p.To); err != nil {
+		return nil, "", err
+	}
+	ti, err := os.Stat(to)
+	if err != nil {
+		return nil, "", err
+	}
+	if !ti.IsDir() {
+		return nil, "", rpc.Errorf(rpc.Invalid, "%s is not a folder.", to)
+	}
+	return from, to, nil
+}
+
+// copyReporter streams the start, progress and final messages of a copy.
+type copyReporter struct {
+	s     rpc.Stream
+	total int64
+	done  int64
+	cur   string
+	last  time.Time
+	err   error // first failed progress send while bytes were being copied
+}
+
+func (r *copyReporter) start(items int) error {
+	return r.s.Send(map[string]any{"type": "start", "total": r.total, "items": items})
+}
+
+func (r *copyReporter) emit(force bool) error {
+	if force || time.Since(r.last) > copyProgressInterval {
+		r.last = time.Now()
+		return r.s.Send(map[string]any{"type": "progress", "done": r.done, "total": r.total, "current": r.cur})
+	}
+	return nil
+}
+
+// onBytes counts copied bytes; a failed send is kept in err for the caller.
+func (r *copyReporter) onBytes(n int64) {
+	r.done += n
+	if r.err == nil {
+		r.err = r.emit(false)
+	}
+}
+
+// run reports and executes each job, returning the destinations in order.
+func (r *copyReporter) run(jobs []copyJob, each func(copyJob) error) ([]string, error) {
+	var results []string
+	for _, j := range jobs {
+		r.cur = filepath.Base(j.src)
+		if err := r.emit(true); err != nil {
+			return nil, err
+		}
+		if err := each(j); err != nil {
+			return nil, err
+		}
+		results = append(results, j.dst)
+	}
+	return results, nil
+}
+
+func (r *copyReporter) finish(msg map[string]any) error {
+	_ = r.emit(true)
+	return r.s.Send(msg)
+}
 
 // ---- delete / trash ----
 
@@ -215,4 +314,49 @@ func resolveID(name string, group bool) (int, error) {
 		return 0, rpc.Errorf(rpc.NotFound, "There is no user called %q.", name)
 	}
 	return strconv.Atoi(u.Uid)
+}
+
+func errChmodOnLink() error {
+	return rpc.Errorf(rpc.Invalid, "Permissions cannot be changed on a link. Change the item it points to instead.")
+}
+
+// bindChmod reads and validates the chmod request.
+func bindChmod(c *rpc.Call) (path string, mode os.FileMode, recursive bool, err error) {
+	var p struct {
+		Path      string `json:"path"`
+		Mode      string `json:"mode"`
+		Recursive bool   `json:"recursive"`
+	}
+	if err = c.Bind(&p); err != nil {
+		return "", 0, false, err
+	}
+	if path, err = cleanPath(p.Path); err != nil {
+		return "", 0, false, err
+	}
+	if mode, err = parseMode(p.Mode); err != nil {
+		return "", 0, false, err
+	}
+	return path, mode, p.Recursive, nil
+}
+
+// firstErr keeps the first error met while a recursive change goes on.
+type firstErr struct{ err error }
+
+func (f *firstErr) note(err error) {
+	if f.err == nil {
+		f.err = err
+	}
+}
+
+// changeResult is the chmod answer: a warning when some entries failed, an
+// error when none succeeded.
+func changeResult(changed int, first error) (any, error) {
+	if first != nil && changed == 0 {
+		return nil, first
+	}
+	res := map[string]any{"changed": changed}
+	if first != nil {
+		res["warning"] = first.Error()
+	}
+	return res, nil
 }

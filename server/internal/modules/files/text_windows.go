@@ -13,57 +13,66 @@ import (
 // renaming it over path (MOVEFILE_REPLACE_EXISTING | WRITE_THROUGH). A link at
 // path is refused, so saving never writes through a link.
 func writeTextFile(path string, data []byte, expected int64) (any, error) {
-	fi, link, err := lstatLink(path)
-	exists := err == nil
-	if err != nil && !os.IsNotExist(err) {
-		return nil, pathErr("lstat", path, err)
+	exists, err := checkSaveTarget(path, expected)
+	if err != nil {
+		return nil, err
 	}
-	if exists {
-		if link {
-			return nil, rpc.Errorf(rpc.Invalid, "%s is a link. Open the file it points to instead.", filepath.Base(path))
-		}
-		if !fi.Mode().IsRegular() {
-			return nil, rpc.Errorf(rpc.Invalid, "Only regular files can be saved as text.")
-		}
-		if mt := fi.ModTime().UnixMilli(); expected != 0 && mt != expected {
-			return nil, rpc.Errorf(rpc.Conflict, "This file was changed by someone else since you opened it. Reload it, or copy your text first.").
-				WithData(map[string]any{"mtime": mt})
-		}
-	} else if expected != 0 {
-		return nil, rpc.Errorf(rpc.Conflict, "This file was removed since you opened it.")
-	}
-	tmp, terr := os.CreateTemp(filepath.Dir(path), ".save-*")
+	terr := saveViaTemp(path, data)
 	if terr == nil {
-		tname := tmp.Name()
-		_, werr := tmp.Write(data)
-		if werr == nil {
-			werr = tmp.Sync()
-		}
-		if cerr := tmp.Close(); werr == nil {
-			werr = cerr
-		}
-		if werr == nil {
-			if werr = replaceFile(tname, path); werr == nil {
-				return saved(path)
-			}
-		}
-		_ = os.Remove(tname)
-		terr = werr
+		return saved(path)
 	}
 	// The folder may not be writable although the file is: write in place.
 	if exists && os.IsPermission(terr) {
-		f, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, 0)
-		if err != nil {
-			return nil, pathErr("open", path, err)
-		}
-		_, err = f.Write(data)
-		if cerr := f.Close(); err == nil {
-			err = cerr
-		}
-		if err != nil {
-			return nil, pathErr("write", path, err)
-		}
-		return saved(path)
+		return saveInPlace(path, data)
 	}
 	return nil, terr
+}
+
+// checkSaveTarget reports whether path exists and checks it is still what the
+// editor opened.
+func checkSaveTarget(path string, expected int64) (bool, error) {
+	fi, link, err := lstatLink(path)
+	if os.IsNotExist(err) {
+		return false, checkExpectedAbsent(expected)
+	}
+	if err != nil {
+		return false, pathErr("lstat", path, err)
+	}
+	if link {
+		return true, rpc.Errorf(rpc.Invalid, "%s is a link. Open the file it points to instead.", filepath.Base(path))
+	}
+	if !fi.Mode().IsRegular() {
+		return true, errNotRegularText()
+	}
+	return true, checkExpectedMtime(fi.ModTime().UnixMilli(), expected)
+}
+
+func saveViaTemp(path string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".save-*")
+	if err != nil {
+		return err
+	}
+	tname := tmp.Name()
+	_, err = tmp.Write(data)
+	if err == nil {
+		err = tmp.Sync()
+	}
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		if err = replaceFile(tname, path); err == nil {
+			return nil
+		}
+	}
+	_ = os.Remove(tname)
+	return err
+}
+
+func saveInPlace(path string, data []byte) (any, error) {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, 0)
+	if err != nil {
+		return nil, pathErr("open", path, err)
+	}
+	return finishInPlaceSave(f, path, data, nil)
 }

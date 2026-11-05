@@ -162,3 +162,40 @@ func saved(path string) (any, error) {
 	}
 	return map[string]any{"path": path, "size": fi.Size(), "mtime": fi.ModTime().UnixMilli()}, nil
 }
+
+func errNotRegularText() error {
+	return rpc.Errorf(rpc.Invalid, "Only regular files can be saved as text.")
+}
+
+// checkExpectedMtime fails when the file changed since the editor opened it
+// (expected is that mtime in ms, 0 when the editor did not see the file).
+func checkExpectedMtime(mtime, expected int64) error {
+	if expected == 0 || mtime == expected {
+		return nil
+	}
+	return rpc.Errorf(rpc.Conflict, "This file was changed by someone else since you opened it. Reload it, or copy your text first.").
+		WithData(map[string]any{"mtime": mtime})
+}
+
+// checkExpectedAbsent fails when the editor opened a file that is gone now.
+func checkExpectedAbsent(expected int64) error {
+	if expected == 0 {
+		return nil
+	}
+	return rpc.Errorf(rpc.Conflict, "This file was removed since you opened it.")
+}
+
+// finishInPlaceSave writes data to f unless err is already set, closes f and
+// reports the saved file.
+func finishInPlaceSave(f *os.File, path string, data []byte, err error) (any, error) {
+	if err == nil {
+		_, err = f.Write(data)
+	}
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		return nil, pathErr("write", path, err)
+	}
+	return saved(path)
+}

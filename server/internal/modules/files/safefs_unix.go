@@ -99,9 +99,9 @@ func resolveStrict(path string) (int, error) {
 	if !filepath.IsAbs(path) {
 		return -1, rpc.Errorf(rpc.Invalid, "The path %q must start with /.", path)
 	}
-	fd, err := unix.Open("/", unix.O_PATH|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+	fd, err := openRoot()
 	if err != nil {
-		return -1, pathErr("open", "/", err)
+		return -1, err
 	}
 	comps := strings.Split(path, "/")
 	hops := 0
@@ -111,40 +111,23 @@ func resolveStrict(path string) (int, error) {
 		if c == "" || c == "." {
 			continue
 		}
-		nfd, err := unix.Openat(fd, c, unix.O_PATH|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+		nfd, st, err := openComponent(fd, c, path)
 		if err != nil {
 			unix.Close(fd)
-			return -1, pathErr("open", path, err)
-		}
-		var st unix.Stat_t
-		if err := unix.Fstat(nfd, &st); err != nil {
-			unix.Close(nfd)
-			unix.Close(fd)
-			return -1, pathErr("stat", path, err)
+			return -1, err
 		}
 		switch {
 		case isLink(&st):
-			if st.Uid != trustedLinkUID {
-				unix.Close(nfd)
-				unix.Close(fd)
-				return -1, errUntrustedLink(path)
-			}
 			hops++
-			if hops > maxLinkHops {
-				unix.Close(nfd)
-				unix.Close(fd)
-				return -1, pathErr("open", path, unix.ELOOP)
-			}
-			target, err := readlinkAt(nfd, "")
-			unix.Close(nfd)
+			target, err := readTrustedLink(nfd, &st, path, hops)
 			if err != nil {
 				unix.Close(fd)
-				return -1, pathErr("readlink", path, err)
+				return -1, err
 			}
 			if strings.HasPrefix(target, "/") {
 				unix.Close(fd)
-				if fd, err = unix.Open("/", unix.O_PATH|unix.O_DIRECTORY|unix.O_CLOEXEC, 0); err != nil {
-					return -1, pathErr("open", "/", err)
+				if fd, err = openRoot(); err != nil {
+					return -1, err
 				}
 			}
 			comps = append(strings.Split(target, "/"), comps...)
@@ -158,6 +141,46 @@ func resolveStrict(path string) (int, error) {
 		}
 	}
 	return fd, nil
+}
+
+func openRoot() (int, error) {
+	fd, err := unix.Open("/", unix.O_PATH|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return -1, pathErr("open", "/", err)
+	}
+	return fd, nil
+}
+
+// openComponent opens name below dirfd without following a link and stats it.
+// dirfd stays open for the caller.
+func openComponent(dirfd int, name, path string) (int, unix.Stat_t, error) {
+	var st unix.Stat_t
+	fd, err := unix.Openat(dirfd, name, unix.O_PATH|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return -1, st, pathErr("open", path, err)
+	}
+	if err := unix.Fstat(fd, &st); err != nil {
+		unix.Close(fd)
+		return -1, st, pathErr("stat", path, err)
+	}
+	return fd, st, nil
+}
+
+// readTrustedLink reads the link on fd (always closing fd) after checking that
+// it belongs to the trusted user and that hops is still within the limit.
+func readTrustedLink(fd int, st *unix.Stat_t, path string, hops int) (string, error) {
+	defer unix.Close(fd)
+	if st.Uid != trustedLinkUID {
+		return "", errUntrustedLink(path)
+	}
+	if hops > maxLinkHops {
+		return "", pathErr("open", path, unix.ELOOP)
+	}
+	target, err := readlinkAt(fd, "")
+	if err != nil {
+		return "", pathErr("readlink", path, err)
+	}
+	return target, nil
 }
 
 // openParent opens the directory holding path and returns it with the last
@@ -175,6 +198,19 @@ func openParent(path string) (*os.File, string, error) {
 }
 
 func dfd(f *os.File) int { return int(f.Fd()) }
+
+// entryRef names an entry by the directory it lies in (a descriptor), its name
+// there, and its full path for error messages.
+type entryRef struct {
+	dirfd int
+	name  string
+	full  string
+}
+
+// child names an entry inside the directory open on dirfd that e refers to.
+func (e entryRef) child(dirfd int, name string) entryRef {
+	return entryRef{dirfd, name, e.full + "/" + name}
+}
 
 // openSubdir opens name below dirfd as a directory without following a link.
 func openSubdir(dirfd int, name, full string) (*os.File, error) {
@@ -239,47 +275,55 @@ func chmodNoFollow(dirfd int, name string, mode uint32) error {
 	return err
 }
 
-// walkAt visits name below dirfd and, for a directory, everything inside it,
-// never following links. For a directory, self is a descriptor opened on it
-// (visit runs before its children); for anything else self is -1. Errors on
-// single entries go to onErr and the walk goes on.
-func walkAt(ctx context.Context, dirfd int, name, full string, visit func(dirfd int, name string, st *unix.Stat_t, self int) error, onErr func(error)) error {
+// visitFunc is called by walkAt for each entry; see walkAt for self.
+type visitFunc func(dirfd int, name string, st *unix.Stat_t, self int) error
+
+// walkAt visits e and, for a directory, everything inside it, never following
+// links. For a directory, self is a descriptor opened on it (visit runs before
+// its children); for anything else self is -1. Errors on single entries go to
+// onErr and the walk goes on.
+func walkAt(ctx context.Context, e entryRef, visit visitFunc, onErr func(error)) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	raceHook("lstat", full)
-	st, err := lstatAt(dirfd, name)
+	raceHook("lstat", e.full)
+	st, err := lstatAt(e.dirfd, e.name)
 	if err != nil {
-		onErr(pathErr("lstat", full, err))
+		onErr(pathErr("lstat", e.full, err))
 		return nil
 	}
-	raceHook("open", full)
+	raceHook("open", e.full)
 	if !isDir(&st) {
-		if err := visit(dirfd, name, &st, -1); err != nil {
-			onErr(pathErr("change", full, err))
+		if err := visit(e.dirfd, e.name, &st, -1); err != nil {
+			onErr(pathErr("change", e.full, err))
 		}
 		return nil
 	}
-	d, err := openSubdir(dirfd, name, full)
+	return walkDir(ctx, e, visit, onErr)
+}
+
+func walkDir(ctx context.Context, e entryRef, visit visitFunc, onErr func(error)) error {
+	d, err := openSubdir(e.dirfd, e.name, e.full)
 	if err != nil {
 		onErr(err)
 		return nil
 	}
 	defer d.Close()
+	var st unix.Stat_t
 	if err := unix.Fstat(dfd(d), &st); err != nil {
-		onErr(pathErr("stat", full, err))
+		onErr(pathErr("stat", e.full, err))
 		return nil
 	}
-	if err := visit(dirfd, name, &st, dfd(d)); err != nil {
-		onErr(pathErr("change", full, err))
+	if err := visit(e.dirfd, e.name, &st, dfd(d)); err != nil {
+		onErr(pathErr("change", e.full, err))
 	}
-	raceHook("children", full)
+	raceHook("children", e.full)
 	names, err := d.Readdirnames(-1)
 	if err != nil {
-		onErr(pathErr("readdir", full, err))
+		onErr(pathErr("readdir", e.full, err))
 	}
 	for _, n := range names {
-		if err := walkAt(ctx, dfd(d), n, full+"/"+n, visit, onErr); err != nil {
+		if err := walkAt(ctx, e.child(dfd(d), n), visit, onErr); err != nil {
 			return err
 		}
 	}
@@ -305,24 +349,37 @@ func removeAllAt(dirfd int, name, full string) error {
 		}
 		return pathErr("unlink", full, err)
 	}
-	var first error
-	names, rerr := d.Readdirnames(-1)
-	if rerr != nil {
-		first = pathErr("readdir", full, rerr)
+	first := removeChildren(d, full)
+	d.Close()
+	return removeEmptyDir(dirfd, name, full, first)
+}
+
+// removeChildren removes everything inside d and returns the first error.
+func removeChildren(d *os.File, full string) error {
+	var first firstErr
+	names, err := d.Readdirnames(-1)
+	if err != nil {
+		first.note(pathErr("readdir", full, err))
 	}
 	for _, n := range names {
-		if err := removeAllAt(dfd(d), n, full+"/"+n); err != nil && first == nil {
-			first = err
+		if err := removeAllAt(dfd(d), n, full+"/"+n); err != nil {
+			first.note(err)
 		}
 	}
-	d.Close()
-	if err := unix.Unlinkat(dirfd, name, unix.AT_REMOVEDIR); err != nil && !errors.Is(err, unix.ENOENT) {
-		if first != nil {
-			return first
-		}
-		return pathErr("rmdir", full, err)
+	return first.err
+}
+
+// removeEmptyDir removes the directory name; first is the error of emptying it,
+// reported only when the removal itself fails.
+func removeEmptyDir(dirfd int, name, full string, first error) error {
+	err := unix.Unlinkat(dirfd, name, unix.AT_REMOVEDIR)
+	if err == nil || errors.Is(err, unix.ENOENT) {
+		return nil
 	}
-	return nil
+	if first != nil {
+		return first
+	}
+	return pathErr("rmdir", full, err)
 }
 
 // removePath is os.RemoveAll through the safe parent resolution.
@@ -401,12 +458,12 @@ func renameNoReplace(sdir int, sname string, ddir int, dname, dfull string) erro
 	if errors.Is(err, unix.EINVAL) || errors.Is(err, unix.ENOSYS) {
 		// File systems without RENAME_NOREPLACE: check, then rename.
 		if _, e := lstatAt(ddir, dname); e == nil {
-			return rpc.Errorf(rpc.Conflict, "%s already exists. Choose another name.", dfull)
+			return errAlreadyExists(dfull)
 		}
 		err = unix.Renameat(sdir, sname, ddir, dname)
 	}
 	if errors.Is(err, unix.EEXIST) {
-		return rpc.Errorf(rpc.Conflict, "%s already exists. Choose another name.", dfull)
+		return errAlreadyExists(dfull)
 	}
 	if errors.Is(err, unix.EXDEV) {
 		return err
@@ -421,9 +478,9 @@ type copier struct {
 	ctx      context.Context
 	progress func(n int64)
 	made     map[devIno]bool // directories this copy created (never copied into themselves)
-	buf      []byte
-	depth    int
-	madeTop  bool // the top-level target was created by this copy (so it may be removed on failure)
+	copyBuffer
+	depth   int
+	madeTop bool // the top-level target was created by this copy (so it may be removed on failure)
 }
 
 func (c *copier) created() {
@@ -441,121 +498,158 @@ func setTimes(dirfd int, name string, st *unix.Stat_t) error {
 	return unix.UtimesNanoAt(dirfd, name, ts, unix.AT_SYMLINK_NOFOLLOW)
 }
 
-// copyAt copies sname in sdir to dname in ddir (which must not exist), without
-// following links. Sockets, devices and pipes are skipped.
-func (c *copier) copyAt(sdir int, sname, sfull string, ddir int, dname, dfull string) error {
+// copyAt copies src to dst (which must not exist), without following links.
+// Sockets, devices and pipes are skipped.
+func (c *copier) copyAt(src, dst entryRef) error {
 	if err := c.ctx.Err(); err != nil {
-		return rpc.Errorf(rpc.Unavailable, "The copy was cancelled.")
+		return errCopyCancelled()
 	}
 	c.depth++
 	defer func() { c.depth-- }()
-	raceHook("lstat", sfull)
-	st, err := lstatAt(sdir, sname)
+	raceHook("lstat", src.full)
+	st, err := lstatAt(src.dirfd, src.name)
 	if err != nil {
-		return pathErr("lstat", sfull, err)
+		return pathErr("lstat", src.full, err)
 	}
-	raceHook("open", sfull)
+	raceHook("open", src.full)
 	switch {
 	case isLink(&st):
-		t, err := readlinkAt(sdir, sname)
-		if err != nil {
-			return pathErr("readlink", sfull, err)
-		}
-		if err := unix.Symlinkat(t, ddir, dname); err != nil {
-			return pathErr("symlink", dfull, err)
-		}
-		c.created()
-		return nil
+		return c.copyLink(src, dst)
 	case isDir(&st):
-		return c.copyDir(sdir, sname, sfull, ddir, dname, dfull)
+		return c.copyDir(src, dst)
 	case isReg(&st):
-		return c.copyFile(sdir, sname, sfull, ddir, dname, dfull)
+		return c.copyFile(src, dst)
 	}
 	return nil
 }
 
-func (c *copier) copyDir(sdir int, sname, sfull string, ddir int, dname, dfull string) error {
-	src, err := openSubdir(sdir, sname, sfull)
+func (c *copier) copyLink(src, dst entryRef) error {
+	t, err := readlinkAt(src.dirfd, src.name)
+	if err != nil {
+		return pathErr("readlink", src.full, err)
+	}
+	if err := unix.Symlinkat(t, dst.dirfd, dst.name); err != nil {
+		return pathErr("symlink", dst.full, err)
+	}
+	c.created()
+	return nil
+}
+
+func (c *copier) copyDir(src, dst entryRef) error {
+	sf, err := openSubdir(src.dirfd, src.name, src.full)
 	if err != nil {
 		return err
 	}
-	defer src.Close()
+	defer sf.Close()
 	var st unix.Stat_t
-	if err := unix.Fstat(dfd(src), &st); err != nil {
-		return pathErr("stat", sfull, err)
+	if err := unix.Fstat(dfd(sf), &st); err != nil {
+		return pathErr("stat", src.full, err)
 	}
 	if c.made[devIno{st.Dev, st.Ino}] {
 		return nil // the copy itself, reached through the source
 	}
-	if err := unix.Mkdirat(ddir, dname, st.Mode&0o777|0o700); err != nil {
-		return pathErr("mkdir", dfull, err)
-	}
-	c.created()
-	dst, err := openSubdir(ddir, dname, dfull)
+	df, err := c.makeDir(dst, st.Mode&0o777|0o700)
 	if err != nil {
 		return err
 	}
-	defer dst.Close()
-	var dst0 unix.Stat_t
-	if err := unix.Fstat(dfd(dst), &dst0); err != nil {
-		return pathErr("stat", dfull, err)
+	defer df.Close()
+	if err := c.copyChildren(sf, df, src, dst); err != nil {
+		return err
 	}
-	if dst0.Uid != uint32(os.Geteuid()) {
-		return rpc.Errorf(rpc.Conflict, "%s was replaced while it was being copied.", dfull)
+	if err := unix.Fchmod(dfd(df), st.Mode&0o777); err != nil {
+		return pathErr("chmod", dst.full, err)
 	}
-	c.made[devIno{dst0.Dev, dst0.Ino}] = true
-	raceHook("children", sfull)
-	names, err := src.Readdirnames(-1)
+	return pathErr("chtimes", dst.full, setTimes(dst.dirfd, dst.name, &st))
+}
+
+// makeDir creates the directory dst and returns it opened, after checking it
+// is ours.
+func (c *copier) makeDir(dst entryRef, mode uint32) (*os.File, error) {
+	if err := unix.Mkdirat(dst.dirfd, dst.name, mode); err != nil {
+		return nil, pathErr("mkdir", dst.full, err)
+	}
+	c.created()
+	df, err := openSubdir(dst.dirfd, dst.name, dst.full)
 	if err != nil {
-		return pathErr("readdir", sfull, err)
+		return nil, err
+	}
+	var st unix.Stat_t
+	if err := unix.Fstat(dfd(df), &st); err != nil {
+		df.Close()
+		return nil, pathErr("stat", dst.full, err)
+	}
+	if st.Uid != uint32(os.Geteuid()) {
+		df.Close()
+		return nil, rpc.Errorf(rpc.Conflict, "%s was replaced while it was being copied.", dst.full)
+	}
+	c.made[devIno{st.Dev, st.Ino}] = true
+	return df, nil
+}
+
+// copyChildren copies everything inside the open directory sf into df.
+func (c *copier) copyChildren(sf, df *os.File, src, dst entryRef) error {
+	raceHook("children", src.full)
+	names, err := sf.Readdirnames(-1)
+	if err != nil {
+		return pathErr("readdir", src.full, err)
 	}
 	for _, n := range names {
-		if err := c.copyAt(dfd(src), n, sfull+"/"+n, dfd(dst), n, dfull+"/"+n); err != nil {
+		if err := c.copyAt(src.child(dfd(sf), n), dst.child(dfd(df), n)); err != nil {
 			return err
 		}
 	}
-	if err := unix.Fchmod(dfd(dst), st.Mode&0o777); err != nil {
-		return pathErr("chmod", dfull, err)
-	}
-	return pathErr("chtimes", dfull, setTimes(ddir, dname, &st))
+	return nil
 }
 
-func (c *copier) copyFile(sdir int, sname, sfull string, ddir int, dname, dfull string) error {
+func (c *copier) copyFile(src, dst entryRef) error {
 	// O_NONBLOCK: a pipe swapped in after the check must not block the copy.
-	ifd, err := unix.Openat(sdir, sname, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_NOCTTY|unix.O_CLOEXEC, 0)
+	ifd, err := unix.Openat(src.dirfd, src.name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_NOCTTY|unix.O_CLOEXEC, 0)
 	if err != nil {
-		return pathErr("open", sfull, err)
+		return pathErr("open", src.full, err)
 	}
 	defer unix.Close(ifd)
 	var st unix.Stat_t
 	if err := unix.Fstat(ifd, &st); err != nil {
-		return pathErr("stat", sfull, err)
+		return pathErr("stat", src.full, err)
 	}
 	if !isReg(&st) {
 		return nil // swapped for something that is not a file: skip, like the walk does
 	}
-	ofd, err := unix.Openat(ddir, dname, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o600)
+	ofd, err := unix.Openat(dst.dirfd, dst.name, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o600)
 	if err != nil {
-		return pathErr("create", dfull, err)
+		return pathErr("create", dst.full, err)
 	}
 	c.created()
-	out := os.NewFile(uintptr(ofd), dfull)
+	out := os.NewFile(uintptr(ofd), dst.full)
 	fail := func(err error) error {
 		out.Close()
-		_ = unix.Unlinkat(ddir, dname, 0)
+		_ = unix.Unlinkat(dst.dirfd, dst.name, 0)
 		return err
 	}
-	if c.buf == nil {
-		c.buf = make([]byte, 256<<10)
+	if err := c.pump(ifd, out, src.full); err != nil {
+		return fail(err)
 	}
+	if err := unix.Fchmod(ofd, st.Mode&0o777); err != nil {
+		return fail(pathErr("chmod", dst.full, err))
+	}
+	if err := out.Close(); err != nil {
+		_ = unix.Unlinkat(dst.dirfd, dst.name, 0)
+		return err
+	}
+	return pathErr("chtimes", dst.full, setTimes(dst.dirfd, dst.name, &st))
+}
+
+// pump copies everything readable from ifd into out, reporting progress.
+func (c *copier) pump(ifd int, out *os.File, sfull string) error {
+	buf := c.buffer()
 	for {
 		if err := c.ctx.Err(); err != nil {
-			return fail(rpc.Errorf(rpc.Unavailable, "The copy was cancelled."))
+			return errCopyCancelled()
 		}
-		n, rerr := unix.Read(ifd, c.buf)
+		n, rerr := unix.Read(ifd, buf)
 		if n > 0 {
-			if _, werr := out.Write(c.buf[:n]); werr != nil {
-				return fail(werr)
+			if _, werr := out.Write(buf[:n]); werr != nil {
+				return werr
 			}
 			if c.progress != nil {
 				c.progress(int64(n))
@@ -565,20 +659,12 @@ func (c *copier) copyFile(sdir int, sname, sfull string, ddir int, dname, dfull 
 			continue
 		}
 		if rerr != nil {
-			return fail(pathErr("read", sfull, rerr))
+			return pathErr("read", sfull, rerr)
 		}
 		if n <= 0 {
-			break
+			return nil
 		}
 	}
-	if err := unix.Fchmod(ofd, st.Mode&0o777); err != nil {
-		return fail(pathErr("chmod", dfull, err))
-	}
-	if err := out.Close(); err != nil {
-		_ = unix.Unlinkat(ddir, dname, 0)
-		return err
-	}
-	return pathErr("chtimes", dfull, setTimes(ddir, dname, &st))
 }
 
 // copyPath copies src to dst (which must not exist).
@@ -594,7 +680,7 @@ func copyPath(ctx context.Context, src, dst string, progress func(int64)) error 
 	}
 	defer dd.Close()
 	c := newCopier(ctx, progress)
-	if err := c.copyAt(dfd(sd), sname, src, dfd(dd), dname, dst); err != nil {
+	if err := c.copyAt(entryRef{dfd(sd), sname, src}, entryRef{dfd(dd), dname, dst}); err != nil {
 		if c.madeTop {
 			_ = removeAllAt(dfd(dd), dname, dst)
 		}
