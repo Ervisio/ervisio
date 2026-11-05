@@ -331,24 +331,29 @@ func classifyPSError(what, stderr string) error {
 		}
 		return false
 	}
-	code := rpc.Internal
-	switch {
-	case has("accessdenied", "unauthorizedaccess", "access is denied"):
+	if has("accessdenied", "unauthorizedaccess", "access is denied") {
 		if msg == "" {
 			msg = "access is denied"
 		}
 		return rpc.Errorf(rpc.NeedsAdmin, "Administrator rights are needed: %s: %s", what, msg)
-	case has("userexists", "groupexists", "memberexists", "already exists", "already a member"):
-		code = rpc.Conflict
-	case has("usernotfound", "groupnotfound", "principalnotfound", "membernotfound", "was not found", "no such"):
-		code = rpc.NotFound
-	case has("invalidpassword", "does not meet", "password policy", "invalidname", "invalidparameter"):
-		code = rpc.Invalid
 	}
 	if msg == "" {
 		msg = "the command failed"
 	}
-	return rpc.Errorf(code, "%s: %s", what, msg)
+	return rpc.Errorf(psErrorCode(has), "%s: %s", what, msg)
+}
+
+// psErrorCode maps the matcher over a PowerShell error to an rpc code.
+func psErrorCode(has func(...string) bool) rpc.Code {
+	switch {
+	case has("userexists", "groupexists", "memberexists", "already exists", "already a member"):
+		return rpc.Conflict
+	case has("usernotfound", "groupnotfound", "principalnotfound", "membernotfound", "was not found", "no such"):
+		return rpc.NotFound
+	case has("invalidpassword", "does not meet", "password policy", "invalidname", "invalidparameter"):
+		return rpc.Invalid
+	}
+	return rpc.Internal
 }
 
 func winUnavailable(what string) error {

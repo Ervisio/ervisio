@@ -181,18 +181,24 @@ func (wc *wsConn) readLoop() error {
 				return errFrameTooBig
 			}
 		}
-		switch f.Op {
-		case "open":
-			wc.sess.touch(time.Now())
-			wc.open(&f)
-			release()
-		case "input":
-			wc.input(&f)
-		case "close":
-			wc.closeChannel(f.Ch)
-		default:
-			wc.sendError(f.Ch, rpc.Errorf(rpc.Invalid, "unknown op %q", f.Op))
-		}
+		wc.dispatch(&f, release)
+	}
+}
+
+// dispatch runs one parsed frame. Only "open" still holds release; it gives
+// it back once the stream has started.
+func (wc *wsConn) dispatch(f *wsFrame, release func()) {
+	switch f.Op {
+	case "open":
+		wc.sess.touch(time.Now())
+		wc.open(f)
+		release()
+	case "input":
+		wc.input(f)
+	case "close":
+		wc.closeChannel(f.Ch)
+	default:
+		wc.sendError(f.Ch, rpc.Errorf(rpc.Invalid, "unknown op %q", f.Op))
 	}
 }
 
@@ -306,47 +312,52 @@ func (wc *wsConn) open(f *wsFrame) {
 	wc.channels[f.Ch] = ch
 	wc.mu.Unlock()
 
-	id := f.Ch
-	// Inputs are forwarded by their own goroutine so a full bridge window
-	// never blocks the WebSocket reader.
-	go func() {
-		defer func() {
-			// Give back the budget of inputs that will never be sent.
-			for in := range ch.inputs {
-				wc.uncharge(ch, in)
-			}
-		}()
+	go wc.forwardInputs(st, ch)
+	go wc.pumpEvents(f.Ch, st, ch, rec, release)
+}
+
+// forwardInputs sends a channel's queued inputs from their own goroutine so
+// a full bridge window never blocks the WebSocket reader.
+func (wc *wsConn) forwardInputs(st *rpc.ClientStream, ch *wsChannel) {
+	defer func() {
+		// Give back the budget of inputs that will never be sent.
 		for in := range ch.inputs {
-			err := st.Send(wc.ctx, in)
 			wc.uncharge(ch, in)
-			if err != nil {
-				return
-			}
 		}
 	}()
-	go func() {
-		defer release()
-		defer st.Close()
-		for ev := range st.Events() {
-			rec.observe(ev)
-			wc.send(&wsFrame{Ch: id, Op: "data", Data: ev.Data, B64: ev.B64})
+	for in := range ch.inputs {
+		err := st.Send(wc.ctx, in)
+		wc.uncharge(ch, in)
+		if err != nil {
+			return
 		}
-		rec.streamDone(st.Err())
-		wc.mu.Lock()
-		if wc.channels[id] == ch {
-			delete(wc.channels, id)
-			close(ch.inputs)
-		}
-		failed := ch.failed
-		wc.mu.Unlock()
-		if failed != nil {
-			wc.sendError(id, failed)
-		} else if err := st.Err(); err != nil {
-			wc.sendError(id, rpc.ToError(err, false))
-		} else {
-			wc.send(&wsFrame{Ch: id, Op: "end"})
-		}
-	}()
+	}
+}
+
+// pumpEvents relays a stream's events to the client, then removes the
+// channel and sends its end or error frame.
+func (wc *wsConn) pumpEvents(id int64, st *rpc.ClientStream, ch *wsChannel, rec *auditRec, release func()) {
+	defer release()
+	defer st.Close()
+	for ev := range st.Events() {
+		rec.observe(ev)
+		wc.send(&wsFrame{Ch: id, Op: "data", Data: ev.Data, B64: ev.B64})
+	}
+	rec.streamDone(st.Err())
+	wc.mu.Lock()
+	if wc.channels[id] == ch {
+		delete(wc.channels, id)
+		close(ch.inputs)
+	}
+	failed := ch.failed
+	wc.mu.Unlock()
+	if failed != nil {
+		wc.sendError(id, failed)
+	} else if err := st.Err(); err != nil {
+		wc.sendError(id, rpc.ToError(err, false))
+	} else {
+		wc.send(&wsFrame{Ch: id, Op: "end"})
+	}
 }
 
 func (wc *wsConn) input(f *wsFrame) {

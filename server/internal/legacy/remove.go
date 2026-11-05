@@ -20,41 +20,17 @@ import (
 // LinuxAdmin is refused (its package manager removes it), and so is a
 // running one.
 func RemoveLegacy(ctx context.Context, p Paths, sd Systemd, purge bool, logf func(string, ...any)) ([]string, error) {
-	if b, err := os.ReadFile(p.At(brand.LegacyLibDir + "/managed")); err == nil {
-		by := strings.TrimSpace(string(b))
-		return nil, fmt.Errorf("%s was installed by a package manager (%s): remove the %s package with it", brand.LegacyName, by, brand.LegacySlug)
-	}
-	if sd.IsActive(ctx, brand.LegacyServiceUnit) {
-		return nil, fmt.Errorf("%s is running: stop it first (systemctl disable --now %s)", brand.LegacyServiceUnit, brand.LegacyServiceUnit)
-	}
-	if !Installed(p) && !exists(p.At(legacyUnitFile)) && !exists(p.At(brand.LegacyBinLink)) {
-		return nil, nil
-	}
-	if !purge && Pending(p) {
-		return nil, errors.New("the move to " + brand.Name + " has not finished; keep " + brand.LegacyName + "'s files for now")
+	if skip, err := removeRefusal(ctx, p, sd, purge); skip || err != nil {
+		return nil, err
 	}
 	var removed []string
 	rm := func(path string, all bool) {
-		full := p.At(path)
-		if _, err := os.Lstat(full); err != nil {
-			return
+		if removePath(p, path, all, logf) {
+			removed = append(removed, path)
 		}
-		var err error
-		if all {
-			err = os.RemoveAll(full)
-		} else {
-			err = os.Remove(full)
-		}
-		if err != nil {
-			if logf != nil {
-				logf("remove %s: %v", full, err)
-			}
-			return
-		}
-		removed = append(removed, path)
 	}
 	_ = sd.Systemctl(ctx, "disable", brand.LegacyServiceUnit)
-	if b, err := os.ReadFile(p.At(legacyUnitFile)); err == nil && bytes.HasPrefix(b, []byte(LegacyInstallerUnitHeader)) {
+	if fileHasPrefix(p.At(legacyUnitFile), LegacyInstallerUnitHeader) {
 		rm(legacyUnitFile, false)
 	}
 	rm(legacyDropInDir, true)
@@ -62,7 +38,7 @@ func RemoveLegacy(ctx context.Context, p Paths, sd Systemd, purge bool, logf fun
 	rm(brand.LegacyLibDir, true)
 	rm(brand.LegacyShareDir, true)
 	rm("/var/cache/"+brand.LegacySlug, true)
-	if b, err := os.ReadFile(p.At(pamDir + "/" + brand.LegacyPAMService)); err == nil && bytes.Contains(b, []byte(legacyPAMHeader)) {
+	if fileContains(p.At(pamDir+"/"+brand.LegacyPAMService), legacyPAMHeader) {
 		rm(pamDir+"/"+brand.LegacyPAMService, false)
 	}
 	if purge {
@@ -73,6 +49,56 @@ func RemoveLegacy(ctx context.Context, p Paths, sd Systemd, purge bool, logf fun
 	}
 	_ = sd.Systemctl(ctx, "daemon-reload")
 	return removed, nil
+}
+
+// removePath deletes p.At(path) if it exists and reports whether it did.
+func removePath(p Paths, path string, all bool, logf func(string, ...any)) bool {
+	full := p.At(path)
+	if _, err := os.Lstat(full); err != nil {
+		return false
+	}
+	var err error
+	if all {
+		err = os.RemoveAll(full)
+	} else {
+		err = os.Remove(full)
+	}
+	if err != nil {
+		if logf != nil {
+			logf("remove %s: %v", full, err)
+		}
+		return false
+	}
+	return true
+}
+
+func fileHasPrefix(path, prefix string) bool {
+	b, err := os.ReadFile(path)
+	return err == nil && bytes.HasPrefix(b, []byte(prefix))
+}
+
+func fileContains(path, sub string) bool {
+	b, err := os.ReadFile(path)
+	return err == nil && bytes.Contains(b, []byte(sub))
+}
+
+// removeRefusal checks what keeps RemoveLegacy from running: it returns an
+// error when removal is refused, or skip when there is nothing to remove.
+func removeRefusal(ctx context.Context, p Paths, sd Systemd, purge bool) (skip bool, err error) {
+	if b, err := os.ReadFile(p.At(brand.LegacyLibDir + "/managed")); err == nil {
+		by := strings.TrimSpace(string(b))
+		return false, fmt.Errorf("%s was installed by a package manager (%s): remove the %s package with it", brand.LegacyName, by, brand.LegacySlug)
+	}
+	if sd.IsActive(ctx, brand.LegacyServiceUnit) {
+		return false, fmt.Errorf("%s is running: stop it first (systemctl disable --now %s)", brand.LegacyServiceUnit, brand.LegacyServiceUnit)
+	}
+	if !Installed(p) && !exists(p.At(legacyUnitFile)) && !exists(p.At(brand.LegacyBinLink)) {
+		return true, nil
+	}
+	if !purge && Pending(p) {
+		return false, errors.New("the move to " + brand.Name + " has not finished; keep " + brand.LegacyName + "'s files for now")
+	}
+	return false, nil
 }
 
 // ImportOnStart is run by the daemon (as root) before it reads its
@@ -119,58 +145,65 @@ func RunMigrate(flag string, args []string) int {
 		errf("%s must run as root", flag)
 		return 2
 	}
-	ctx := context.Background()
 	p := Paths{}
 	switch flag {
 	case MigrateFlag:
-		if len(args) > 0 {
-			errf("unexpected argument %q", args[0])
-			return 2
-		}
-		if !Installed(p) {
-			logf("%s is not installed here: nothing to migrate.", brand.LegacyName)
-			return 0
-		}
-		res, err := (&Import{Paths: p, Logf: logf}).Run()
-		if err != nil {
-			errf("%v", err)
-			return 1
-		}
-		if !res.Any() {
-			logf("%s's data was imported already.", brand.LegacyName)
-		}
-		if err := WriteNote(p); err != nil {
-			errf("note: %v", err)
-		}
-		if err := MigrateSchedule(ctx, p, Systemctl{}, logf); err != nil {
-			errf("scheduled update: %v", err)
-		}
-		return 0
+		return runMigrateData(p, args, logf, errf)
 	case RemoveFlag:
-		purge := false
-		for _, a := range args {
-			if a != "--purge" {
-				errf("unexpected argument %q", a)
-				return 2
-			}
-			purge = true
-		}
-		removed, err := RemoveLegacy(ctx, p, Systemctl{}, purge, errf)
-		if err != nil {
-			errf("%v", err)
-			return 1
-		}
-		if len(removed) == 0 {
-			logf("Nothing of %s is left to remove.", brand.LegacyName)
-			return 0
-		}
-		for _, r := range removed {
-			logf("removed %s", r)
-		}
-		if !purge && isDir(p.At(brand.LegacyConfigDir)) {
-			logf("Kept %s and %s (--purge removes them).", brand.LegacyConfigDir, brand.LegacyStateDir)
-		}
-		return 0
+		return runRemove(p, args, logf, errf)
 	}
 	return 2
+}
+
+func runMigrateData(p Paths, args []string, logf, errf func(string, ...any)) int {
+	if len(args) > 0 {
+		errf("unexpected argument %q", args[0])
+		return 2
+	}
+	if !Installed(p) {
+		logf("%s is not installed here: nothing to migrate.", brand.LegacyName)
+		return 0
+	}
+	res, err := (&Import{Paths: p, Logf: logf}).Run()
+	if err != nil {
+		errf("%v", err)
+		return 1
+	}
+	if !res.Any() {
+		logf("%s's data was imported already.", brand.LegacyName)
+	}
+	if err := WriteNote(p); err != nil {
+		errf("note: %v", err)
+	}
+	if err := MigrateSchedule(context.Background(), p, Systemctl{}, logf); err != nil {
+		errf("scheduled update: %v", err)
+	}
+	return 0
+}
+
+func runRemove(p Paths, args []string, logf, errf func(string, ...any)) int {
+	purge := false
+	for _, a := range args {
+		if a != "--purge" {
+			errf("unexpected argument %q", a)
+			return 2
+		}
+		purge = true
+	}
+	removed, err := RemoveLegacy(context.Background(), p, Systemctl{}, purge, errf)
+	if err != nil {
+		errf("%v", err)
+		return 1
+	}
+	if len(removed) == 0 {
+		logf("Nothing of %s is left to remove.", brand.LegacyName)
+		return 0
+	}
+	for _, r := range removed {
+		logf("removed %s", r)
+	}
+	if !purge && isDir(p.At(brand.LegacyConfigDir)) {
+		logf("Kept %s and %s (--purge removes them).", brand.LegacyConfigDir, brand.LegacyStateDir)
+	}
+	return 0
 }
