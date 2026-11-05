@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/ervisio/ervisio/server/internal/account"
 	"github.com/ervisio/ervisio/server/internal/audit"
+	"github.com/ervisio/ervisio/server/internal/config"
 	"github.com/ervisio/ervisio/server/internal/pam"
 	"github.com/ervisio/ervisio/server/internal/rpc"
 	"github.com/ervisio/ervisio/server/internal/sshauth"
@@ -64,12 +66,8 @@ func (s *Server) handleChallenge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cfg := s.Config()
-	if !cfg.Auth.SSHKeys {
-		writeError(w, errKeysDisabled)
-		return
-	}
-	if req.User == "root" && !cfg.AllowRoot {
-		writeError(w, errRootDisabled)
+	if e := keySignInClosed(cfg, req.User); e != nil {
+		writeError(w, e)
 		return
 	}
 	if !account.ValidName(req.User) {
@@ -165,12 +163,8 @@ func (s *Server) handleLoginKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cfg := s.Config()
-	if !cfg.Auth.SSHKeys {
-		writeError(w, errKeysDisabled)
-		return
-	}
-	if req.User == "root" && !cfg.AllowRoot {
-		writeError(w, errRootDisabled)
+	if e := keySignInClosed(cfg, req.User); e != nil {
+		writeError(w, e)
 		return
 	}
 	ip := s.realClientIP(r)
@@ -187,76 +181,34 @@ func (s *Server) handleLoginKey(w http.ResponseWriter, r *http.Request) {
 	if !account.ValidName(who) {
 		who = ""
 	}
-	refuse := func(e *rpc.Error, why string) {
-		s.log.Printf("login %q from %s method=ssh-key refused: %s", who, ip, why)
-		s.auditCore(who, ip, "login.failed", "ssh-key", audit.Denied, why)
-		if d := time.Until(start.Add(keyFailMinDelay)); d > 0 {
-			t := time.NewTimer(d)
-			select {
-			case <-t.C:
-			case <-r.Context().Done():
-				t.Stop()
-			}
+	fail := func(f *keyLoginFailure) {
+		if !f.refused {
+			result = attemptNeutral
+			writeError(w, f.err)
+			return
 		}
-		writeError(w, e)
+		s.log.Printf("login %q from %s method=ssh-key refused: %s", who, ip, f.why)
+		s.auditCore(who, ip, "login.failed", "ssh-key", audit.Denied, f.why)
+		sleepUntil(r.Context(), start.Add(keyFailMinDelay))
+		writeError(w, f.err)
 	}
 
 	if !account.ValidName(req.User) {
-		refuse(errKeyRefused, "invalid user name")
+		fail(keyRefusal(errKeyRefused, "invalid user name"))
 		return
 	}
 	if s.opts.Dev && req.User != s.devUser.Name {
 		writeError(w, rpc.Errorf(rpc.Forbidden, "in dev mode only %s can sign in", s.devUser.Name).WithData(map[string]string{"reason": "dev_mode_user"}))
 		return
 	}
-	ch, err := s.challenges.Take(req.Nonce, req.User, ip)
-	if err != nil {
-		refuse(errChallengeInvalid, "challenge unknown, used, expired or issued to another user/address")
+	pub, fp, f := s.verifyKeySignature(&req, ip)
+	if f != nil {
+		fail(f)
 		return
 	}
-	pub, err := sshauth.ParsePublicKey(req.PublicKey)
-	if err != nil {
-		refuse(rpc.Errorf(rpc.Invalid, "this key type is not supported (use ed25519, ECDSA or RSA of at least 2048 bits)").
-			WithData(map[string]string{"reason": "unsupported_key"}), err.Error())
-		return
-	}
-	fp := sshauth.Fingerprint(pub)
-	sig, err := sshauth.ParseSignature(req.Signature)
-	if err == nil {
-		err = sshauth.Verify(pub, sig, sshauth.Message(ch.Host, req.User, req.Nonce))
-	}
-	if err != nil {
-		refuse(errKeyRefused, "key "+fp+": "+err.Error())
-		return
-	}
-
-	a, err := account.Lookup(req.User)
-	if err != nil {
-		if unknownUser(err) {
-			refuse(errKeyRefused, "no such user")
-			return
-		}
-		result = attemptNeutral
-		s.log.Printf("login %q method=ssh-key: lookup: %v", req.User, err)
-		writeError(w, rpc.Errorf(rpc.Internal, "cannot resolve the account"))
-		return
-	}
-	if a.IsRoot() && !cfg.AllowRoot {
-		refuse(errKeyRefused, "uid 0 and allow_root = false")
-		return
-	}
-	if !account.ShellAllowed(a.Shell) {
-		refuse(errKeyRefused, "login shell "+a.Shell+" is not allowed (nologin, restricted or not in /etc/shells)")
-		return
-	}
-	// from= is matched against the browser's address only when it is known
-	// (not a trusted proxy that sent no X-Forwarded-For).
-	fromIP, known := s.clientAddr(r)
-	if !known {
-		fromIP = ""
-	}
-	if err := s.keyAuthorized(a, pub, fromIP); err != nil {
-		refuse(errKeyRefused, "key "+fp+": "+err.Error())
+	a, fromIP, f := s.keyAccount(r, cfg.AllowRoot, req.User, pub, fp)
+	if f != nil {
+		fail(f)
 		return
 	}
 	// The key is proven: the allowlist refusal can be explicit.
@@ -265,36 +217,8 @@ func (s *Server) handleLoginKey(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errNotAllowed)
 		return
 	}
-	// PAM account management (expired/locked accounts, pam_access…),
-	// without pam_authenticate.
-	release, e := s.pamSlot(r.Context())
-	if e != nil {
-		result = attemptNeutral
-		writeError(w, e)
-		return
-	}
-	err = s.pamAccount(a.Name, ip)
-	release()
-	if err != nil {
-		if errors.Is(err, pam.ErrAccount) {
-			refuse(errKeyRefused, "PAM account check: "+err.Error())
-			return
-		}
-		result = attemptNeutral
-		s.log.Printf("login %q method=ssh-key: %v", req.User, err)
-		writeError(w, rpc.Errorf(rpc.Internal, "authentication service error"))
-		return
-	}
-	// Windows: the bridge needs the user's token and a key sign-in has no
-	// password, so it is obtained with an S4U logon (no-op elsewhere).
-	if err := s.keyLogonToken(a.Name); err != nil {
-		if errors.Is(err, pam.ErrAccount) || errors.Is(err, pam.ErrAuth) {
-			refuse(errKeyRefused, "token: "+err.Error())
-			return
-		}
-		result = attemptNeutral
-		s.log.Printf("login %q method=ssh-key: %v", req.User, err)
-		writeError(w, rpc.Errorf(rpc.Internal, "authentication service error"))
+	if f := s.checkKeyAccount(r.Context(), a, req.User, ip); f != nil {
+		fail(f)
 		return
 	}
 	result = attemptOK
@@ -312,6 +236,131 @@ func (s *Server) handleLoginKey(w http.ResponseWriter, r *http.Request) {
 	s.log.Printf("login %q from %s method=ssh-key key=%s", a.Name, ip, fp)
 	s.auditCore(a.Name, ip, "login", "ssh-key "+fp, audit.OK, "")
 	writeJSON(w, http.StatusOK, s.info(sess))
+}
+
+// keySignInClosed is the answer when key sign-in is off, or when user is
+// root and root may not sign in; nil otherwise.
+func keySignInClosed(cfg *config.Config, user string) *rpc.Error {
+	if !cfg.Auth.SSHKeys {
+		return errKeysDisabled
+	}
+	if user == "root" && !cfg.AllowRoot {
+		return errRootDisabled
+	}
+	return nil
+}
+
+// keyLoginFailure ends a key sign-in. A refused one counts as a failed
+// attempt and is logged, audited and answered no sooner than
+// keyFailMinDelay; any other is a server-side problem that does not count.
+type keyLoginFailure struct {
+	err     *rpc.Error
+	why     string
+	refused bool
+}
+
+func keyRefusal(e *rpc.Error, why string) *keyLoginFailure {
+	return &keyLoginFailure{err: e, why: why, refused: true}
+}
+
+func keyServerError(e *rpc.Error) *keyLoginFailure {
+	return &keyLoginFailure{err: e}
+}
+
+// sleepUntil waits until t, or less when ctx ends first.
+func sleepUntil(ctx context.Context, t time.Time) {
+	d := time.Until(t)
+	if d <= 0 {
+		return
+	}
+	timer := time.NewTimer(d)
+	select {
+	case <-timer.C:
+	case <-ctx.Done():
+		timer.Stop()
+	}
+}
+
+// verifyKeySignature burns the challenge req.Nonce and checks req.Signature
+// over it with req.PublicKey; it returns the key and its fingerprint.
+func (s *Server) verifyKeySignature(req *keyLoginRequest, ip string) (ssh.PublicKey, string, *keyLoginFailure) {
+	ch, err := s.challenges.Take(req.Nonce, req.User, ip)
+	if err != nil {
+		return nil, "", keyRefusal(errChallengeInvalid, "challenge unknown, used, expired or issued to another user/address")
+	}
+	pub, err := sshauth.ParsePublicKey(req.PublicKey)
+	if err != nil {
+		return nil, "", keyRefusal(rpc.Errorf(rpc.Invalid, "this key type is not supported (use ed25519, ECDSA or RSA of at least 2048 bits)").
+			WithData(map[string]string{"reason": "unsupported_key"}), err.Error())
+	}
+	fp := sshauth.Fingerprint(pub)
+	sig, err := sshauth.ParseSignature(req.Signature)
+	if err == nil {
+		err = sshauth.Verify(pub, sig, sshauth.Message(ch.Host, req.User, req.Nonce))
+	}
+	if err != nil {
+		return nil, "", keyRefusal(errKeyRefused, "key "+fp+": "+err.Error())
+	}
+	return pub, fp, nil
+}
+
+// keyAccount resolves user and checks that the account may sign in and
+// lists pub; it also returns the client address from= options were
+// matched against ("" when not known).
+func (s *Server) keyAccount(r *http.Request, allowRoot bool, user string, pub ssh.PublicKey, fp string) (*account.Account, string, *keyLoginFailure) {
+	a, err := account.Lookup(user)
+	if err != nil {
+		if unknownUser(err) {
+			return nil, "", keyRefusal(errKeyRefused, "no such user")
+		}
+		s.log.Printf("login %q method=ssh-key: lookup: %v", user, err)
+		return nil, "", keyServerError(rpc.Errorf(rpc.Internal, "cannot resolve the account"))
+	}
+	if a.IsRoot() && !allowRoot {
+		return nil, "", keyRefusal(errKeyRefused, "uid 0 and allow_root = false")
+	}
+	if !account.ShellAllowed(a.Shell) {
+		return nil, "", keyRefusal(errKeyRefused, "login shell "+a.Shell+" is not allowed (nologin, restricted or not in /etc/shells)")
+	}
+	// from= is matched against the browser's address only when it is known
+	// (not a trusted proxy that sent no X-Forwarded-For).
+	fromIP, known := s.clientAddr(r)
+	if !known {
+		fromIP = ""
+	}
+	if err := s.keyAuthorized(a, pub, fromIP); err != nil {
+		return nil, "", keyRefusal(errKeyRefused, "key "+fp+": "+err.Error())
+	}
+	return a, fromIP, nil
+}
+
+// checkKeyAccount runs PAM account management (expired/locked accounts,
+// pam_access…) without pam_authenticate, then gets the logon token the
+// bridge needs on Windows. user is the name as given, for the log.
+func (s *Server) checkKeyAccount(ctx context.Context, a *account.Account, user, ip string) *keyLoginFailure {
+	release, e := s.pamSlot(ctx)
+	if e != nil {
+		return keyServerError(e)
+	}
+	err := s.pamAccount(a.Name, ip)
+	release()
+	if err != nil {
+		if errors.Is(err, pam.ErrAccount) {
+			return keyRefusal(errKeyRefused, "PAM account check: "+err.Error())
+		}
+		s.log.Printf("login %q method=ssh-key: %v", user, err)
+		return keyServerError(rpc.Errorf(rpc.Internal, "authentication service error"))
+	}
+	// Windows: a key sign-in has no password, so the token is obtained with
+	// an S4U logon (no-op elsewhere).
+	if err := s.keyLogonToken(a.Name); err != nil {
+		if errors.Is(err, pam.ErrAccount) || errors.Is(err, pam.ErrAuth) {
+			return keyRefusal(errKeyRefused, "token: "+err.Error())
+		}
+		s.log.Printf("login %q method=ssh-key: %v", user, err)
+		return keyServerError(rpc.Errorf(rpc.Internal, "authentication service error"))
+	}
+	return nil
 }
 
 // pamAccount runs PAM account management for name (replaceable in tests).
