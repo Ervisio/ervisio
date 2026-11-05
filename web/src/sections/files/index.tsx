@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObjec
 import { useSearchParams } from 'react-router-dom';
 import { ApiError, downloadUrl, usePrefs, useSession } from '../../api';
 import { useT, type TFn } from '../../i18n';
-import { Button, ConfirmDialog, Dialog, Icon, IconButton, Menu, Sheet, toast, type IconName, type MenuItem } from '../../ui';
+import { Button, ConfirmDialog, Dialog, Icon, IconButton, Menu, Sheet, toast, useIsMobile, type IconName, type MenuItem } from '../../ui';
 import { usePaletteActions } from '../index';
 import { ChownDialog, EditorDialog, NameDialog } from './Dialogs';
 import { Pane, type Shortcut } from './Pane';
@@ -61,7 +61,6 @@ type SetPref = ReturnType<typeof usePrefs>['set'];
 type TrashItem = { id: string; originalPath: string; deletedAt: number };
 type BatchFailure = { path: string; message: string };
 
-const MOBILE_QUERY = '(max-width: 859px)';
 const PLACES_REFRESH_MS = 60_000;
 const SAVE_TABS_DELAY_MS = 500;
 const DOWNLOAD_STAGGER_MS = 350;
@@ -76,18 +75,6 @@ function readFilePrefs(prefs: Prefs) {
   const remotes: Remote[] = Array.isArray(prefs['files.remotes']) ? prefs['files.remotes'].filter((r: any) => r && typeof r.name === 'string') : [];
   const showHidden = !!prefs['files.showHidden'];
   return { starredList, bookmarks, remotes, showHidden };
-}
-
-function useIsMobile(): boolean {
-  const [mobile, setMobile] = useState(() => typeof matchMedia === 'function' && matchMedia(MOBILE_QUERY).matches);
-  useEffect(() => {
-    if (typeof matchMedia !== 'function') return;
-    const mq = matchMedia(MOBILE_QUERY);
-    const on = () => setMobile(mq.matches);
-    mq.addEventListener('change', on);
-    return () => mq.removeEventListener('change', on);
-  }, []);
-  return mobile;
 }
 
 /** Applies the saved tabs once prefs are ready; the returned ref is true from then on. */
@@ -210,7 +197,15 @@ async function undoTrash(paths: string[], t: TFn) {
   }
 }
 
-async function saveName(mode: NameMode, dir: string, entry: FEntry | undefined, name: string, admin: boolean, t: TFn) {
+interface NameSave {
+  mode: NameMode;
+  dir: string;
+  entry: FEntry | undefined;
+  name: string;
+  admin: boolean;
+}
+
+async function saveName({ mode, dir, entry, name, admin }: NameSave, t: TFn) {
   const target = join(dir, name);
   if (mode === 'folder') await fcall('files.mkdir', { path: target }, { admin });
   else if (mode === 'file') await fcall('files.create', { path: target }, { admin });
@@ -308,14 +303,21 @@ function splitCopyItems({ t, side, split, canWrite, ops }: MenuContext): MenuIte
   ];
 }
 
-function entryMenu(ctx: MenuContext, one: FEntry): MenuItem[] {
-  const { t, side, split, clip, ops } = ctx;
+function entryOpenItems(ctx: MenuContext, one: FEntry): MenuItem[] {
+  const { t, side, split, ops } = ctx;
   const dirLike = isDirLike(one);
   const items: MenuItem[] = [{ id: 'open', label: dirLike ? t('act.open') : looksTextual(one) ? t('act.edit') : t('act.openFile'), icon: dirLike ? 'files' : 'eye', kbd: 'Enter', onSelect: () => ops.open(one) }];
   if (dirLike && split) items.push({ id: 'openo', label: t('act.openOther'), icon: 'columns', onSelect: () => ops.navigate(otherOf(side), one.path) });
   if (dirLike) items.push({ id: 'opent', label: t('act.openTab'), icon: 'plus', onSelect: () => ops.openTab(one.path) });
   if (isVirtual(ctx.loc) || ctx.searching) items.push({ id: 'show', label: t('act.showInFolder'), icon: 'search', onSelect: () => ops.navigate(side, dirname(one.path)) });
   if (!dirLike) items.push({ id: 'dl', label: t('act.download'), icon: 'download', onSelect: () => ops.download([one]) });
+  return items;
+}
+
+function entryMenu(ctx: MenuContext, one: FEntry): MenuItem[] {
+  const { t, clip, ops } = ctx;
+  const dirLike = isDirLike(one);
+  const items = entryOpenItems(ctx, one);
   items.push({ id: 'ren', label: t('act.rename'), icon: 'edit', kbd: 'F2', onSelect: () => ops.shortcut('rename') });
   items.push(...clipItems(ctx));
   if (dirLike && clip) items.push({ id: 'pi', label: t('act.pasteInto'), onSelect: () => ops.pasteInto(one.path) });
@@ -740,7 +742,7 @@ export default function FilesPage() {
   const submitName = async (mode: NameMode, s: Side, entry: FEntry | undefined, name: string) => {
     const dir = mode === 'rename' ? dirname(entry!.path) : writableLoc(s);
     if (!dir) return;
-    await saveName(mode, dir, entry, name, adminOf(s), t);
+    await saveName({ mode, dir, entry, name, admin: adminOf(s) }, t);
   };
 
   const enqueueClip = (c: Clip, dest: string, s: Side) => enqueueCopy({ from: c.paths, to: dest, move: c.cut, admin: adminOf(s), onElevate: elevate(s) });

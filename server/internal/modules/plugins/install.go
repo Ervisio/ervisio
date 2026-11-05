@@ -92,18 +92,12 @@ func readArchiveEntries(tr *tar.Reader) ([]archiveEntry, error) {
 		case tar.TypeDir:
 			entries = append(entries, archiveEntry{name: clean, dir: true})
 		case tar.TypeReg:
-			if h.Size > maxFileBytes {
-				return nil, fmt.Errorf("archive entry %q is larger than %d MiB", h.Name, maxFileBytes>>20)
-			}
 			total += h.Size
-			if total > maxTotalBytes {
-				return nil, fmt.Errorf("the archive expands to more than %d MiB", maxTotalBytes>>20)
+			e, err := readRegularEntry(tr, h, clean, total)
+			if err != nil {
+				return nil, err
 			}
-			data, err := io.ReadAll(io.LimitReader(tr, h.Size+1))
-			if err != nil || int64(len(data)) != h.Size {
-				return nil, fmt.Errorf("archive entry %q is damaged", h.Name)
-			}
-			entries = append(entries, archiveEntry{name: clean, exec: h.Mode&0o111 != 0, data: data})
+			entries = append(entries, e)
 		case tar.TypeXGlobalHeader:
 		default:
 			return nil, fmt.Errorf("archive entry %q is a link or special file, which plugins may not contain", h.Name)
@@ -113,6 +107,21 @@ func readArchiveEntries(tr *tar.Reader) ([]archiveEntry, error) {
 		return nil, fmt.Errorf("the archive is empty")
 	}
 	return entries, nil
+}
+
+// readRegularEntry reads one file entry; total is the running size including this entry.
+func readRegularEntry(tr *tar.Reader, h *tar.Header, clean string, total int64) (archiveEntry, error) {
+	if h.Size > maxFileBytes {
+		return archiveEntry{}, fmt.Errorf("archive entry %q is larger than %d MiB", h.Name, maxFileBytes>>20)
+	}
+	if total > maxTotalBytes {
+		return archiveEntry{}, fmt.Errorf("the archive expands to more than %d MiB", maxTotalBytes>>20)
+	}
+	data, err := io.ReadAll(io.LimitReader(tr, h.Size+1))
+	if err != nil || int64(len(data)) != h.Size {
+		return archiveEntry{}, fmt.Errorf("archive entry %q is damaged", h.Name)
+	}
+	return archiveEntry{name: clean, exec: h.Mode&0o111 != 0, data: data}, nil
 }
 
 // cleanEntryName normalises a tar header name; skip is true for the archive root.
@@ -192,11 +201,8 @@ type installRequest struct {
 
 func install(ctx context.Context, req installRequest) (*Info, error) {
 	p := readPolicy()
-	if req.Source == "" {
-		return nil, rpc.Errorf(rpc.Invalid, "Say where to install from: an https:// address or the path of a .tar.gz file.")
-	}
-	if req.SHA256 != "" && !shaRe.MatchString(strings.ToLower(req.SHA256)) {
-		return nil, rpc.Errorf(rpc.Invalid, "The checksum must be a 64-character sha256 in hex.")
+	if err := validateInstallRequest(req); err != nil {
+		return nil, err
 	}
 	if err := os.MkdirAll(InstalledDir, 0o755); err != nil {
 		return nil, rpc.Errorf(rpc.Unavailable, "Cannot create %s: %v", InstalledDir, cleanErr(err))
@@ -207,54 +213,12 @@ func install(ctx context.Context, req installRequest) (*Info, error) {
 	}
 	defer os.RemoveAll(tmp)
 
-	archive, err := fetchArchive(ctx, req.Source, req.SHA256)
+	stage, m, err := stagePlugin(ctx, req, tmp, p)
 	if err != nil {
 		return nil, err
 	}
-	defer archive.Close()
-	stage := filepath.Join(tmp, "stage")
-	if err := os.Mkdir(stage, 0o755); err != nil {
+	if err := swapIntoPlace(tmp, stage, m.ID); err != nil {
 		return nil, err
-	}
-	if err := ExtractTarGz(archive, stage); err != nil {
-		return nil, rpc.Errorf(rpc.Invalid, "%v", err)
-	}
-	m, err := LoadManifest(stage)
-	if err != nil {
-		return nil, rpc.Errorf(rpc.Invalid, "This is not a valid plugin: %v", err)
-	}
-	sig := CheckSignature(stage, Keys())
-	if !sig.Verified {
-		if sig.Signed {
-			return nil, rpc.Errorf(rpc.Forbidden, "The signature of %s is not valid (%s). It was not installed.", m.Name, sig.Err)
-		}
-		if !p.AllowUnsigned {
-			return nil, rpc.Errorf(rpc.Forbidden, "%s is not signed and this server only accepts signed plugins. Turn on plugins.allow_unsigned in Settings to install it.", m.Name)
-		}
-	}
-	if msg := m.CoreProblem(); msg != "" {
-		return nil, rpc.Errorf(rpc.Conflict, "%s Nothing was installed.", msg)
-	}
-	if req.Consent != nil && !sameJSON(emptyIfNil(*req.Consent), m.declared) {
-		return nil, rpc.Errorf(rpc.Conflict, "%s asks for different permissions than the ones you were shown. Nothing was installed; open Browse again to review them.", m.Name)
-	}
-	if ex := find(p, m.ID); ex != nil && ex.Location != LocInstalled {
-		if ex.Location == LocSystem {
-			return nil, rpc.Errorf(rpc.Conflict, "%s is part of the system package and cannot be replaced from here.", m.Name)
-		}
-	}
-	final := filepath.Join(InstalledDir, m.ID)
-	old := filepath.Join(tmp, "old")
-	if _, err := os.Lstat(final); err == nil {
-		if err := os.Rename(final, old); err != nil {
-			return nil, rpc.Errorf(rpc.Internal, "Cannot replace the installed version: %v", cleanErr(err))
-		}
-	}
-	if err := os.Rename(stage, final); err != nil {
-		if _, e := os.Lstat(old); e == nil {
-			_ = os.Rename(old, final)
-		}
-		return nil, rpc.Errorf(rpc.Internal, "Cannot move the plugin into place: %v", cleanErr(err))
 	}
 	// New installs start enabled.
 	st := readState()
@@ -270,67 +234,161 @@ func install(ctx context.Context, req installRequest) (*Info, error) {
 	return nil, rpc.Errorf(rpc.Internal, "Installed, but the plugin does not show up in the list.")
 }
 
+func validateInstallRequest(req installRequest) error {
+	if req.Source == "" {
+		return rpc.Errorf(rpc.Invalid, "Say where to install from: an https:// address or the path of a .tar.gz file.")
+	}
+	if req.SHA256 != "" && !shaRe.MatchString(strings.ToLower(req.SHA256)) {
+		return rpc.Errorf(rpc.Invalid, "The checksum must be a 64-character sha256 in hex.")
+	}
+	return nil
+}
+
+// stagePlugin fetches and unpacks the package into tmp/stage and runs every
+// check that must pass before anything is installed.
+func stagePlugin(ctx context.Context, req installRequest, tmp string, p policy) (string, *Manifest, error) {
+	archive, err := fetchArchive(ctx, req.Source, req.SHA256)
+	if err != nil {
+		return "", nil, err
+	}
+	defer archive.Close()
+	stage := filepath.Join(tmp, "stage")
+	if err := os.Mkdir(stage, 0o755); err != nil {
+		return "", nil, err
+	}
+	if err := ExtractTarGz(archive, stage); err != nil {
+		return "", nil, rpc.Errorf(rpc.Invalid, "%v", err)
+	}
+	m, err := LoadManifest(stage)
+	if err != nil {
+		return "", nil, rpc.Errorf(rpc.Invalid, "This is not a valid plugin: %v", err)
+	}
+	if err := checkInstallable(req, m, stage, p); err != nil {
+		return "", nil, err
+	}
+	return stage, m, nil
+}
+
+func checkInstallable(req installRequest, m *Manifest, stage string, p policy) error {
+	sig := CheckSignature(stage, Keys())
+	if !sig.Verified {
+		if sig.Signed {
+			return rpc.Errorf(rpc.Forbidden, "The signature of %s is not valid (%s). It was not installed.", m.Name, sig.Err)
+		}
+		if !p.AllowUnsigned {
+			return rpc.Errorf(rpc.Forbidden, "%s is not signed and this server only accepts signed plugins. Turn on plugins.allow_unsigned in Settings to install it.", m.Name)
+		}
+	}
+	if msg := m.CoreProblem(); msg != "" {
+		return rpc.Errorf(rpc.Conflict, "%s Nothing was installed.", msg)
+	}
+	if req.Consent != nil && !sameJSON(emptyIfNil(*req.Consent), m.declared) {
+		return rpc.Errorf(rpc.Conflict, "%s asks for different permissions than the ones you were shown. Nothing was installed; open Browse again to review them.", m.Name)
+	}
+	if ex := find(p, m.ID); ex != nil && ex.Location == LocSystem {
+		return rpc.Errorf(rpc.Conflict, "%s is part of the system package and cannot be replaced from here.", m.Name)
+	}
+	return nil
+}
+
+// swapIntoPlace moves stage to InstalledDir/id, keeping the old version in
+// tmp/old so a failed move can be undone.
+func swapIntoPlace(tmp, stage, id string) error {
+	final := filepath.Join(InstalledDir, id)
+	old := filepath.Join(tmp, "old")
+	if _, err := os.Lstat(final); err == nil {
+		if err := os.Rename(final, old); err != nil {
+			return rpc.Errorf(rpc.Internal, "Cannot replace the installed version: %v", cleanErr(err))
+		}
+	}
+	if err := os.Rename(stage, final); err != nil {
+		if _, e := os.Lstat(old); e == nil {
+			_ = os.Rename(old, final)
+		}
+		return rpc.Errorf(rpc.Internal, "Cannot move the plugin into place: %v", cleanErr(err))
+	}
+	return nil
+}
+
 // fetchArchive opens a local .tar.gz or downloads an https one into a temp file.
 func fetchArchive(ctx context.Context, source, wantSHA string) (io.ReadCloser, error) {
 	var f *os.File
-	if u, err := url.Parse(source); err == nil && u.Scheme != "" && u.Host != "" {
-		if u.Scheme != "https" {
-			return nil, rpc.Errorf(rpc.Invalid, "Only https:// addresses are accepted for downloads.")
-		}
-		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
-		resp, err := downloadClient().Do(req)
-		if err != nil {
-			return nil, rpc.Errorf(rpc.Unavailable, "Download failed: %v", err)
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			return nil, rpc.Errorf(rpc.Unavailable, "The download server answered %s.", resp.Status)
-		}
-		tmp, err := os.CreateTemp(InstalledDir, ".download-*")
-		if err != nil {
-			return nil, err
-		}
-		n, err := io.Copy(tmp, io.LimitReader(resp.Body, maxArchiveBytes+1))
-		if err != nil || n > maxArchiveBytes {
-			tmp.Close()
-			os.Remove(tmp.Name())
-			return nil, rpc.Errorf(rpc.Invalid, "The download is interrupted or larger than %d MiB.", maxArchiveBytes>>20)
-		}
-		if _, err := tmp.Seek(0, io.SeekStart); err != nil {
-			return nil, err
-		}
-		f = tmp
+	var err error
+	if u, perr := url.Parse(source); perr == nil && u.Scheme != "" && u.Host != "" {
+		f, err = downloadArchive(ctx, u)
 	} else {
-		if !filepath.IsAbs(source) {
-			return nil, rpc.Errorf(rpc.Invalid, "Use an absolute path or an https:// address.")
-		}
-		fi, err := os.Stat(source)
-		if err != nil {
-			return nil, rpc.Errorf(rpc.NotFound, "Cannot read %s: %v", source, cleanErr(err))
-		}
-		if !fi.Mode().IsRegular() || fi.Size() > maxArchiveBytes {
-			return nil, rpc.Errorf(rpc.Invalid, "%s must be a .tar.gz file of at most %d MiB.", source, maxArchiveBytes>>20)
-		}
-		if f, err = os.Open(source); err != nil {
-			return nil, rpc.Errorf(rpc.NotFound, "Cannot read %s: %v", source, cleanErr(err))
-		}
+		f, err = openLocalArchive(source)
+	}
+	if err != nil {
+		return nil, err
 	}
 	if wantSHA != "" {
-		h := sha256.New()
-		if _, err := io.Copy(h, f); err != nil {
-			f.Close()
-			return nil, err
-		}
-		if got := hex.EncodeToString(h.Sum(nil)); got != strings.ToLower(wantSHA) {
-			f.Close()
-			return nil, rpc.Errorf(rpc.Invalid, "The checksum does not match (expected %s…, got %s…). Nothing was installed.", wantSHA[:12], got[:12])
-		}
-		if _, err := f.Seek(0, io.SeekStart); err != nil {
+		if err := verifyChecksum(f, wantSHA); err != nil {
 			f.Close()
 			return nil, err
 		}
 	}
 	return &tempFile{f}, nil
+}
+
+func downloadArchive(ctx context.Context, u *url.URL) (*os.File, error) {
+	if u.Scheme != "https" {
+		return nil, rpc.Errorf(rpc.Invalid, "Only https:// addresses are accepted for downloads.")
+	}
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	resp, err := downloadClient().Do(req)
+	if err != nil {
+		return nil, rpc.Errorf(rpc.Unavailable, "Download failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, rpc.Errorf(rpc.Unavailable, "The download server answered %s.", resp.Status)
+	}
+	tmp, err := os.CreateTemp(InstalledDir, ".download-*")
+	if err != nil {
+		return nil, err
+	}
+	n, err := io.Copy(tmp, io.LimitReader(resp.Body, maxArchiveBytes+1))
+	if err != nil || n > maxArchiveBytes {
+		tmp.Close()
+		os.Remove(tmp.Name())
+		return nil, rpc.Errorf(rpc.Invalid, "The download is interrupted or larger than %d MiB.", maxArchiveBytes>>20)
+	}
+	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	}
+	return tmp, nil
+}
+
+func openLocalArchive(source string) (*os.File, error) {
+	if !filepath.IsAbs(source) {
+		return nil, rpc.Errorf(rpc.Invalid, "Use an absolute path or an https:// address.")
+	}
+	fi, err := os.Stat(source)
+	if err != nil {
+		return nil, rpc.Errorf(rpc.NotFound, "Cannot read %s: %v", source, cleanErr(err))
+	}
+	if !fi.Mode().IsRegular() || fi.Size() > maxArchiveBytes {
+		return nil, rpc.Errorf(rpc.Invalid, "%s must be a .tar.gz file of at most %d MiB.", source, maxArchiveBytes>>20)
+	}
+	f, err := os.Open(source)
+	if err != nil {
+		return nil, rpc.Errorf(rpc.NotFound, "Cannot read %s: %v", source, cleanErr(err))
+	}
+	return f, nil
+}
+
+// verifyChecksum hashes f and rewinds it.
+func verifyChecksum(f *os.File, wantSHA string) error {
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return err
+	}
+	if got := hex.EncodeToString(h.Sum(nil)); got != strings.ToLower(wantSHA) {
+		return rpc.Errorf(rpc.Invalid, "The checksum does not match (expected %s…, got %s…). Nothing was installed.", wantSHA[:12], got[:12])
+	}
+	_, err := f.Seek(0, io.SeekStart)
+	return err
 }
 
 // tempFile removes downloaded temp files on Close.

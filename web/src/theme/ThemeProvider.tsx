@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import { usePrefs, useSession } from '../api';
+import { useMediaQuery } from '../ui';
 import { applyVars, parseTheme, themeVars } from './engine';
 import { BUILTIN_THEMES, DEFAULT_LIGHT_THEME_ID, DEFAULT_THEME_ID, type ColourMode, type ThemeDef } from './themes';
 
@@ -50,24 +51,37 @@ export interface ThemeSnapshot {
 const Ctx = createContext<ThemeValue | null>(null);
 const DEFAULT_FOLLOW: FollowDevice = { on: false, dark: DEFAULT_THEME_ID, light: DEFAULT_LIGHT_THEME_ID };
 
-function systemDark(): boolean {
-  return typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)').matches : true;
+const newCustomId = () => `custom-${Date.now().toString(36)}`;
+
+function toSavedCustom(t: ThemeDef): ThemeDef {
+  const keepId = t.id !== 'custom-new' && t.id.startsWith('custom-');
+  return { ...t, custom: true, id: keepId ? t.id : newCustomId() };
+}
+
+function parseImportedTheme(json: string): ThemeDef {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(json);
+  } catch {
+    throw new Error('invalid_json');
+  }
+  const t = parseTheme(raw);
+  if (!t) throw new Error('invalid_theme');
+  return { ...t, id: newCustomId() };
+}
+
+function serializeTheme(t: ThemeDef): string {
+  const { custom: _c, ...rest } = t;
+  void _c;
+  return JSON.stringify({ ervisioTheme: 1, ...rest }, null, 2);
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const { prefs, set } = usePrefs();
   const { host } = useSession();
-  const [sysDark, setSysDark] = useState(systemDark);
+  const sysDark = useMediaQuery('(prefers-color-scheme: dark)');
   const [prev, setPrev] = useState<ThemeDef | null>(null);
   const [prevDistro, setPrevDistro] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (typeof matchMedia !== 'function') return;
-    const mq = matchMedia('(prefers-color-scheme: dark)');
-    const on = () => setSysDark(mq.matches);
-    mq.addEventListener('change', on);
-    return () => mq.removeEventListener('change', on);
-  }, []);
 
   const customThemes = useMemo<ThemeDef[]>(
     () => ((prefs.customThemes as unknown[]) ?? []).map(parseTheme).filter((t): t is ThemeDef => !!t),
@@ -132,7 +146,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       preview: setPrev,
       previewDistro: setPrevDistro,
       saveCustom: (t) => {
-        const clean: ThemeDef = { ...t, custom: true, id: t.id !== 'custom-new' && t.id.startsWith('custom-') ? t.id : `custom-${Date.now().toString(36)}` };
+        const clean = toSavedCustom(t);
         const list = customThemes.filter((x) => x.id !== clean.id);
         save('customThemes', [...list, clean]);
         return clean;
@@ -142,23 +156,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         if (themeId === id) save('theme', DEFAULT_THEME_ID);
       },
       importTheme: (json) => {
-        let raw: unknown;
-        try {
-          raw = JSON.parse(json);
-        } catch {
-          throw new Error('invalid_json');
-        }
-        const t = parseTheme(raw);
-        if (!t) throw new Error('invalid_theme');
-        const clean = { ...t, id: `custom-${Date.now().toString(36)}` };
+        const clean = parseImportedTheme(json);
         save('customThemes', [...customThemes, clean]);
         return clean;
       },
-      exportTheme: (t) => {
-        const { custom: _c, ...rest } = t;
-        void _c;
-        return JSON.stringify({ ervisioTheme: 1, ...rest }, null, 2);
-      },
+      exportTheme: serializeTheme,
       snapshot: () => ({ themeId, colourMode, follow }),
       restore: (s) => {
         save('theme', s.themeId);
