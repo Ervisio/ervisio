@@ -12,123 +12,70 @@ import (
 	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
+// bound wraps a handler that takes its params already bound.
+func bound[P any](fn func(ctx context.Context, c *rpc.Call, p P) (any, error)) rpc.Handler {
+	return func(ctx context.Context, c *rpc.Call) (any, error) {
+		var p P
+		if err := c.Bind(&p); err != nil {
+			return nil, err
+		}
+		return fn(ctx, c, p)
+	}
+}
+
+// boundStream is bound for stream handlers.
+func boundStream[P any](fn func(ctx context.Context, c *rpc.Call, s rpc.Stream, p P) error) rpc.StreamHandler {
+	return func(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
+		var p P
+		if err := c.Bind(&p); err != nil {
+			return err
+		}
+		return fn(ctx, c, s, p)
+	}
+}
+
+// pathParams are the params of plugins.loadDev and plugins.unloadDev.
+type pathParams struct {
+	Path string `json:"path"`
+}
+
 // Register adds the plugins.* methods to the registry.
 func Register(r *rpc.Registry) {
 	r.Handle("plugins.list", rpc.User, func(ctx context.Context, c *rpc.Call) (any, error) {
 		return list(c.Admin), nil
 	})
-
-	r.Handle("plugins.setEnabled", rpc.Admin, func(ctx context.Context, c *rpc.Call) (any, error) {
-		var p struct {
-			ID      string `json:"id"`
-			Enabled bool   `json:"enabled"`
-		}
-		if err := c.Bind(&p); err != nil {
-			return nil, err
-		}
-		f := find(readPolicy(), p.ID)
-		if f == nil {
-			return nil, rpc.Errorf(rpc.NotFound, "There is no plugin %q.", p.ID)
-		}
-		if msg := f.M.CoreProblem(); msg != "" && p.Enabled {
-			return nil, rpc.Errorf(rpc.Conflict, "%s", msg)
-		}
-		st := readState()
-		st.Enabled[p.ID] = p.Enabled
-		if err := writeState(st); err != nil {
-			return nil, rpc.Errorf(rpc.Internal, "Could not save the plugin state: %v", cleanErr(err))
-		}
-		return map[string]any{"id": p.ID, "enabled": p.Enabled}, nil
-	})
-
-	r.Handle("plugins.uninstall", rpc.Admin, func(ctx context.Context, c *rpc.Call) (any, error) {
-		var p struct {
-			ID string `json:"id"`
-		}
-		if err := c.Bind(&p); err != nil {
-			return nil, err
-		}
+	r.Handle("plugins.setEnabled", rpc.Admin, bound(setEnabled))
+	r.Handle("plugins.uninstall", rpc.Admin, bound(func(_ context.Context, _ *rpc.Call, p struct {
+		ID string `json:"id"`
+	}) (any, error) {
 		if err := uninstall(p.ID); err != nil {
 			return nil, err
 		}
 		return map[string]any{"id": p.ID}, nil
-	})
-
-	r.Handle("plugins.install", rpc.Admin, func(ctx context.Context, c *rpc.Call) (any, error) {
-		var p installRequest
-		if err := c.Bind(&p); err != nil {
-			return nil, err
-		}
+	}))
+	r.Handle("plugins.install", rpc.Admin, bound(func(ctx context.Context, _ *rpc.Call, p installRequest) (any, error) {
 		return install(ctx, p)
-	})
-
+	}))
 	r.Handle("plugins.catalog", rpc.User, func(ctx context.Context, c *rpc.Call) (any, error) {
 		return catalogView(ctx)
 	})
-
-	r.Handle("plugins.exec", rpc.User, func(ctx context.Context, c *rpc.Call) (any, error) {
-		var p ExecParams
-		if err := c.Bind(&p); err != nil {
-			return nil, err
-		}
+	r.Handle("plugins.exec", rpc.User, bound(func(ctx context.Context, c *rpc.Call, p ExecParams) (any, error) {
 		return runExec(ctx, c, p)
-	})
-
-	r.Stream("plugins.execStream", rpc.User, func(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
-		var p ExecParams
-		if err := c.Bind(&p); err != nil {
-			return err
-		}
-		return runStream(ctx, c, s, p)
-	})
-
-	r.Stream("plugins.pty", rpc.User, func(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
-		var p PTYParams
-		if err := c.Bind(&p); err != nil {
-			return err
-		}
-		return runPTY(ctx, c, s, p)
-	})
+	}))
+	r.Stream("plugins.execStream", rpc.User, boundStream(runStream))
+	r.Stream("plugins.pty", rpc.User, boundStream(runPTY))
 
 	// HTTP APIs on unix sockets, only for the declared rules (see http.go).
-	r.Handle("plugins.http", rpc.User, func(ctx context.Context, c *rpc.Call) (any, error) {
-		var p HTTPParams
-		if err := c.Bind(&p); err != nil {
-			return nil, err
-		}
+	r.Handle("plugins.http", rpc.User, bound(func(ctx context.Context, c *rpc.Call, p HTTPParams) (any, error) {
 		return runHTTP(ctx, c, p)
-	})
-	r.Stream("plugins.httpStream", rpc.User, func(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
-		var p HTTPParams
-		if err := c.Bind(&p); err != nil {
-			return err
-		}
-		return runHTTPStream(ctx, c, s, p)
-	})
+	}))
+	r.Stream("plugins.httpStream", rpc.User, boundStream(runHTTPStream))
 
 	// Large transfers: streamed GET downloads (HTTP API or command output)
 	// and uploads as a request body (see transfer.go).
-	r.Stream("plugins.httpDownload", rpc.User, func(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
-		var p HTTPParams
-		if err := c.Bind(&p); err != nil {
-			return err
-		}
-		return runHTTPDownload(ctx, c, s, p)
-	})
-	r.Stream("plugins.execDownload", rpc.User, func(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
-		var p ExecParams
-		if err := c.Bind(&p); err != nil {
-			return err
-		}
-		return runExecDownload(ctx, c, s, p)
-	})
-	r.Stream("plugins.httpUpload", rpc.User, func(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
-		var p UploadParams
-		if err := c.Bind(&p); err != nil {
-			return err
-		}
-		return runHTTPUpload(ctx, c, s, p)
-	})
+	r.Stream("plugins.httpDownload", rpc.User, boundStream(runHTTPDownload))
+	r.Stream("plugins.execDownload", rpc.User, boundStream(runExecDownload))
+	r.Stream("plugins.httpUpload", rpc.User, boundStream(runHTTPUpload))
 
 	// Plugin-scoped file access: only inside capabilities.files, with the
 	// user's own rights, or on the root bridge for folders declared admin
@@ -145,27 +92,33 @@ func Register(r *rpc.Registry) {
 	// Environments (envbridge.go) and user-approved network hosts (userhosts.go).
 	registerEnvs(r)
 
-	r.Handle("plugins.loadDev", rpc.User, func(ctx context.Context, c *rpc.Call) (any, error) {
-		var p struct {
-			Path string `json:"path"`
-		}
-		if err := c.Bind(&p); err != nil {
-			return nil, err
-		}
+	r.Handle("plugins.loadDev", rpc.User, bound(func(_ context.Context, _ *rpc.Call, p pathParams) (any, error) {
 		return loadDev(p.Path)
-	})
-
+	}))
 	r.Stream("plugins.devAsset", rpc.User, devAsset)
-
-	r.Handle("plugins.unloadDev", rpc.User, func(ctx context.Context, c *rpc.Call) (any, error) {
-		var p struct {
-			Path string `json:"path"`
-		}
-		if err := c.Bind(&p); err != nil {
-			return nil, err
-		}
+	r.Handle("plugins.unloadDev", rpc.User, bound(func(_ context.Context, _ *rpc.Call, p pathParams) (any, error) {
 		return unloadDev(p.Path)
-	})
+	}))
+}
+
+// setEnabled implements plugins.setEnabled.
+func setEnabled(_ context.Context, _ *rpc.Call, p struct {
+	ID      string `json:"id"`
+	Enabled bool   `json:"enabled"`
+}) (any, error) {
+	f := find(readPolicy(), p.ID)
+	if f == nil {
+		return nil, rpc.Errorf(rpc.NotFound, "There is no plugin %q.", p.ID)
+	}
+	if msg := f.M.CoreProblem(); msg != "" && p.Enabled {
+		return nil, rpc.Errorf(rpc.Conflict, "%s", msg)
+	}
+	st := readState()
+	st.Enabled[p.ID] = p.Enabled
+	if err := writeState(st); err != nil {
+		return nil, rpc.Errorf(rpc.Internal, "Could not save the plugin state: %v", cleanErr(err))
+	}
+	return map[string]any{"id": p.ID, "enabled": p.Enabled}, nil
 }
 
 // DevInfo is the result of plugins.loadDev.
@@ -187,16 +140,9 @@ func loadDev(raw string) (*DevInfo, error) {
 	if raw == "" {
 		return nil, rpc.Errorf(rpc.Invalid, "Give the path of the plugin folder.")
 	}
-	dir := filepath.Clean(expandHome(raw))
-	if !filepath.IsAbs(dir) {
-		return nil, rpc.Errorf(rpc.Invalid, "Use an absolute path (or one starting with ~/).")
-	}
-	if real, err := filepath.EvalSymlinks(dir); err == nil {
-		dir = real
-	}
-	fi, err := os.Stat(dir)
-	if err != nil || !fi.IsDir() {
-		return nil, rpc.Errorf(rpc.NotFound, "%s is not a folder.", dir)
+	dir, err := devDir(raw)
+	if err != nil {
+		return nil, err
 	}
 	m, err := LoadManifest(dir)
 	if err != nil {
@@ -207,23 +153,44 @@ func loadDev(raw string) (*DevInfo, error) {
 			return nil, rpc.Errorf(rpc.Conflict, "A plugin with the id %q is already installed. Uninstall it, or change the id in your manifest.", m.ID)
 		}
 	}
-	st := readDev()
-	have := false
-	for _, f := range st.Folders {
-		if f == dir {
-			have = true
-		}
-	}
-	if !have {
-		st.Folders = append(st.Folders, dir)
-		if err := saveDev(st); err != nil {
-			return nil, rpc.Errorf(rpc.Internal, "Could not remember the folder: %v", cleanErr(err))
-		}
+	if err := rememberDev(dir); err != nil {
+		return nil, err
 	}
 	// The daemon serves /plugins/<id>/… of loaded folders through
 	// plugins.devAsset on the user's own bridge, so nothing is linked.
 	info := &DevInfo{Path: dir, ID: m.ID, Name: m.Name, Linked: true}
 	return info, nil
+}
+
+// devDir validates the folder given to plugins.loadDev and resolves symlinks.
+func devDir(raw string) (string, error) {
+	dir := filepath.Clean(expandHome(raw))
+	if !filepath.IsAbs(dir) {
+		return "", rpc.Errorf(rpc.Invalid, "Use an absolute path (or one starting with ~/).")
+	}
+	if real, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = real
+	}
+	fi, err := os.Stat(dir)
+	if err != nil || !fi.IsDir() {
+		return "", rpc.Errorf(rpc.NotFound, "%s is not a folder.", dir)
+	}
+	return dir, nil
+}
+
+// rememberDev adds dir to the saved developer folders when it is new.
+func rememberDev(dir string) error {
+	st := readDev()
+	for _, f := range st.Folders {
+		if f == dir {
+			return nil
+		}
+	}
+	st.Folders = append(st.Folders, dir)
+	if err := saveDev(st); err != nil {
+		return rpc.Errorf(rpc.Internal, "Could not remember the folder: %v", cleanErr(err))
+	}
+	return nil
 }
 
 func unloadDev(raw string) (any, error) {

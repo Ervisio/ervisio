@@ -65,21 +65,13 @@ type capRoot struct {
 func matchCap(declared []Folder, path string) (capRoot, bool) {
 	var best capRoot
 	found := false
-	sep := string(filepath.Separator)
 	for _, d := range declared {
 		dir := filepath.Clean(expandHome(d.Path))
 		if !filepath.IsAbs(dir) || strings.HasPrefix(dir, "~") {
 			continue // ~ without a home directory: never matches
 		}
-		var rel string
-		switch {
-		case path == dir:
-			rel = "."
-		case dir == filepath.VolumeName(dir)+sep: // the root: "/" or a drive root
-			rel = strings.TrimPrefix(path, dir)
-		case strings.HasPrefix(path, dir+sep):
-			rel = path[len(dir)+1:]
-		default:
+		rel, ok := relBelow(dir, path)
+		if !ok {
 			continue
 		}
 		if !found || len(dir) > len(best.dir) || (len(dir) == len(best.dir) && best.folder.Admin && !d.Admin) {
@@ -87,6 +79,42 @@ func matchCap(declared []Folder, path string) (capRoot, bool) {
 		}
 	}
 	return best, found
+}
+
+// relBelow returns path relative to dir ("." for dir itself), or false when
+// path is not inside dir.
+func relBelow(dir, path string) (string, bool) {
+	sep := string(filepath.Separator)
+	switch {
+	case path == dir:
+		return ".", true
+	case dir == filepath.VolumeName(dir)+sep: // the root: "/" or a drive root
+		return strings.TrimPrefix(path, dir), true
+	case strings.HasPrefix(path, dir+sep):
+		return path[len(dir)+1:], true
+	}
+	return "", false
+}
+
+// cleanPluginPath validates a path from a plugin and returns it absolute and clean.
+func cleanPluginPath(raw string) (string, error) {
+	if raw == "" || len(raw) > 4096 || strings.ContainsRune(raw, 0) {
+		return "", rpc.Errorf(rpc.Invalid, "Give an absolute path.")
+	}
+	path := filepath.Clean(expandHome(raw))
+	if !filepath.IsAbs(path) {
+		return "", rpc.Errorf(rpc.Invalid, "Give an absolute path (or one starting with ~/).")
+	}
+	return path, nil
+}
+
+// declaredFolders lists the folders an operation may use: write folders for
+// a write, read and write folders for a read.
+func declaredFolders(caps FileAccess, write bool) []Folder {
+	if write {
+		return caps.Write
+	}
+	return append(append([]Folder{}, caps.Read...), caps.Write...)
 }
 
 // pluginPath checks a path from a plugin and resolves it against the
@@ -99,20 +127,11 @@ func pluginPath(c *rpc.Call, p FileParams, write bool) (*Found, capRoot, error) 
 	if err != nil {
 		return nil, capRoot{}, err
 	}
-	raw := p.Path
-	if raw == "" || len(raw) > 4096 || strings.ContainsRune(raw, 0) {
-		return nil, capRoot{}, rpc.Errorf(rpc.Invalid, "Give an absolute path.")
+	path, err := cleanPluginPath(p.Path)
+	if err != nil {
+		return nil, capRoot{}, err
 	}
-	path := filepath.Clean(expandHome(raw))
-	if !filepath.IsAbs(path) {
-		return nil, capRoot{}, rpc.Errorf(rpc.Invalid, "Give an absolute path (or one starting with ~/).")
-	}
-	caps := f.M.Capabilities.Files
-	declared := caps.Write
-	if !write {
-		declared = append(append([]Folder{}, caps.Read...), caps.Write...)
-	}
-	r, ok := matchCap(declared, path)
+	r, ok := matchCap(declaredFolders(f.M.Capabilities.Files, write), path)
 	if !ok {
 		verb := "read"
 		if write {
@@ -176,12 +195,40 @@ func openNoBlock(root *os.Root, rel string) (*os.File, error) {
 // other local users even when a parent folder is.
 func privateFolder(f Folder) bool { return f.Create && strings.HasPrefix(f.Path, "~") }
 
-func readPluginFile(_ context.Context, c *rpc.Call) (any, error) {
+// bindPath binds the file params of a call and resolves their path.
+func bindPath(c *rpc.Call, write bool) (FileParams, capRoot, error) {
 	var p FileParams
 	if err := c.Bind(&p); err != nil {
-		return nil, err
+		return p, capRoot{}, err
 	}
-	_, r, err := pluginPath(c, p, false)
+	_, r, err := pluginPath(c, p, write)
+	return p, r, err
+}
+
+// readRegular reads an open regular file of at most MaxPluginFile bytes.
+func readRegular(fh *os.File, path string) ([]byte, error) {
+	fi, err := fh.Stat()
+	if err != nil {
+		return nil, fileErr(err, path)
+	}
+	if !fi.Mode().IsRegular() {
+		return nil, rpc.Errorf(rpc.Invalid, "%s is not a regular file.", path)
+	}
+	if fi.Size() > MaxPluginFile {
+		return nil, rpc.Errorf(rpc.Invalid, "%s is larger than %d MiB.", path, MaxPluginFile>>20)
+	}
+	b, err := io.ReadAll(io.LimitReader(fh, MaxPluginFile+1))
+	if err != nil {
+		return nil, fileErr(err, path)
+	}
+	if len(b) > MaxPluginFile {
+		return nil, rpc.Errorf(rpc.Invalid, "%s is larger than %d MiB.", path, MaxPluginFile>>20)
+	}
+	return b, nil
+}
+
+func readPluginFile(_ context.Context, c *rpc.Call) (any, error) {
+	p, r, err := bindPath(c, false)
 	if err != nil {
 		return nil, err
 	}
@@ -195,22 +242,9 @@ func readPluginFile(_ context.Context, c *rpc.Call) (any, error) {
 		return nil, fileErr(err, p.Path)
 	}
 	defer fh.Close()
-	fi, err := fh.Stat()
+	b, err := readRegular(fh, p.Path)
 	if err != nil {
-		return nil, fileErr(err, p.Path)
-	}
-	if !fi.Mode().IsRegular() {
-		return nil, rpc.Errorf(rpc.Invalid, "%s is not a regular file.", p.Path)
-	}
-	if fi.Size() > MaxPluginFile {
-		return nil, rpc.Errorf(rpc.Invalid, "%s is larger than %d MiB.", p.Path, MaxPluginFile>>20)
-	}
-	b, err := io.ReadAll(io.LimitReader(fh, MaxPluginFile+1))
-	if err != nil {
-		return nil, fileErr(err, p.Path)
-	}
-	if len(b) > MaxPluginFile {
-		return nil, rpc.Errorf(rpc.Invalid, "%s is larger than %d MiB.", p.Path, MaxPluginFile>>20)
+		return nil, err
 	}
 	res := &FileResult{Path: filepath.Join(r.dir, r.rel), Size: int64(len(b))}
 	if p.B64 || !utf8.Valid(b) || jsonTextLen(b) > jsonTextBudget {
@@ -221,23 +255,11 @@ func readPluginFile(_ context.Context, c *rpc.Call) (any, error) {
 	return res, nil
 }
 
-func writePluginFile(_ context.Context, c *rpc.Call) (any, error) {
-	var p FileParams
-	if err := c.Bind(&p); err != nil {
-		return nil, err
-	}
-	_, r, err := pluginPath(c, p, true)
-	if err != nil {
-		return nil, err
-	}
-	if r.rel == "." {
-		return nil, rpc.Errorf(rpc.Invalid, "%s is a declared folder, not a file.", p.Path)
-	}
-	if err := ensureFolder(r); err != nil {
-		return nil, err
-	}
+// decodeWriteData returns the bytes of a writeFile call, checking the size.
+func decodeWriteData(p FileParams) ([]byte, error) {
 	data := []byte(p.Data)
 	if p.B64 {
+		var err error
 		if data, err = base64.StdEncoding.DecodeString(p.Data); err != nil {
 			return nil, rpc.Errorf(rpc.Invalid, "data is not valid base64.")
 		}
@@ -245,34 +267,38 @@ func writePluginFile(_ context.Context, c *rpc.Call) (any, error) {
 	if len(data) > MaxPluginFile {
 		return nil, rpc.Errorf(rpc.Invalid, "At most %d MiB can be written at once.", MaxPluginFile>>20)
 	}
-	root, err := os.OpenRoot(r.dir)
-	if err != nil {
-		return nil, fileErr(err, p.Path)
-	}
-	defer root.Close()
+	return data, nil
+}
+
+// writeMode is the mode for the written file: the existing file's, or 0644.
+func writeMode(root *os.Root, r capRoot, path string) (fs.FileMode, error) {
 	mode := fs.FileMode(0o644)
 	if fi, err := root.Lstat(r.rel); err == nil {
 		if !fi.Mode().IsRegular() {
-			return nil, rpc.Errorf(rpc.Invalid, "%s is not a regular file.", p.Path)
+			return 0, rpc.Errorf(rpc.Invalid, "%s is not a regular file.", path)
 		}
 		mode = fi.Mode().Perm()
 	}
 	if privateFolder(r.folder) {
 		mode &= 0o700
 	}
-	// Write a temporary file next to the target and rename it over the
-	// target. The folder is opened through os.Root and both names are
-	// single components relative to its descriptor, so neither the write
-	// nor the rename can leave the declared folder (a symlink at the target
-	// is replaced, never followed).
-	dirRel, base := filepath.Dir(r.rel), filepath.Base(r.rel)
+	return mode, nil
+}
+
+// writeAtomic writes a temporary file next to the target and renames it over
+// the target. The folder is opened through os.Root and both names are
+// single components relative to its descriptor, so neither the write
+// nor the rename can leave the declared folder (a symlink at the target
+// is replaced, never followed).
+func writeAtomic(root *os.Root, rel, path string, data []byte, mode fs.FileMode) error {
+	dirRel, base := filepath.Dir(rel), filepath.Base(rel)
 	dh, err := openNoBlock(root, dirRel)
 	if err != nil {
-		return nil, fileErr(err, p.Path)
+		return fileErr(err, path)
 	}
 	defer dh.Close()
 	if fi, err := dh.Stat(); err != nil || !fi.IsDir() {
-		return nil, rpc.Errorf(rpc.Invalid, "%s is not inside a folder.", p.Path)
+		return rpc.Errorf(rpc.Invalid, "%s is not inside a folder.", path)
 	}
 	var rnd [6]byte
 	_, _ = rand.Read(rnd[:])
@@ -280,7 +306,7 @@ func writePluginFile(_ context.Context, c *rpc.Call) (any, error) {
 	tmp := filepath.Join(dirRel, tmpBase)
 	fh, err := root.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
 	if err != nil {
-		return nil, fileErr(err, p.Path)
+		return fileErr(err, path)
 	}
 	_, werr := fh.Write(data)
 	cerr := fh.Close()
@@ -292,17 +318,61 @@ func writePluginFile(_ context.Context, c *rpc.Call) (any, error) {
 	}
 	if werr != nil {
 		_ = root.Remove(tmp)
-		return nil, fileErr(werr, p.Path)
+		return fileErr(werr, path)
+	}
+	return nil
+}
+
+func writePluginFile(_ context.Context, c *rpc.Call) (any, error) {
+	p, r, err := bindPath(c, true)
+	if err != nil {
+		return nil, err
+	}
+	if r.rel == "." {
+		return nil, rpc.Errorf(rpc.Invalid, "%s is a declared folder, not a file.", p.Path)
+	}
+	if err := ensureFolder(r); err != nil {
+		return nil, err
+	}
+	data, err := decodeWriteData(p)
+	if err != nil {
+		return nil, err
+	}
+	root, err := os.OpenRoot(r.dir)
+	if err != nil {
+		return nil, fileErr(err, p.Path)
+	}
+	defer root.Close()
+	mode, err := writeMode(root, r, p.Path)
+	if err != nil {
+		return nil, err
+	}
+	if err := writeAtomic(root, r.rel, p.Path, data, mode); err != nil {
+		return nil, err
 	}
 	return map[string]any{"path": filepath.Join(r.dir, r.rel), "size": len(data)}, nil
 }
 
-func listPluginDir(_ context.Context, c *rpc.Call) (any, error) {
-	var p FileParams
-	if err := c.Bind(&p); err != nil {
-		return nil, err
+// dirEntry describes one directory entry; size and time stay zero when the
+// entry cannot be stat'ed.
+func dirEntry(e fs.DirEntry) DirEntry {
+	d := DirEntry{Name: e.Name(), Type: "other"}
+	switch t := e.Type(); {
+	case t.IsDir():
+		d.Type = "dir"
+	case t.IsRegular():
+		d.Type = "file"
+	case t&fs.ModeSymlink != 0:
+		d.Type = "link"
 	}
-	_, r, err := pluginPath(c, p, false)
+	if fi, err := e.Info(); err == nil {
+		d.Size, d.MTime = fi.Size(), fi.ModTime().UnixMilli()
+	}
+	return d
+}
+
+func listPluginDir(_ context.Context, c *rpc.Call) (any, error) {
+	p, r, err := bindPath(c, false)
 	if err != nil {
 		return nil, err
 	}
@@ -322,32 +392,35 @@ func listPluginDir(_ context.Context, c *rpc.Call) (any, error) {
 	}
 	out := make([]DirEntry, 0, len(ents))
 	for _, e := range ents {
-		d := DirEntry{Name: e.Name(), Type: "other"}
-		switch t := e.Type(); {
-		case t.IsDir():
-			d.Type = "dir"
-		case t.IsRegular():
-			d.Type = "file"
-		case t&fs.ModeSymlink != 0:
-			d.Type = "link"
-		}
-		if fi, err := e.Info(); err == nil {
-			d.Size, d.MTime = fi.Size(), fi.ModTime().UnixMilli()
-		}
-		out = append(out, d)
+		out = append(out, dirEntry(e))
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return map[string]any{"path": filepath.Join(r.dir, r.rel), "entries": out}, nil
 }
 
+// mkdirStep creates one folder, accepting one that already exists.
+func mkdirStep(root *os.Root, dir, cur, path string) error {
+	err := root.Mkdir(cur, 0o755)
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, fs.ErrExist) {
+		return fileErr(err, path)
+	}
+	fi, serr := root.Stat(cur)
+	if serr != nil {
+		return fileErr(serr, path)
+	}
+	if !fi.IsDir() {
+		return rpc.Errorf(rpc.Invalid, "%s exists and is not a folder.", filepath.Join(dir, cur))
+	}
+	return nil
+}
+
 // mkdirPlugin implements plugins.mkdir: creates a folder (and missing
 // parents) inside a files.write folder.
 func mkdirPlugin(_ context.Context, c *rpc.Call) (any, error) {
-	var p FileParams
-	if err := c.Bind(&p); err != nil {
-		return nil, err
-	}
-	_, r, err := pluginPath(c, p, true)
+	p, r, err := bindPath(c, true)
 	if err != nil {
 		return nil, err
 	}
@@ -367,19 +440,8 @@ func mkdirPlugin(_ context.Context, c *rpc.Call) (any, error) {
 			continue
 		}
 		cur = filepath.Join(cur, part)
-		err := root.Mkdir(cur, 0o755)
-		if err == nil {
-			continue
-		}
-		if !errors.Is(err, fs.ErrExist) {
-			return nil, fileErr(err, p.Path)
-		}
-		fi, serr := root.Stat(cur)
-		if serr != nil {
-			return nil, fileErr(serr, p.Path)
-		}
-		if !fi.IsDir() {
-			return nil, rpc.Errorf(rpc.Invalid, "%s exists and is not a folder.", filepath.Join(r.dir, cur))
+		if err := mkdirStep(root, r.dir, cur, p.Path); err != nil {
+			return nil, err
 		}
 	}
 	return map[string]any{"path": filepath.Join(r.dir, r.rel)}, nil
