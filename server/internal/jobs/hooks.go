@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ervisio/ervisio/server/internal/modules/plugins"
 )
 
 // Webhooks: POST /hooks/<plugin>/<token>. The token is 32 random bytes
@@ -45,27 +47,48 @@ func newHookLimits() hookLimits {
 	return hookLimits{byToken: map[string]*bucket{}, byIP: map[string]*bucket{}}
 }
 
-// take removes one token from the bucket of key (when consume) and says
-// whether one was available.
-func take(m map[string]*bucket, key string, now time.Time, burst int, refill time.Duration, consume bool) bool {
-	b := m[key]
+type rate struct {
+	burst  int
+	refill time.Duration
+}
+
+var (
+	hookRate = rate{hookBurst, hookRefill}
+	missRate = rate{missBurst, missRefill}
+)
+
+// refilled returns the bucket of key brought up to now; fresh says it did
+// not exist yet (and is not stored).
+func refilled(m map[string]*bucket, key string, now time.Time, r rate) (b *bucket, fresh bool) {
+	b = m[key]
 	if b == nil {
-		b = &bucket{tokens: float64(burst), at: now}
-		if consume {
-			m[key] = b
-		}
+		b, fresh = &bucket{tokens: float64(r.burst), at: now}, true
 	}
-	b.tokens += float64(now.Sub(b.at)) / float64(refill)
-	if b.tokens > float64(burst) {
-		b.tokens = float64(burst)
+	b.tokens += float64(now.Sub(b.at)) / float64(r.refill)
+	if b.tokens > float64(r.burst) {
+		b.tokens = float64(r.burst)
 	}
 	b.at = now
+	return b, fresh
+}
+
+// peek says whether the bucket of key has a token, without using it.
+func peek(m map[string]*bucket, key string, now time.Time, r rate) bool {
+	b, _ := refilled(m, key, now, r)
+	return b.tokens >= 1
+}
+
+// take removes one token from the bucket of key and says whether one was
+// available.
+func take(m map[string]*bucket, key string, now time.Time, r rate) bool {
+	b, fresh := refilled(m, key, now, r)
+	if fresh {
+		m[key] = b
+	}
 	if b.tokens < 1 {
 		return false
 	}
-	if consume {
-		b.tokens--
-	}
+	b.tokens--
 	return true
 }
 
@@ -111,39 +134,21 @@ func (m *Manager) HandleHook(plugin, token, ip string, body []byte, query url.Va
 	hl.mu.Lock()
 	hl.gc(now)
 	// A client that keeps missing is slowed down before any lookup.
-	if !take(hl.byIP, ip, now, missBurst, missRefill, false) {
-		hl.mu.Unlock()
+	allowed := peek(hl.byIP, ip, now, missRate)
+	hl.mu.Unlock()
+	if !allowed {
 		return HookResult{Status: http.StatusTooManyRequests, RetryAfter: int(missRefill.Seconds())}
 	}
-	hl.mu.Unlock()
 
 	hash := HashToken(token)
-	m.mu.Lock()
-	var in *Instance
-	hookID := ""
-	// Every stored hash is compared in constant time, none is skipped.
-	for _, cand := range m.list {
-		for i := range cand.Webhooks {
-			if subtle.ConstantTimeCompare([]byte(cand.Webhooks[i].Hash), []byte(hash)) == 1 && cand.Plugin == plugin {
-				in, hookID = cand, cand.Webhooks[i].ID
-			}
-		}
-	}
-	var snap Instance
-	if in != nil && in.Enabled {
-		snap = *in
-	} else {
-		in = nil
-	}
-	m.mu.Unlock()
-
+	snap, hookID, found := m.findHook(plugin, hash)
 	miss := func() HookResult {
 		hl.mu.Lock()
-		take(hl.byIP, ip, now, missBurst, missRefill, true)
+		take(hl.byIP, ip, now, missRate)
 		hl.mu.Unlock()
 		return HookResult{Status: http.StatusNotFound}
 	}
-	if in == nil {
+	if !found {
 		return miss()
 	}
 	man, err := m.env.Manifest(snap.Plugin)
@@ -155,46 +160,16 @@ func (m *Manager) HandleHook(plugin, token, ip string, body []byte, query url.Va
 		return miss()
 	}
 	hl.mu.Lock()
-	ok := take(hl.byToken, hash, now, hookBurst, hookRefill, true)
+	ok := take(hl.byToken, hash, now, hookRate)
 	hl.mu.Unlock()
 	if !ok {
 		return HookResult{Status: http.StatusTooManyRequests, RetryAfter: int(hookRefill.Seconds())}
 	}
 
-	// Only the params the job lists may come from the call.
-	over := map[string]string{}
-	if job.Webhook != nil && len(job.Webhook.Params) > 0 {
-		given := map[string]string{}
-		if t := strings.TrimSpace(string(body)); strings.HasPrefix(t, "{") {
-			var raw map[string]json.RawMessage
-			if json.Unmarshal(body, &raw) == nil {
-				for k, v := range raw {
-					var s string
-					if json.Unmarshal(v, &s) == nil {
-						given[k] = s
-					} else if n := strings.TrimSpace(string(v)); n != "" && n[0] >= '0' && n[0] <= '9' {
-						given[k] = n
-					}
-				}
-			}
-		}
-		for k, v := range query {
-			if len(v) > 0 {
-				given[k] = v[0]
-			}
-		}
-		for _, name := range job.Webhook.Params {
-			v, has := given[name]
-			if !has {
-				continue
-			}
-			if p := job.Param(name); p == nil || p.CheckValue(v) != nil {
-				return HookResult{Status: http.StatusBadRequest}
-			}
-			over[name] = v
-		}
+	over, valid := hookParams(job, body, query)
+	if !valid {
+		return HookResult{Status: http.StatusBadRequest}
 	}
-
 	// An instance that runs steps as root runs with the values an
 	// administrator approved, and only those: a call that tries to set a
 	// param is refused (400), whatever webhook.params says.
@@ -204,10 +179,82 @@ func (m *Manager) HandleHook(plugin, token, ip string, body []byte, query url.Va
 			return HookResult{Status: http.StatusBadRequest}
 		}
 	}
+	return m.runHook(snap.ID, hookID, ip, now, over)
+}
 
+// findHook looks up the enabled instance owning the webhook with this hash
+// and returns a copy of it.
+func (m *Manager) findHook(plugin, hash string) (snap Instance, hookID string, found bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	cur := m.findLocked(snap.ID)
+	var in *Instance
+	// Every stored hash is compared in constant time, none is skipped.
+	for _, cand := range m.list {
+		for i := range cand.Webhooks {
+			if subtle.ConstantTimeCompare([]byte(cand.Webhooks[i].Hash), []byte(hash)) == 1 && cand.Plugin == plugin {
+				in, hookID = cand, cand.Webhooks[i].ID
+			}
+		}
+	}
+	if in == nil || !in.Enabled {
+		return Instance{}, "", false
+	}
+	return *in, hookID, true
+}
+
+// bodyParams reads the top-level string and number values of a JSON object
+// body; anything else yields nothing.
+func bodyParams(body []byte) map[string]string {
+	given := map[string]string{}
+	if t := strings.TrimSpace(string(body)); !strings.HasPrefix(t, "{") {
+		return given
+	}
+	var raw map[string]json.RawMessage
+	if json.Unmarshal(body, &raw) != nil {
+		return given
+	}
+	for k, v := range raw {
+		var s string
+		if json.Unmarshal(v, &s) == nil {
+			given[k] = s
+		} else if n := strings.TrimSpace(string(v)); n != "" && n[0] >= '0' && n[0] <= '9' {
+			given[k] = n
+		}
+	}
+	return given
+}
+
+// hookParams picks the params the job lists from the call (the query wins
+// over the body). valid is false when one of them is not acceptable.
+func hookParams(job *plugins.JobDef, body []byte, query url.Values) (over map[string]string, valid bool) {
+	over = map[string]string{}
+	if job.Webhook == nil || len(job.Webhook.Params) == 0 {
+		return over, true
+	}
+	given := bodyParams(body)
+	for k, v := range query {
+		if len(v) > 0 {
+			given[k] = v[0]
+		}
+	}
+	for _, name := range job.Webhook.Params {
+		v, has := given[name]
+		if !has {
+			continue
+		}
+		if p := job.Param(name); p == nil || p.CheckValue(v) != nil {
+			return nil, false
+		}
+		over[name] = v
+	}
+	return over, true
+}
+
+// runHook starts the instance for a webhook call and audits it.
+func (m *Manager) runHook(id, hookID, ip string, now time.Time, over map[string]string) HookResult {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	cur := m.findLocked(id)
 	if cur == nil || !cur.Enabled {
 		return HookResult{Status: http.StatusNotFound}
 	}

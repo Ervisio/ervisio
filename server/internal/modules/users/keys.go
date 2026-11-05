@@ -78,20 +78,12 @@ func parseKeyLine(line string) (k authKey, ok bool, err error) {
 	if len(f) < 2 {
 		return k, true, errors.New("a public key looks like \"ssh-ed25519 AAAA… comment\"")
 	}
-	if !keyTypes[f[0]] {
-		return k, true, fmt.Errorf("unsupported key type %q", f[0])
+	fp, err := keyFingerprint(f[0], f[1])
+	if err != nil {
+		return k, true, err
 	}
-	blob, derr := base64.StdEncoding.DecodeString(f[1])
-	if derr != nil || len(blob) < 8 {
-		return k, true, errors.New("the key data is not valid base64")
-	}
-	n := binary.BigEndian.Uint32(blob[:4])
-	if int(n) > len(blob)-4 || string(blob[4:4+n]) != f[0] {
-		return k, true, errors.New("the key data does not match its type")
-	}
-	sum := sha256.Sum256(blob)
 	k.Type = f[0]
-	k.Fingerprint = "SHA256:" + base64.RawStdEncoding.EncodeToString(sum[:])
+	k.Fingerprint = fp
 	k.Key = f[0] + " " + f[1]
 	if len(f) > 2 {
 		// The comment is everything after the key data, spacing preserved.
@@ -99,6 +91,24 @@ func parseKeyLine(line string) (k authKey, ok bool, err error) {
 		k.Comment = strings.TrimSpace(rest[i:])
 	}
 	return k, true, nil
+}
+
+// keyFingerprint checks the key data (base64) against its type and returns
+// its SHA256 fingerprint.
+func keyFingerprint(typ, data string) (string, error) {
+	if !keyTypes[typ] {
+		return "", fmt.Errorf("unsupported key type %q", typ)
+	}
+	blob, derr := base64.StdEncoding.DecodeString(data)
+	if derr != nil || len(blob) < 8 {
+		return "", errors.New("the key data is not valid base64")
+	}
+	n := binary.BigEndian.Uint32(blob[:4])
+	if int(n) > len(blob)-4 || string(blob[4:4+n]) != typ {
+		return "", errors.New("the key data does not match its type")
+	}
+	sum := sha256.Sum256(blob)
+	return "SHA256:" + base64.RawStdEncoding.EncodeToString(sum[:]), nil
 }
 
 // parseAuthorizedKeys returns the valid keys of a file's content. Malformed
@@ -165,14 +175,8 @@ func readKeyFile(path string) (string, error) {
 // point, see asUser).
 func writeKeyFile(path, content string) error {
 	dir := filepath.Dir(path)
-	if fi, err := os.Lstat(dir); errors.Is(err, os.ErrNotExist) {
-		if err := os.Mkdir(dir, 0o700); err != nil {
-			return err
-		}
-	} else if err != nil {
+	if err := ensureSSHDir(dir); err != nil {
 		return err
-	} else if !fi.IsDir() {
-		return fmt.Errorf("%s is not a directory", dir)
 	}
 	tmp, err := os.OpenFile(filepath.Join(dir, ".authorized_keys.tmp"), os.O_WRONLY|os.O_CREATE|os.O_TRUNC|openNoFollow, 0o600)
 	if err != nil {
@@ -185,6 +189,33 @@ func writeKeyFile(path, content string) error {
 			os.Remove(name)
 		}
 	}()
+	if err := fillKeyTemp(tmp, content); err != nil {
+		return err
+	}
+	if err := os.Rename(name, path); err != nil {
+		return err
+	}
+	ok = true
+	return nil
+}
+
+// ensureSSHDir creates dir (0700) when missing and checks it is a directory.
+func ensureSSHDir(dir string) error {
+	fi, err := os.Lstat(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return os.Mkdir(dir, 0o700)
+	}
+	if err != nil {
+		return err
+	}
+	if !fi.IsDir() {
+		return fmt.Errorf("%s is not a directory", dir)
+	}
+	return nil
+}
+
+// fillKeyTemp writes content to tmp, sets mode 0600 and closes it.
+func fillKeyTemp(tmp *os.File, content string) error {
 	if _, err := tmp.WriteString(content); err != nil {
 		tmp.Close()
 		return err
@@ -193,12 +224,5 @@ func writeKeyFile(path, content string) error {
 		tmp.Close()
 		return err
 	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(name, path); err != nil {
-		return err
-	}
-	ok = true
-	return nil
+	return tmp.Close()
 }

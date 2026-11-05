@@ -223,8 +223,14 @@ func listDir(path string, showHidden bool) ([]Entry, bool, error) {
 		return nil, false, err
 	}
 	defer d.Close()
-	out := []Entry{}
-	truncated := false
+	out, truncated := readEntries(d, path, showHidden)
+	sortEntries(out)
+	return out, truncated, nil
+}
+
+// readEntries reads the open directory d in batches, up to maxListEntries.
+func readEntries(d *os.File, path string, showHidden bool) (out []Entry, truncated bool) {
+	out = []Entry{}
 	for {
 		infos, err := d.Readdir(512)
 		for _, fi := range infos {
@@ -238,9 +244,13 @@ func listDir(path string, showHidden bool) ([]Entry, bool, error) {
 			out = append(out, makeEntry(path, fi))
 		}
 		if err != nil || truncated {
-			break
+			return out, truncated
 		}
 	}
+}
+
+// sortEntries puts folders first, then orders by name ignoring case.
+func sortEntries(out []Entry) {
 	sort.SliceStable(out, func(i, j int) bool {
 		di, dj := isDirLike(out[i]), isDirLike(out[j])
 		if di != dj {
@@ -248,7 +258,6 @@ func listDir(path string, showHidden bool) ([]Entry, bool, error) {
 		}
 		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
 	})
-	return out, truncated, nil
 }
 
 func isDirLike(e Entry) bool {
