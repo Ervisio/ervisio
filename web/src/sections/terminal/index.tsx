@@ -8,13 +8,9 @@ import {
   type SetStateAction,
 } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ApiError, call, usePrefs, useSession } from '../../api';
+import { call, usePrefs, useSession } from '../../api';
 import { useI18n, useT, type TFn } from '../../i18n';
-import { relativeTime } from '../../lib/format';
 import {
-  Button,
-  ConfirmDialog,
-  EmptyState,
   Icon,
   Page,
   Sheet,
@@ -24,55 +20,28 @@ import {
   useMediaQuery,
   type IconName,
 } from '../../ui';
-import { useFocusMode, usePaletteActions } from '../../sections';
-import { HostDialog, RenameDialog, SnippetDialog } from './Dialogs';
+import { useFocusMode } from '../../sections';
 import ExtraKeys from './ExtraKeys';
-import Palette, { type PaletteItem } from './Palette';
+import Palette from './Palette';
 import Sidebar from './Sidebar';
-import Snippets, { snippetLook } from './Snippets';
-import TerminalView from './TerminalView';
+import Snippets from './Snippets';
+import { terminalPaletteItems, useTerminalPaletteActions } from './terminalPalette';
+import { errMsg } from './terminalErrors';
+import { TerminalPageDialogs } from './TerminalPageDialogs';
+import { TerminalPaneArea } from './TerminalPanes';
+import type { Host, HistoryItem, SessionInfo, Snippet } from './types';
 import {
-  newId,
-  type Host,
-  type HistoryItem,
-  type Kind,
-  type SessionInfo,
-  type Snippet,
-  type TermHandle,
-} from './types';
+  useTerminalCommands,
+  useTerminalHosts,
+  useTerminalSessionDialogs,
+  useTerminalSnippets,
+} from './useTerminalActions';
+import { useTerminalPanes } from './useTerminalPanes';
 import './terminal.css';
-
-const LAYOUT_KEY = 'ervisio.term.layout';
-type Panes = [string | null, string | null];
-interface Layout {
-  open: string[];
-  panes: Panes;
-  split: boolean;
-}
-
-function loadLayout(): Layout {
-  try {
-    const l = JSON.parse(localStorage.getItem(LAYOUT_KEY) || 'null');
-    if (l && Array.isArray(l.open) && Array.isArray(l.panes))
-      return {
-        open: l.open.filter((x: unknown) => typeof x === 'string'),
-        panes: [l.panes[0] ?? null, l.panes[1] ?? null],
-        split: !!l.split,
-      };
-  } catch {
-    /* ignore */
-  }
-  return { open: [], panes: [null, null], split: false };
-}
-
-const errMsg = (e: unknown) => (e instanceof ApiError ? e.message : String(e));
-let bootstrapping = false;
 
 const REFRESH_MS = 4000;
 const DEFAULT_FONT_SIZE = 14;
-const HISTORY_LIMIT = 50;
 const LINK_CMD_MAX = 1000;
-const NEW_SESSION_SIZE = { cols: 100, rows: 30 };
 const KIND_DOT = 'terminal-dot terminal-k-';
 
 type SetBool = Dispatch<SetStateAction<boolean>>;
@@ -198,64 +167,6 @@ function useTerminalSessions(adminOk: boolean) {
   return { sessions, loaded, loadError, lastInfo, refresh };
 }
 
-// Which sessions are open here and what the two panes show, kept in localStorage.
-function useStoredLayout() {
-  const [layout, setLayout] = useState<Layout>(loadLayout);
-  const patch = useCallback((fn: (l: Layout) => Layout) => setLayout((l) => fn(l)), []);
-  useEffect(() => {
-    try {
-      localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout));
-    } catch {
-      /* ignore */
-    }
-  }, [layout]);
-  return { layout, patch };
-}
-
-const withOpen = (open: string[], id: string) => (open.includes(id) ? open : [...open, id]);
-
-function withoutPane(l: Layout, idx: 0 | 1): Layout {
-  const id = l.panes[idx];
-  const panes: Panes = [...l.panes];
-  panes[idx] = null;
-  if (!panes[0] && panes[1]) {
-    panes[0] = panes[1];
-    panes[1] = null;
-  }
-  return { ...l, panes, open: id && !panes.includes(id) ? l.open.filter((x) => x !== id) : l.open };
-}
-
-function withoutSession(l: Layout, id: string): Layout {
-  let panes: Panes = [l.panes[0] === id ? null : l.panes[0], l.panes[1] === id ? null : l.panes[1]];
-  if (!panes[0] && panes[1]) panes = [panes[1], null];
-  return { ...l, panes, open: l.open.filter((x) => x !== id) };
-}
-
-function withSplitToggled(l: Layout, byId: Map<string, SessionInfo>): Layout {
-  if (l.split) return { ...l, split: false };
-  let second = l.panes[1];
-  if (!second || second === l.panes[0])
-    second = l.open.find((id) => id !== l.panes[0] && byId.has(id)) ?? null;
-  return { ...l, split: true, panes: [l.panes[0], second] };
-}
-
-// Drop panes whose session is gone; the first pane falls back to an open session, then the newest one.
-function bootPanes(
-  panes: Panes,
-  open: string[],
-  byId: Map<string, SessionInfo>,
-  sessions: SessionInfo[],
-): Panes {
-  const keep = (id: string | null) => (id && byId.has(id) ? id : null);
-  const second = keep(panes[1]);
-  const first =
-    keep(panes[0]) ??
-    second ??
-    open.find((id) => byId.has(id)) ??
-    (sessions.length ? sessions[sessions.length - 1].id : null);
-  return [first, second];
-}
-
 // ?cmd=… (links from other sections, e.g. Software's AUR "Open in terminal"):
 // a new session with the command typed at the prompt, not run, so the user reviews it first.
 function useCommandLink(
@@ -325,43 +236,10 @@ function useKeyboardSafeHeight(mobile: boolean) {
   return rootRef;
 }
 
-function kindLook(kind: Kind): { icon: IconName; hue: string } {
-  if (kind === 'root') return { icon: 'lock', hue: 'svc' };
-  if (kind === 'ssh') return { icon: 'server', hue: 'ov' };
-  return { icon: 'terminal', hue: 'term' };
-}
-
 function sudoLeftLabel(t: TFn, forever: boolean, left: number) {
   if (forever) return t('sudoForever');
   if (left >= 60) return t('sudoMin', { count: Math.ceil(left / 60) });
   return t('sudoSec', { count: left });
-}
-
-function prettyTitle(s: SessionInfo | undefined, home: string | undefined) {
-  const raw = s?.title || s?.name || '';
-  return home && home !== '/' ? raw.split(home).join('~') : raw;
-}
-
-function EmptyPane({
-  isActive,
-  onActivate,
-  onNew,
-}: {
-  isActive: boolean;
-  onActivate(): void;
-  onNew(): void;
-}) {
-  const t = useT('terminal');
-  return (
-    <div className="terminal-pane" onMouseDown={onActivate}>
-      <div className={`terminal-pane-h${isActive ? ' act' : ''}`}>{t('emptyPane')}</div>
-      <div className="terminal-pane-empty">
-        <Button icon="plus" onClick={onNew}>
-          {t('newSession')}
-        </Button>
-      </div>
-    </div>
-  );
 }
 
 function MobileStrip({
@@ -511,236 +389,41 @@ function Toolbar(p: ToolbarProps) {
   );
 }
 
+function terminalRootClass(focus: boolean, splitShown: boolean, mobile: boolean) {
+  return [
+    'terminal-root',
+    focus && 'terminal-focus',
+    splitShown && 'terminal-split',
+    mobile && 'terminal-mobile',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
 export default function TerminalPage() {
   const t = useT('terminal');
   const { lang } = useI18n();
   const { session, isUnlocked, unlockLeft, unlockForever, lock } = useSession();
   const mobile = useIsMobile();
   const compact = useMediaQuery('(max-width: 1100px)');
-  const {
-    ready,
-    opts,
-    hosts,
-    history,
-    save,
-    snippets,
-    fontSize,
-    copyOnSelect,
-    themeMode,
-    showSnippets,
-  } = useTerminalPrefs(t, session?.os === 'windows');
+  const prefs = useTerminalPrefs(t, session?.os === 'windows');
+  const { hosts, history, save, snippets, showSnippets } = prefs;
 
   const adminOk = isUnlocked && unlockLeft > 2 && !session?.isRoot;
   const { sessions, loaded, loadError, lastInfo, refresh } = useTerminalSessions(adminOk);
-
-  const { layout, patch } = useStoredLayout();
-  const { open, panes, split } = layout;
-  const [active, setActive] = useState<0 | 1>(0);
+  const panesCtl = useTerminalPanes({ t, mobile, sessions, loaded, loadError, lastInfo, refresh });
+  const { splitShown, activePane, setActive, visible, activeId, showSession, create } = panesCtl;
   const [focus, setFocus] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [sheet, setSheet] = useState(false);
   const [ctrl, setCtrl] = useState(false);
-  const handles = useRef<[TermHandle | null, TermHandle | null]>([null, null]);
 
-  const splitShown = split && !mobile;
-  const activePane: 0 | 1 = splitShown ? active : 0;
-  const byId = useMemo(() => new Map(sessions.map((s) => [s.id, s])), [sessions]);
-  const infoOf = (id: string | null) =>
-    id ? (byId.get(id) ?? lastInfo.current.get(id)) : undefined;
-  const openSessions = open.map((id) => byId.get(id)).filter((s): s is SessionInfo => !!s);
-  const detached = sessions.filter((s) => !open.includes(s.id));
-  const visible: Panes = splitShown ? panes : [panes[0], null];
-  const activeId = visible[active] ?? visible[0];
-
-  const showSession = useCallback(
-    (id: string) =>
-      patch((l) => {
-        const open = withOpen(l.open, id);
-        const splitNow = l.split && !mobile;
-        const shown = splitNow ? l.panes : [l.panes[0], null];
-        const at = shown.indexOf(id);
-        if (at >= 0) {
-          setActive(at as 0 | 1);
-          return { ...l, open };
-        }
-        const panes: Panes = [...l.panes];
-        panes[splitNow ? active : 0] = id;
-        return { ...l, open, panes };
-      }),
-    [patch, active, mobile],
-  );
-
-  // First load: show a surviving or newest session, or start one.
-  const didBoot = useRef(false);
-  useEffect(() => {
-    if (!loaded || loadError || didBoot.current) return;
-    didBoot.current = true;
-    const [first, second] = bootPanes(panes, open, byId, sessions);
-    if (first) {
-      patch((l) => ({
-        ...l,
-        panes: [first, second && second !== first ? second : null],
-        open: withOpen(l.open, first),
-      }));
-    } else if (!bootstrapping && !new URLSearchParams(window.location.search).has('cmd')) {
-      // (with ?cmd= the link handler below starts the session)
-      bootstrapping = true;
-      void create({}).finally(() => (bootstrapping = false));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, loadError]);
-
-  // Forget open ids whose session ended (panes keep showing their "ended" bar until closed).
-  useEffect(() => {
-    if (!loaded || loadError) return;
-    const gone = open.filter((id) => !byId.has(id));
-    if (gone.length) patch((l) => ({ ...l, open: l.open.filter((id) => byId.has(id)) }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessions, loaded, loadError]);
-
-  const closePane = useCallback((idx: 0 | 1) => patch((l) => withoutPane(l, idx)), [patch]);
-  const detach = useCallback((id: string) => patch((l) => withoutSession(l, id)), [patch]);
-  const toggleSplit = () => patch((l) => withSplitToggled(l, byId));
-
-  const create = useCallback(
-    async (p: Record<string, unknown>, admin = false) => {
-      try {
-        const r = await call<{ id: string }>(
-          'terminal.create',
-          { ...NEW_SESSION_SIZE, ...p },
-          { admin },
-        );
-        await refresh();
-        showSession(r.id);
-        return r.id;
-      } catch (e) {
-        const forbidden = e instanceof ApiError && e.code === 'forbidden';
-        toast.err(forbidden ? errMsg(e) : t('createFailed', { error: errMsg(e) }));
-        return null;
-      }
-    },
-    [refresh, showSession, t],
-  );
-
-  const [renaming, setRenaming] = useState<SessionInfo | null>(null);
-  const [killing, setKilling] = useState<SessionInfo | null>(null);
-  const [hostDlg, setHostDlg] = useState<{ mode: 'connect' | 'edit'; host: Host | null } | null>(
-    null,
-  );
-  const [snipDlg, setSnipDlg] = useState<{ snippet?: Snippet; command?: string } | null>(null);
-
-  const doRename = async (name: string) => {
-    const s = renaming;
-    setRenaming(null);
-    if (!s) return;
-    try {
-      await call('terminal.rename', { id: s.id, name }, { admin: s.admin });
-      toast.ok(t('renamed', { name }));
-      void refresh();
-    } catch (e) {
-      toast.err(t('renameFailed', { error: errMsg(e) }));
-    }
-  };
-  const doKill = async () => {
-    const s = killing;
-    setKilling(null);
-    if (!s) return;
-    try {
-      await call('terminal.kill', { id: s.id }, { admin: s.admin });
-      toast.ok(t('killed', { name: s.name }));
-    } catch (e) {
-      if (!(e instanceof ApiError && e.code === 'not_found'))
-        toast.err(t('killFailed', { error: errMsg(e) }));
-    }
-    void refresh();
-  };
-
-  const connectSsh = (h: Omit<Host, 'id'>) =>
-    void create({ kind: 'ssh', host: h.host, user: h.user, port: h.port, name: h.name });
-  const connectHost = (h: Host) => {
-    const existing = sessions.find((s) => s.kind === 'ssh' && s.name === h.name);
-    if (existing) return showSession(existing.id);
-    connectSsh(h);
-  };
-  const submitHost = (h: Omit<Host, 'id'> & { id?: string }, saveIt: boolean) => {
-    const mode = hostDlg?.mode;
-    setHostDlg(null);
-    if (saveIt || mode === 'edit') {
-      const entry: Host = {
-        id: h.id ?? newId(),
-        name: h.name,
-        host: h.host,
-        user: h.user,
-        port: h.port,
-      };
-      const next = hosts.some((x) => x.id === entry.id)
-        ? hosts.map((x) => (x.id === entry.id ? entry : x))
-        : [...hosts, entry];
-      void save('terminal.hosts', next);
-      if (mode === 'edit') return toast.ok(t('hostSaved', { name: entry.name }));
-    }
-    connectSsh(h);
-  };
-  const deleteHost = (h: Host) => {
-    void save(
-      'terminal.hosts',
-      hosts.filter((x) => x.id !== h.id),
-    );
-    toast.undo(
-      t('hostDeleted', { name: h.name }),
-      t('undo'),
-      () => void save('terminal.hosts', hosts),
-    );
-  };
-
+  const sessionDialogs = useTerminalSessionDialogs(t, refresh);
+  const hostsCtl = useTerminalHosts({ t, hosts, save, sessions, create, showSession });
+  const snippetsCtl = useTerminalSnippets({ t, snippets, opts: prefs.opts, save });
+  const { setSnipDlg, setShowSnippets } = snippetsCtl;
   const { pendingInput, setPendingInput } = useCommandLink(loaded, loadError, create);
-
-  const target = (): TermHandle | null => handles.current[activePane] ?? handles.current[0];
-  const remember = (cmd: string) => {
-    const c = cmd.trim();
-    if (!c) return;
-    void save(
-      'terminal.history',
-      [{ cmd: c, at: Date.now() }, ...history.filter((h) => h.cmd !== c)].slice(0, HISTORY_LIMIT),
-    );
-  };
-  const runCmd = (cmd: string) => {
-    const h = target();
-    if (!h) return toast.info(t('noSession'));
-    h.run(cmd);
-    remember(cmd);
-  };
-  const pasteCmd = (cmd: string) => {
-    const h = target();
-    if (!h) return toast.info(t('noSession'));
-    h.paste(cmd);
-  };
-
-  const saveSnippet = (title: string, command: string) => {
-    const edit = snipDlg?.snippet;
-    setSnipDlg(null);
-    const next =
-      edit && snippets.some((s) => s.id === edit.id)
-        ? snippets.map((s) => (s.id === edit.id ? { ...s, title, command } : s))
-        : [...snippets, { id: newId(), title, command }];
-    void save('terminal.snippets', next);
-    toast.ok(t('snippet.saved', { name: title }));
-  };
-  const deleteSnippet = (s: Snippet) => {
-    void save(
-      'terminal.snippets',
-      snippets.filter((x) => x.id !== s.id),
-    );
-    toast.undo(
-      t('snippet.deleted', { name: s.title }),
-      t('undo'),
-      () => void save('terminal.snippets', snippets),
-    );
-  };
-  const setShowSnippets = (v: boolean) => {
-    void save('terminal', { ...opts, snippets: v });
-    void save('terminal.showSnippets', v);
-  };
+  const { handles, target, runCmd, pasteCmd } = useTerminalCommands(t, activePane, history, save);
 
   usePaletteShortcut(setPaletteOpen);
   useFocusMode('terminal', focus);
@@ -749,133 +432,31 @@ export default function TerminalPage() {
 
   const newLocal = () => void create({});
   const newRoot = () => void create({}, true);
-  const newSsh = () => setHostDlg({ mode: 'connect', host: null });
+  const newSsh = () => hostsCtl.setHostDlg({ mode: 'connect', host: null });
   const toggleFocus = () => setFocus((f) => !f);
+  useTerminalPaletteActions(t, { newLocal, newRoot, toggleFocus });
 
-  usePaletteActions('terminal', [
-    {
-      id: 'terminal.new',
-      title: t('newSession'),
-      hint: t('title'),
-      icon: 'plus',
-      hue: 'term',
-      keywords: ['shell', 'terminal'],
-      run: newLocal,
-    },
-    {
-      id: 'terminal.root',
-      title: t('newRoot'),
-      hint: t('title'),
-      icon: 'lock',
-      hue: 'term',
-      keywords: ['sudo', 'admin'],
-      run: newRoot,
-    },
-    {
-      id: 'terminal.focus',
-      title: t('focusMode'),
-      hint: t('title'),
-      icon: 'overview',
-      hue: 'term',
-      run: toggleFocus,
-    },
-  ]);
-
-  const paletteItems: PaletteItem[] = [
-    ...snippets.map((s) => {
-      const look = snippetLook(s);
-      return {
-        id: 'sn' + s.id,
-        group: 'snippets' as const,
-        title: s.title,
-        sub: s.command,
-        icon: look.icon,
-        hue: look.hue,
-        run: () => runCmd(s.command),
-        paste: () => pasteCmd(s.command),
-      };
-    }),
-    ...sessions.map((s) => ({
-      id: 'se' + s.id,
-      group: 'sessions' as const,
-      title: t('palette.openName', { name: s.name }),
-      sub: t('palette.switch'),
-      ...kindLook(s.kind),
-      keywords: s.kind,
-      run: () => showSession(s.id),
-    })),
-    ...history.map((h, i) => ({
-      id: 'hi' + i,
-      group: 'history' as const,
-      title: h.cmd,
-      sub: relativeTime(h.at, lang),
-      icon: 'clock' as const,
-      hue: 'sw',
-      run: () => runCmd(h.cmd),
-      paste: () => pasteCmd(h.cmd),
-    })),
-    {
-      id: 'a-new',
-      group: 'actions' as const,
-      title: t('newSession'),
-      icon: 'plus' as const,
-      hue: 'term',
-      run: newLocal,
-    },
-    {
-      id: 'a-root',
-      group: 'actions' as const,
-      title: t('newRoot'),
-      icon: 'lock' as const,
-      hue: 'svc',
-      keywords: 'sudo admin',
-      run: newRoot,
-    },
-    {
-      id: 'a-ssh',
-      group: 'actions' as const,
-      title: t('newSsh'),
-      icon: 'server' as const,
-      hue: 'ov',
-      run: newSsh,
-    },
-    ...(mobile
-      ? []
-      : [
-          {
-            id: 'a-split',
-            group: 'actions' as const,
-            title: split ? t('splitOff') : t('splitOn'),
-            icon: 'columns' as const,
-            hue: 'term',
-            run: toggleSplit,
-          },
-        ]),
-    {
-      id: 'a-focus',
-      group: 'actions' as const,
-      title: focus ? t('focusOff') : t('focusMode'),
-      icon: 'overview' as const,
-      hue: 'term',
-      run: toggleFocus,
-    },
-    {
-      id: 'a-save',
-      group: 'actions' as const,
-      title: t('snippet.add'),
-      icon: 'command' as const,
-      hue: 'term',
-      run: () => setSnipDlg({}),
-    },
-    {
-      id: 'a-chips',
-      group: 'actions' as const,
-      title: showSnippets ? t('hideSnippets') : t('showSnippets'),
-      icon: 'eye' as const,
-      hue: 'term',
-      run: () => setShowSnippets(!showSnippets),
-    },
-  ];
+  const paletteItems = terminalPaletteItems({
+    t,
+    lang,
+    snippets,
+    sessions,
+    history,
+    mobile,
+    split: panesCtl.split,
+    focus,
+    showSnippets,
+    runCmd,
+    pasteCmd,
+    showSession,
+    newLocal,
+    newRoot,
+    newSsh,
+    toggleSplit: panesCtl.toggleSplit,
+    toggleFocus,
+    addSnippet: () => setSnipDlg({}),
+    setShowSnippets,
+  });
 
   const paneOf: Record<string, number> = {};
   if (splitShown) visible.forEach((id, i) => id && (paneOf[id] = i + 1));
@@ -888,8 +469,8 @@ export default function TerminalPage() {
     };
   const sidebar = (
     <Sidebar
-      open={openSessions}
-      detached={detached}
+      open={panesCtl.openSessions}
+      detached={panesCtl.detached}
       hosts={hosts}
       paneOf={paneOf}
       activeId={activeId ?? null}
@@ -898,125 +479,23 @@ export default function TerminalPage() {
       onNewRoot={closeSheetThen(newRoot)}
       onNewSsh={closeSheetThen(newSsh)}
       onOpen={closeSheetThen((s: SessionInfo) => showSession(s.id))}
-      onDetach={(s) => detach(s.id)}
-      onRename={setRenaming}
-      onKill={setKilling}
-      onConnect={closeSheetThen((h: Host) => connectHost(h))}
-      onEditHost={(h) => setHostDlg({ mode: 'edit', host: h })}
-      onDeleteHost={deleteHost}
+      onDetach={(s) => panesCtl.detach(s.id)}
+      onRename={sessionDialogs.setRenaming}
+      onKill={sessionDialogs.setKilling}
+      onConnect={closeSheetThen((h: Host) => hostsCtl.connectHost(h))}
+      onEditHost={(h) => hostsCtl.setHostDlg({ mode: 'edit', host: h })}
+      onDeleteHost={hostsCtl.deleteHost}
     />
   );
 
-  const paneView = (idx: 0 | 1) => {
-    const id = visible[idx];
-    const isActive = activePane === idx;
-    if (!id) {
-      return (
-        <EmptyPane
-          key={`empty${idx}`}
-          isActive={isActive}
-          onActivate={() => setActive(idx)}
-          onNew={() => {
-            setActive(idx);
-            newLocal();
-          }}
-        />
-      );
-    }
-    const info = infoOf(id);
-    return (
-      <div className="terminal-pane" key={id}>
-        <div className={`terminal-pane-h${isActive ? ' act' : ''}`}>
-          <span className="terminal-pane-t">{prettyTitle(info, session?.home)}</span>
-          <span className="sp" />
-          <button
-            type="button"
-            aria-label={t('closePane')}
-            title={t('closePane')}
-            onClick={() => closePane(idx)}
-          >
-            <Icon name="close" />
-          </button>
-        </div>
-        <TerminalView
-          ref={(h) => {
-            handles.current[idx] = h;
-          }}
-          id={id}
-          admin={!!info?.admin}
-          fontSize={fontSize}
-          copyOnSelect={copyOnSelect}
-          themeMode={themeMode}
-          ctrl={ctrl && isActive}
-          onCtrlUsed={() => setCtrl(false)}
-          onActivate={() => setActive(idx)}
-          onEnded={() => void refresh()}
-          onClosePane={() => closePane(idx)}
-          initialInput={pendingInput?.id === id ? pendingInput.text : undefined}
-          onInitialInputUsed={() => setPendingInput(null)}
-        />
-      </div>
-    );
-  };
-
-  const paneArea = () => {
-    if (loadError && !sessions.length) {
-      return (
-        <div className="terminal-center">
-          <EmptyState
-            icon="alert"
-            hue="term"
-            title={t('loadFailed')}
-            text={loadError}
-            action={<Button onClick={() => void refresh()}>{t('retry')}</Button>}
-          />
-        </div>
-      );
-    }
-    if (!visible[0] && !visible[1]) {
-      return (
-        <div className="terminal-center">
-          {loaded && ready ? (
-            <EmptyState
-              icon="terminal"
-              hue="term"
-              title={t('noneTitle')}
-              text={t('noneText')}
-              action={
-                <Button variant="primary" icon="plus" onClick={newLocal}>
-                  {t('newSession')}
-                </Button>
-              }
-            />
-          ) : null}
-        </div>
-      );
-    }
-    return (
-      <div className="terminal-panes">
-        {paneView(0)}
-        {splitShown && paneView(1)}
-      </div>
-    );
-  };
-
-  const rootClass = [
-    'terminal-root',
-    focus && 'terminal-focus',
-    splitShown && 'terminal-split',
-    mobile && 'terminal-mobile',
-  ]
-    .filter(Boolean)
-    .join(' ');
-
   return (
     <Page flush hue="term">
-      <div ref={rootRef} className={rootClass}>
+      <div ref={rootRef} className={terminalRootClass(focus, splitShown, mobile)}>
         {!compact && !focus && sidebar}
         <div className="terminal-body">
           {mobile && (
             <MobileStrip
-              sessions={openSessions}
+              sessions={panesCtl.openSessions}
               activeId={activeId}
               onShow={showSession}
               onNew={newLocal}
@@ -1024,21 +503,45 @@ export default function TerminalPage() {
             />
           )}
           <Toolbar
-            active={infoOf(activeId ?? null)}
+            active={panesCtl.infoOf(activeId ?? null)}
             sudoLeft={isUnlocked ? sudoLeftLabel(t, unlockForever, unlockLeft) : null}
             onLock={() => void lock()}
             showMenu={compact && !mobile}
             onMenu={() => setSheet(true)}
             showSplit={!mobile}
-            split={split}
-            onSplit={toggleSplit}
+            split={panesCtl.split}
+            onSplit={panesCtl.toggleSplit}
             paletteOpen={paletteOpen}
             onPalette={() => setPaletteOpen((o) => !o)}
             focus={focus}
             onFocus={toggleFocus}
           />
 
-          {paneArea()}
+          <TerminalPaneArea
+            loadError={loadError}
+            hasSessions={sessions.length > 0}
+            showNone={loaded && prefs.ready}
+            visible={visible}
+            splitShown={splitShown}
+            activePane={activePane}
+            onRetry={() => void refresh()}
+            pane={{
+              home: session?.home,
+              fontSize: prefs.fontSize,
+              copyOnSelect: prefs.copyOnSelect,
+              themeMode: prefs.themeMode,
+              ctrl,
+              pendingInput,
+              handles,
+              infoOf: panesCtl.infoOf,
+              onCtrlUsed: () => setCtrl(false),
+              onEnded: () => void refresh(),
+              onInitialInputUsed: () => setPendingInput(null),
+              onActivate: setActive,
+              onClosePane: panesCtl.closePane,
+              onNew: newLocal,
+            }}
+          />
 
           {showSnippets && (
             <Snippets
@@ -1046,7 +549,7 @@ export default function TerminalPage() {
               onPaste={(s) => pasteCmd(s.command)}
               onRun={(s) => runCmd(s.command)}
               onEdit={(s) => setSnipDlg({ snippet: s })}
-              onDelete={deleteSnippet}
+              onDelete={snippetsCtl.deleteSnippet}
               onAdd={() => setSnipDlg({})}
             />
           )}
@@ -1071,32 +574,10 @@ export default function TerminalPage() {
       >
         <div className="terminal-sheet">{sidebar}</div>
       </Sheet>
-      <RenameDialog
-        open={!!renaming}
-        name={renaming?.name ?? ''}
-        onClose={() => setRenaming(null)}
-        onSave={doRename}
-      />
-      <ConfirmDialog
-        open={!!killing}
-        onClose={() => setKilling(null)}
-        onConfirm={doKill}
-        title={t('killTitle', { name: killing?.name ?? '' })}
-        description={t('killText')}
-        confirmLabel={t('kill')}
-      />
-      <HostDialog
-        open={!!hostDlg}
-        mode={hostDlg?.mode ?? 'connect'}
-        initial={hostDlg?.host}
-        onClose={() => setHostDlg(null)}
-        onSubmit={submitHost}
-      />
-      <SnippetDialog
-        open={!!snipDlg}
-        initial={snipDlg?.snippet ?? (snipDlg?.command ? { command: snipDlg.command } : undefined)}
-        onClose={() => setSnipDlg(null)}
-        onSave={saveSnippet}
+      <TerminalPageDialogs
+        sessionDialogs={sessionDialogs}
+        hostsCtl={hostsCtl}
+        snippetsCtl={snippetsCtl}
       />
     </Page>
   );
