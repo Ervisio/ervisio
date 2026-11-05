@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ApiError, call, stream, usePrefs, useSession, type StreamHandle } from '../../api';
+import { ApiError, call, stream, usePrefs, useSession, type StreamHandle, errorMessage } from '../../api';
 import { useT, type TFn } from '../../i18n';
 import { usePaletteActions } from '../index';
 import { Badge, Button, Page, Sheet, toast, useIsMobile, useMediaQuery } from '../../ui';
@@ -21,7 +21,6 @@ function toEntry(e: Omit<Entry, 'key'>): Entry {
   return { ...e, key: e.file && !e.line ? `${e.cursor}#${++seq}` : e.cursor };
 }
 
-const message = (e: unknown) => (e instanceof ApiError ? e.message : e instanceof Error ? e.message : String(e));
 
 type LogsCall = <T>(method: string, params: unknown, signal?: AbortSignal) => Promise<T>;
 
@@ -62,7 +61,7 @@ function useLogSources(lcall: LogsCall, watchers: Watcher[], watchersKey: string
       setSrcError(undefined);
       lcall<SourcesResult>('logs.sources', { watchers }, signal)
         .then((r) => !signal?.aborted && setSources(r))
-        .catch((e) => !signal?.aborted && setSrcError(message(e)));
+        .catch((e) => !signal?.aborted && setSrcError(errorMessage(e)));
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [lcall, watchersKey],
@@ -127,7 +126,7 @@ function useLogQuery({ lcall, filter, b, watchers, qkey }: LogQueryOptions) {
       })
       .catch((e) => {
         if (id !== gen.current || ac.signal.aborted) return;
-        setError(message(e));
+        setError(errorMessage(e));
         setLoading(false);
       });
     return () => ac.abort();
@@ -150,7 +149,7 @@ function useLogQuery({ lcall, filter, b, watchers, qkey }: LogQueryOptions) {
       })
       .catch((e) => {
         if (id !== gen.current || ac.signal.aborted) return;
-        setError(message(e));
+        setError(errorMessage(e));
       })
       .finally(() => id === gen.current && setMoreLoading(false));
   }, [next, moreLoading, lcall, baseParams]);

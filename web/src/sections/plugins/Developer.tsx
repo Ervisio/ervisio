@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { call } from '../../api';
+import { call, errorMessage } from '../../api';
 import { pluginLogoUrl } from '../../plugins';
 import { useT } from '../../i18n';
 import { Button, Icon, Input, toast } from '../../ui';
-import { errMsg } from './data';
 import { Tile } from './Parts';
 import type { PluginInfo } from './types';
 
@@ -33,7 +32,7 @@ export function Developer({ plugins, refresh }: { plugins: PluginInfo[]; refresh
       setPath('');
       await refresh(true);
     } catch (e) {
-      setError(errMsg(e));
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }

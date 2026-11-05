@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Badge, Icon, Panel, Skeleton, toast, type Tone } from '../../ui';
+import { Badge, Icon, Panel, Skeleton, type Tone } from '../../ui';
+import { copyToClipboard } from '../../lib/clipboard';
 import { useI18n, useT } from '../../i18n';
 import { entryText, fmtClock, fmtFull, hueFor } from './helpers';
 import type { ContextResult, Entry, Watcher } from './types';
@@ -60,12 +61,7 @@ export function Details({ entry, contextSource, watchers, call_, onClose, onOpen
 
   const copy = async () => {
     if (!entry) return;
-    try {
-      await navigator.clipboard.writeText(entryText(entry));
-      toast.ok(t('details.copied'));
-    } catch {
-      toast.err(t('details.copyFailed'));
-    }
+    await copyToClipboard(entryText(entry), t('details.copied'), t('details.copyFailed'));
   };
 
   const unit = entry?.unit && entry.unit.endsWith('.service') ? entry.unit : '';

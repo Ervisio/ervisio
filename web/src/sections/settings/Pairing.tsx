@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
-import { ApiError, useSession } from '../../api';
+import { useSession, errorMessage } from '../../api';
 import { useT } from '../../i18n';
 import { formatDateTime } from '../../lib/format';
 import { Button, ConfirmDialog, Dialog, IconButton, Input, toast } from '../../ui';
 import { pairTokenCreate, pairingRevoke, type PairToken, type Pairing } from './envs';
 import './envs.css';
 
-const errText = (e: unknown) => (e instanceof ApiError || e instanceof Error ? e.message : String(e));
 
 const when = (iso: string) => {
   const d = new Date(iso);
@@ -80,7 +79,7 @@ function TokenDialog({ defaultUser, onClose }: { defaultUser: string; onClose():
     try {
       setTok(await pairTokenCreate(user.trim() || undefined));
     } catch (e2) {
-      setErr(errText(e2));
+      setErr(errorMessage(e2));
     } finally {
       setBusy(false);
     }

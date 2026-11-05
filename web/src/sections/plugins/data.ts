@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ApiError, call } from '../../api';
+import { call, errorMessage } from '../../api';
 import { usePlugins } from '../../plugins';
 import type { CatalogView, PluginInfo } from './types';
 
@@ -12,7 +12,6 @@ export interface PluginData {
   refresh(reloadLoader?: boolean): Promise<void>;
 }
 
-export const errMsg = (e: unknown) => (e instanceof ApiError ? e.message : e instanceof Error ? e.message : String(e));
 
 export function usePluginData(): PluginData {
   const loader = usePlugins();
@@ -30,7 +29,7 @@ export function usePluginData(): PluginData {
       setState('ready');
       setError('');
     } catch (e) {
-      setError(errMsg(e));
+      setError(errorMessage(e));
       setState('error');
     }
     try {

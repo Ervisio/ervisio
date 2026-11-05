@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ApiError, apiUrl, call } from '../../api';
+import { apiUrl, call, errorMessage } from '../../api';
 import { useT } from '../../i18n';
 import { formatBytes, formatDateTime } from '../../lib/format';
 import type { AuditEntry } from '../../plugins/types';
@@ -61,7 +61,7 @@ export function ActivityLog({ canSeeAll, canUnlock }: { canSeeAll: boolean; canU
       setNext(r.next ?? '');
       setEnabled(r.enabled !== false);
     } catch (e) {
-      if (my === seq.current) setError(e instanceof ApiError || e instanceof Error ? e.message : String(e));
+      if (my === seq.current) setError(errorMessage(e));
     } finally {
       if (my === seq.current) setLoading(false);
     }

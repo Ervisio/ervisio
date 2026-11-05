@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ApiError } from '../../api';
+import { errorMessage } from '../../api';
 import { useT } from '../../i18n';
 import { formatDate } from '../../lib/format';
 import { Badge, ConfirmDialog, IconButton, Skeleton, toast } from '../../ui';
@@ -17,7 +17,7 @@ export function NetworkHostsBlock({ disabled }: { disabled?: boolean }) {
       setList((await hostsList()).approved ?? []);
       setFailed('');
     } catch (e) {
-      setFailed(e instanceof ApiError || e instanceof Error ? e.message : String(e));
+      setFailed(errorMessage(e));
     }
   }, []);
   useEffect(() => {

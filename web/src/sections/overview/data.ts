@@ -1,5 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react';
-import { call, stream } from '../../api';
+import { call, stream, errorMessage } from '../../api';
 import type { StreamHandle } from '../../api';
 import { onRefreshNow, useRefreshInterval } from '../../lib/refresh';
 
@@ -193,7 +193,7 @@ export async function refreshAlerts() {
     const r = await call<AlertItem[]>('overview.alerts');
     alertSnap = { alerts: Array.isArray(r) ? r : [], error: '', at: Date.now() };
   } catch (e) {
-    alertSnap = { ...alertSnap, error: e instanceof Error ? e.message : String(e), at: Date.now() };
+    alertSnap = { ...alertSnap, error: errorMessage(e), at: Date.now() };
   } finally {
     alertBusy = false;
     alertSubs.forEach((s) => s());

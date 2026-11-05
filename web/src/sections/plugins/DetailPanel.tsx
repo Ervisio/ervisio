@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { call } from '../../api';
+import { call, errorMessage } from '../../api';
 import { useT } from '../../i18n';
 import { Badge, Button, ConfirmDialog, Dialog, Icon, Panel, toast } from '../../ui';
-import { errMsg } from './data';
 import { CapList, H4, hueOf, PlatformIcons, WhoCanUse } from './Parts';
 import type { PluginInfo } from './types';
 
@@ -34,7 +33,7 @@ export function DetailPanel({ p, onClose, onToggle, onUpdate, refresh, busy }: P
       onClose();
       await refresh(true);
     } catch (e) {
-      toast.err(t('removeFailed', { name: p.name }), errMsg(e));
+      toast.err(t('removeFailed', { name: p.name }), errorMessage(e));
     } finally {
       setWorking(false);
     }
@@ -47,7 +46,7 @@ export function DetailPanel({ p, onClose, onToggle, onUpdate, refresh, busy }: P
       onClose();
       await refresh(true);
     } catch (e) {
-      toast.err(t('removeFailed', { name: p.name }), errMsg(e));
+      toast.err(t('removeFailed', { name: p.name }), errorMessage(e));
     } finally {
       setWorking(false);
     }

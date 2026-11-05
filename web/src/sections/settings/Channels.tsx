@@ -1,10 +1,11 @@
 import { useState } from 'react';
+import { errorMessage } from '../../api';
 import { Name } from '../../brand';
 import { useT } from '../../i18n';
 import { formatDateTime } from '../../lib/format';
 import { Badge, Button, Checkbox, ConfirmDialog, Dialog, Icon, IconButton, Input, Select, Switch, Textarea, toast } from '../../ui';
 import { deleteChannel, listChannels, saveChannel, testChannel, type Channel, type ChannelEvent, type ChannelInput, type ChannelType } from './jobsApi';
-import { LockedPanel, useAdminLoad } from './useAdminLoad';
+import { adminGate, useAdminLoad } from './useAdminLoad';
 
 const TYPES: ChannelType[] = ['email', 'telegram', 'webhook', 'ntfy', 'gotify'];
 const EVENTS: ChannelEvent[] = ['alerts', 'updates', 'plugins', 'jobs'];
@@ -64,8 +65,8 @@ export function ChannelsBlock() {
   const [removing, setRemoving] = useState<Channel | null>(null);
   const [testing, setTesting] = useState('');
 
-  if (state === 'locked') return <LockedPanel title={t('channels.lockedTitle')} text={t('channels.lockedText')} onUnlocked={() => void reload()} />;
-  if (state === 'failed') return <div className="st-warn" role="alert"><Icon name="alert" /><div>{error}</div></div>;
+  const gate = adminGate(state, error, { title: t('channels.lockedTitle'), text: t('channels.lockedText') }, () => void reload());
+  if (gate) return gate;
   const channels = data?.channels ?? [];
 
   const test = async (c: Channel) => {
@@ -178,7 +179,7 @@ function ChannelDialog({ draft, existing, onClose, onSaved }: { draft: Draft; ex
         toast.ok(t('channels.testOk', { name: d.name || t(`channels.types.${d.type}`) }));
       }
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(errorMessage(e));
     } finally {
       setBusy('');
     }

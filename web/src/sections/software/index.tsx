@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { errorMessage } from '../../api';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast, Button, EmptyState, Page, Tabs, type TabItem } from '../../ui';
 import { useI18n, useT } from '../../i18n';
@@ -83,7 +84,7 @@ export default function SoftwarePage() {
       if (warnings.length) toast.info(t('check.warning'), warnings[0]);
       else toast.ok(t('check.done'));
     } catch (e) {
-      toast.err(t('check.failed'), e instanceof Error ? e.message : String(e));
+      toast.err(t('check.failed'), errorMessage(e));
     }
   };
 

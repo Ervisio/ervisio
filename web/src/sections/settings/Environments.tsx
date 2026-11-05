@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ApiError } from '../../api';
+import { errorMessage } from '../../api';
 import { useT } from '../../i18n';
 import { Badge, Button, ConfirmDialog, Dialog, IconButton, Input, Segmented, Select, Skeleton, Textarea, toast } from '../../ui';
 import { NameList } from './NameList';
@@ -9,7 +9,6 @@ import {
 } from './envs';
 import './envs.css';
 
-const errText = (e: unknown) => (e instanceof ApiError || e instanceof Error ? e.message : String(e));
 
 /** Settings > Environments: remote Docker hosts that plugins can target. Admin only. */
 export function EnvironmentsBlock({ disabled, onData }: { disabled?: boolean; onData?(d: EnvList | null): void }) {
@@ -29,7 +28,7 @@ export function EnvironmentsBlock({ disabled, onData }: { disabled?: boolean; on
       setFailed('');
       onDataRef.current?.(d);
     } catch (e) {
-      setFailed(errText(e));
+      setFailed(errorMessage(e));
     }
   }, []);
   useEffect(() => {
@@ -46,7 +45,7 @@ export function EnvironmentsBlock({ disabled, onData }: { disabled?: boolean; on
       toast[st.reachable ? 'ok' : 'err'](st.reachable ? t('test.ok', { name: env.name, ms: st.latencyMs }) : t('test.failed', { name: env.name }), st.error);
       await load();
     } catch (e) {
-      toast.err(t('test.failed', { name: env.name }), errText(e));
+      toast.err(t('test.failed', { name: env.name }), errorMessage(e));
     } finally {
       setTesting(null);
     }
@@ -209,7 +208,7 @@ function EnvWizard({ env, onClose, onDone }: { env?: EnvView; onClose(): void; o
       setProbe(r);
       set({ fingerprint: r.fingerprint, hostKey: r.hostKey ?? '', confirmed: false });
     } catch (e) {
-      setErr(errText(e));
+      setErr(errorMessage(e));
     } finally {
       setProbing(false);
     }
@@ -243,7 +242,7 @@ function EnvWizard({ env, onClose, onDone }: { env?: EnvView; onClose(): void; o
       else toast.ok(t(editing ? 'save.updated' : 'save.added', { name: v.name }));
       onDone();
     } catch (e2) {
-      setErr(errText(e2));
+      setErr(errorMessage(e2));
     } finally {
       setBusy(false);
     }

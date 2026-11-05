@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { call, ApiError } from '../../api';
+import { call, errorMessage } from '../../api';
 import { useT, useI18n } from '../../i18n';
 import { Button, Checkbox, ConfirmDialog, Dialog, EmptyState, Icon, IconButton, Input, Panel, Select, Skeleton, Switch, Tabs, Textarea, toast } from '../../ui';
 import { relativeTime } from '../../lib/format';
@@ -10,7 +10,6 @@ import { ADMIN_GROUPS, COMMON_GROUPS } from './util';
 
 type Tab = 'info' | 'groups' | 'keys' | 'sess';
 
-const msg = (e: unknown) => (e instanceof ApiError || e instanceof Error ? e.message : String(e));
 
 export function UserPanel({ user, data, groups, self, onClose, reload }: {
   user: UserInfo | null;
@@ -35,7 +34,7 @@ export function UserPanel({ user, data, groups, self, onClose, reload }: {
       toast.ok(ok);
       await reload();
     } catch (e) {
-      toast.err(t('errors.failed'), msg(e));
+      toast.err(t('errors.failed'), errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -199,7 +198,7 @@ function GroupsTab({ user, groups, run }: { user: UserInfo; groups: GroupInfo[];
       setNewName('');
       await run(async () => undefined, t('groups.created', { group: newName }));
     } catch (e) {
-      setErr(msg(e));
+      setErr(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -258,7 +257,7 @@ function KeysTab({ user, self }: { user: UserInfo; self: string }) {
       setKeys(await call<SshKey[]>('users.sshKeys', { name: user.name }, { admin }));
       setError('');
     } catch (e) {
-      setError(msg(e));
+      setError(errorMessage(e));
       setKeys([]);
     }
   }, [user.name, admin]);
@@ -274,7 +273,7 @@ function KeysTab({ user, self }: { user: UserInfo; self: string }) {
       setAdding(false);
       await load();
     } catch (e) {
-      setAddErr(msg(e));
+      setAddErr(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -344,7 +343,7 @@ function SessionsTab({ user }: { user: UserInfo }) {
       setList(await call<SessionInfo[]>('users.sessions', { name: user.name }));
       setError('');
     } catch (e) {
-      setError(msg(e));
+      setError(errorMessage(e));
       setList([]);
     }
   }, [user.name]);
@@ -356,7 +355,7 @@ function SessionsTab({ user }: { user: UserInfo }) {
       toast.ok(t('sessions.ended'));
       await load();
     } catch (e) {
-      toast.err(t('errors.failed'), msg(e));
+      toast.err(t('errors.failed'), errorMessage(e));
     }
   };
 
@@ -399,7 +398,7 @@ function ResetDialog({ open, onClose, name }: { open: boolean; onClose(): void; 
       toast.ok(t('reset.done', { name }));
       onClose();
     } catch (e) {
-      setErr(msg(e));
+      setErr(errorMessage(e));
     } finally {
       setBusy(false);
     }

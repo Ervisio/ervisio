@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { call, ApiError } from '../../api';
+import { call, errorMessage } from '../../api';
 import { useT } from '../../i18n';
 import { Button, Checkbox, Chip, Dialog, Icon, Input, Select, Switch, toast } from '../../ui';
 import type { GroupInfo, UserList } from './types';
@@ -63,7 +63,7 @@ export function CreateDialog({ open, onClose, data, groups, onCreated }: {
       reset();
       onCreated(name);
     } catch (x) {
-      setErr(x instanceof ApiError || x instanceof Error ? x.message : String(x));
+      setErr(errorMessage(x));
     } finally {
       setBusy(false);
     }

@@ -23,6 +23,9 @@ export class ApiError extends Error {
   }
 }
 
+/** Text of any thrown value: the message of an Error (ApiError included), else its string form. */
+export const errorMessage = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
 export interface CallOptions {
   /** Run on the root bridge (needs unlock). */
   admin?: boolean;

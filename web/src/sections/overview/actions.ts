@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { ApiError, call } from '../../api';
+import { ApiError, call, errorMessage } from '../../api';
 import type { TFn } from '../../i18n';
 import { toast } from '../../ui';
 import type { DashAction } from './model';
@@ -75,7 +75,7 @@ export async function runAction(a: DashAction, t: TFn, onShow: (v: OutputView) =
     }
   } catch (e) {
     if (e instanceof ApiError && e.code === 'cancelled') return;
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = errorMessage(e);
     const view: OutputView = { ...base, error: msg };
     toast.show({ title: t('action.couldNotRun', { name: a.label }), detail: msg, tone: 'err', action: { label: t('action.showOutput'), onClick: () => onShow(view) } });
   } finally {

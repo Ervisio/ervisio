@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useSession } from '../../api';
+import { useSession, errorMessage } from '../../api';
 import { Name } from '../../brand';
 import { useI18n, useT } from '../../i18n';
 import { formatBytes, formatDate, formatDateTime, relativeTime } from '../../lib/format';
@@ -41,7 +41,7 @@ export function UpdatesBlock({ isAdmin }: { isAdmin: boolean }) {
     try {
       setCheck(await checkUpdates(force));
     } catch (e) {
-      setCheckErr(e instanceof Error ? e.message : String(e));
+      setCheckErr(errorMessage(e));
     } finally {
       setChecking(false);
     }

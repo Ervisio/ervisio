@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { call } from '../../api';
+import { call, errorMessage } from '../../api';
 import { useT } from '../../i18n';
 import { Button, EmptyState, Input, Page, Skeleton, Tabs, toast, useIsMobile } from '../../ui';
 import { useRailBadge } from '../index';
 import { Browse } from './Browse';
 import { MovedCard, PluginCard } from './Cards';
 import { ConsentDialog } from './ConsentDialog';
-import { errMsg, usePluginData, type PluginData } from './data';
+import { usePluginData, type PluginData } from './data';
 import { DetailPanel } from './DetailPanel';
 import { Developer } from './Developer';
 import { Security } from './Security';
@@ -70,7 +70,7 @@ function usePluginActions({ catalog, refresh, setSel }: { catalog: PluginData['c
       toast.ok(t(on ? 'enabled' : 'disabled', { name: p.name }));
       await refresh(true);
     } catch (e) {
-      toast.err(t('toggleFailed', { name: p.name }), errMsg(e));
+      toast.err(t('toggleFailed', { name: p.name }), errorMessage(e));
     } finally {
       setBusyId('');
     }
@@ -89,7 +89,7 @@ function usePluginActions({ catalog, refresh, setSel }: { catalog: PluginData['c
       await refresh(true);
       if (mode === 'install') setSel(entry.id);
     } catch (e) {
-      toast.err(t('installFailed', { name: entry.name }), errMsg(e));
+      toast.err(t('installFailed', { name: entry.name }), errorMessage(e));
     } finally {
       setBusyId('');
     }

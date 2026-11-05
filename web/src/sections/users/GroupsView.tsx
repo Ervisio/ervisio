@@ -1,12 +1,11 @@
 import { useState } from 'react';
-import { call } from '../../api';
+import { call, errorMessage } from '../../api';
 import { useT } from '../../i18n';
 import { Badge, Button, ConfirmDialog, Dialog, EmptyState, Icon, IconButton, Input, Segmented, Select, toast } from '../../ui';
 import { useGroupDesc } from './parts';
 import type { GroupInfo, UserInfo } from './types';
 import { NAME_RE } from './util';
 
-const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 export function GroupsView({ groups, people, filter, reload, newOpen, setNewOpen }: {
   groups: GroupInfo[];
@@ -37,7 +36,7 @@ export function GroupsView({ groups, people, filter, reload, newOpen, setNewOpen
       toast.ok(t(method === 'groups.addMember' ? 'groups.added' : 'groups.removed', { name: user, group }));
       await reload();
     } catch (e) {
-      toast.err(t('errors.failed'), msg(e));
+      toast.err(t('errors.failed'), errorMessage(e));
     }
   };
 
@@ -52,7 +51,7 @@ export function GroupsView({ groups, people, filter, reload, newOpen, setNewOpen
       setShow('all');
       await reload();
     } catch (e) {
-      setErr(msg(e));
+      setErr(errorMessage(e));
     } finally {
       setBusy(false);
     }

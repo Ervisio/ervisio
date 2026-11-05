@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ApiError, call, useSession } from '../api';
+import { ApiError, call, useSession, errorMessage } from '../api';
 import { useT } from '../i18n';
 import { Badge, Button, Dialog } from '../ui';
 import './networkApproval.css';
@@ -72,7 +72,7 @@ export function NetworkApprovalHost({ reload }: { reload(): void }) {
       await call('plugins.network.approve', { plugin: cur.plugin.id, host: cur.host, scheme: cur.scheme }, { admin: true });
       done(true);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(errorMessage(e));
     } finally {
       setBusy(false);
     }

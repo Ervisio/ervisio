@@ -6,7 +6,7 @@ import {
   approveJob, createWebhook, deleteJob, jobHistory, listJobs, regenerateWebhook, revokeWebhook, runJob, setJobEnabled,
   type JobInstance, type NewWebhook, type RunLog, type Schedule,
 } from './jobsApi';
-import { LockedPanel, useAdminLoad } from './useAdminLoad';
+import { adminGate, useAdminLoad } from './useAdminLoad';
 
 const STATUS_TONE: Record<string, Tone> = { ok: 'ok', failed: 'err', timeout: 'err', running: 'info', queued: 'info', cancelled: 'neutral' };
 
@@ -46,8 +46,8 @@ export function PluginJobsBlock() {
   const [busy, setBusy] = useState('');
   const [approving, setApproving] = useState<JobInstance | null>(null);
 
-  if (state === 'locked') return <LockedPanel title={t('jobs.lockedTitle')} text={t('jobs.lockedText')} onUnlocked={() => void reload()} />;
-  if (state === 'failed') return <div className="st-warn" role="alert"><Icon name="alert" /><div>{error}</div></div>;
+  const gate = adminGate(state, error, { title: t('jobs.lockedTitle'), text: t('jobs.lockedText') }, () => void reload());
+  if (gate) return gate;
   const all = data?.instances ?? [];
   const byPlugin = groupByPlugin(all);
 

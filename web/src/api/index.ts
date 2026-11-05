@@ -1,7 +1,7 @@
 export { call, session, login, logout, unlock, lock, publicHost, downloadUrl, uploadUrl } from './client';
 export { requestUnlock } from './unlock';
 export { stream, toBase64, fromBase64 } from './stream';
-export { ApiError } from './types';
+export { ApiError, errorMessage } from './types';
 export type { CallOptions, Session, PublicHost, DistroInfo, StreamHandle, StreamHandlers, ErrorCode } from './types';
 export { SessionProvider, useSession } from './session';
 export type { SessionValue } from './session';

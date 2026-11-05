@@ -7,6 +7,7 @@
  * goes through the app's broker (channel.ts); the frame itself has an opaque origin and no network.
  */
 import * as React from 'react';
+import { errorMessage } from '../../api';
 import { Component, useEffect, useRef, useSyncExternalStore, type ComponentType, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import tokensCss from '../../styles/tokens.css?inline';
@@ -244,10 +245,10 @@ type Sdk = ReturnType<typeof makeSdk>['sdk'];
 class Boundary extends Component<{ children: ReactNode }, { error: string | null }> {
   state = { error: null as string | null };
   static getDerivedStateFromError(e: unknown) {
-    return { error: e instanceof Error ? e.message : String(e) };
+    return { error: errorMessage(e) };
   }
   componentDidCatch(e: unknown) {
-    send({ la: 'plugin', t: 'failed', message: e instanceof Error ? e.message : String(e) });
+    send({ la: 'plugin', t: 'failed', message: errorMessage(e) });
   }
   render() {
     return this.state.error ? <div className="la-frame-error">{this.state.error}</div> : this.props.children;
@@ -315,7 +316,7 @@ window.addEventListener('message', (ev: MessageEvent) => {
     case 'init':
       if (started) return;
       started = true;
-      start(m).catch((e) => send({ la: 'plugin', t: 'failed', message: e instanceof Error ? e.message : String(e) }));
+      start(m).catch((e) => send({ la: 'plugin', t: 'failed', message: errorMessage(e) }));
       break;
     case 'theme':
       applyTheme(m.theme);

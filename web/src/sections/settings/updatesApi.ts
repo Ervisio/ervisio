@@ -1,5 +1,5 @@
 import { useStore } from '../../lib/useStore';
-import { apiUrl, call, stream, ApiError, MOCK } from '../../api';
+import { apiUrl, call, stream, ApiError, MOCK, errorMessage } from '../../api';
 
 /* Self-update API (docs/api/updates.md). */
 
@@ -180,7 +180,7 @@ export async function startRollback(target: string, from: string): Promise<void>
   try {
     await call('updates.rollback', { version: target }, { admin: true });
   } catch (e) {
-    set({ phase: 'error', error: e instanceof Error ? e.message : String(e) });
+    set({ phase: 'error', error: errorMessage(e) });
     throw e;
   }
   void waitForRestart(target, from, before);

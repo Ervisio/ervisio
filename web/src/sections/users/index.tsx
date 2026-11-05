@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { call, usePrefs, useSession } from '../../api';
+import { call, usePrefs, useSession, errorMessage } from '../../api';
 import { useT, type TFn } from '../../i18n';
 import { Button, EmptyState, Icon, Input, Page, Segmented, Skeleton, Table, Tabs, useIsMobile, type Column } from '../../ui';
 import { usePaletteActions } from '../index';
@@ -34,7 +34,7 @@ function useUsersData(isUnlocked: boolean) {
       setGroups(g);
       setError('');
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     }
   }, [isUnlocked]);
   useEffect(() => { void load(); }, [load]);

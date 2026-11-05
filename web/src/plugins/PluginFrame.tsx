@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useNavigate, type NavigateFunction } from 'react-router-dom';
-import { ApiError, call, fromBase64, stream, toBase64, useSession, type StreamHandle } from '../api';
+import { ApiError, call, fromBase64, stream, toBase64, useSession, type StreamHandle, errorMessage } from '../api';
 import { apiUrl, consoleOrigin, FETCH_CREDENTIALS } from '../api/base';
 import { saveDownload, sendUpload, startTransfer, watchDownloadEnd, type TransferStart } from '../api/transfer';
 import { useI18n, useT } from '../i18n';
@@ -24,7 +24,7 @@ const MAX_PTY_SIZE = 1000;
 const SAVE_URL_TTL_MS = 60_000;
 
 const toFrameError = (e: unknown): FrameError =>
-  e instanceof ApiError ? { code: String(e.code), message: e.message } : { code: 'internal', message: e instanceof Error ? e.message : String(e) };
+  e instanceof ApiError ? { code: String(e.code), message: e.message } : { code: 'internal', message: errorMessage(e) };
 
 const encodeAsset = (p: string) => p.split('/').map(encodeURIComponent).join('/');
 
@@ -248,7 +248,7 @@ function FrameSession({ plugin, view, title, style }: FrameProps) {
         const { themeSnap: snap, lang: l } = live.current;
         post({ la: 'plugin', t: 'init', plugin: { id: plugin.id, name: plugin.name, version: plugin.version }, view, lang: l, theme: snap(), appOrigin: consoleOrigin(), platform: session?.os ?? 'linux', code });
       } catch (e) {
-        fail(e instanceof Error ? e.message : String(e));
+        fail(errorMessage(e));
       }
     };
 

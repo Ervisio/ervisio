@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ApiError, stream } from '../../api';
+import { ApiError, stream, errorMessage } from '../../api';
 import { fcall, onFilesChanged, type RunOpts } from './fapi';
 import type { FEntry, RawEntry } from './types';
 import { basename, join, withPath } from './util';
@@ -122,7 +122,7 @@ function isAffectedBy(loc: string, dir: string | undefined): boolean {
   return !dir || dir === loc || loc.startsWith('trash:') || loc === 'recent:' || loc === 'starred:';
 }
 
-const toApiError = (e: unknown) => (e instanceof ApiError ? e : new ApiError('internal', e instanceof Error ? e.message : String(e)));
+const toApiError = (e: unknown) => (e instanceof ApiError ? e : new ApiError('internal', errorMessage(e)));
 
 interface SearchMessage {
   entries?: RawEntry[];

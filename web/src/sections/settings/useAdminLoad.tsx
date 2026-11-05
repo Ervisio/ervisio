@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ApiError, requestUnlock, useSession } from '../../api';
+import { ApiError, requestUnlock, useSession, errorMessage } from '../../api';
 import { useT } from '../../i18n';
 import { Button, Icon } from '../../ui';
 
@@ -26,7 +26,7 @@ export function useAdminLoad<T>(fn: () => Promise<T>, poll = 0) {
     } catch (e) {
       if (e instanceof ApiError && e.code === 'needs_admin') setState('locked');
       else {
-        setError(e instanceof Error ? e.message : String(e));
+        setError(errorMessage(e));
         if (!quiet) setState('failed');
       }
     }
@@ -54,4 +54,11 @@ export function LockedPanel({ title, text, onUnlocked }: { title: string; text: 
       <Button icon="unlock" onClick={() => requestUnlock().then(onUnlocked, () => undefined)}>{t('channels.unlock')}</Button>
     </div>
   );
+}
+
+/** What an admin block shows instead of its content while locked or failed; null when it can render. */
+export function adminGate(state: LoadState, error: string, locked: { title: string; text: string }, onUnlocked: () => void) {
+  if (state === 'locked') return <LockedPanel title={locked.title} text={locked.text} onUnlocked={onUnlocked} />;
+  if (state === 'failed') return <div className="st-warn" role="alert"><Icon name="alert" /><div>{error}</div></div>;
+  return null;
 }

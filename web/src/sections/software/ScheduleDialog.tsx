@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ApiError, call, useSession } from '../../api';
+import { ApiError, call, useSession, errorMessage } from '../../api';
 import { useT } from '../../i18n';
 import { Button, Dialog, Input, toast } from '../../ui';
 import { loadSummary } from './store';
@@ -27,7 +27,7 @@ export function ScheduleDialog({ open, onClose, current }: { open: boolean; onCl
       toast.ok(value ? t('schedule.saved', { time: value }) : t('schedule.removed'));
       onClose();
     } catch (e) {
-      if (!(e instanceof ApiError && e.code === 'cancelled')) setErr(e instanceof Error ? e.message : String(e));
+      if (!(e instanceof ApiError && e.code === 'cancelled')) setErr(errorMessage(e));
     } finally {
       setBusy(false);
     }

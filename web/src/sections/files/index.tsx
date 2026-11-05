@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ApiError, downloadUrl, usePrefs, useSession } from '../../api';
+import { ApiError, downloadUrl, usePrefs, useSession, errorMessage } from '../../api';
 import { useT, type TFn } from '../../i18n';
 import { Button, ConfirmDialog, Dialog, Icon, IconButton, Menu, Sheet, toast, useIsMobile, type IconName, type MenuItem } from '../../ui';
+import { copyToClipboard } from '../../lib/clipboard';
 import { usePaletteActions } from '../index';
 import { ChownDialog, EditorDialog, NameDialog } from './Dialogs';
 import { Pane, type Shortcut } from './Pane';
@@ -144,21 +145,14 @@ function usePlaces(): Places | null {
 
 function fail(title: string, x: unknown) {
   if (x instanceof ApiError && x.code === 'cancelled') return;
-  toast.err(title, x instanceof ApiError ? x.message : x instanceof Error ? x.message : String(x));
+  toast.err(title, errorMessage(x));
 }
 
 function toastFailed(failed: BatchFailure[] | undefined, title: (count: number) => string) {
   if (failed?.length) toast.err(title(failed.length), failed[0].message);
 }
 
-async function copyText(txt: string, t: TFn) {
-  try {
-    await navigator.clipboard.writeText(txt);
-    toast.ok(t('pathCopied'));
-  } catch {
-    toast.err(t('err.clipboard'));
-  }
-}
+const copyText = (txt: string, t: TFn) => copyToClipboard(txt, t('pathCopied'), t('err.clipboard'));
 
 function clickDownload(href: string, name: string) {
   const a = document.createElement('a');

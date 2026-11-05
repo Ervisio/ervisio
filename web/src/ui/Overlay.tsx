@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { errorMessage } from '../api';
 import { createPortal } from 'react-dom';
 import { useT } from '../i18n';
 import { ApiError } from '../api/types';
@@ -102,7 +103,7 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, description, co
       await onConfirm();
       onClose();
     } catch (x) {
-      setErr(x instanceof Error ? x.message : String(x));
+      setErr(errorMessage(x));
     } finally {
       setBusy(false);
     }
@@ -170,7 +171,7 @@ export function UnlockDialog({ open, user, minutes = 5, reason, onSubmit, onCanc
       await onSubmit(pw);
     } catch (x) {
       const code = x instanceof ApiError ? x.code : '';
-      setErr(code === 'forbidden' ? t('unlock.forbidden') : code === 'unauthenticated' || code === 'invalid' ? t('unlock.wrong') : x instanceof Error ? x.message : String(x));
+      setErr(code === 'forbidden' ? t('unlock.forbidden') : code === 'unauthenticated' || code === 'invalid' ? t('unlock.wrong') : errorMessage(x));
       setPw('');
     } finally {
       setBusy(false);
