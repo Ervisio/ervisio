@@ -25,6 +25,8 @@
 param(
     [string]$Version = '',
     [int]$Port = 9090,
+    [ValidateSet('', 'classic', 'ervisios')]
+    [string]$UI = $env:ERVISIO_UI,
     [switch]$Uninstall,
     [switch]$PurgeData
 )
@@ -84,7 +86,7 @@ try {
 
     Expand-Archive $zip -DestinationPath $work -Force
     $src = Join-Path $work "ervisio-$ver-windows-$arch"
-    & (Join-Path $src 'install.ps1') -SourceDir $src -Port $Port
+    & (Join-Path $src 'install.ps1') -SourceDir $src -Port $Port -UI $UI
 
     # Keep install.ps1 next to the program, so -Uninstall works later.
     Copy-Item (Join-Path $src 'install.ps1') (Join-Path $env:ProgramFiles 'Ervisio\install.ps1') -Force

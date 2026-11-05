@@ -9,6 +9,8 @@ export type ViewKind = 'page' | 'widget';
 export interface FrameView {
   kind: ViewKind;
   id: string;
+  /** Contract v4: rendering surface; omitted by older consoles. */
+  shell?: 'classic' | 'ervisios';
 }
 
 export interface FrameTheme {
@@ -32,6 +34,7 @@ export type FrameOp =
   | 'toast'
   | 'open'
   | 'openUrl'
+  | 'shell.command'
   | 'download'
   | 'saveFile'
   | 'auditList'

@@ -33,6 +33,13 @@ const docker: BrokerManifest = {
 const user = { groups: ['users'], isRoot: false, home: '/home/ann' };
 const inDocker = { ...user, groups: ['docker'] };
 
+test('AI local UI intents have no RPC plan and cannot be requested by other plugins', () => {
+  assert.deepEqual(authorize({ id: 'ai' }, 'shell.command', { text: 'Apri file' }, user), { kind: 'shell.command', text: 'Apri file' });
+  assert.equal(authorize(docker, 'shell.command', { text: 'Apri file', plugin: 'ai' }, user).kind, 'deny');
+  assert.equal(authorize({ id: 'ai' }, 'shell.command', { text: 'a'.repeat(501) }, user).kind, 'deny');
+  assert.equal(authorize({ id: 'ai' }, 'shell.command', { text: '' }, user).kind, 'deny');
+});
+
 test('only declared commands, through plugins.exec', () => {
   const p = authorize(docker, 'exec', { command: 'version', args: [] }, user);
   assert.deepEqual(p, {

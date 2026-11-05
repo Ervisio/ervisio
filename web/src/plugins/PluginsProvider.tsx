@@ -107,6 +107,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
         id: g.id,
         title: g.title,
         icon: g.icon,
+        ervisios: g.ervisios,
       })),
     );
     const widgets = plugins.flatMap((p) =>

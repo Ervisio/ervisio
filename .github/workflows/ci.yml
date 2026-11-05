@@ -59,6 +59,9 @@ jobs:
       - run: npm run lint
       - run: npm run i18n:check
       - run: npm test
+      - name: Install Chromium for desktop interaction tests
+        run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
       - run: npm run build
 
   packaging:

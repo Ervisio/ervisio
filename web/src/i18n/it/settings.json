@@ -105,6 +105,14 @@
     "refresh": {
       "title": "Aggiorna dati in tempo reale",
       "desc": "Ogni quanto si aggiornano i dati in tempo reale, come i grafici della Panoramica e l'elenco dei servizi. Più veloce usa più CPU."
+    },
+    "shell": {
+      "title": "Interfaccia",
+      "desc": "Cambia subito interfaccia. Desktop, cartelle virtuali e preferenze vengono salvati nel tuo account su questo server.",
+      "classic": "Ervisio classico",
+      "classicDesc": "La console con barra laterale, strumenti a pagina intera e ricerca comandi.",
+      "ervisios": "ErvisiOS",
+      "ervisiosDesc": "App in finestre, desktop con cartelle virtuali e barra delle applicazioni."
     }
   },
   "language": {

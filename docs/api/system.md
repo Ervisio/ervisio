@@ -53,6 +53,47 @@ interval as `data` (first one immediately). Never ends by itself; close the chan
 
 Params `{"action":"reboot"|"poweroff"}` → `{"ok":true}` (runs `systemctl reboot|poweroff`).
 
+## `system.connectivity` (user)
+
+Reads the managed host's hardware radios and network interfaces. It never scans for
+access points, requests radio access or changes a connection. This is the server's
+network, even when the browser is running on a different machine.
+
+```json
+{"source":"host","platform":"linux",
+ "wifi":{"present":true,"supported":true,"enabled":false,"state":"off","devices":[{"id":"wlan0","name":"wlan0"}]},
+ "bluetooth":{"present":false,"supported":false,"enabled":null,"state":"unavailable","reason":"no_hardware","devices":[]},
+ "interfaces":[{"id":"2","name":"eth0","type":"ethernet","state":"up","addresses":["192.168.1.20/24"],"connection":"Wired connection"}]}
+```
+
+Radio `enabled` is `null` when its actual state is unknown. `reason` distinguishes
+`no_hardware`, `missing_tool`, `hardware_blocked`, `permission_denied` and `query_failed`;
+`detail` contains host diagnostics. An absent module is never represented as an off
+but usable radio. `devices` contains controllers, not paired Bluetooth peripherals.
+When several controllers exist, `enabled` means at least one is on. `connection`,
+when present, is the OS connection/profile name and is not necessarily the Wi-Fi SSID.
+
+Interface types are `ethernet`, `wifi`, or `other` when the OS cannot establish the
+physical type. Loopback is omitted. `state:up` requires both administrative and
+operational link-up flags. Addresses are the host's current CIDR addresses.
+
+Linux uses sysfs hardware detection, NetworkManager's [radio status](https://networkmanager.pages.freedesktop.org/NetworkManager/NetworkManager/nmcli.html)
+and [BlueZ controller properties](https://github.com/bluez/bluez/blob/master/doc/bluetoothctl.rst).
+Windows uses [WinRT Radio enumeration](https://learn.microsoft.com/en-us/uwp/api/windows.devices.radios.radio.getradiosasync)
+and physical `Get-NetAdapter` metadata; Go's `net.Interfaces` supplies link state and addresses on both platforms.
+
+## `system.connectivity.set` (admin)
+
+Params `{"radio":"wifi"|"bluetooth","enabled":true|false}`. Requires the same
+administrator unlock as other host changes. Unavailable hardware or tools return
+`unavailable`. Windows also enforces its radio-access policy and physical switches.
+
+Linux sets Wi-Fi with `nmcli radio wifi on|off`, and Bluetooth power through
+`bluetoothctl` for each detected controller. Windows uses
+[Radio.SetStateAsync](https://learn.microsoft.com/en-us/uwp/api/windows.devices.radios.radio.setstateasync)
+after access is granted. The host state is read back before returning the updated
+Connectivity object; a request that did not take effect returns `conflict`.
+
 ## Windows notes
 
 `system.host` and `system.metrics` keep the same shapes on Windows, filled from Win32 instead of `/proc`:

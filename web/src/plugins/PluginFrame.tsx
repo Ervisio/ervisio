@@ -22,7 +22,7 @@ export function PluginFrame(props: FrameProps) {
   // A new frame (fresh sandbox, fresh code) for every plugin/view and every plugin reload.
   return (
     <FrameSession
-      key={`${props.plugin.id}/${props.view.kind}/${props.view.id}/${generation}`}
+      key={`${props.plugin.id}/${props.view.kind}/${props.view.id}/${props.view.shell ?? 'classic'}/${generation}`}
       {...props}
     />
   );

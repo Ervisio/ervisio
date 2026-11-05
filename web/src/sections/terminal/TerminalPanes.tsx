@@ -35,6 +35,12 @@ function EmptyPane({
 export interface TerminalPaneShared {
   home?: string;
   fontSize: number;
+  fontFamily?: string;
+  transparent?: boolean;
+  cursorStyle?: 'block' | 'bar' | 'underline';
+  cursorBlink?: boolean;
+  lineHeight?: number;
+  scrollback?: number;
   copyOnSelect: boolean;
   themeMode: string;
   ctrl: boolean;
@@ -95,6 +101,12 @@ function TerminalPaneSlot({
         id={id}
         admin={!!info?.admin}
         fontSize={s.fontSize}
+        fontFamily={s.fontFamily}
+        transparent={s.transparent}
+        cursorStyle={s.cursorStyle}
+        cursorBlink={s.cursorBlink}
+        lineHeight={s.lineHeight}
+        scrollback={s.scrollback}
         copyOnSelect={s.copyOnSelect}
         themeMode={s.themeMode}
         ctrl={s.ctrl && isActive}

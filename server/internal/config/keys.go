@@ -113,6 +113,14 @@ var keys = []Key{
 		validate: func(v any) error { return validateListen(v.(string)) }},
 	{Name: "allow_root", Type: Bool,
 		get: func(c *Config) any { return c.AllowRoot }, set: func(c *Config, v any) { c.AllowRoot = v.(bool) }, validate: noCheck},
+	{Name: "ui.default_shell", Type: Enum, Values: []string{"classic", "ervisios"},
+		get: func(c *Config) any { return c.UI.DefaultShell }, set: func(c *Config, v any) { c.UI.DefaultShell = v.(string) },
+		validate: func(v any) error {
+			if !slices.Contains([]string{"classic", "ervisios"}, v.(string)) {
+				return errors.New("must be classic or ervisios")
+			}
+			return nil
+		}},
 	{Name: "login.show_ip", Type: Bool,
 		get: func(c *Config) any { return c.Login.ShowIP }, set: func(c *Config, v any) { c.Login.ShowIP = v.(bool) }, validate: noCheck},
 	{Name: "login.max_failures", Type: Int,

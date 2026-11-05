@@ -21,6 +21,12 @@ interface Props {
   id: string;
   admin: boolean;
   fontSize: number;
+  fontFamily?: string;
+  transparent?: boolean;
+  cursorStyle?: 'block' | 'bar' | 'underline';
+  cursorBlink?: boolean;
+  lineHeight?: number;
+  scrollback?: number;
   copyOnSelect: boolean;
   /** terminal.theme preference: app | dark | light */
   themeMode: string;
@@ -60,14 +66,17 @@ function copySilently(text: string) {
   void navigator.clipboard?.writeText(text).catch(() => undefined);
 }
 
-function createTerminal(el: HTMLElement, fontSize: number, themeMode: string) {
+function createTerminal(el: HTMLElement, options: Props) {
   const term = new Terminal({
-    fontFamily: '"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace',
-    fontSize,
-    cursorBlink: true,
-    scrollback: 5000,
+    fontFamily: options.fontFamily ?? '"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace',
+    fontSize: options.fontSize,
+    cursorBlink: options.cursorBlink ?? true,
+    cursorStyle: options.cursorStyle ?? 'block',
+    lineHeight: options.lineHeight ?? 1,
+    scrollback: options.scrollback ?? 5000,
+    allowTransparency: !!options.transparent,
     allowProposedApi: true,
-    theme: buildTheme(themeMode),
+    theme: { ...buildTheme(options.themeMode), ...(options.transparent ? { background: '#00000000' } : {}) },
     macOptionIsMeta: true,
   });
   const fit = new FitAddon();
@@ -306,7 +315,7 @@ const TerminalView = forwardRef<TermHandle, Props>(function TerminalView(props, 
   useEffect(() => {
     const el = host.current;
     if (!el) return;
-    const { term, fit } = createTerminal(el, live.current.fontSize, live.current.themeMode);
+    const { term, fit } = createTerminal(el, live.current);
     termRef.current = term;
     fitRef.current = fit;
 
@@ -354,18 +363,23 @@ const TerminalView = forwardRef<TermHandle, Props>(function TerminalView(props, 
   }, []);
   useEffect(() => {
     const term = termRef.current;
-    if (term) term.options.theme = buildTheme(props.themeMode);
-  }, [props.themeMode, tick]);
+    if (term) term.options.theme = { ...buildTheme(props.themeMode), ...(props.transparent ? { background: '#00000000' } : {}) };
+  }, [props.themeMode, props.transparent, tick]);
   useEffect(() => {
     const term = termRef.current;
     if (!term) return;
     term.options.fontSize = props.fontSize;
+    term.options.fontFamily = props.fontFamily ?? '"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace';
+    term.options.cursorStyle = props.cursorStyle ?? 'block';
+    term.options.cursorBlink = props.cursorBlink ?? true;
+    term.options.lineHeight = props.lineHeight ?? 1;
+    term.options.scrollback = props.scrollback ?? 5000;
     try {
       fitRef.current?.fit();
     } catch {
       /* ignore */
     }
-  }, [props.fontSize]);
+  }, [props.fontSize, props.fontFamily, props.cursorStyle, props.cursorBlink, props.lineHeight, props.scrollback]);
 
   return (
     <div className="terminal-view">

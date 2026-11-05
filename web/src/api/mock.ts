@@ -173,6 +173,22 @@ const mockState = () => ({
 
 export async function mockCall(method: string, params: any, _admin?: boolean): Promise<any> {
   switch (method) {
+    case 'system.connectivity': {
+      const failure = rd<string | null>('connectivityError', null);
+      if (failure) throw new ApiError('unavailable', failure);
+      const missing = { present: false, supported: false, enabled: null, state: 'unavailable', reason: 'no_hardware', devices: [] };
+      return delay(rd('connectivity', { source: 'host', platform: 'linux', wifi: missing, bluetooth: missing, interfaces: [{ id: 'enp0s3', name: 'enp0s3', type: 'ethernet', state: 'up', addresses: ['192.168.1.137/24'] }] }));
+    }
+    case 'system.connectivity.set': {
+      if (!_admin || !mockSession().isAdmin) throw new ApiError('needs_admin', 'Administrator rights are needed.');
+      if (!['wifi', 'bluetooth'].includes(params.radio) || typeof params.enabled !== 'boolean') throw new ApiError('invalid', 'Give a radio and enabled state.');
+      const state = await mockCall('system.connectivity', {});
+      const radio = state[params.radio];
+      if (!radio.supported || radio.enabled === null) throw new ApiError('unavailable', 'No manageable radio is present.');
+      const updated = { ...state, [params.radio]: { ...radio, enabled: params.enabled, state: params.enabled ? 'on' : 'off' } };
+      wr('connectivity', updated);
+      return updated;
+    }
     case 'system.host':
       return delay({
         hostname: 'arch',

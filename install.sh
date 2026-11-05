@@ -49,6 +49,7 @@
 #                              only opened with --open-firewall, Caddy only changed with --caddy)
 #   --insecure-skip-signature  install even when no tool here can verify ed25519 signatures
 #                              (the sha256 is still checked, but against an unverified list)
+#   --ui classic|ervisios      initial interface (default classic; ERVISIO_UI also accepted)
 #   --port N                   port to listen on (default 9090; asked when it is in use)
 #   --listen all|local|IP      listen on all interfaces (default), on 127.0.0.1 only, or on one address
 #   --allow-root               allow signing in as root (default: no); --no-allow-root
@@ -231,6 +232,9 @@ ask_choice() {
 opt_set() {
 	CFG_REQUESTED=1
 	case $1 in
+	--ui)
+		case $2 in classic | ervisios) F_UI=$2 ;; *) die "--ui must be classic or ervisios." ;; esac
+		;;
 	--port)
 		valid_port "$2" || die "--port must be a number from 1 to 65535."
 		F_PORT=$2
@@ -299,6 +303,7 @@ Options:
   -h, --help                 show this help
 
 Configuration (first install; asked unless given here, --yes takes the defaults):
+  --ui classic|ervisios      initial interface; users can switch later (also ERVISIO_UI)
   --port N                   port to listen on (default 9090; asked again when it is in use)
   --listen all|local|IP      all interfaces (default), 127.0.0.1 only, or one address
   --allow-root               allow signing in as root (default: no); --no-allow-root
@@ -1042,7 +1047,7 @@ conf_get() {
 	[ -r "$cg_f" ] || return 0
 	awk -v sec="$1" -v key="$2" '
 	BEGIN { insec = (sec == "") }
-	/^[[:space:]]*\[/ { h = $0; sub(/^[[:space:]]*\[/, "", h); sub(/\].*$/, "", h); insec = (h == sec); next }
+	/^[[:space:]]*\[/ { h = $0; sub(/^[[:space:]]*\[/, "", h); sub(/\].*$/, "", h); gsub(/^[[:space:]]+|[[:space:]]+$/, "", h); insec = (h == sec); next }
 	insec && $0 ~ "^[[:space:]]*" key "[[:space:]]*=" { sub(/^[^=]*=[[:space:]]*/, ""); sub(/[[:space:]]+#.*$/, ""); sub(/[[:space:]]+$/, ""); print; exit }
 	' "$cg_f"
 }
@@ -1054,7 +1059,7 @@ conf_set() {
 	BEGIN { insec = (sec == ""); seen = insec; done = 0; val = ENVIRON["CS_VAL"] }
 	/^[[:space:]]*\[/ {
 		if (insec && !done) { print key " = " val; done = 1 }
-		h = $0; sub(/^[[:space:]]*\[/, "", h); sub(/\].*$/, "", h)
+		h = $0; sub(/^[[:space:]]*\[/, "", h); sub(/\].*$/, "", h); gsub(/^[[:space:]]+|[[:space:]]+$/, "", h)
 		insec = (h == sec); if (insec) seen = 1
 		print; next
 	}
@@ -1081,7 +1086,7 @@ toml_list() {
 
 # Defaults for the questions: the built-in ones, or what the existing file says.
 load_current() {
-	D_PORT=9090 D_HOST=0.0.0.0 D_ROOT=false D_UNLOCK=5m D_TLS=self-signed D_CERT='' D_KEY='' D_ORIGINS='' D_PROXIES='' D_AUSERS='' D_AGROUPS='' D_ADMINS=false
+	D_UI=classic D_PORT=9090 D_HOST=0.0.0.0 D_ROOT=false D_UNLOCK=5m D_TLS=self-signed D_CERT='' D_KEY='' D_ORIGINS='' D_PROXIES='' D_AUSERS='' D_AGROUPS='' D_ADMINS=false
 	CFG_EXISTS=0
 	CFG_SHOWN=$CONF_FILE
 	if [ ! -f "$CONF_FILE" ]; then
@@ -1090,6 +1095,8 @@ load_current() {
 		CFG_SHOWN=$LEGACY_CONF_FILE
 	fi
 	CFG_EXISTS=1
+	lc_ui="$(conf_get ui default_shell | tr -d "\"'")"
+	case $lc_ui in classic | ervisios) D_UI=$lc_ui ;; esac
 	lc_l="$(conf_get '' listen | tr -d "\"'")"
 	if [ -n "$lc_l" ]; then
 		D_PORT="${lc_l##*:}"
@@ -1297,6 +1304,11 @@ CONF
 	fi
 	cat <<CONF
 
+[ui]
+# Initial interface for users who have not chosen one in Settings.
+# Desktop folders are virtual and saved in each user's preferences.
+default_shell = "$C_UI"
+
 [web]
 # Browser origins accepted besides the address in the Host header, for
 # reaching Ervisio through a reverse proxy.
@@ -1349,6 +1361,7 @@ write_config() {
 		say "  [dry-run] listen = \"$C_HOST:$C_PORT\", allow_root = $C_ROOT, session.admin_unlock = \"$C_UNLOCK\", tls.mode = \"$C_TLS\""
 		[ -n "$C_ORIGINS" ] && say "  [dry-run] web.allowed_origins = $C_ORIGINS"
 		[ -n "$C_PROXIES" ] && say "  [dry-run] web.trusted_proxies = $C_PROXIES"
+		say "  [dry-run] ui.default_shell = \"$C_UI\""
 		say "  [dry-run] who may sign in: $(auth_text)"
 		return 0
 	fi
@@ -1358,6 +1371,7 @@ write_config() {
 	WC_BAK=$wc_bak
 	conf_set '' listen "\"$C_HOST:$C_PORT\""
 	conf_set '' allow_root "$C_ROOT"
+	conf_set ui default_shell "\"$C_UI\""
 	conf_set session admin_unlock "\"$C_UNLOCK\""
 	conf_set tls mode "\"$C_TLS\""
 	if [ "$C_TLS" = custom ]; then
@@ -1840,6 +1854,7 @@ decide_config() {
 	load_current
 	CFG_MODE=new
 	PROXY='' CADDY_KIND='' CADDY_ACTION=none
+	C_UI=$D_UI
 	C_PORT=$D_PORT C_HOST=$D_HOST C_ROOT=$D_ROOT C_UNLOCK=$D_UNLOCK C_TLS=$D_TLS C_CERT=$D_CERT C_KEY=$D_KEY
 	C_ORIGINS=$D_ORIGINS C_PROXIES=$D_PROXIES C_AUSERS=$D_AUSERS C_AGROUPS=$D_AGROUPS C_ADMINS=$D_ADMINS
 	ENABLE=1 START=1
@@ -1864,6 +1879,14 @@ decide_config() {
 		say "Press Enter to take the value in [brackets]."
 	else
 		say "Nothing is asked (no terminal, or --yes): defaults, plus the options given."
+	fi
+
+	if [ -n "$F_UI" ]; then
+		C_UI=$F_UI
+	elif [ "$TTY_OK" = 1 ]; then
+		if [ "$C_UI" = ervisios ]; then ui_def=2; else ui_def=1; fi
+		ask_choice "Initial Ervisio interface (each user can switch later):" "$ui_def" "Classic console" "ErvisiOS desktop with app windows"
+		if [ "$CHOICE" = 2 ]; then C_UI=ervisios; else C_UI=classic; fi
 	fi
 
 	choose_port
@@ -2509,6 +2532,7 @@ main() {
 	set -u
 	WANT_VERSION='' PRERELEASE=0 FROM='' UNINSTALL=0 PURGE=0 OPEN_FW=0 DRY=0 YES=0 SKIP_SIG=0
 	PARTIAL='' TMPD='' PREVIOUS='' VERSION=''
+	F_UI=${ERVISIO_UI:-}
 	F_PORT='' F_LISTEN='' F_ROOT='' F_UNLOCK='' F_CERT='' F_KEY='' F_PROXY=0 F_ORIGINS='' F_TRUSTED='' F_DOMAIN='' F_AUSERS='' F_AGROUPS='' F_ADMINS=0 WC_BAK=''
 	CADDY_MODE=auto NO_ENABLE=0 NO_START=0 RECONF=0 CFG_REQUESTED=0
 	TTY_OK=0 C_LISTEN='' C_TLS='' PROXY='' CADDY_DOMAIN='' CADDY_DONE=0 ENABLE=1 START=1
@@ -2536,12 +2560,12 @@ main() {
 		--dry-run) DRY=1 ;;
 		-y | --yes) YES=1 ;;
 		--insecure-skip-signature) SKIP_SIG=1 ;;
-		--port | --listen | --admin-unlock | --tls-cert | --tls-key | --origin | --trusted-proxy | --domain | --allow-users | --allow-groups)
+		--ui | --port | --listen | --admin-unlock | --tls-cert | --tls-key | --origin | --trusted-proxy | --domain | --allow-users | --allow-groups)
 			[ $# -ge 2 ] || die "$1 needs a value."
 			opt_set "$1" "$2"
 			shift
 			;;
-		--port=* | --listen=* | --admin-unlock=* | --tls-cert=* | --tls-key=* | --origin=* | --trusted-proxy=* | --domain=* | --allow-users=* | --allow-groups=*)
+		--ui=* | --port=* | --listen=* | --admin-unlock=* | --tls-cert=* | --tls-key=* | --origin=* | --trusted-proxy=* | --domain=* | --allow-users=* | --allow-groups=*)
 			opt_set "${1%%=*}" "${1#*=}"
 			;;
 		--admins-only) F_ADMINS=1 CFG_REQUESTED=1 ;;
@@ -2569,6 +2593,7 @@ main() {
 		esac
 		shift
 	done
+	[ -z "$F_UI" ] || opt_set --ui "$F_UI"
 	[ "$PURGE" = 1 ] && [ "$UNINSTALL" = 0 ] && die "--purge only goes with --uninstall."
 	if [ -n "$F_CERT" ] || [ -n "$F_KEY" ]; then
 		if [ -z "$F_CERT" ] || [ -z "$F_KEY" ]; then

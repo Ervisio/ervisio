@@ -19,7 +19,7 @@ import {
 import { RefreshSelect } from '../../lib/RefreshSelect';
 import { REFRESH_KEY } from '../../lib/refresh';
 import { ActivityLog } from './ActivityLog';
-import { ColourBlock, ThemeGrid } from './Appearance';
+import { ColourBlock, ShellChoice, ThemeGrid } from './Appearance';
 import { ChannelsBlock } from './Channels';
 import { EnvironmentsBlock } from './Environments';
 import { HostsBlock, type HostEntry } from './Hosts';
@@ -352,6 +352,13 @@ function appearanceGroup(t: TFn, th: ThemeValue, save: Save): GroupDef {
     hue: 'plg',
     title: t('groups.appearance'),
     rows: [
+      {
+        id: 'shell',
+        title: t('appearance.shell.title'),
+        desc: t('appearance.shell.desc'),
+        words: 'ErvisiOS classic desktop interface windows interfaccia classica finestre',
+        block: <ShellChoice />,
+      },
       {
         id: 'theme',
         title: t('appearance.theme.title'),

@@ -19,6 +19,8 @@ type RestoredTabs = { tabs: TabState[]; active: string };
 const SORT0: SortState = { key: 'name', dir: 'asc' };
 const none = new Set<string>();
 const SAVE_TABS_DELAY_MS = 500;
+// The bridge validates paths against its platform; accept Windows drive and UNC links too.
+const absolutePath = (path: string) => path.startsWith('/') || /^[a-z]:[\\/]/i.test(path) || path.startsWith('\\\\');
 
 const newPane = (loc: string, view: View = 'grid'): PaneState => ({ loc, view, admin: false });
 const newTab = (home: string, loc = home): TabState => ({
@@ -32,7 +34,7 @@ function sanitizeTabs(raw: unknown, home: string): RestoredTabs | null {
   const arr = Array.isArray(raw) ? raw : raw && typeof raw === 'object' ? (raw as any).tabs : null;
   if (!Array.isArray(arr) || arr.length === 0) return null;
   const okLoc = (l: unknown) =>
-    typeof l === 'string' && (l.startsWith('/') || ['trash:', 'recent:', 'starred:'].includes(l))
+    typeof l === 'string' && (absolutePath(l) || ['trash:', 'recent:', 'starred:'].includes(l))
       ? l
       : home;
   const okView = (v: unknown): View => (v === 'list' ? 'list' : 'grid');
@@ -73,7 +75,7 @@ function useLinkPath(ready: boolean, open: (dir: string, select?: string) => voi
   const [params, setParams] = useSearchParams();
   const linkPath = params.get('path');
   useEffect(() => {
-    if (!ready || !linkPath || !linkPath.startsWith('/')) return;
+    if (!ready || !linkPath || !absolutePath(linkPath)) return;
     let live = true;
     const openOnce = (dir: string, select?: string) => {
       if (!live) return;

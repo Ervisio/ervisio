@@ -1,6 +1,8 @@
 # Shell, UI kit, theme, i18n and lib
 Purpose: the app frame (rail, top bar, dock, palette, notices), shared UI components and tokens, theming, translations and formatting helpers.
 
+ErvisiOS adds `web/src/desktop/`: virtual desktop preferences (`shell.desktop`), real section/plugin windows, native Terminal and host connectivity. AppShell selects `prefs['shell.mode'] ?? host.defaultShell ?? 'classic'` after a successful per-user preference load; load failures expose Retry. Classic remains the existing shell. See `docs/ERVISIOS.md`.
+
 ## Entry points and public contracts
 - `web/src/shell/AppShell.tsx`: `AppShell` = `Rail` + `TopBar` + `<Outlet>` in Suspense + `Dock` + `CommandPalette` + `UpdateNotifier`; Ctrl/Cmd+K toggles the palette; sets `document.title` from the section or plugin page; mounts `useSectionBackgroundHooks`.
 - `shell/useNav.ts`: `useNav()` -> `{main, settings, plugins}` `NavEntry[]`; the single source for Rail, Dock, MoreSheet and the palette (SECTIONS filtered by `rail` and `platforms`, plus plugin `railPages`, badges from `registry` + `badge.ts` hooks).

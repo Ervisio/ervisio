@@ -81,6 +81,8 @@ export type Plan =
   | { kind: 'toast'; tone: 'ok' | 'err' | 'info'; title: string; detail?: string }
   | { kind: 'open'; to: string }
   | { kind: 'openUrl'; url: string }
+  /** AI plugin only: local UI intents, never an operating-system shell command. */
+  | { kind: 'shell.command'; text: string }
   /** sdk.network.request: the app asks an administrator (a dialog) and reloads the plugin's frames when approved. */
   | { kind: 'network'; host: string; scheme: 'https' | 'http' }
   | { kind: 'deny'; code: 'forbidden' | 'invalid'; message: string };
@@ -628,6 +630,12 @@ export function authorize(
       return authorizeOpen(m, a);
     case 'openUrl':
       return authorizeOpenUrl(a, u);
+    case 'shell.command': {
+      if (m.id !== 'ai') return deny('Local assistant commands are reserved for the AI plugin.');
+      const text = str(a.text, 500);
+      if (!text?.trim()) return deny('Give a UI command of at most 500 characters.', 'invalid');
+      return { kind: 'shell.command', text };
+    }
   }
   if (op === 'jobs' || op === 'notify') return authorizeJobsOp(m, op, a);
   return deny(`Plugins cannot use ${JSON.stringify(op)}.`);

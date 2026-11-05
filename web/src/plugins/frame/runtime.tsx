@@ -163,11 +163,15 @@ function makeSdk(
   const strings: Record<string, Record<string, string>> = {};
   const assets = new Map<string, Promise<string>>();
   const sdk = {
-    version: 3 as const,
+    version: 4 as const,
     /** The console's origin as the user reaches it, for building URLs such as webhooks (location.origin is opaque in a frame). */
     appOrigin,
     /** The server's operating system: 'linux' or 'windows'. */
     platform,
+    shell: {
+      mode: view.shell ?? 'classic',
+      command: (text: string) => request<{ handled: boolean; message?: string }>('shell.command', { text }),
+    },
     plugin,
     view,
     react: React,
@@ -436,6 +440,7 @@ async function start(m: Extract<HostToFrame, { t: 'init' }>) {
   setLang(m.lang);
   applyTheme(m.theme);
   document.documentElement.dataset.view = m.view.kind;
+  document.documentElement.dataset.shell = m.view.shell ?? 'classic';
   document.documentElement.lang = getLang();
   const { sdk, pages, widgets } = makeSdk(m.plugin, m.view, m.appOrigin, m.platform ?? 'linux');
   const url = URL.createObjectURL(new Blob([m.code], { type: 'text/javascript' }));

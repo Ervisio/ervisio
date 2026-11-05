@@ -105,6 +105,14 @@
     "refresh": {
       "title": "Refresh live data",
       "desc": "How often live data such as the Overview charts and service lists updates. Faster uses more CPU."
+    },
+    "shell": {
+      "title": "Interface",
+      "desc": "Switch instantly. Your desktop, virtual folders and preferences are saved to your account on this server.",
+      "classic": "Ervisio Classic",
+      "classicDesc": "The console with its sidebar, full-page tools and command palette.",
+      "ervisios": "ErvisiOS",
+      "ervisiosDesc": "Your apps in windows, a desktop with virtual folders and a taskbar."
     }
   },
   "language": {

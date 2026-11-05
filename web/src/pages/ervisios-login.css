@@ -1,0 +1,172 @@
+/* The concept's full-screen clock/account sign-in, using the real authentication form. */
+.login--ervisios {
+  --login-wall-ink: #f8fbff;
+  position: relative;
+  isolation: isolate;
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+  padding: 180px 24px 70px;
+  gap: 0;
+  min-height: 100dvh;
+  overflow: clip;
+}
+.login--ervisios .eos-wallpaper {
+  position: fixed;
+}
+.login--ervisios .eos-bloom {
+  filter: blur(10px);
+  opacity: 0.8;
+}
+.os-login-welcome {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: var(--login-wall-ink);
+}
+.os-login-welcome > .ui-brandlockup {
+  position: absolute;
+  left: 30px;
+  top: 22px;
+}
+.os-login-welcome .ui-brandmark {
+  --brand-frame: var(--login-wall-ink);
+  --brand-cursor: var(--login-wall-ink);
+}
+.os-login-clock {
+  position: absolute;
+  left: 50%;
+  top: 6vh;
+  transform: translateX(-50%);
+  text-align: center;
+  white-space: nowrap;
+  text-shadow: 0 3px 25px #030a2155;
+}
+.os-login-clock time {
+  font-size: 76px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  font-variant-numeric: tabular-nums;
+}
+.os-login-clock p {
+  font-size: 16px;
+  font-weight: 500;
+  margin: 10px 0 0;
+}
+.os-login-host {
+  position: absolute;
+  left: 30px;
+  bottom: 25px;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.os-login-host strong {
+  font-size: 17px;
+  font-weight: 600;
+}
+.os-login-host span {
+  font-size: 12px;
+  opacity: 0.7;
+}
+.login--ervisios .lb-form {
+  position: relative;
+  width: min(100%, 430px);
+  border-radius: 18px;
+  padding: 28px 32px;
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  backdrop-filter: blur(36px) saturate(140%);
+  box-shadow:
+    0 18px 70px #02091b44,
+    inset 0 0 0 1px color-mix(in srgb, var(--ink) 10%, transparent);
+}
+.login--ervisios .lb-in > h1,
+.login--ervisios .lb-in > p {
+  text-align: center;
+}
+.login--ervisios .lb-in h1 {
+  font-size: 23px;
+  font-weight: 600;
+}
+.login--ervisios .lb-in > p {
+  font-size: 12px;
+  margin-bottom: 18px;
+}
+.os-login-avatar {
+  width: 76px;
+  height: 76px;
+  margin: 0 auto 17px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--acc-s);
+  color: var(--acc);
+  font-size: 31px;
+  font-weight: 500;
+}
+.login--ervisios .ugrid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.login--ervisios .ut {
+  padding: 7px 3px;
+}
+.login--ervisios .ut .av {
+  border-radius: 50%;
+  font-size: 18px;
+  width: 42px;
+  height: 42px;
+}
+.login--ervisios .ut small {
+  font-size: 10px;
+}
+.login--ervisios .ut b {
+  font-size: 11px;
+}
+.login--ervisios .lb-in .ui-btn {
+  border-radius: 8px;
+}
+@media (max-width: 859px) {
+  .login--ervisios {
+    padding: 130px 16px 50px;
+  }
+  .os-login-clock {
+    top: 34px;
+  }
+  .os-login-clock time {
+    font-size: 53px;
+  }
+  .os-login-clock p {
+    font-size: 12px;
+    margin-top: 7px;
+  }
+  .os-login-welcome > .ui-brandlockup {
+    top: 13px;
+    left: 17px;
+    font-size: 13px !important;
+  }
+  .os-login-welcome > .ui-brandlockup .ui-brandmark {
+    width: 20px;
+  }
+  .os-login-host {
+    bottom: 16px;
+    left: 20px;
+  }
+  .os-login-host strong {
+    font-size: 13px;
+  }
+  .login--ervisios .lb-form {
+    padding: 25px 24px;
+  }
+  .os-login-avatar {
+    width: 62px;
+    height: 62px;
+    margin-bottom: 13px;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .login--ervisios .lb-form {
+    backdrop-filter: none;
+    background: var(--surface);
+  }
+}

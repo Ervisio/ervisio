@@ -1,0 +1,83 @@
+/* ErvisiOS Terminal: native tabs over the existing xterm/PTY implementation. */
+.terminal-root.terminal-ervisios {
+  padding: 0;
+  gap: 0;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  flex: 1;
+  container-type: inline-size;
+  container-name: terminal;
+  background: color-mix(in srgb, var(--tbg) var(--terminal-opacity, 88%), transparent);
+  backdrop-filter: blur(var(--terminal-blur, 18px)) saturate(115%);
+}
+.terminal-ervisios[data-terminal-theme='dark'] { --tbg: #0f1218; }
+.terminal-ervisios[data-terminal-theme='light'] { --tbg: #fbfbfd; }
+.terminal-ervisios .terminal-body { border-radius: 0; background: transparent; }
+.terminal-ervisios .terminal-pane, .terminal-ervisios .terminal-split .terminal-panes { background: transparent; }
+.terminal-ervisios .terminal-panes { padding: 4px 0 0; gap: 1px; }
+.terminal-ervisios.terminal-split .terminal-panes { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; }
+.terminal-ervisios .terminal-pane { border-radius: 0; }
+.terminal-ervisios:not(.terminal-split) .terminal-pane-h { display: none; }
+.terminal-ervisios .terminal-pane-h { padding: 6px 12px; background: color-mix(in srgb, var(--surface) 65%, transparent); }
+.terminal-ervisios .terminal-host { padding: 9px 12px 10px; }
+.terminal-native-tabs { display: flex; align-items: stretch; gap: 3px; min-height: 43px; padding: 6px 9px 0; background: color-mix(in srgb, var(--sunk) 88%, transparent); flex-shrink: 0; }
+.terminal-native-tablist { display: flex; gap: 4px; min-width: 0; overflow-x: auto; scrollbar-width: thin; align-items: stretch; }
+.terminal-native-tab { display: flex; align-items: center; min-width: 135px; max-width: 265px; flex: 1 0 160px; border-radius: 8px 8px 0 0; color: var(--ink2); background: transparent; }
+.terminal-native-tab:hover { background: color-mix(in srgb, var(--surface) 50%, transparent); }
+.terminal-native-tab.is-active { background: color-mix(in srgb, var(--surface) 92%, transparent); color: var(--ink); box-shadow: inset 0 2px var(--acc); }
+.terminal-native-tab button, .terminal-native-new > button, .terminal-native-toolbar > button { border: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; }
+.terminal-native-tab-open { display: flex; gap: 9px; align-items: center; min-width: 0; flex: 1; text-align: left; padding: 9px 5px 10px 12px; font-size: 12px !important; }
+.terminal-native-tab-open > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.terminal-native-tab-open > .ui-icon { width: 15px; height: 15px; flex: none; color: var(--acc); }
+.terminal-native-tab.terminal-k-root .terminal-native-tab-open > .ui-icon { color: var(--warn); }
+.terminal-native-tab.terminal-k-ssh .terminal-native-tab-open > .ui-icon { color: var(--h-file); }
+.terminal-native-tab-close, .terminal-native-tab-menu { display: grid; place-items: center; padding: 4px; width: 25px; height: 25px; border-radius: 4px; flex: none; }
+.terminal-native-tab-close { margin-right: 5px; }
+.terminal-native-tab-close .ui-icon { width: 12px; height: 12px; }
+.terminal-native-tab-menu .ui-icon { width: 10px; height: 10px; }
+.terminal-native-tab-close:hover, .terminal-native-tab-menu:hover { background: color-mix(in srgb, var(--ink) 12%, transparent); }
+.terminal-native-new { display: flex; align-items: center; flex: none; padding-bottom: 5px; }
+.terminal-native-new > button { display: grid; place-items: center; width: 31px; height: 30px; border-radius: 5px; }
+.terminal-native-new > button:hover, .terminal-native-toolbar > button:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.terminal-native-new .ui-icon { width: 15px; height: 15px; }
+.terminal-native-new > button:last-child { width: 24px; }
+.terminal-native-toolbar { display: flex; align-items: center; gap: 3px; padding: 5px 10px; min-height: 37px; color: var(--ink2); background: color-mix(in srgb, var(--surface) 80%, transparent); flex: none; }
+.terminal-native-toolbar > button { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 5px 9px; border-radius: 5px; font-size: 11px !important; min-height: 28px; }
+.terminal-native-toolbar > button .ui-icon { width: 14px; height: 14px; }
+.terminal-native-toolbar > button[aria-pressed='true'] { background: var(--acc-s); color: var(--acc); }
+.terminal-native-toolbar b { font-weight: 500; color: var(--acc); }
+.terminal-native-spacer { flex: 1; }
+.terminal-native-font { font-size: 10px; color: var(--ink3); padding: 0 6px; }
+.terminal-native-status { display: flex; align-items: center; gap: 13px; padding: 4px 13px; min-height: 25px; color: var(--ink3); background: color-mix(in srgb, var(--sunk) 84%, transparent); flex-shrink: 0; font-size: 10px; }
+.terminal-native-status > span { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.terminal-native-status > .terminal-native-status-path { flex: 1; overflow: hidden; text-overflow: ellipsis; display: block; min-width: 0; }
+.terminal-native-status button { display: flex; align-items: center; gap: 5px; color: var(--warn); background: transparent; border: 0; font: inherit; cursor: pointer; }
+.terminal-ervisios .terminal-chips { padding: 7px 11px; gap: 5px; background: color-mix(in srgb, var(--surface) 78%, transparent); }
+.terminal-ervisios .terminal-chip { border-radius: 5px; padding: 5px 9px; font-size: 11px; font-weight: 500; background: color-mix(in srgb, var(--ink) 6%, transparent); color: var(--ink2); }
+.terminal-ervisios .terminal-chip .ui-icon { width: 13px; height: 13px; }
+.terminal-ervisios.terminal-focus .terminal-native-tabs, .terminal-ervisios.terminal-focus .terminal-native-toolbar, .terminal-ervisios.terminal-focus .terminal-native-status, .terminal-ervisios.terminal-focus .terminal-chips { display: none; }
+.terminal-appearance { display: flex; flex-direction: column; gap: 19px; margin: 16px 0 6px; }
+.terminal-appearance-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px 16px; }
+.terminal-appearance-range { display: flex; flex-direction: column; gap: 10px; }
+.terminal-appearance-range label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; }
+.terminal-appearance-range label .ui-icon { width: 15px; height: 15px; color: var(--ink2); }
+.terminal-appearance-range output { margin-left: auto; font: 12px var(--mono); color: var(--ink2); }
+.terminal-appearance-range input { width: 100%; accent-color: var(--acc); cursor: pointer; }
+.terminal-appearance-error { color: var(--err); margin: 0; font-size: 12px; }
+.terminal-ervisios button:focus-visible, .terminal-appearance input:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+@media (max-width: 600px) {
+  .terminal-native-tab { min-width: 115px; flex-basis: 140px; }
+  .terminal-native-toolbar > button > span { display: none; }
+  .terminal-native-status { gap: 8px; }
+  .terminal-native-status > span:last-child { display: none; }
+  .terminal-appearance-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@container terminal (max-width: 600px) {
+  .terminal-native-toolbar > button > span { display: none; }
+  .terminal-native-status { gap: 8px; }
+  .terminal-native-status > span:last-child { display: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .terminal-root.terminal-ervisios { background: var(--tbg); backdrop-filter: none; }
+}

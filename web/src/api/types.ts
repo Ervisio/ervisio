@@ -73,6 +73,8 @@ export interface DistroInfo {
 
 export interface PublicHost {
   hostname: string;
+  /** Installation default; each authenticated user can override it with shell.mode. */
+  defaultShell?: 'classic' | 'ervisios';
   ip?: string;
   distro: DistroInfo;
   /** The server accepts SSH-key sign-in (auth.ssh_keys). */

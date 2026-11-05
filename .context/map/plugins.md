@@ -1,6 +1,8 @@
 # Plugins
 Purpose: signed, manifest-scoped third-party UI plugins that run in sandboxed frames and reach the host only through a capability broker and daemon-checked `plugins.*` methods.
 
+ErvisiOS contract v4 adds optional `contributes.pages[].ervisios.view`, `FrameView.shell`, runtime `sdk.shell.mode` and AI-only `sdk.shell.command`. Native layouts share the existing broker/capabilities; missing native metadata opens the public page unchanged. See `docs/dev/ervisios-plugins.md` and the coordinated SDK branch.
+
 ## Entry points and public contracts
 - `server/internal/modules/plugins/plugins.go:Register`: all bridge `plugins.*` methods (list/catalog/exec*/pty/http*/files/access/loadDev...); install/setEnabled/uninstall are `rpc.Admin`, the rest `rpc.User`.
 - `.../plugins/manifest.go:ParseManifest|LoadManifest|validate`: strict manifest (unknown fields rejected), id `^[a-z][a-z0-9-]{1,39}$`, entry `.js|.mjs`, size/count caps (256 KiB, 64 commands, 16 http APIs).

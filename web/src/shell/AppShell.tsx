@@ -3,7 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { Name } from '../brand';
 import { useT } from '../i18n';
 import { SECTIONS, useSectionBackgroundHooks } from '../sections';
-import { Skeleton } from '../ui';
+import { Button, EmptyState, Skeleton } from '../ui';
 import { CommandPalette } from './CommandPalette';
 import { Dock } from './Dock';
 import { Rail } from './Rail';
@@ -11,6 +11,9 @@ import { TopBar } from './TopBar';
 import { useFocusActive } from './focus';
 import { usePlugins } from '../plugins';
 import { UpdateNotifier } from '../sections/settings/UpdateNotifier';
+import { usePrefs, useSession } from '../api';
+import { DesktopShell } from '../desktop/DesktopShell';
+import { useShellCommands } from './useShellCommands';
 import './shell.css';
 
 function usePaletteShortcut(toggle: () => void) {
@@ -44,10 +47,37 @@ function useDocumentTitle() {
 
 export function AppShell() {
   const [palette, setPalette] = useState(false);
+  const { prefs, ready, error, retry } = usePrefs();
+  const t = useT('shell');
+  const { host, session } = useSession();
+  const mode = prefs['shell.mode'] ?? host?.defaultShell ?? 'classic';
   const focus = useFocusActive();
+  useShellCommands();
   useSectionBackgroundHooks();
   usePaletteShortcut(useCallback(() => setPalette((o) => !o), []));
   useDocumentTitle();
+
+  if (!ready)
+    return (
+      <div className="app-loading">
+        {error ? (
+          <>
+            <EmptyState icon="alert" title={t('desktop.prefsFailed')} text={error.message} />
+            <Button onClick={retry}>{t('desktop.retry')}</Button>
+          </>
+        ) : (
+          <Skeleton lines={5} />
+        )}
+      </div>
+    );
+  if (mode === 'ervisios')
+    return (
+      <>
+        <DesktopShell key={session?.user} />
+        <CommandPalette open={palette} onClose={() => setPalette(false)} />
+        <UpdateNotifier />
+      </>
+    );
 
   return (
     <div className={`app${focus ? ' app--focus' : ''}`}>

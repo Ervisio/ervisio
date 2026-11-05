@@ -1,5 +1,6 @@
 import type { MutableRefObject, RefObject } from 'react';
 import type { NavigateFunction } from 'react-router-dom';
+import { runShellCommand } from '../shell/commands';
 import {
   ApiError,
   call,
@@ -183,6 +184,8 @@ function runPlan(plan: Plan, ctx: PlanContext): Promise<unknown> {
     case 'open':
       ctx.go(plan.to);
       return Promise.resolve(null);
+    case 'shell.command':
+      return runShellCommand(plan.text);
     case 'openUrl':
       // The frame has no allow-popups; the app opens the tab, detached from both the app and the frame.
       // With noopener window.open always returns null, so a blocked pop-up cannot be detected here.

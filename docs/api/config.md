@@ -10,6 +10,7 @@ after a change; keys marked `restart` need a daemon restart.
 |---|---|---|---|
 | `listen` | string `host:port` | `0.0.0.0:9090` | restart |
 | `allow_root` | bool | `false` | |
+| `ui.default_shell` | enum `classic`/`ervisios` | `classic` | initial interface for users without a personal `shell.mode` preference; live reload, no restart |
 | `login.show_ip` | bool | `true` | |
 | `login.max_failures` | int 1–1000 | `5` | per IP per 15 min (password and SSH-key failures together) |
 | `auth.ssh_keys` | bool | `true` | sign in with an SSH key listed in the user's `authorized_keys` (`docs/api/auth.md`) |

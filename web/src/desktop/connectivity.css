@@ -1,0 +1,139 @@
+.eos-connectivity {
+  margin: 14px 0;
+  color: var(--ink);
+}
+.eos-connectivity-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+.eos-connectivity-hint {
+  color: var(--ink2);
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 1px 0 10px;
+}
+.eos-connectivity-loading {
+  display: grid;
+  gap: 8px;
+}
+.eos-connectivity-radio {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 10px;
+  background: color-mix(in srgb, var(--sunk) 80%, transparent);
+  border-radius: 10px;
+  margin-top: 7px;
+}
+.eos-connectivity-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--ink2);
+  display: grid;
+  place-items: center;
+}
+.eos-connectivity-icon.is-on {
+  color: var(--h-file);
+  background: var(--h-file-s);
+}
+.eos-connectivity-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.eos-connectivity-text strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+.eos-connectivity-text span,
+.eos-connectivity-text small {
+  color: var(--ink2);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.eos-connectivity-text small {
+  color: var(--ink3);
+  font-size: 10px;
+}
+.eos-connectivity-reason {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ink2);
+}
+.eos-connectivity-detail {
+  grid-column: 1 / -1;
+  font-size: 10.5px;
+  color: var(--ink2);
+}
+.eos-connectivity-detail summary {
+  cursor: pointer;
+}
+.eos-connectivity-detail p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 5px 0 0;
+}
+.eos-connectivity-error {
+  border-radius: 9px;
+  padding: 10px;
+  background: var(--err-s);
+  color: var(--err);
+  font-size: 11px;
+  margin-top: 8px;
+}
+.eos-connectivity-error p {
+  margin: 4px 0 8px;
+  overflow-wrap: anywhere;
+}
+.eos-connectivity-links {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 4px 2px;
+}
+.eos-connectivity-link {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+.eos-connectivity-link > .ui-icon {
+  flex: none;
+  color: var(--ink2);
+  margin-top: 2px;
+}
+.eos-connectivity-link > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.eos-connectivity-link strong {
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.eos-connectivity-link span,
+.eos-connectivity-link small {
+  font-size: 10.5px;
+  color: var(--ink2);
+}
+.eos-connectivity-link b {
+  font-weight: 500;
+}
+.eos-connectivity-link code {
+  font-size: 10px;
+  color: var(--ink2);
+  overflow-wrap: anywhere;
+}

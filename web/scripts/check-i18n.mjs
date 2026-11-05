@@ -1,8 +1,9 @@
 // Checks that every namespace has the same keys in every language. Usage: npm run i18n:check
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const root = new URL('../src/i18n/', import.meta.url).pathname;
+const root = fileURLToPath(new URL('../src/i18n/', import.meta.url));
 const langs = readdirSync(root, { withFileTypes: true })
   .filter((d) => d.isDirectory())
   .map((d) => d.name);

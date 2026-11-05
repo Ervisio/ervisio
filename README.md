@@ -22,6 +22,10 @@ Ervisio is early software. It runs and I use it on my own machine, but it has ha
 
 ## Features
 
+### ErvisiOS (feature branch)
+
+An optional desktop interface with real applications in windows, per-user virtual folders, taskbar and native Terminal appearance settings. Switch between it and the classic console in Appearance. Native layouts are provided by the coordinated AI, Docker, Minecraft and Caddy plugin branches; other plugin pages open unchanged in a window. See [ErvisiOS setup, plugin compatibility and verification](docs/ERVISIOS.md). This feature is not yet in the stable release downloads.
+
 ### Overview
 
 CPU, memory, disk and network at a glance, an activity chart, a list of failed units and pending problems, and a card with machine details. The dashboard is customizable: widgets can be added, resized and reordered, and you can define your own command shortcuts ("My actions").
