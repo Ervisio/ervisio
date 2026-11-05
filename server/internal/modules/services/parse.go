@@ -139,8 +139,6 @@ func fields(s string) []string {
 	return strings.Fields(s)
 }
 
-// ---- unit state ----
-
 // State is the simplified state the UI filters on.
 const (
 	StateRunning  = "running"

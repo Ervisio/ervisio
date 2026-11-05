@@ -334,8 +334,6 @@ func offersAuthQop(qop string) bool {
 	return false
 }
 
-/* ---------- PROPFIND ---------- */
-
 type davMultistatus struct {
 	Responses []davResponse `xml:"DAV: response"`
 }

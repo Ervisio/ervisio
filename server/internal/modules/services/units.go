@@ -39,8 +39,6 @@ func unitType(name string) string {
 	return ""
 }
 
-// ---- purpose heuristic (one table) ----
-
 // Purpose groups, in the order the UI shows them.
 const (
 	PurposeWeb        = "web"
