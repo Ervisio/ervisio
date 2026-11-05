@@ -42,3 +42,5 @@ Purpose: dual-pane file manager (browse, edit, copy/move, trash, upload/download
 - Docs: `docs/api/files.md`, `docs/api/files-transfer.md`, `docs/api/remote.md`, `docs/SECURITY-REVIEW.md` (H1).
 
 Related: map/server.md, map/web.md
+
+Sweep helpers (2026-11-05): bindPath, cachedName (files/entry.go); openParentStat (ops_unix.go).

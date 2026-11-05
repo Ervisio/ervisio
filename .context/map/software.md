@@ -41,3 +41,5 @@ Purpose: list, search, install, remove and update system packages and Flatpak ap
 - Docs: `docs/api/software.md`, `docs/SECURITY-REVIEW.md` (M3, L1).
 
 Related: map/server.md, map/web.md
+
+Sweep helpers (2026-11-05): changePkgs (rpm.go), withManager/unixMillis (software.go), queryBackends[T] (manager.go), regularIconIn (apps.go), aptPackagePlan (apt.go).

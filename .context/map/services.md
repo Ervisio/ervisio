@@ -35,3 +35,5 @@ Purpose: list, inspect, control and watch systemd units (service/timer/socket) o
 - `cd server && go test ./internal/modules/services/...`; `GOOS=windows go vet ./internal/modules/services/`.
 - `cd web && npm run typecheck && npm run i18n:check` (namespace `services`).
 - Related: map/server.md, map/web.md, map/overview.md (failed-unit alerts and `unitStatus` widget), map/logs.md.
+
+Sweep helpers (2026-11-05): bindUnitShow (services_unix.go).

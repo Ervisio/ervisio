@@ -42,3 +42,5 @@ Purpose: reach other machines (SFTP/FTP/SMB/WebDAV file connections, Ervisio-to-
 - `docs/api/environments.md` (pairing), `docs/api/plugins.md` (network capability), `docs/api/auth.md` (`public/host`).
 - `remote.go` header cites `docs/api/remote.md`, which does not exist.
 Related: map/auth.md, map/server.md, map/web.md
+
+Sweep helpers (2026-11-05): checkoutPath, bindPathParams (remote.go); server/envpair.go relayPeerLine.

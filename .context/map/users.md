@@ -37,3 +37,5 @@ Purpose: manage local accounts, groups, SSH authorized keys and login sessions o
 - Docs: `docs/api/users.md`.
 
 Related: map/server.md, map/web.md
+
+Sweep helpers (2026-11-05): bindGroup, editKeyFile, lockSystem (users.go); bindWinGroup, winLockTarget, winLockSnapshot (users_windows.go); findByName[T] (winaccounts.go).

@@ -43,3 +43,5 @@ Purpose: Go daemon and per-session bridges for authenticated host administration
 - Read `server/README.md` for module implementation, dev flags and security limits.
 - Read `docs/ARCHITECTURE.md` sections Processes, Wire protocols, Bridge module API, Server configuration, Plugins and Releases.
 - Detailed contracts: `docs/api/auth.md`, `config.md`, `jobs.md`, `notify.md`, `environments.md`, `plugins.md`, `updates.md`; deployment: `docs/RELEASING.md`, `docs/PACKAGING.md`.
+
+Sweep helpers (2026-11-05): sys.RandHex, sys.SyncDir, brand.FirstEnv, explicitAccess (winsec.go), update.LockRetry/HelperArg, streamHandler, resolveCmd, setSessionCookie, receiveUpload, decodeChunk (static.go). Lint: golangci-lint v2.1.6 via docker (needs libpam0g-dev); 50 errcheck, 25 unused, 8 staticcheck, 2 ineffassign left.

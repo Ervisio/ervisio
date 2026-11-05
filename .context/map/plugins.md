@@ -54,3 +54,5 @@ Purpose: signed, manifest-scoped third-party UI plugins that run in sandboxed fr
 - Runtime build: `cd web && npm run build:runtime`.
 - Read `docs/api/plugins.md` (Isolation, manifest.json, Signing, Methods), `docs/api/jobs.md`, `docs/api/notify.md`, `docs/api/environments.md`, `docs/PLUGIN-SIGNING.md`.
 Related: map/server.md, map/web.md
+
+Sweep helpers (2026-11-05): openCapRoot, openCapFile (plugins/files.go); web DetailPanel.tsx local runWork.

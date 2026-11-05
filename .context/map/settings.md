@@ -43,3 +43,5 @@ Purpose: Settings page (preferences, server config, channels, plugin jobs, envir
 - `cd server && go test ./internal/jobs ./internal/notify ./internal/audit ./internal/envs ./internal/modules/config ./internal/modules/prefs ./internal/server`; web: `npm run typecheck && npm run lint && npm run i18n:check` (namespaces `settings`, `envs`).
 - Docs: `docs/api/config.md`, `jobs.md`, `notify.md`, `environments.md`, `prefs.md`; `docs/ARCHITECTURE.md` Preferences.
 Related: map/server.md, map/web.md, map/remote-hosts.md, map/updates.md, map/shell-ui.md
+
+Sweep helpers (2026-11-05): instanceLocked (jobs/api.go), intRange (config/keys.go), config.WriteAtomic, notify.WriteFileAtomic, AuditEntry.

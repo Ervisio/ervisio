@@ -37,3 +37,5 @@ Purpose: React 18/TypeScript browser console for ervisiod, built with Vite and r
 - Checks: `npm run typecheck`, `npm run lint`, `npm run i18n:check`, `npm test`; production build: `npm run build` (outputs `web/dist`).
 - Sources: `docs/ARCHITECTURE.md` sections Web app, Preferences, Plugins; `web/CONTRIBUTING-SECTIONS.md` for section contracts and ownership.
 - Related: `docs/DESIGN-RULES.md`, `web/PLUGIN-SDK.md`, `docs/api/plugins.md`, `web/package.json`, `web/vite.config.ts`.
+
+Sweep helpers (2026-11-05): errorMessage (api/types.ts), lib/clipboard.ts, lib/useStore.ts, i18n/flatten.ts, adminGate (settings/useAdminLoad.tsx), b64encode, useIsMobile, measure (Menu.tsx). Format: npx prettier@3.3.3 (web/.prettierrc.json).

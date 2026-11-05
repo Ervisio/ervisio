@@ -37,3 +37,5 @@ Purpose: search, histogram and live-follow of the systemd journal, log files and
 - `cd server && go test ./internal/modules/logs/...` (`logs_test.go`, `eventlog_test.go`); `GOOS=windows go vet ./internal/modules/logs/`.
 - `cd web && npm run typecheck && npm run i18n:check` (namespace `logs`).
 - Related: map/server.md, map/web.md, map/services.md (`services.logs` is a separate journal reader), map/overview.md (log widget calls `logs.query` on Windows).
+
+Sweep helpers (2026-11-05): bindAndRun (logs.go), atoiOrZero (parse.go).
