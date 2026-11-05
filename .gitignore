@@ -6,6 +6,9 @@ target/
 *.log
 .env
 __pycache__/
+.qa/
+web/test-results/
+web/playwright-report/
 
 # Dev plugin folders (plugins/README.md)
 /plugins/*

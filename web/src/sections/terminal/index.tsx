@@ -6,10 +6,13 @@ import {
   useState,
   type Dispatch,
   type SetStateAction,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { call, usePrefs, useSession } from '../../api';
 import { useI18n, useT, type TFn } from '../../i18n';
+import { useWindowActivity } from '../../lib/windowActivity';
 import {
   Icon,
   Page,
@@ -37,7 +40,11 @@ import {
   useTerminalSnippets,
 } from './useTerminalActions';
 import { useTerminalPanes } from './useTerminalPanes';
+import { NativeTerminalChrome } from './NativeTerminalChrome';
+import { NativeTerminalAppearance } from './NativeTerminalAppearance';
+import { nativeAppearance, terminalFont, type NativeAppearance } from './appearance';
 import './terminal.css';
+import './terminal-native.css';
 
 const REFRESH_MS = 4000;
 const DEFAULT_FONT_SIZE = 14;
@@ -138,6 +145,7 @@ async function listSessions(withRoot: boolean): Promise<SessionInfo[]> {
 
 // Sessions from the user bridge (and the root bridge while unlocked), polled while the page is visible.
 function useTerminalSessions(adminOk: boolean) {
+  const active = useWindowActivity();
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState('');
@@ -157,12 +165,13 @@ function useTerminalSessions(adminOk: boolean) {
   }, [adminOk]);
 
   useEffect(() => {
+    if (!active) return;
     void refresh();
     const id = window.setInterval(() => {
       if (!document.hidden) void refresh();
     }, REFRESH_MS);
     return () => window.clearInterval(id);
-  }, [refresh]);
+  }, [refresh, active]);
 
   return { sessions, loaded, loadError, lastInfo, refresh };
 }
@@ -403,7 +412,9 @@ function terminalRootClass(focus: boolean, splitShown: boolean, mobile: boolean)
 export default function TerminalPage() {
   const t = useT('terminal');
   const { lang } = useI18n();
-  const { session, isUnlocked, unlockLeft, unlockForever, lock } = useSession();
+  const { session, host, isUnlocked, unlockLeft, unlockForever, lock } = useSession();
+  const { prefs: accountPrefs } = usePrefs();
+  const native = (accountPrefs['shell.mode'] ?? host?.defaultShell) === 'ervisios';
   const mobile = useIsMobile();
   const compact = useMediaQuery('(max-width: 1100px)');
   const prefs = useTerminalPrefs(t, session?.os === 'windows');
@@ -417,6 +428,9 @@ export default function TerminalPage() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [sheet, setSheet] = useState(false);
   const [ctrl, setCtrl] = useState(false);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [appearancePreview, setAppearancePreview] = useState<NativeAppearance | null>(null);
+  const appearance = appearancePreview ?? nativeAppearance({ ...prefs.opts });
 
   const sessionDialogs = useTerminalSessionDialogs(t, refresh);
   const hostsCtl = useTerminalHosts({ t, hosts, save, sessions, create, showSession });
@@ -434,6 +448,45 @@ export default function TerminalPage() {
   const newRoot = () => void create({}, true);
   const newSsh = () => hostsCtl.setHostDlg({ mode: 'connect', host: null });
   const toggleFocus = () => setFocus((f) => !f);
+  const duplicate = (item: SessionInfo) => {
+    const saved = item.kind === 'ssh' ? hosts.find((value) => value.name === item.name) : undefined;
+    if (item.kind === 'ssh' && !saved) return;
+    void create(
+      saved
+        ? { kind: 'ssh', host: saved.host, user: saved.user, port: saved.port, name: saved.name }
+        : { cwd: item.cwd || undefined },
+      item.admin,
+    );
+  };
+  const pasteClipboard = async () => {
+    try {
+      pasteCmd(await navigator.clipboard.readText());
+    } catch {
+      toast.err(t('native.clipboardFailed'));
+    }
+  };
+  const nativeKeys = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!native || !(event.target instanceof Node) || !rootRef.current?.contains(event.target))
+      return;
+    if (event.ctrlKey && event.shiftKey && event.code === 'KeyT') {
+      event.preventDefault();
+      event.stopPropagation();
+      newLocal();
+    } else if (event.ctrlKey && event.shiftKey && event.code === 'KeyW' && activeId) {
+      const item = panesCtl.infoOf(activeId);
+      if (item) {
+        event.preventDefault();
+        event.stopPropagation();
+        sessionDialogs.setKilling(item);
+      }
+    } else if (event.ctrlKey && event.code === 'Tab' && panesCtl.openSessions.length) {
+      event.preventDefault();
+      event.stopPropagation();
+      const open = panesCtl.openSessions;
+      const index = open.findIndex((value) => value.id === activeId);
+      showSession(open[(index + (event.shiftKey ? open.length - 1 : 1)) % open.length].id);
+    }
+  };
   useTerminalPaletteActions(t, { newLocal, newRoot, toggleFocus });
 
   const paletteItems = terminalPaletteItems({
@@ -490,10 +543,58 @@ export default function TerminalPage() {
 
   return (
     <Page flush hue="term">
-      <div ref={rootRef} className={terminalRootClass(focus, splitShown, mobile)}>
-        {!compact && !focus && sidebar}
+      <div
+        ref={rootRef}
+        className={`${terminalRootClass(focus, splitShown, mobile)}${native ? ' terminal-ervisios' : ''}`}
+        onKeyDownCapture={nativeKeys}
+        data-terminal-theme={native ? appearance.theme : undefined}
+        style={
+          native
+            ? ({
+                '--terminal-opacity': `${appearance.backgroundOpacity}%`,
+                '--terminal-blur': `${appearance.backgroundBlur}px`,
+              } as CSSProperties)
+            : undefined
+        }
+      >
+        {!native && !compact && !focus && sidebar}
         <div className="terminal-body">
-          {mobile && (
+          {native && (
+            <NativeTerminalChrome
+              sessions={panesCtl.openSessions}
+              detached={panesCtl.detached}
+              hosts={hosts}
+              activeId={activeId ?? null}
+              split={panesCtl.split}
+              canSplit={!mobile}
+              snippets={showSnippets}
+              fontSize={appearance.fontSize}
+              onShow={showSession}
+              onNew={newLocal}
+              onRoot={newRoot}
+              onSsh={newSsh}
+              onHost={hostsCtl.connectHost}
+              onDuplicate={duplicate}
+              onDetach={panesCtl.detach}
+              onRename={sessionDialogs.setRenaming}
+              onEnd={sessionDialogs.setKilling}
+              onSessions={() => setSheet(true)}
+              onSplit={panesCtl.toggleSplit}
+              onPalette={() => setPaletteOpen((value) => !value)}
+              onSnippets={() => setShowSnippets(!showSnippets)}
+              onFont={(delta) =>
+                void save('terminal', {
+                  ...prefs.opts,
+                  fontSize: Math.max(9, Math.min(32, appearance.fontSize + delta)),
+                })
+              }
+              onCopy={() => target()?.copySelection()}
+              onPaste={() => void pasteClipboard()}
+              onFocus={toggleFocus}
+              onAppearance={() => setAppearanceOpen(true)}
+            />
+          )}
+          {!native && mobile && (
             <MobileStrip
               sessions={panesCtl.openSessions}
               activeId={activeId}
@@ -502,20 +603,22 @@ export default function TerminalPage() {
               onMenu={() => setSheet(true)}
             />
           )}
-          <Toolbar
-            active={panesCtl.infoOf(activeId ?? null)}
-            sudoLeft={isUnlocked ? sudoLeftLabel(t, unlockForever, unlockLeft) : null}
-            onLock={() => void lock()}
-            showMenu={compact && !mobile}
-            onMenu={() => setSheet(true)}
-            showSplit={!mobile}
-            split={panesCtl.split}
-            onSplit={panesCtl.toggleSplit}
-            paletteOpen={paletteOpen}
-            onPalette={() => setPaletteOpen((o) => !o)}
-            focus={focus}
-            onFocus={toggleFocus}
-          />
+          {!native && (
+            <Toolbar
+              active={panesCtl.infoOf(activeId ?? null)}
+              sudoLeft={isUnlocked ? sudoLeftLabel(t, unlockForever, unlockLeft) : null}
+              onLock={() => void lock()}
+              showMenu={compact && !mobile}
+              onMenu={() => setSheet(true)}
+              showSplit={!mobile}
+              split={panesCtl.split}
+              onSplit={panesCtl.toggleSplit}
+              paletteOpen={paletteOpen}
+              onPalette={() => setPaletteOpen((o) => !o)}
+              focus={focus}
+              onFocus={toggleFocus}
+            />
+          )}
 
           <TerminalPaneArea
             loadError={loadError}
@@ -527,9 +630,15 @@ export default function TerminalPage() {
             onRetry={() => void refresh()}
             pane={{
               home: session?.home,
-              fontSize: prefs.fontSize,
+              fontSize: native ? appearance.fontSize : prefs.fontSize,
+              fontFamily: native ? terminalFont(appearance.fontFamily) : undefined,
+              transparent: native,
+              cursorStyle: native ? appearance.cursorStyle : undefined,
+              cursorBlink: native ? appearance.cursorBlink : undefined,
+              lineHeight: native ? appearance.lineHeight : undefined,
+              scrollback: native ? appearance.scrollback : undefined,
               copyOnSelect: prefs.copyOnSelect,
-              themeMode: prefs.themeMode,
+              themeMode: native ? appearance.theme : prefs.themeMode,
               ctrl,
               pendingInput,
               handles,
@@ -554,6 +663,28 @@ export default function TerminalPage() {
             />
           )}
           {mobile && <ExtraKeys ctrl={ctrl} onCtrl={setCtrl} term={target} />}
+          {native && (
+            <div className="terminal-native-status">
+              <span>
+                <Icon name="server" size={12} />
+                {host?.hostname}
+              </span>
+              <span>{session?.user}</span>
+              <span className="terminal-native-status-path">
+                {panesCtl.infoOf(activeId ?? null)?.title || panesCtl.infoOf(activeId ?? null)?.cwd}
+              </span>
+              {isUnlocked && (
+                <button
+                  onClick={() => void lock().catch((error) => toast.err(errMsg(error)))}
+                  title={t('lockNow')}
+                >
+                  <Icon name="lock" size={12} />
+                  {sudoLeftLabel(t, unlockForever, unlockLeft)}
+                </button>
+              )}
+              <span>{t('native.terminal')}</span>
+            </div>
+          )}
         </div>
 
         {paletteOpen && (
@@ -568,7 +699,7 @@ export default function TerminalPage() {
       </div>
 
       <Sheet
-        open={sheet && (compact || mobile)}
+        open={sheet && (native || compact || mobile)}
         onClose={() => setSheet(false)}
         title={t('sessions')}
       >
@@ -579,6 +710,13 @@ export default function TerminalPage() {
         hostsCtl={hostsCtl}
         snippetsCtl={snippetsCtl}
       />
+      {native && (
+        <NativeTerminalAppearance
+          open={appearanceOpen}
+          onClose={() => setAppearanceOpen(false)}
+          onPreview={setAppearancePreview}
+        />
+      )}
     </Page>
   );
 }

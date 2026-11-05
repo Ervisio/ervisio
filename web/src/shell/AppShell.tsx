@@ -1,17 +1,20 @@
-import { Suspense, useCallback, useEffect, useState } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Name } from '../brand';
 import { useT } from '../i18n';
 import { SECTIONS, useSectionBackgroundHooks } from '../sections';
-import { Skeleton } from '../ui';
+import { Button, EmptyState, Skeleton } from '../ui';
 import { CommandPalette } from './CommandPalette';
-import { Dock } from './Dock';
-import { Rail } from './Rail';
-import { TopBar } from './TopBar';
-import { useFocusActive } from './focus';
 import { usePlugins } from '../plugins';
 import { UpdateNotifier } from '../sections/settings/UpdateNotifier';
+import { usePrefs, useSession } from '../api';
+import { useShellCommands } from './useShellCommands';
 import './shell.css';
+
+const DesktopShell = lazy(() =>
+  import('../desktop/DesktopShell').then((m) => ({ default: m.DesktopShell })),
+);
+const ClassicShell = lazy(() => import('./ClassicShell'));
 
 function usePaletteShortcut(toggle: () => void) {
   useEffect(() => {
@@ -26,7 +29,7 @@ function usePaletteShortcut(toggle: () => void) {
   }, [toggle]);
 }
 
-function useDocumentTitle() {
+function useDocumentTitle(mode: 'classic' | 'ervisios') {
   const t = useT('shell');
   const { pathname } = useLocation();
   const { railPages } = usePlugins();
@@ -37,40 +40,56 @@ function useDocumentTitle() {
     const pg = pathname.startsWith('/p/')
       ? railPages.find((p) => pathname === `/p/${p.plugin}/${p.page}`)
       : undefined;
-    const title = pg?.title ?? (sec ? t(sec.titleKey) : '');
+    const title =
+      pg?.title ??
+      (sec
+        ? t(mode === 'ervisios' && sec.desktopTitleKey ? sec.desktopTitleKey : sec.titleKey)
+        : '');
     document.title = title ? `${title} · ${Name}` : Name;
-  }, [pathname, railPages, t]);
+  }, [pathname, railPages, t, mode]);
 }
 
 export function AppShell() {
   const [palette, setPalette] = useState(false);
-  const focus = useFocusActive();
+  const { prefs, ready, error, retry } = usePrefs();
+  const t = useT('shell');
+  const { host, session } = useSession();
+  const mode = prefs['shell.mode'] ?? host?.defaultShell ?? 'classic';
+  useShellCommands();
   useSectionBackgroundHooks();
   usePaletteShortcut(useCallback(() => setPalette((o) => !o), []));
-  useDocumentTitle();
+  useDocumentTitle(mode);
 
-  return (
-    <div className={`app${focus ? ' app--focus' : ''}`}>
-      {!focus && <Rail />}
-      <div className="app-main">
-        {!focus && <TopBar onSearch={() => setPalette(true)} />}
-        <main className="app-content" id="main">
-          <Suspense
-            fallback={
-              <div style={{ padding: 28 }}>
-                <Skeleton width="30%" height={26} />
-                <div style={{ height: 18 }} />
-                <Skeleton lines={5} />
-              </div>
-            }
-          >
-            <Outlet />
-          </Suspense>
-        </main>
+  if (!ready)
+    return (
+      <div className="app-loading">
+        {error ? (
+          <>
+            <EmptyState icon="alert" title={t('desktop.prefsFailed')} text={error.message} />
+            <Button onClick={retry}>{t('desktop.retry')}</Button>
+          </>
+        ) : (
+          <Skeleton lines={5} />
+        )}
       </div>
-      {!focus && <Dock />}
+    );
+  return (
+    <>
+      <Suspense
+        fallback={
+          <div className="app-loading">
+            <Skeleton lines={5} />
+          </div>
+        }
+      >
+        {mode === 'ervisios' ? (
+          <DesktopShell key={session?.user} />
+        ) : (
+          <ClassicShell onSearch={() => setPalette(true)} />
+        )}
+      </Suspense>
       <CommandPalette open={palette} onClose={() => setPalette(false)} />
       <UpdateNotifier />
-    </div>
+    </>
   );
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { call, usePrefs, useSession, errorMessage } from '../../api';
 import { useT, type TFn } from '../../i18n';
+import { useWindowActivity } from '../../lib/windowActivity';
 import {
   Button,
   EmptyState,
@@ -19,11 +20,12 @@ import { CreateDialog } from './CreateDialog';
 import { GroupsView } from './GroupsView';
 import { Avatar, RoleBadge, useLastLogin } from './parts';
 import type { GroupInfo, UserInfo, UserList } from './types';
-import { UserPanel } from './UserPanel';
+import { UserPanel, type UserDetailTab } from './UserPanel';
+import { NativeUsers } from './NativeUsers';
 import { hueOf, initial, roleOf } from './util';
 import './users.css';
 
-type Tab = 'people' | 'system' | 'groups';
+type Tab = 'people' | 'system' | 'groups' | 'security';
 type View = 'cards' | 'table';
 
 const ADMIN_GROUPS = ['wheel', 'sudo', 'admin'];
@@ -32,6 +34,7 @@ const MOBILE_PEOPLE_COLS = ['name', 'role'];
 const MOBILE_SYSTEM_COLS = ['name', 'uid', 'shell'];
 
 function useUsersData(isUnlocked: boolean) {
+  const active = useWindowActivity();
   const [data, setData] = useState<UserList | null>(null);
   const [groups, setGroups] = useState<GroupInfo[]>([]);
   const [error, setError] = useState('');
@@ -50,8 +53,8 @@ function useUsersData(isUnlocked: boolean) {
     }
   }, [isUnlocked]);
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (active) void load();
+  }, [load, active]);
 
   return { data, groups, error, load };
 }
@@ -241,18 +244,26 @@ function PeopleCards({
   );
 }
 
-function PeopleTable({ people, selName, onSelect, onAdd }: PeopleProps) {
+function PeopleTable({
+  people,
+  selName,
+  onSelect,
+  onAdd,
+  native = false,
+}: PeopleProps & { native?: boolean }) {
   const t = useT('users');
   const lastLogin = useLastLogin();
   const mobile = useIsMobile();
   const cols = peopleColumns(t, lastLogin);
   return (
     <div className="usr-tablewrap">
-      <div style={{ marginBottom: 12 }}>
-        <Button icon="plus" onClick={onAdd}>
-          {t('add.title')}
-        </Button>
-      </div>
+      {!native && (
+        <div style={{ marginBottom: 12 }}>
+          <Button icon="plus" onClick={onAdd}>
+            {t('add.title')}
+          </Button>
+        </div>
+      )}
       <Table<UserInfo>
         columns={mobile ? cols.filter((c) => MOBILE_PEOPLE_COLS.includes(c.key)) : cols}
         rows={people}
@@ -286,13 +297,18 @@ function SystemTable({ users }: { users: UserInfo[] }) {
 
 export default function UsersPage() {
   const t = useT('users');
-  const { session, isUnlocked } = useSession();
+  const { session, isUnlocked, host } = useSession();
   const { prefs, set } = usePrefs();
+  const native = (prefs['shell.mode'] ?? host?.defaultShell) === 'ervisios';
   const view: View =
     (prefs as Record<string, unknown>)['users.view'] === 'table' ? 'table' : 'cards';
   const { data, groups, error, load } = useUsersData(isUnlocked);
 
   const [tab, setTab] = useState<Tab>('people');
+  const [detailTab, setDetailTab] = useState<UserDetailTab>('info');
+  useEffect(() => {
+    if (!native && tab === 'security') setTab('people');
+  }, [native, tab]);
   const [filter, setFilter] = useState('');
   const [selName, setSelName] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -341,60 +357,53 @@ export default function UsersPage() {
     setSelName(name);
   };
 
+  const details =
+    data && (tab === 'people' || (native && tab === 'security')) ? (
+      <UserPanel
+        user={selected}
+        data={data}
+        groups={groups}
+        self={self}
+        initialTab={native ? detailTab : undefined}
+        onClose={() => setSelName(null)}
+        reload={load}
+      />
+    ) : null;
+
   return (
     <Page flush hue="usr">
-      <div className="usr-root hue-usr">
-        <div className="usr-main">
-          <UsersToolbar
-            tab={tab}
-            onTab={changeTab}
-            data={data}
-            groupCount={groups.length}
-            view={view}
-            onView={(v) => void set('users.view', v)}
-            filter={filter}
-            onFilter={setFilter}
-          />
-
-          {error && (
-            <div className="usr-note err" role="alert">
-              <Icon name="alert" />
-              {error}
-              <Button size="sm" onClick={() => void load()}>
-                {t('retry')}
-              </Button>
-            </div>
-          )}
-          {data && !data.shadowReadable && tab === 'people' && (
-            <div className="usr-note">
-              <Icon name="info" />
-              {t('notes.shadow')}
-            </div>
-          )}
-
-          {!data && !error && (
-            <div className="usr-grid">
-              {[0, 1, 2, 3].map((i) => (
-                <Skeleton key={i} height={200} />
-              ))}
-            </div>
-          )}
-
-          {data && tab === 'people' && view === 'cards' && (
-            <PeopleCards
-              people={people}
-              selName={selName}
-              onSelect={toggleSelected}
-              onAdd={openCreate}
-              isFiltered={!!q}
-            />
-          )}
+      {native ? (
+        <NativeUsers
+          data={data}
+          people={people}
+          groupCount={groups.length}
+          section={tab}
+          onSection={changeTab}
+          filter={filter}
+          onFilter={setFilter}
+          view={view}
+          onView={(value) => void set('users.view', value)}
+          selected={selName}
+          onSelect={(name, target = 'info') => {
+            setSelName(name);
+            setDetailTab(target);
+            if (tab !== 'people' && tab !== 'security') setTab('people');
+          }}
+          onAddUser={openCreate}
+          onAddGroup={() => setGroupOpen(true)}
+          onRefresh={load}
+          self={self}
+          error={error}
+          host={host?.hostname ?? ''}
+          details={details}
+        >
           {data && tab === 'people' && view === 'table' && (
             <PeopleTable
               people={people}
               selName={selName}
               onSelect={toggleSelected}
               onAdd={openCreate}
+              native
             />
           )}
           {data && tab === 'system' && <SystemTable users={system} />}
@@ -406,21 +415,81 @@ export default function UsersPage() {
               reload={load}
               newOpen={groupOpen}
               setNewOpen={setGroupOpen}
+              showCreate={false}
             />
           )}
-        </div>
+        </NativeUsers>
+      ) : (
+        <div className="usr-root hue-usr">
+          <div className="usr-main">
+            <UsersToolbar
+              tab={tab}
+              onTab={changeTab}
+              data={data}
+              groupCount={groups.length}
+              view={view}
+              onView={(v) => void set('users.view', v)}
+              filter={filter}
+              onFilter={setFilter}
+            />
 
-        {data && tab === 'people' && (
-          <UserPanel
-            user={selected}
-            data={data}
-            groups={groups}
-            self={self}
-            onClose={() => setSelName(null)}
-            reload={load}
-          />
-        )}
-      </div>
+            {error && (
+              <div className="usr-note err" role="alert">
+                <Icon name="alert" />
+                {error}
+                <Button size="sm" onClick={() => void load()}>
+                  {t('retry')}
+                </Button>
+              </div>
+            )}
+            {data && !data.shadowReadable && tab === 'people' && (
+              <div className="usr-note">
+                <Icon name="info" />
+                {t('notes.shadow')}
+              </div>
+            )}
+
+            {!data && !error && (
+              <div className="usr-grid">
+                {[0, 1, 2, 3].map((i) => (
+                  <Skeleton key={i} height={200} />
+                ))}
+              </div>
+            )}
+
+            {data && tab === 'people' && view === 'cards' && (
+              <PeopleCards
+                people={people}
+                selName={selName}
+                onSelect={toggleSelected}
+                onAdd={openCreate}
+                isFiltered={!!q}
+              />
+            )}
+            {data && tab === 'people' && view === 'table' && (
+              <PeopleTable
+                people={people}
+                selName={selName}
+                onSelect={toggleSelected}
+                onAdd={openCreate}
+              />
+            )}
+            {data && tab === 'system' && <SystemTable users={system} />}
+            {data && tab === 'groups' && (
+              <GroupsView
+                groups={groups}
+                people={data.people}
+                filter={filter}
+                reload={load}
+                newOpen={groupOpen}
+                setNewOpen={setGroupOpen}
+              />
+            )}
+          </div>
+
+          {details}
+        </div>
+      )}
       {data && (
         <CreateDialog
           open={createOpen}

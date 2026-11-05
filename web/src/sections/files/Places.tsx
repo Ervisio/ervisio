@@ -14,6 +14,9 @@ import type { Disk, Places as PlacesData, Remote } from './types';
 import { basename } from './util';
 
 export interface PlacesProps {
+  native?: boolean;
+  computer?: boolean;
+  onComputer?(): void;
   data: PlacesData | null;
   home: string;
   loc: string;
@@ -34,10 +37,10 @@ export function PlacesList(p: PlacesProps) {
   };
   const item = (loc: string, icon: IconName, label: string, extra?: React.ReactNode) => (
     <a
-      key={loc}
+      key={`${loc}:${label}`}
       href="#"
-      className={p.loc === loc ? 'is-on' : ''}
-      aria-current={p.loc === loc ? 'page' : undefined}
+      className={!p.computer && p.loc === loc ? 'is-on' : ''}
+      aria-current={!p.computer && p.loc === loc ? 'page' : undefined}
       onClick={(e) => {
         e.preventDefault();
         go(loc);
@@ -51,15 +54,18 @@ export function PlacesList(p: PlacesProps) {
   const root = (p.data?.disks ?? []).find((d) => d.mount === '/') ?? p.data?.disks[0];
   return (
     <>
-      <DropdownMenu
-        items={p.onNew}
-        aria-label={t('new.label')}
-        trigger={(tp) => (
-          <Button variant="primary" icon="plus" className="files-newb" {...tp}>
-            {t('new.label')}
-          </Button>
-        )}
-      />
+      {!p.native && (
+        <DropdownMenu
+          items={p.onNew}
+          aria-label={t('new.label')}
+          trigger={(tp) => (
+            <Button variant="primary" icon="plus" className="files-newb" {...tp}>
+              {t('new.label')}
+            </Button>
+          )}
+        />
+      )}
+      {p.native && <div className="files-plt">{t('native.quickAccess')}</div>}
       <div className="files-pg">
         {item(p.home, 'home', t('place.home'))}
         {item('/', 'server', t('place.root'), <span className="files-muted mono">/</span>)}
@@ -72,6 +78,22 @@ export function PlacesList(p: PlacesProps) {
           p.data && p.data.trashCount > 0 ? <Badge>{p.data.trashCount}</Badge> : undefined,
         )}
       </div>
+      {p.native && (
+        <div className="files-pg">
+          <a
+            href="#"
+            className={p.computer ? 'is-on' : ''}
+            onClick={(e) => {
+              e.preventDefault();
+              p.onComputer?.();
+              p.onPicked?.();
+            }}
+          >
+            <Icon name="server" />
+            <span className="files-pl-n">{t('native.thisPC')}</span>
+          </a>
+        </div>
+      )}
       <div className="files-plt">{t('bookmarks')}</div>
       <div className="files-pg">
         {p.bookmarks.length === 0 && (

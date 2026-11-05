@@ -1,5 +1,7 @@
 # Packaging and distribution
 
+ErvisiOS currently requires the `feat/ervisios` source build; stable release downloads do not yet include it. See [branch setup](ERVISIOS.md) before using the new UI installer option below.
+
 How Ervisio reaches machines, what each way installs, and how to publish it in more places. Building and
 signing a release is in [RELEASING.md](RELEASING.md).
 
@@ -21,6 +23,25 @@ GitHub and tells administrators when a new version is out. A repository (below) 
 **The first release whose binaries work in the package layout is 0.1.1.** The 0.1.0 daemon looks for the bridge
 next to itself and does not know the managed marker, so a 0.1.0 package would not start sessions and would offer a
 self-update that replaces files owned by the package manager. Publish packages from 0.1.1 on.
+
+### Choose the interface
+
+The Linux installer offers **Classic console** or **ErvisiOS desktop** during first-install
+configuration. Unattended installs keep Classic unless explicitly selected:
+
+```sh
+sudo sh install.sh --yes --ui ervisios
+# Equivalent when the environment variable is passed through sudo:
+sudo env ERVISIO_UI=ervisios sh install.sh --yes
+```
+
+Both `--ui classic` and `--ui ervisios` work when reconfiguring an existing installation.
+The choice sets `[ui] default_shell = "ervisios"` in `ervisio.conf`; upgrades without a
+choice keep the existing value. On Windows, pass `-UI ervisios` (or `-UI classic`) to
+`install-windows.ps1` or the release's `install.ps1`; `ERVISIO_UI` is also supported.
+Windows installers keep their existing unattended behavior. Every account can later
+switch in Settings without reinstalling. Its own choice and virtual desktop are saved
+in its per-user preferences; changing the install default does not override those choices.
 
 ### The two layouts
 

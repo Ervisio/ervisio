@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useWindowActivity } from '../../lib/windowActivity';
 import { errorMessage } from '../../api';
 import { useT } from '../../i18n';
 import {
@@ -39,6 +40,7 @@ export function EnvironmentsBlock({
   disabled?: boolean;
   onData?(d: EnvList | null): void;
 }) {
+  const active = useWindowActivity();
   const t = useT('envs');
   const [data, setData] = useState<EnvList | null>(null);
   const [failed, setFailed] = useState('');
@@ -59,11 +61,11 @@ export function EnvironmentsBlock({
     }
   }, []);
   useEffect(() => {
-    if (disabled) return;
+    if (disabled || !active) return;
     void load();
     const id = window.setInterval(() => void load(), 30000);
     return () => window.clearInterval(id);
-  }, [load, disabled]);
+  }, [load, disabled, active]);
 
   const test = async (env: EnvView) => {
     setTesting(env.id);

@@ -270,7 +270,7 @@ func stagePlugin(ctx context.Context, req installRequest, tmp string, p policy) 
 }
 
 func checkInstallable(req installRequest, m *Manifest, stage string, p policy) error {
-	sig := CheckSignature(stage, Keys())
+	sig := CheckSignature(stage, pluginSigningKeys())
 	if !sig.Verified {
 		if sig.Signed {
 			return rpc.Errorf(rpc.Forbidden, "The signature of %s is not valid (%s). It was not installed.", m.Name, sig.Err)

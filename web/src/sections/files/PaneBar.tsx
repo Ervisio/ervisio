@@ -6,6 +6,8 @@ import type { PaneState, SortKey, SortState, View } from './types';
 import { basename, crumbs, isVirtual } from './util';
 
 interface PaneBarProps {
+  native?: boolean;
+  navigationKey?: string;
   label?: string;
   state: PaneState;
   query: string;
@@ -24,9 +26,41 @@ export function PaneBar({ label, state, t, ...p }: PaneBarProps) {
   const virtual = isVirtual(loc);
   const canUp = !virtual && loc !== '/';
   const title = virtual ? t(`place.${loc.replace(':', '')}`) : basename(loc) || '/';
+  const [history, setHistory] = useState({ key: p.navigationKey, paths: [loc], index: 0 });
+  useEffect(() => {
+    if (!p.native) return;
+    setHistory((h) => {
+      if (h.key !== p.navigationKey) return { key: p.navigationKey, paths: [loc], index: 0 };
+      if (h.paths[h.index] === loc) return h;
+      return { ...h, paths: [...h.paths.slice(0, h.index + 1), loc], index: h.index + 1 };
+    });
+  }, [loc, p.native, p.navigationKey]);
+  const step = (delta: number) => {
+    const index = history.index + delta;
+    if (index < 0 || index >= history.paths.length) return;
+    setHistory({ ...history, index });
+    p.onNavigate(history.paths[index]);
+  };
   return (
     <div className="files-bar">
       {label && <span className="files-pl">{label}</span>}
+      {p.native && (
+        <>
+          <IconButton
+            icon="right"
+            className="files-native-back"
+            label={t('native.back')}
+            disabled={history.index === 0}
+            onClick={() => step(-1)}
+          />
+          <IconButton
+            icon="right"
+            label={t('native.forward')}
+            disabled={history.index >= history.paths.length - 1}
+            onClick={() => step(1)}
+          />
+        </>
+      )}
       <IconButton icon="chevronup" label={t('up')} disabled={!canUp} onClick={() => p.onUp()} />
       <Crumbs loc={loc} onNavigate={p.onNavigate} title={title} t={t} />
       {state.admin && (
@@ -39,7 +73,13 @@ export function PaneBar({ label, state, t, ...p }: PaneBarProps) {
           {t('leaveAdmin')}
         </Button>
       )}
-      <SearchBox query={p.query} onQuery={p.onQuery} canOpen={!virtual} t={t} />
+      <SearchBox
+        query={p.query}
+        onQuery={p.onQuery}
+        canOpen={!virtual}
+        always={p.native && !virtual}
+        t={t}
+      />
       <SortMenu sort={p.sort} onSort={p.onSort} t={t} />
       <Segmented<View>
         aria-label={t('view.label')}
@@ -58,11 +98,13 @@ function SearchBox({
   query,
   onQuery,
   canOpen,
+  always,
   t,
 }: {
   query: string;
   onQuery(q: string): void;
   canOpen: boolean;
+  always?: boolean;
   t: TFn;
 }) {
   const [open, setOpen] = useState(false);
@@ -71,7 +113,7 @@ function SearchBox({
     if (!query) setOpen(false);
   }, [query]);
 
-  if (!open && !query)
+  if (!always && !open && !query)
     return (
       canOpen && <IconButton icon="search" label={t('search')} onClick={() => setOpen(true)} />
     );
@@ -79,7 +121,7 @@ function SearchBox({
     <div className="files-search ui-in">
       <Icon name="search" />
       <input
-        autoFocus
+        autoFocus={!always}
         value={query}
         placeholder={t('searchHere')}
         aria-label={t('searchHere')}

@@ -23,6 +23,7 @@ export const NAMESPACES = [
   'ui',
   'settings',
   'overview',
+  'taskmanager',
   'terminal',
   'files',
   'logs',

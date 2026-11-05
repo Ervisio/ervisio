@@ -19,6 +19,7 @@ import {
   errorMessage,
 } from '../../api';
 import { useT, type TFn } from '../../i18n';
+import { useWindowActivity } from '../../lib/windowActivity';
 import { usePaletteActions } from '../index';
 import { Badge, Button, Page, Sheet, toast, useIsMobile, useMediaQuery } from '../../ui';
 import { Details } from './Details';
@@ -88,6 +89,7 @@ function useAdminEscalation(isUnlocked: boolean, isRoot: boolean | undefined) {
 }
 
 function useLogSources(lcall: LogsCall, watchers: Watcher[], watchersKey: string, admin: boolean) {
+  const active = useWindowActivity();
   const [sources, setSources] = useState<SourcesResult | null>(null);
   const [srcError, setSrcError] = useState<string>();
   const loadSources = useCallback(
@@ -101,6 +103,7 @@ function useLogSources(lcall: LogsCall, watchers: Watcher[], watchersKey: string
     [lcall, watchersKey],
   );
   useEffect(() => {
+    if (!active) return;
     const ac = new AbortController();
     loadSources(ac.signal);
     const id = window.setInterval(() => loadSources(ac.signal), 60_000);
@@ -108,7 +111,7 @@ function useLogSources(lcall: LogsCall, watchers: Watcher[], watchersKey: string
       ac.abort();
       window.clearInterval(id);
     };
-  }, [loadSources, admin]);
+  }, [loadSources, admin, active]);
   return { sources, srcError, loadSources };
 }
 
@@ -219,12 +222,13 @@ function useLogQuery({ lcall, filter, b, watchers, qkey }: LogQueryOptions) {
 }
 
 function useHistogramTick(live: boolean | undefined) {
+  const active = useWindowActivity();
   const [hTick, setHTick] = useState(0);
   useEffect(() => {
-    if (!live) return;
+    if (!live || !active) return;
     const id = window.setInterval(() => setHTick((n) => n + 1), 20_000);
     return () => window.clearInterval(id);
-  }, [live]);
+  }, [live, active]);
   return hTick;
 }
 
@@ -245,10 +249,12 @@ function useLogHistogram({
   watchers,
   watchersKey,
 }: LogHistogramOptions) {
+  const active = useWindowActivity();
   const [hist, setHist] = useState<HistogramResult | null>(null);
   const [histLoading, setHistLoading] = useState(false);
   const hTick = useHistogramTick(filter.live);
   useEffect(() => {
+    if (!active) return;
     const ac = new AbortController();
     const now = filter.live ? Date.now() : anchor;
     const hb = bounds(filter, now);
@@ -283,6 +289,7 @@ function useLogHistogram({
     tick,
     hTick,
     watchersKey,
+    active,
   ]);
   return { hist, histLoading };
 }
@@ -325,8 +332,9 @@ function useLiveFollow({
   setRows,
   t,
 }: LiveFollowOptions) {
+  const active = useWindowActivity();
   useEffect(() => {
-    if (!filter.live || !isLoaded) return;
+    if (!active || !filter.live || !isLoaded) return;
     let h: StreamHandle | undefined;
     let closed = false;
     const ingest = (batch: Omit<Entry, 'key'>[]) => {
@@ -370,7 +378,7 @@ function useLiveFollow({
     };
     // qkey covers the filter fields and watchers the stream reads; reopen only when it changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter.live, isLoaded, qkey]);
+  }, [filter.live, isLoaded, qkey, active]);
 }
 
 function sourcesLabelOf(ids: string[], sources: SourcesResult | null, t: TFn): string {

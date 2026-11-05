@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useSession } from '../../api';
+import { usePrefs, useSession } from '../../api';
 import { useT } from '../../i18n';
 import {
   themeVars,
@@ -14,6 +14,37 @@ import {
   type ThemeDef,
 } from '../../theme';
 import { Button, Icon, Input, Segmented, toast } from '../../ui';
+import { usePrefSave } from './save';
+
+/** Both shells use the same account, preferences and real pages. */
+export function ShellChoice() {
+  const { prefs } = usePrefs();
+  const { host } = useSession();
+  const t = useT('settings');
+  const save = usePrefSave();
+  const mode = (prefs['shell.mode'] ?? host?.defaultShell) === 'ervisios' ? 'ervisios' : 'classic';
+  return (
+    <div className="st-shell-choices" role="group" aria-label={t('appearance.shell.title')}>
+      {(['classic', 'ervisios'] as const).map((choice) => (
+        <button
+          type="button"
+          className="st-shell-choice"
+          key={choice}
+          aria-pressed={mode === choice}
+          onClick={() => mode !== choice && save('shell.mode', choice, t('appearance.shell.title'))}
+        >
+          <div className={`st-shell-preview st-shell-preview--${choice}`} aria-hidden="true">
+            <div className="st-shell-preview-apps"><i /><i /><i /><i /></div>
+            <div className="st-shell-preview-window"><b /><span /><span /></div>
+            {choice === 'ervisios' && <div className="st-shell-preview-taskbar"><i /><i /><i /></div>}
+          </div>
+          <div className="st-shell-name"><strong>{t(`appearance.shell.${choice}`)}</strong>{mode === choice && <Icon name="check" />}</div>
+          <p>{t(`appearance.shell.${choice}Desc`)}</p>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function Mini({ t, mode, distro }: { t: ThemeDef; mode: ColourMode; distro: string }) {
   const v = useMemo(() => themeVars(t, mode, distro), [t, mode, distro]);

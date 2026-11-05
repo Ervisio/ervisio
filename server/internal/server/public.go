@@ -24,6 +24,8 @@ type publicHost struct {
 	Distro   publicDistro `json:"distro"`
 	// SSHKeys: the sign-in page may offer "Sign in with an SSH key" (auth.ssh_keys).
 	SSHKeys bool `json:"sshKeys"`
+	// Initial shell; the signed-in user's preference takes priority.
+	DefaultShell string `json:"defaultShell"`
 }
 
 // hostCache avoids re-reading os-release and probing the network on every
@@ -62,6 +64,7 @@ func (s *Server) handlePublicHost(w http.ResponseWriter, r *http.Request) {
 		h.IP = ip
 	}
 	h.SSHKeys = s.Config().Auth.SSHKeys
+	h.DefaultShell = s.Config().UI.DefaultShell
 	writeJSON(w, http.StatusOK, h)
 }
 

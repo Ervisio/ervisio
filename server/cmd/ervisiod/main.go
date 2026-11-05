@@ -367,6 +367,7 @@ func sessionHelperPath() string {
 // config), and moves a LinuxAdmin-layout installation to Ervisio.
 func startUpdates(ctx context.Context, srv *server.Server) {
 	u := update.New(update.NewChecker())
+	u.ConfigPath = configmod.Path
 	exe, _ := os.Executable()
 	if r, err := filepath.EvalSymlinks(exe); err == nil {
 		exe = r

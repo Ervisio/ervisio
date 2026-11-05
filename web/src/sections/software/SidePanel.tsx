@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useWindowActivity } from '../../lib/windowActivity';
 import { ApiError, call } from '../../api';
 import { useT } from '../../i18n';
 import { Badge, Button, Icon, Panel, Progress, Skeleton } from '../../ui';
@@ -20,21 +21,22 @@ function logClass(line: string): string {
 }
 
 export function TxPanel({ tx, openTerminal }: { tx: TxState; openTerminal(cmd?: string): void }) {
+  const active = useWindowActivity();
   const t = useT('software');
   const ref = useRef<HTMLPreElement>(null);
   const stick = useRef(true);
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
-    if (tx.phase !== 'running') return;
+    if (tx.phase !== 'running' || !active) return;
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
-  }, [tx.phase]);
+  }, [tx.phase, active]);
 
   useEffect(() => {
     const el = ref.current;
-    if (el && stick.current) el.scrollTop = el.scrollHeight;
-  }, [tx.log]);
+    if (el && stick.current && active) el.scrollTop = el.scrollHeight;
+  }, [tx.log, active]);
 
   const eta = useMemo(() => {
     if (tx.phase !== 'running' || tx.steps !== 1 || tx.total === 0 || tx.done === 0) return '';

@@ -10,6 +10,7 @@ after a change; keys marked `restart` need a daemon restart.
 |---|---|---|---|
 | `listen` | string `host:port` | `0.0.0.0:9090` | restart |
 | `allow_root` | bool | `false` | |
+| `ui.default_shell` | enum `classic`/`ervisios` | `classic` | initial interface for users without a personal `shell.mode` preference; live reload, no restart |
 | `login.show_ip` | bool | `true` | |
 | `login.max_failures` | int 1–1000 | `5` | per IP per 15 min (password and SSH-key failures together) |
 | `auth.ssh_keys` | bool | `true` | sign in with an SSH key listed in the user's `authorized_keys` (`docs/api/auth.md`) |
@@ -23,6 +24,7 @@ after a change; keys marked `restart` need a daemon restart.
 | `tls.cert`, `tls.key` | absolute path | `""` | for `custom`; restart |
 | `plugins.allow_unsigned` | bool | `false` | unsigned plugins are blocked (dev folders still run in developer mode, marked "Unsigned, dev") |
 | `plugins.dev` | bool | `false` | |
+| `plugins.trusted_keys` | list of up to 16 base64 ed25519 public keys | `[]` | additional plugin package signers; embedded team keys remain trusted. Does not authorize catalog signatures. Changes apply on the next plugin authorization. Keep this configuration administrator-owned. |
 | `plugins.catalog_url` | string, `""` or an `https://` URL | `https://ervisio.github.io/plugins/catalog.json` | the marketplace catalog of Plugins › Browse; its signature is at the same address with `.sig` instead of `.json`, and an unsigned catalog is ignored (`docs/api/plugins.md`); `""` = no remote catalog |
 | `plugins.catalog_key` | string, `""` or a base64 ed25519 public key | `""` | an extra key trusted for catalog signatures (a private catalog); plugins still need the team signature |
 | `audit.enabled` | bool | `true` | record the activity log (sign-ins, administrator unlocks, plugin installs, settings, and every mutating plugin call); see `docs/api/plugins.md`, "Activity log" |

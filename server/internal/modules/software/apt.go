@@ -46,18 +46,18 @@ func parseDpkgList(out string, manual map[string]bool, orphans map[string]bool) 
 var aptRemvRe = regexp.MustCompile(`^Remv (\S+)`)
 
 func (a *apt) ListInstalled(ctx context.Context) ([]Package, error) {
-	out, err := run(ctx, time.Minute, nil, "dpkg-query", "-W", "-f", "${Package}\t${Version}\t${Installed-Size}\t${db:Status-Abbrev}\t${binary:Summary}\n")
+	out, err := runAptRead(ctx, time.Minute, nil, "dpkg-query", "-W", "-f", "${Package}\t${Version}\t${Installed-Size}\t${db:Status-Abbrev}\t${binary:Summary}\n")
 	if err != nil {
 		return nil, err
 	}
 	manual := map[string]bool{}
-	if m, err := run(ctx, 30*time.Second, nil, "apt-mark", "showmanual"); err == nil {
+	if m, err := runAptRead(ctx, 30*time.Second, nil, "apt-mark", "showmanual"); err == nil {
 		for _, n := range strings.Fields(m) {
 			manual[n] = true
 		}
 	}
 	orphans := map[string]bool{}
-	if s, _ := run(ctx, 30*time.Second, aptEnv, "apt-get", "-s", "autoremove"); s != "" {
+	if s, _ := runAptRead(ctx, 30*time.Second, aptEnv, "apt-get", "-s", "autoremove"); s != "" {
 		for _, l := range strings.Split(s, "\n") {
 			if g := aptRemvRe.FindStringSubmatch(l); g != nil {
 				orphans[g[1]] = true
@@ -113,13 +113,13 @@ func parseAptURIs(out string) map[string]int64 {
 }
 
 func (a *apt) ListUpdates(ctx context.Context) ([]Update, error) {
-	out, err := run(ctx, time.Minute, aptEnv, "apt", "list", "--upgradable")
+	out, err := runAptRead(ctx, time.Minute, aptEnv, "apt", "list", "--upgradable")
 	if err != nil && out == "" {
 		return nil, err
 	}
 	ups := parseAptUpgradable(out)
 	if len(ups) > 0 {
-		if uris, _ := run(ctx, time.Minute, aptEnv, "apt-get", "--print-uris", "-qq", "-y", "dist-upgrade"); uris != "" {
+		if uris, _ := runAptRead(ctx, time.Minute, aptEnv, "apt-get", "--print-uris", "-qq", "-y", "dist-upgrade"); uris != "" {
 			sizes := parseAptURIs(uris)
 			for i := range ups {
 				ups[i].Size = sizes[ups[i].Name]
@@ -169,7 +169,7 @@ func (a *apt) Search(ctx context.Context, q string) ([]Result, error) {
 	if len(terms) == 0 {
 		return nil, nil
 	}
-	out, err := run(ctx, 30*time.Second, nil, "apt-cache", append([]string{"search", "--names-only", "--"}, terms...)...)
+	out, err := runAptRead(ctx, 30*time.Second, nil, "apt-cache", append([]string{"search", "--names-only", "--"}, terms...)...)
 	if err != nil && out == "" && exitCode(err) != 1 {
 		return nil, err
 	}
@@ -196,7 +196,7 @@ func (a *apt) fill(ctx context.Context, res []Result) {
 	for i := range res {
 		names[i] = res[i].Name
 	}
-	if out, err := run(ctx, 20*time.Second, nil, "apt-cache", append([]string{"policy", "--"}, names...)...); err == nil {
+	if out, err := runAptRead(ctx, 20*time.Second, nil, "apt-cache", append([]string{"policy", "--"}, names...)...); err == nil {
 		pol := parseAptPolicy(out)
 		for i := range res {
 			if v, ok := pol[res[i].Name]; ok {
@@ -216,7 +216,7 @@ func (a *apt) Lookup(ctx context.Context, names []string) ([]Result, error) {
 	var out []Result
 	for _, r := range res {
 		if r.Version != "" && r.Version != "(none)" {
-			if d, err := run(ctx, 10*time.Second, nil, "apt-cache", "show", "--no-all-versions", "--", r.Name); err == nil {
+			if d, err := runAptRead(ctx, 10*time.Second, nil, "apt-cache", "show", "--no-all-versions", "--", r.Name); err == nil {
 				r.Description = fieldValue(parseKV(d), "Description")
 			}
 			out = append(out, r)
@@ -229,13 +229,13 @@ func (a *apt) Info(ctx context.Context, name string) (*Detail, error) {
 	if err := validNames([]string{name}); err != nil {
 		return nil, err
 	}
-	out, err := run(ctx, 20*time.Second, nil, "apt-cache", "show", "--no-all-versions", "--", name)
+	out, err := runAptRead(ctx, 20*time.Second, nil, "apt-cache", "show", "--no-all-versions", "--", name)
 	if err != nil || strings.TrimSpace(out) == "" {
 		return nil, rpc.Errorf(rpc.NotFound, "No package called %q was found.", name)
 	}
 	f := parseKV(out)
 	d := &Detail{Name: name, Source: "apt", Kind: KindRepo, Version: fieldValue(f, "Version"), Description: fieldValue(f, "Description"), Fields: f}
-	if st, err := run(ctx, 10*time.Second, nil, "dpkg-query", "-W", "-f", "${db:Status-Abbrev}", name); err == nil && strings.HasPrefix(st, "ii") {
+	if st, err := runAptRead(ctx, 10*time.Second, nil, "dpkg-query", "-W", "-f", "${db:Status-Abbrev}", name); err == nil && strings.HasPrefix(st, "ii") {
 		d.Installed = true
 	}
 	return d, nil
@@ -244,7 +244,7 @@ func (a *apt) Info(ctx context.Context, name string) (*Detail, error) {
 func (a *apt) Owners(ctx context.Context, files []string) map[string]string {
 	res := map[string]string{}
 	for _, f := range files {
-		out, err := run(ctx, 10*time.Second, nil, "dpkg", "-S", "--", f)
+		out, err := runAptRead(ctx, 10*time.Second, nil, "dpkg", "-S", "--", f)
 		if err != nil {
 			continue
 		}

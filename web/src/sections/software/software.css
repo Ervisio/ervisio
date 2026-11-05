@@ -1,4 +1,36 @@
 /* Software section. Every class is prefixed sw-. No divider lines: tinted rows, spacing, hover. */
+/* A native window owns its height; only the active catalog content scrolls. */
+.eos-native-frame:has(.sw-root) {
+  max-height: 100%;
+  overflow: hidden;
+}
+.eos-native-frame:has(.sw-root) .eos-native-content,
+.eos-native-frame:has(.sw-root) .eos-native-content > .ui-page {
+  overflow: hidden;
+}
+.eos-native-frame:has(.sw-root) .eos-native-content > .ui-page {
+  height: 100%;
+  max-height: 100%;
+}
+.eos-native-frame .sw-root {
+  flex: 1;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+}
+.eos-native-frame .sw-root > .sw-bar,
+.eos-native-frame .sw-root > .sw-read-error {
+  flex-shrink: 0;
+}
+.eos-native-frame .sw-root > .sw-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.eos-native-frame:has(.sw-root) .eos-native-sidebar {
+  min-height: 0;
+  overflow-y: auto;
+}
 .sw-root {
   --acc: var(--h-sw);
   --acc-s: var(--h-sw-s);
@@ -32,6 +64,17 @@
 }
 .sw-muted {
   color: var(--ink3);
+}
+.sw-read-error {
+  margin: 10px 16px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 12px;
+  background: var(--h-log-s);
+  color: var(--ink);
 }
 .sw-checked {
   font-size: 13px;

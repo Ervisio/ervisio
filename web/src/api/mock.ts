@@ -32,6 +32,7 @@ export function mockSession(): Session {
   if (!user) throw new ApiError('unauthenticated', 'Not signed in', undefined, 401);
   return {
     user,
+    home: rd<string | undefined>('home', undefined),
     uid: 1000,
     isAdmin: unlockedUntil > Date.now(),
     canSudo: true,
@@ -173,6 +174,71 @@ const mockState = () => ({
 
 export async function mockCall(method: string, params: any, _admin?: boolean): Promise<any> {
   switch (method) {
+    // Read-only browser fixtures for Files interaction tests; never used by a production build.
+    case 'files.list': {
+      const folders = rd<Record<string, any[]>>('files', {});
+      const entries = (folders[params.path] ?? []).filter(
+        (entry) => params.showHidden || !entry.name.startsWith('.'),
+      );
+      return delay({ path: params.path, entries }, 15);
+    }
+    case 'files.places':
+      return delay({ home: rd('home', '/'), recent: [], disks: [], trashCount: 0 }, 15);
+    case 'files.stat': {
+      const folders = rd<Record<string, any[]>>('files', {});
+      for (const [folder, entries] of Object.entries(folders)) {
+        const entry = entries.find((item) => `${folder}/${item.name}` === params.path);
+        if (entry) return delay({ ...entry, path: params.path }, 15);
+      }
+      throw new ApiError('not_found', 'Fixture file not found');
+    }
+    case 'files.readText':
+      return delay({ text: '', encoding: 'utf-8', eol: 'lf', size: 0, truncated: false }, 15);
+    case 'system.connectivity': {
+      const failure = rd<string | null>('connectivityError', null);
+      if (failure) throw new ApiError('unavailable', failure);
+      const missing = {
+        present: false,
+        supported: false,
+        enabled: null,
+        state: 'unavailable',
+        reason: 'no_hardware',
+        devices: [],
+      };
+      return delay(
+        rd('connectivity', {
+          source: 'host',
+          platform: 'linux',
+          wifi: missing,
+          bluetooth: missing,
+          interfaces: [
+            {
+              id: 'enp0s3',
+              name: 'enp0s3',
+              type: 'ethernet',
+              state: 'up',
+              addresses: ['192.168.1.137/24'],
+            },
+          ],
+        }),
+      );
+    }
+    case 'system.connectivity.set': {
+      if (!_admin || !mockSession().isAdmin)
+        throw new ApiError('needs_admin', 'Administrator rights are needed.');
+      if (!['wifi', 'bluetooth'].includes(params.radio) || typeof params.enabled !== 'boolean')
+        throw new ApiError('invalid', 'Give a radio and enabled state.');
+      const state = await mockCall('system.connectivity', {});
+      const radio = state[params.radio];
+      if (!radio.supported || radio.enabled === null)
+        throw new ApiError('unavailable', 'No manageable radio is present.');
+      const updated = {
+        ...state,
+        [params.radio]: { ...radio, enabled: params.enabled, state: params.enabled ? 'on' : 'off' },
+      };
+      wr('connectivity', updated);
+      return updated;
+    }
     case 'system.host':
       return delay({
         hostname: 'arch',

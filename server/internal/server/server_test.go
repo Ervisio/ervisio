@@ -324,6 +324,8 @@ func TestUnauthenticated(t *testing.T) {
 		t.Fatal("public host", code)
 	} else if !strings.Contains(body, `"sshKeys":true`) {
 		t.Fatal("public host should expose sshKeys (default on):", body)
+	} else if !strings.Contains(body, `"defaultShell":"classic"`) {
+		t.Fatal("public host should expose the initial interface:", body)
 	}
 	if code, body := do(t, "GET", ts.URL+"/api/auth/session", "", false); code != 401 || !strings.Contains(body, "unauthenticated") {
 		t.Fatal(code, body)

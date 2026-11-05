@@ -49,13 +49,16 @@ import { jobsApi, notifyApi } from './jobs';
 import * as kit from './kit';
 import { b64encode } from '../../auth/sshkey/bytes.ts';
 import type { AuditEntry, HttpRequestOptions, UploadOptions } from '../types';
+import { installFrameVisibility } from './visibility';
+
+const visibility = installFrameVisibility(window, document);
 
 type ViewDef<S> =
   | ComponentType<{ sdk: S }>
   | { render(container: HTMLElement, sdk: S): void | (() => void) };
 
 const style = document.createElement('style');
-style.textContent = `${tokensCss}\n${uiCss}\n${frameCss}`;
+style.textContent = `${tokensCss}\n${uiCss}\n${frameCss}\n:root[data-frame-hidden="true"] *, :root[data-frame-hidden="true"] *::before, :root[data-frame-hidden="true"] *::after { animation-play-state: paused !important; }`;
 document.head.appendChild(style);
 
 /* ---------- theme ---------- */
@@ -163,11 +166,22 @@ function makeSdk(
   const strings: Record<string, Record<string, string>> = {};
   const assets = new Map<string, Promise<string>>();
   const sdk = {
-    version: 3 as const,
+    version: 4 as const,
     /** The console's origin as the user reaches it, for building URLs such as webhooks (location.origin is opaque in a frame). */
     appOrigin,
     /** The server's operating system: 'linux' or 'windows'. */
     platform,
+    visibility: {
+      get hidden() {
+        return visibility.hidden;
+      },
+      onChange: visibility.onChange,
+    },
+    shell: {
+      mode: view.shell ?? 'classic',
+      command: (text: string) =>
+        request<{ handled: boolean; message?: string }>('shell.command', { text }),
+    },
     plugin,
     view,
     react: React,
@@ -433,9 +447,11 @@ function Mount({ def, sdk }: { def: ViewDef<Sdk>; sdk: Sdk }) {
 }
 
 async function start(m: Extract<HostToFrame, { t: 'init' }>) {
+  visibility.setActive(m.active !== false);
   setLang(m.lang);
   applyTheme(m.theme);
   document.documentElement.dataset.view = m.view.kind;
+  document.documentElement.dataset.shell = m.view.shell ?? 'classic';
   document.documentElement.lang = getLang();
   const { sdk, pages, widgets } = makeSdk(m.plugin, m.view, m.appOrigin, m.platform ?? 'linux');
   const url = URL.createObjectURL(new Blob([m.code], { type: 'text/javascript' }));
@@ -485,6 +501,9 @@ window.addEventListener('message', (ev: MessageEvent) => {
     case 'lang':
       setLang(m.lang);
       document.documentElement.lang = getLang();
+      break;
+    case 'visibility':
+      if (typeof m.active === 'boolean') visibility.setActive(m.active);
       break;
   }
 });

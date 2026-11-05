@@ -58,7 +58,7 @@ export interface PluginManifest {
     userHosts?: boolean;
   };
   contributes?: {
-    pages?: { id: string; title: string; icon?: string }[];
+    pages?: { id: string; title: string; icon?: string; ervisios?: { view: string } }[];
     widgets?: { id: string; title: string; icon?: string }[];
     snippets?: { name: string; command: string }[];
   };
@@ -80,6 +80,8 @@ export interface PluginPageInfo {
   id: string;
   title: string;
   icon?: string;
+  /** Opt-in native ErvisiOS view registered through sdk.registerPage. */
+  ervisios?: { view: string };
 }
 
 /** A widget contributed by a plugin (from its manifest). It renders in a small sandboxed frame. */
@@ -313,14 +315,24 @@ export type PluginViewDef<S = PluginSDK> =
   | { render(container: HTMLElement, sdk: S): void | (() => void) };
 
 export interface PluginSDK {
-  version: 3;
+  version: 4;
+  /** Visibility combines the minimized window and browser tab; active work is never cancelled. */
+  visibility: {
+    readonly hidden: boolean;
+    onChange(callback: (hidden: boolean) => void): () => void;
+  };
+  /** Contract v4: UI surface and deterministic assistant UI commands. Commands are restricted to plugin ai. */
+  shell: {
+    mode: 'classic' | 'ervisios';
+    command(text: string): Promise<{ handled: boolean; message?: string }>;
+  };
   /** SDK 0.2: the console's origin as the user reaches it (https://host:9090 or the proxied origin), no path. Use it to show webhook URLs (`${sdk.appOrigin}/hooks/...`): `location.origin` is opaque in a sandboxed frame. */
   appOrigin: string;
   /** SDK 0.6.1: the server's operating system, 'linux' or 'windows'. Commands, paths and sockets differ: a plugin for both checks it. */
   platform: 'linux' | 'windows';
   plugin: { id: string; name: string; version: string };
   /** What this frame shows: one page or one widget of the plugin. */
-  view: { kind: 'page' | 'widget'; id: string };
+  view: { kind: 'page' | 'widget'; id: string; shell?: 'classic' | 'ervisios' };
   react: typeof import('react');
   /** The component kit, same look as the app (Button, Table, Card, StatCard, Dialog, Tabs, Badge, toast, ...). */
   ui: Record<string, unknown>;

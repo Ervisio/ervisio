@@ -171,7 +171,8 @@
     "emptyTrash": "Empty Trash",
     "selectAll": "Select all",
     "refresh": "Refresh",
-    "chown": "Change owner"
+    "chown": "Change owner",
+    "properties": "Properties"
   },
   "bulk": {
     "label": "Selected items",
@@ -291,5 +292,19 @@
     "trash": "Files: open the Trash",
     "newFolder": "Files: new folder",
     "split": "Files: toggle split view"
-  }
+  },
+  "native": {
+    "thisPC": "This PC",
+    "hostFiles": "Files and storage on this server",
+    "devices": "Devices and drives",
+    "quickAccess": "Quick access",
+    "back": "Back",
+    "forward": "Forward",
+    "refresh": "Refresh folder",
+    "freeSpace": "{free} free of {total}",
+    "noDisks": "No storage information available",
+    "itemCount_one": "{count} item",
+    "itemCount_other": "{count} items"
+  },
+  "propertiesFor": "Properties: {name}"
 }

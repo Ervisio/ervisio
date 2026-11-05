@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { recentUsersEnabled, setRecentUsersEnabled, useSession, usePrefs } from '../../api';
 import { FormerName, Name } from '../../brand';
 import { LANGUAGES, useI18n, useT, type Lang, type TFn } from '../../i18n';
@@ -19,7 +19,7 @@ import {
 import { RefreshSelect } from '../../lib/RefreshSelect';
 import { REFRESH_KEY } from '../../lib/refresh';
 import { ActivityLog } from './ActivityLog';
-import { ColourBlock, ThemeGrid } from './Appearance';
+import { ColourBlock, ShellChoice, ThemeGrid } from './Appearance';
 import { ChannelsBlock } from './Channels';
 import { EnvironmentsBlock } from './Environments';
 import { HostsBlock, type HostEntry } from './Hosts';
@@ -31,9 +31,10 @@ import { PluginJobsBlock } from './PluginJobs';
 import { usePrefSave, useServerConfig, type CfgState } from './save';
 import { UpdatesBlock } from './Updates';
 import { updateStatus } from './updatesApi';
+import { NativeSettings } from './NativeSettings';
 import './settings.css';
 
-interface RowDef {
+export interface RowDef {
   id: string;
   title: string;
   desc?: string;
@@ -47,7 +48,7 @@ interface RowDef {
   /** The daemon must restart for this key to apply. */
   restart?: boolean;
 }
-interface GroupDef {
+export interface GroupDef {
   id: string;
   part: 'you' | 'server' | 'about';
   icon: IconName;
@@ -86,6 +87,8 @@ export default function SettingsPage() {
   const { lang, setLang } = useI18n();
   const save = usePrefSave();
   const loc = useLocation();
+  const navigate = useNavigate();
+  const native = (prefs['shell.mode'] ?? host?.defaultShell) === 'ervisios';
   const isAdmin = !!session && (session.isAdmin || session.canSudo || !!session.isRoot);
   // What the daemon shows in the activity log: everyone's entries to root and to an unlocked administrator.
   const canSeeAll = !!session && (!!session.isRoot || isUnlocked);
@@ -101,7 +104,17 @@ export default function SettingsPage() {
     setRecentOn(on);
     toast.info(t('saved', { name: t('browser.recent.title') }));
   };
-  const { scrollRef, active, onScroll, go } = useSettingsScroll(loc.hash, server.state);
+  const {
+    scrollRef,
+    active,
+    onScroll,
+    go: scrollToGroup,
+  } = useSettingsScroll(loc.hash, server.state, !native);
+  const go = (id: string) => {
+    if (!native) return scrollToGroup(id);
+    setQ('');
+    navigate({ pathname: loc.pathname, search: loc.search, hash: `#${id}` }, { replace: true });
+  };
 
   const region = { timeFormat: '24', weekStart: 'mon', ...(prefs.region ?? {}) } as Region;
   const term = {
@@ -159,6 +172,20 @@ export default function SettingsPage() {
 
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   const visible = filterGroups(groups, words);
+
+  if (native)
+    return (
+      <NativeSettings
+        groups={groups}
+        visible={visible}
+        selected={loc.hash.slice(1) || 'appearance'}
+        query={q}
+        onQuery={setQ}
+        onSelect={go}
+        locked={server.state !== 'ready'}
+        renderRow={(row) => settingsRow(t, row)}
+      />
+    );
 
   return (
     <div className="st hue-set">
@@ -225,7 +252,7 @@ function useManagedBy(isAdmin: boolean) {
 }
 
 /** Scroll spy over the group sections and deep links to a group by #hash. */
-function useSettingsScroll(hash: string, serverState: CfgState) {
+function useSettingsScroll(hash: string, serverState: CfgState, enabled = true) {
   const [active, setActive] = useState('appearance');
   const scrollRef = useRef<HTMLDivElement>(null);
   const onScroll = useCallback(() => {
@@ -244,9 +271,13 @@ function useSettingsScroll(hash: string, serverState: CfgState) {
     setActive(id);
   };
   useEffect(() => {
+    if (!enabled) return;
     const id = hash.replace('#', '');
-    if (id) window.setTimeout(() => go(id), 50);
-  }, [hash, serverState]);
+    const timer = id ? window.setTimeout(() => go(id), 50) : undefined;
+    return () => {
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [hash, serverState, enabled]);
   return { scrollRef, active, onScroll, go };
 }
 
@@ -352,6 +383,13 @@ function appearanceGroup(t: TFn, th: ThemeValue, save: Save): GroupDef {
     hue: 'plg',
     title: t('groups.appearance'),
     rows: [
+      {
+        id: 'shell',
+        title: t('appearance.shell.title'),
+        desc: t('appearance.shell.desc'),
+        words: 'ErvisiOS classic desktop interface windows interfaccia classica finestre',
+        block: <ShellChoice />,
+      },
       {
         id: 'theme',
         title: t('appearance.theme.title'),

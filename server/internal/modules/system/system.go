@@ -13,6 +13,7 @@ import (
 // Register adds the system.* methods.
 func Register(r *rpc.Registry) {
 	shared := newSampler()
+	registerConnectivity(r, platformConnectivity())
 	r.Handle("system.host", rpc.User, func(ctx context.Context, c *rpc.Call) (any, error) {
 		return readHost()
 	})

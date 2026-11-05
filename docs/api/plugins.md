@@ -254,7 +254,7 @@ daemon itself, not by a bridge, because jobs must run while no page is open. The
 fills in the plugin id and refuses undeclared jobs, but the daemon checks everything again. Reference:
 `docs/api/jobs.md` (jobs, instances, webhooks `POST /hooks/<plugin>/<token>`) and `docs/api/notify.md` (channels,
 `plugins.notify`). The SDK exposes them as `sdk.api.jobs` and `sdk.api.notify`; both are absent on consoles older than
-0.5, so a plugin checks `sdk.api.jobs` before using it. The SDK contract version stays 3: the additions are backward
+0.5, so a plugin checks `sdk.api.jobs` before using it. These job APIs are additive to SDK contract 3: the additions are backward
 compatible.
 
 ## Signing
@@ -264,7 +264,7 @@ canonical form is the JSON re-encoded with sorted keys and no whitespace. Becaus
 other file in `files`, the signature covers the whole folder. Verification also fails when a file differs from its hash,
 when a listed file is missing, or when the folder holds a file that is not listed.
 
-The trusted key is `plugins.TeamPublicKey` in `sign.go`, the public half of the Ervisio team key. The private key
+The embedded trusted key is `plugins.TeamPublicKey` in `sign.go`, the public half of the Ervisio team key. Administrators can add plugin-only public keys with `plugins.trusted_keys` in the server configuration; this does not grant catalog-signing authority. The private key
 is never in the repository: where it lives, who may use it and how to rotate it is in `docs/PLUGIN-SIGNING.md`.
 Marketplace plugins are signed with it by the registry's CI.
 

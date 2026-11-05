@@ -107,6 +107,11 @@ func (s *Spec) command(name string, args ...string) *exec.Cmd {
 
 func (s *Spec) bridgeArgs(admin bool) []string {
 	args := []string{"--config", s.Config}
+	// A flag survives the clean user environment, PAM and sudo. Propagating
+	// only the service's environment would silently miss its child bridges.
+	if limit := os.Getenv("GOMEMLIMIT"); limit != "" {
+		args = append(args, "--memory-limit", limit)
+	}
 	if s.Dev {
 		args = append(args, "--dev")
 		if s.DevPlugins != "" {

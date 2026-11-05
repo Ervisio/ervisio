@@ -35,6 +35,7 @@ interface MenuOps {
 }
 
 interface MenuContext {
+  native?: boolean;
   t: TFn;
   side: Side;
   loc: string;
@@ -57,7 +58,7 @@ function contextMenu(ctx: MenuContext, onEntry: boolean): MenuItem[] {
   return backgroundMenu(ctx);
 }
 
-function trashMenu({ t, paneEmpty, ops }: MenuContext, onEntry: boolean): MenuItem[] {
+function trashMenu({ t, paneEmpty, ops, native }: MenuContext, onEntry: boolean): MenuItem[] {
   if (!onEntry)
     return [
       {
@@ -71,7 +72,12 @@ function trashMenu({ t, paneEmpty, ops }: MenuContext, onEntry: boolean): MenuIt
     ];
   return [
     { id: 'restore', label: t('act.restore'), icon: 'undo', onSelect: ops.restore },
-    { id: 'det', label: t('act.details'), icon: 'info', onSelect: ops.details },
+    {
+      id: 'det',
+      label: t(native ? 'act.properties' : 'act.details'),
+      icon: 'info',
+      onSelect: ops.details,
+    },
     {
       id: 'del',
       label: t('act.deleteForever'),
@@ -193,7 +199,12 @@ function entryMenu(ctx: MenuContext, one: FEntry): MenuItem[] {
     icon: 'link',
     onSelect: () => ops.copyPath(one.path),
   });
-  items.push({ id: 'det', label: t('act.details'), icon: 'info', onSelect: ops.details });
+  items.push({
+    id: 'det',
+    label: t(ctx.native ? 'act.properties' : 'act.details'),
+    icon: 'info',
+    onSelect: ops.details,
+  });
   items.push({
     id: 'del',
     label: t('act.trash'),
@@ -216,6 +227,8 @@ function selectionMenu(ctx: MenuContext): MenuItem[] {
       onSelect: () => ops.download(entries),
     });
   items.push(...splitCopyItems(ctx));
+  if (ctx.native)
+    items.push({ id: 'det', label: t('act.properties'), icon: 'info', onSelect: ops.details });
   items.push({
     id: 'del',
     label: t('act.trashMany', { count: entries.length }),
@@ -273,6 +286,7 @@ function backgroundMenu({
 }
 
 interface FilesMenuArgs {
+  native?: boolean;
   t: TFn;
   tabs: FilesTabs;
   data(s: Side): PaneData;
@@ -319,7 +333,7 @@ export function useFilesMenu(args: FilesMenuArgs) {
 
   const menuOps = (s: Side, es: FEntry[]): MenuOps => ({
     restore: () => void actions.restore(es, s),
-    details: panel.show,
+    details: () => panel.show(es),
     remove: () => actions.requestDelete(es, s),
     emptyTrash: actions.askEmptyTrash,
     open: (e) => actions.openEntry(e, s),
@@ -342,6 +356,7 @@ export function useFilesMenu(args: FilesMenuArgs) {
     const loc = pane(s).loc;
     const es = e ? (sel[s].has(e.path) ? selectedEntries(s) : [e]) : [];
     const ctx: MenuContext = {
+      native: args.native,
       t,
       side: s,
       loc,

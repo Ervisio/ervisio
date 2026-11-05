@@ -4,6 +4,8 @@ Package `server/internal/modules/updates` (RPC) on top of `server/internal/updat
 install layout, switch helper, automatic installs). Release process and layout: `docs/RELEASING.md`. UI:
 Settings › About (`web/src/sections/settings/Updates.tsx`), bell notice for admins (`UpdateNotifier.tsx`).
 
+Update and rollback helpers receive the daemon's active `--config` path. Their loopback health request uses HTTP for `tls.mode = "http"` and HTTPS for TLS modes, avoiding false 30-second rollback failures behind an HTTP reverse proxy. Regression tests exercise the actual configured constructor against both HTTP and TLS servers.
+
 ## `updates.check` (user)
 
 Params `{"force": false}`. Asks GitHub for the newest release of the configured channel

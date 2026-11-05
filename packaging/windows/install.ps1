@@ -22,6 +22,8 @@ param(
     [switch]$PurgeData,
     [string]$SourceDir = $PSScriptRoot,
     [int]$Port = 9090,
+    [ValidateSet('', 'classic', 'ervisios')]
+    [string]$UI = $env:ERVISIO_UI,
     [string]$InstallDir = (Join-Path $env:ProgramFiles 'Ervisio')
 )
 $ErrorActionPreference = 'Stop'
@@ -29,6 +31,37 @@ $ErrorActionPreference = 'Stop'
 $ServiceName = 'Ervisio'
 $RuleName = 'Ervisio (TCP)'
 $DataDir = Join-Path $env:ProgramData 'Ervisio'
+
+# Preserve the rest of the TOML, including comments and plugin settings.
+# Called only after the service stops, before it starts again.
+function Set-ErvisioDefaultShell([string]$Path, [string]$Shell) {
+    $text = [IO.File]::ReadAllText($Path)
+    $section = [regex]::Match($text, '(?ms)^[ \t]*\[[ \t]*ui[ \t]*\][ \t]*(?:#[^\r\n]*)?(?:\r?\n|\z)(?<body>.*?)(?=^[ \t]*\[|\z)')
+    $value = 'default_shell = "' + $Shell + '"'
+    if ($section.Success) {
+        $body = $section.Groups['body'].Value
+        if ($body -match '(?m)^[ \t]*default_shell[ \t]*=') {
+            $body = [regex]::Replace($body, '(?m)^[ \t]*default_shell[ \t]*=[^\r\n]*', $value)
+        } else {
+            $body = $value + "`r`n" + $body
+        }
+        $group = $section.Groups['body']
+        if ($group.Index -gt 0 -and $text[$group.Index - 1] -ne "`n") {
+            $body = "`r`n" + $body
+        }
+        $text = $text.Substring(0, $group.Index) + $body + $text.Substring($group.Index + $group.Length)
+    } else {
+        $text = $text.TrimEnd() + "`r`n`r`n[ui]`r`n$value`r`n"
+    }
+    Copy-Item -LiteralPath $Path -Destination ($Path + '.bak') -Force
+    $temporary = $Path + '.tmp-' + [guid]::NewGuid().ToString('N')
+    try {
+        [IO.File]::WriteAllText($temporary, $text, (New-Object Text.UTF8Encoding($false)))
+        Move-Item -LiteralPath $temporary -Destination $Path -Force
+    } finally {
+        if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force }
+    }
+}
 
 $principal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -91,7 +124,10 @@ if ($LASTEXITCODE -ne 0) { throw "icacls failed ($LASTEXITCODE)" }
 # Default configuration (never overwritten on upgrade).
 $conf = Join-Path $DataDir 'ervisio.conf'
 if (-not (Test-Path $conf)) {
-    Set-Content -Path $conf -Encoding UTF8 -Value "listen = `"0.0.0.0:$Port`"`r`n"
+    $initialShell = if ($UI) { $UI } else { 'classic' }
+    [IO.File]::WriteAllText($conf, "listen = `"0.0.0.0:$Port`"`r`n`r`n[ui]`r`ndefault_shell = `"$initialShell`"`r`n", (New-Object Text.UTF8Encoding($false)))
+} elseif ($UI) {
+    Set-ErvisioDefaultShell -Path $conf -Shell $UI
 }
 
 # Service.

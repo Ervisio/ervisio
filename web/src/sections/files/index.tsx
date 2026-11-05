@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { downloadUrl, useSession } from '../../api';
+import { downloadUrl, usePrefs, useSession } from '../../api';
 import { useT, type TFn } from '../../i18n';
 import {
   Button,
@@ -14,6 +14,7 @@ import {
 } from '../../ui';
 import { ChownDialog, EditorDialog, NameDialog } from './Dialogs';
 import { Pane } from './Pane';
+import { NativeComputer, NativeFilesCommandBar } from './NativeFiles';
 import { PlacesList } from './Places';
 import { SidePanel } from './SidePanel';
 import { TransferBar } from './TransferBar';
@@ -36,6 +37,7 @@ import { useFilesPrefs } from './useFilesPrefs';
 import { useFilesTabs } from './useFilesTabs';
 import { basename, isVirtual } from './util';
 import './files.css';
+import './native-files.css';
 
 const placeName = (loc: string, t: TFn) => t(`place.${loc.replace(':', '')}`);
 
@@ -92,6 +94,7 @@ function FileTab({ tab, home, isOn, showSplit, onSwitch, onClose }: FileTabProps
 }
 
 interface TabBarProps {
+  native?: boolean;
   tabs: TabState[];
   activeId: string;
   home: string;
@@ -107,6 +110,7 @@ interface TabBarProps {
 }
 
 function TabBar({
+  native,
   tabs,
   activeId,
   home,
@@ -123,7 +127,7 @@ function TabBar({
   const t = useT('files');
   return (
     <div className="files-tabs" role="tablist" aria-label={t('tabs')}>
-      {mobile && <IconButton icon="menu" label={t('places')} onClick={onPlaces} />}
+      {(mobile || native) && <IconButton icon="menu" label={t('places')} onClick={onPlaces} />}
       {tabs.map((x) => (
         <FileTab
           key={x.id}
@@ -382,7 +386,10 @@ function UploadInput({
 
 export default function FilesPage() {
   const t = useT('files');
-  const { session, isUnlocked } = useSession();
+  const { session, host, isUnlocked } = useSession();
+  const { prefs: accountPrefs } = usePrefs();
+  const native = (accountPrefs['shell.mode'] ?? host?.defaultShell) === 'ervisios';
+  const [computer, setComputer] = useState(false);
   const prefs = useFilesPrefs(t);
   const home = session?.home || '/';
   const isRoot = !!session?.isRoot;
@@ -405,10 +412,29 @@ export default function FilesPage() {
   const places = usePlaces();
   const { data, selectedEntries } = useFilesPaneData(tabs, prefs.showHidden, prefs.starredList);
   const targets = selectedEntries(side);
-  const panel = useFilesPanel(targets, mobile, split);
+  const panel = useFilesPanel(
+    targets,
+    mobile,
+    split,
+    native,
+    `${tab.id}:${side}:${pane(side).loc}:${adminOf(side)}:${computer}`,
+  );
   const actions = useFilesActions({ t, isRoot, tabs, selectedEntries, panel });
-  const menu = useFilesMenu({ t, tabs, data, selectedEntries, prefs, actions, panel, fileInput });
-  const goPlace = (loc: string) => tabs.navigate(side, loc);
+  const menu = useFilesMenu({
+    t,
+    tabs,
+    data,
+    selectedEntries,
+    prefs,
+    actions,
+    panel,
+    fileInput,
+    native,
+  });
+  const goPlace = (loc: string) => {
+    setComputer(false);
+    tabs.navigate(side, loc);
+  };
   useFilesPalette({
     t,
     home,
@@ -427,6 +453,8 @@ export default function FilesPage() {
   const renderPane = (s: Side) => (
     <Pane
       key={s}
+      native={native}
+      navigationKey={`${tab.id}:${s}`}
       label={split ? t(s === 'L' ? 'left' : 'right') : undefined}
       active={side === s}
       state={pane(s)}
@@ -458,6 +486,12 @@ export default function FilesPage() {
   );
 
   const placesProps = {
+    native,
+    computer,
+    onComputer: () => {
+      clearSel();
+      setComputer(true);
+    },
     data: places,
     home,
     loc: pane(side).loc,
@@ -469,31 +503,80 @@ export default function FilesPage() {
   };
 
   return (
-    <div className="files-root hue-file">
-      {!mobile && (
+    <div className={`files-root hue-file${native ? ' files-native' : ''}`}>
+      {!mobile && !native && (
         <aside className="files-places" aria-label={t('places')}>
           <PlacesList {...placesProps} />
         </aside>
       )}
       <div className="files-body">
         <TabBar
+          native={native}
           tabs={tabs.tabs}
           activeId={tab.id}
           home={home}
           mobile={mobile}
           split={tab.split}
           showHidden={prefs.showHidden}
-          onSwitch={tabs.switchTab}
+          onSwitch={(id) => {
+            setComputer(false);
+            tabs.switchTab(id);
+          }}
           onClose={tabs.closeTab}
-          onNewTab={() => tabs.openTab()}
+          onNewTab={() => {
+            setComputer(false);
+            tabs.openTab();
+          }}
           onPlaces={() => setPlacesSheet(true)}
           onToggleHidden={prefs.toggleHidden}
           onToggleSplit={tabs.toggleSplit}
         />
-        <div className={`files-duo${split ? ' is-split' : ''}`}>
-          {renderPane('L')}
-          {split && renderPane('R')}
+        {native && (
+          <NativeFilesCommandBar
+            targets={targets}
+            writable={!computer && !!tabs.writableLoc(side)}
+            trash={inTrash && !computer}
+            clipboard={!!actions.clip}
+            computer={computer}
+            newItems={menu.newItems(side)}
+            onShortcut={(key) => actions.shortcut(side, key)}
+            onRestore={() => void actions.restore(targets, side)}
+            onEmptyTrash={actions.askEmptyTrash}
+            onUpload={() => fileInput.current?.click()}
+          />
+        )}
+        <div className={native ? 'files-native-workspace' : 'files-workspace'}>
+          {native && !mobile && (
+            <aside className="files-places" aria-label={t('places')}>
+              <PlacesList {...placesProps} />
+            </aside>
+          )}
+          {native && computer ? (
+            <NativeComputer
+              places={places}
+              home={home}
+              bookmarks={prefs.bookmarks}
+              onGo={goPlace}
+            />
+          ) : (
+            <div className={`files-duo${split ? ' is-split' : ''}`}>
+              {renderPane('L')}
+              {split && renderPane('R')}
+            </div>
+          )}
         </div>
+        {native && (
+          <div className="files-native-status">
+            <span>
+              {computer
+                ? t('native.thisPC')
+                : t('native.itemCount', { count: data(side).entries.length })}
+            </span>
+            <span>
+              {targets.length > 0 ? t('selectedCount', { count: targets.length }) : session?.user}
+            </span>
+          </div>
+        )}
         {targets.length > 0 && !actions.dialog && !actions.del && (
           <BulkBar
             targets={targets}
@@ -513,11 +596,12 @@ export default function FilesPage() {
       </div>
       {panel.isOpen && (
         <SidePanel
-          entries={targets}
+          native={native}
+          entries={panel.entries}
           admin={adminOf(side)}
           inline={!split && !mobile}
           inTrash={inTrash}
-          starred={targets.length === 1 && prefs.starred.has(targets[0].path)}
+          starred={panel.entries.length === 1 && prefs.starred.has(panel.entries[0].path)}
           canChown={!!session?.canSudo}
           onClose={panel.dismiss}
           onEdit={(e) => actions.setDialog({ kind: 'edit', entry: e, admin: adminOf(side) })}
@@ -529,7 +613,7 @@ export default function FilesPage() {
           onChown={(e) => actions.setDialog({ kind: 'chown', entry: e })}
         />
       )}
-      {mobile && (
+      {(mobile || native) && (
         <Sheet open={placesSheet} onClose={() => setPlacesSheet(false)} title={t('places')}>
           <div className="files-places files-places--sheet">
             <PlacesList {...placesProps} onPicked={() => setPlacesSheet(false)} />

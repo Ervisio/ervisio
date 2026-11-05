@@ -1,6 +1,6 @@
 # Plugin signing key
 
-Ervisio trusts plugins signed with one ed25519 key, the **team key**. The same key signs the marketplace catalog
+Ervisio trusts plugins signed with its embedded ed25519 **team key**, plus any additional plugin signers an administrator configures. The team key also signs the marketplace catalog
 (`catalog.sig`). (Releases of Ervisio itself are signed with a different key, the release key: `docs/RELEASING.md`.) Since `plugins.allow_unsigned = false` is
 the default, a plugin that is not signed with it does not run (except dev folders in developer mode, marked
 "Unsigned, dev"). The signature format is in `docs/api/plugins.md`, "Signing".
@@ -27,6 +27,27 @@ Rules:
   whoever can push there can get a plugin signed.
 
 ## Signing a plugin
+
+For a private deployment, add the public half of a separate signing key to the
+administrator-owned server configuration. Never put the private key in this file:
+
+```toml
+[plugins]
+allow_unsigned = false
+trusted_keys = ["<base64 ed25519 public key>"]
+```
+
+The list accepts up to 16 distinct 32-byte public keys, in addition to the embedded
+team keys. Both user and administrator bridges, package installation and daemon-owned
+plugin jobs use it. Additions and revocations apply at the next authorization; malformed
+or unreadable configuration fails closed. Plugins cannot supply trust through preferences
+or plugin methods; writing server configuration requires administrator rights. Keep the
+file and its parent directory owned and writable only by administrators.
+
+These keys authorize plugin packages only. `plugins.catalog_key` continues to authorize
+an extra marketplace catalog signer separately and never makes its plugin packages trusted.
+Use `plugin-sign -verify -pub <public-key> <folder>` to verify a private build before
+deployment. Keep the normal team trust so existing marketplace plugins continue to work.
 
 Normally nobody signs by hand: a plugin is published through the registry (`docs/api/plugins.md`, "Marketplace").
 After a maintainer merges the pull request that adds or updates it, the registry's `publish` workflow signs it, attaches

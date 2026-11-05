@@ -17,3 +17,11 @@ whole file ≤ 1 MiB. All methods are user level.
 
 Suggested keys (owned by the web app): `theme`, `colourMode`, `language`, `density`,
 `reduceMotion`, `terminal`, `dashboard`, `files.bookmarks`, `snippets`, `logs.watchers`.
+
+ErvisiOS uses `shell.mode` (`classic` or `ervisios`) and `shell.desktop` (a versioned JSON
+object containing desktop shortcuts, virtual folders, pinned apps and wallpaper). These
+belong to the signed-in account and follow it between browsers. Virtual folders only
+organize app shortcuts; saving them never creates directories on the operating system.
+Without `shell.mode`, the console uses `ui.default_shell` from the daemon configuration
+(also returned as `defaultShell` by `GET /api/public/host`). The browser preference cache
+is scoped by API origin, account UID and account name; an unattributed old cache is ignored.

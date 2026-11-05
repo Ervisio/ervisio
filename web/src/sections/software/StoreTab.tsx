@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ApiError, call } from '../../api';
+import { ApiError, call, errorMessage } from '../../api';
 import { useSession } from '../../api';
 import { useT } from '../../i18n';
 import { Badge, Button, Chip, EmptyState, Icon, Input, Skeleton, type IconName } from '../../ui';
 import { AppIcon } from './AppIcon';
 import { SourceBadge, displayName } from './helpers';
-import { useSoftware } from './store';
+import { loadSuggestions, peekSuggestions, suggestionsRevision, useSoftware } from './store';
+import { useAccountScope } from '../../lib/accountScope';
 import type { App, Kind, SearchResult, Update } from './types';
 
 const CATEGORIES: { id: string; icon: IconName; hue: string }[] = [
@@ -43,13 +44,25 @@ const SHOWN_APPS = 8;
 export function StoreTab({ actions, onOpen, goInstalled }: Props) {
   const t = useT('software');
   const { host } = useSession();
+  const scope = useAccountScope();
   const { summary, updates, installed, apps } = useSoftware();
+  const catalogRevision = suggestionsRevision(scope);
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
   const [category, setCategory] = useState<string | null>(null);
   const [filters, setFilters] = useState<Set<Kind>>(new Set());
   const [results, setResults] = useState<SearchResult[] | null>(null);
-  const [popular, setPopular] = useState<SearchResult[] | null>(null);
+  const [suggestions, setSuggestions] = useState(() => ({
+    scope,
+    category: '',
+    value: peekSuggestions('', scope) ?? null,
+    error: '',
+  }));
+  const categoryKey = category ?? '';
+  const sameSuggestions = suggestions.scope === scope && suggestions.category === categoryKey;
+  const popular = sameSuggestions
+    ? suggestions.value
+    : (peekSuggestions(categoryKey, scope) ?? null);
   const [error, setError] = useState('');
   const [showAllApps, setShowAllApps] = useState(false);
   const seq = useRef(0);
@@ -80,11 +93,30 @@ export function StoreTab({ actions, onOpen, goInstalled }: Props) {
 
   // Suggestions per category
   useEffect(() => {
-    setPopular(null);
-    call<SearchResult[]>('software.suggest', { category: category ?? '' })
-      .then(setPopular)
-      .catch(() => setPopular([]));
-  }, [category]);
+    let alive = true;
+    setSuggestions({
+      scope,
+      category: categoryKey,
+      value: peekSuggestions(categoryKey, scope) ?? null,
+      error: '',
+    });
+    void loadSuggestions(categoryKey, scope)
+      .then((value) => {
+        if (alive) setSuggestions({ scope, category: categoryKey, value, error: '' });
+      })
+      .catch((failure: unknown) => {
+        if (alive)
+          setSuggestions({
+            scope,
+            category: categoryKey,
+            value: peekSuggestions(categoryKey, scope) ?? [],
+            error: errorMessage(failure),
+          });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [categoryKey, scope, catalogRevision]);
 
   const updateByName = useMemo(() => {
     const m = new Map<string, Update>();
@@ -271,6 +303,11 @@ export function StoreTab({ actions, onOpen, goInstalled }: Props) {
           </button>
         ))}
       </div>
+      {sameSuggestions && suggestions.error && !debounced && (
+        <div className="sw-read-error" role="alert">
+          {suggestions.error}
+        </div>
+      )}
 
       {searching ? (
         <>

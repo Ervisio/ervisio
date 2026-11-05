@@ -227,6 +227,13 @@ type Contribution struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
 	Icon  string `json:"icon,omitempty"`
+	// Optional native desktop view. The legacy page ID and route stay stable.
+	ErvisiOS *ErvisiOSPage `json:"ervisios,omitempty"`
+}
+
+// ErvisiOSPage opts a plugin page into a separately registered desktop view.
+type ErvisiOSPage struct {
+	View string `json:"view"`
 }
 
 // Snippet is a terminal snippet.
@@ -824,6 +831,11 @@ func (c *Contributes) validateLists() error {
 			}
 			if p.Icon != "" && !iconRe.MatchString(p.Icon) {
 				return fmt.Errorf("contributes.%s: icon %q is invalid", l.what, p.Icon)
+			}
+			if p.ErvisiOS != nil {
+				if l.what != "pages" || !cmdNameRe.MatchString(p.ErvisiOS.View) {
+					return fmt.Errorf("contributes.%s: ervisios.view of %q must be a valid page view id", l.what, p.ID)
+				}
 			}
 			if seen[p.ID] {
 				return fmt.Errorf("contributes.%s: id %q is used twice", l.what, p.ID)

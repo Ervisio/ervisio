@@ -1,10 +1,13 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { readRecentUsers, useSession, type RecentUser } from '../api';
 import { KeyStep } from './KeyStep';
 import { useT } from '../i18n';
+import { formatDate, formatTime } from '../lib/format';
+import { readLoginMode } from '../shell/loginMode';
 import { useTheme } from '../theme';
-import { Button, Checkbox } from '../ui';
+import { BrandLockup, Button, Checkbox, Icon } from '../ui';
+import { Wallpaper } from '../desktop/Wallpaper';
 import { problemMessage, type Problem } from './loginProblem';
 import {
   HostArt,
@@ -19,6 +22,7 @@ import {
 } from './LoginParts';
 import { useKeySignIn, useLoginFocus, usePasswordSignIn } from './useLoginFlow';
 import './login.css';
+import './ervisios-login.css';
 
 export default function LoginPage() {
   const t = useT('auth');
@@ -75,13 +79,20 @@ export default function LoginPage() {
       }
     : submit;
   const hasRecent = recent.length > 0;
+  const osLogin = (readLoginMode(user.trim()) ?? host?.defaultShell) === 'ervisios';
 
   return (
-    <div className="login">
-      <HostArt host={host} />
+    <div className={`login${osLogin ? ' login--ervisios' : ''}`}>
+      {osLogin && <Wallpaper />}
+      {osLogin ? <ErvisiOSWelcome host={host?.hostname} /> : <HostArt host={host} />}
       <section className="lb-form">
         <div className="lb-in">
-          <h1>{t('title')}</h1>
+          {osLogin && (
+            <div className="os-login-avatar" aria-hidden="true">
+              {user.trim() ? user.trim().slice(0, 1).toUpperCase() : <Icon name="user" size={42} />}
+            </div>
+          )}
+          <h1>{osLogin && user.trim() ? user.trim() : t('title')}</h1>
           <p>{hasRecent ? t('pick') : t('enter')}</p>
           {hasRecent && (
             <RecentAccounts
@@ -142,5 +153,26 @@ export default function LoginPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+function ErvisiOSWelcome({ host }: { host?: string }) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  return (
+    <section className="os-login-welcome" aria-label={host}>
+      <BrandLockup size={28} />
+      <div className="os-login-clock">
+        <time dateTime={now.toISOString()}>{formatTime(now)}</time>
+        <p>{formatDate(now, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+      </div>
+      <div className="os-login-host">
+        <strong>ErvisiOS</strong>
+        {host && <span>{host}</span>}
+      </div>
+    </section>
   );
 }

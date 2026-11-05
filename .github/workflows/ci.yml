@@ -2,6 +2,12 @@ name: CI
 
 on:
   workflow_dispatch:
+    inputs:
+      artifact_version:
+        description: 'Optional version for the downloadable Linux binaries (for example 0.6.5-ervisios.abcdef0)'
+        type: string
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -37,7 +43,28 @@ jobs:
         working-directory: server
         run: go test -race ./...
       - name: Build
-        run: make build-server VERSION=ci-${GITHUB_SHA::7}
+        env:
+          ARTIFACT_VERSION: ${{ inputs.artifact_version }}
+        run: |
+          version="${ARTIFACT_VERSION:-ci-${GITHUB_SHA::7}}"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?(\+[0-9A-Za-z][0-9A-Za-z.-]*)?$ || "$version" =~ ^ci-[0-9a-f]{7,40}$ ]]; then
+            echo 'artifact_version must be a semantic version or ci-<commit>' >&2
+            exit 1
+          fi
+          make build-server VERSION="$version"
+          (cd server && go build -trimpath -ldflags "-X github.com/ervisio/ervisio/server/internal/brand.Version=$version" -o bin/plugin-sign ./internal/modules/plugins/cmd/plugin-sign)
+          test "$(server/bin/ervisiod --version)" = "$version"
+          test "$(server/bin/ervisio-bridge --version)" = "$version"
+      - name: Upload Linux binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: ervisio-linux-amd64
+          path: |
+            server/bin/ervisiod
+            server/bin/ervisio-bridge
+            server/bin/plugin-sign
+          if-no-files-found: error
+          retention-days: 7
       - name: Build Windows binaries (amd64, arm64)
         run: make build-windows VERSION=ci-${GITHUB_SHA::7}
 
@@ -59,6 +86,9 @@ jobs:
       - run: npm run lint
       - run: npm run i18n:check
       - run: npm test
+      - name: Install Chromium for desktop interaction tests
+        run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
       - run: npm run build
 
   packaging:

@@ -24,6 +24,8 @@ import { isRunning, useServiceCells } from './useServiceCells';
 import { useServicesRoute, type Tab } from './useServicesRoute';
 import { usePolling, useRefreshInterval } from '../../lib/refresh';
 import './services.css';
+import { NativeAppFrame } from '../../ui/NativeAppFrame';
+import { useWindowActivity } from '../../lib/windowActivity';
 
 type Purpose = 'all' | (typeof PURPOSES)[number];
 const PURPOSE_HUE = { web: 'term', containers: 'plg', system: 'ov' } as const;
@@ -104,7 +106,9 @@ function useUnitWatch(
   loadSummary: () => Promise<void>,
   setPanelRev: React.Dispatch<React.SetStateAction<number>>,
 ) {
+  const active = useWindowActivity();
   useEffect(() => {
+    if (!active) return;
     let timer: number | undefined;
     const s = stream<WatchEvent>(
       'services.watch',
@@ -132,7 +136,7 @@ function useUnitWatch(
       window.clearTimeout(timer);
       s.close();
     };
-  }, [kind, loadSummary, setLists, setPanelRev]);
+  }, [active, kind, loadSummary, setLists, setPanelRev]);
 }
 
 function useUnitData(kind: UnitKind) {
@@ -253,68 +257,88 @@ export default function ServicesPage() {
   });
 
   return (
-    <Page flush hue="svc">
-      <div className={`svc-root ${selected && wide ? 'svc-has-panel' : ''}`}>
-        <div className="svc-main">
-          <ServicesToolbar
-            t={t}
-            tabs={tabItems(t, summary, win)}
-            tab={tab}
-            onTab={setTab}
-            showPurpose={kind === 'service' && !win}
-            purpose={purpose}
-            onPurpose={setPurpose}
-            q={q}
-            onQ={setQ}
-            view={view}
-            onView={(v) => void setPref('services.view', v)}
-          />
-          {failed.length > 0 && kind === 'service' && (
-            <FailedBanner
-              failed={failed}
+    <NativeAppFrame<Tab>
+      title={t('title')}
+      icon="services"
+      items={tabItems(t, summary, win).map((item) => ({
+        ...item,
+        icon:
+          (
+            {
+              running: 'play',
+              failed: 'alert',
+              stopped: 'stop',
+              timers: 'clock',
+              sockets: 'net',
+            } as Record<string, string>
+          )[item.id] ?? 'services',
+      }))}
+      active={tab}
+      onSelect={setTab}
+    >
+      <Page flush hue="svc">
+        <div className={`svc-root ${selected && wide ? 'svc-has-panel' : ''}`}>
+          <div className="svc-main">
+            <ServicesToolbar
               t={t}
-              win={win}
-              onLog={(n) => openUnit(n, 'logs')}
-              onRestart={(n) => run(n, 'restart')}
-              onDisable={(n) => run(n, 'disable')}
-              onShow={() => setTab('failed')}
+              tabs={tabItems(t, summary, win)}
+              tab={tab}
+              onTab={setTab}
+              showPurpose={kind === 'service' && !win}
+              purpose={purpose}
+              onPurpose={setPurpose}
+              q={q}
+              onQ={setQ}
+              view={view}
+              onView={(v) => void setPref('services.view', v)}
+            />
+            {failed.length > 0 && kind === 'service' && (
+              <FailedBanner
+                failed={failed}
+                t={t}
+                win={win}
+                onLog={(n) => openUnit(n, 'logs')}
+                onRestart={(n) => run(n, 'restart')}
+                onDisable={(n) => run(n, 'disable')}
+                onShow={() => setTab('failed')}
+              />
+            )}
+            <div className="svc-body">
+              <ServicesBody
+                t={t}
+                win={win}
+                error={error}
+                all={all}
+                rows={rows}
+                view={view}
+                columns={columns}
+                selected={selected}
+                renderCard={renderCard}
+                onOpen={(n) => openUnit(n)}
+                onRetry={retry}
+              />
+            </div>
+          </div>
+          {selected && (
+            <UnitPanel
+              key={selected}
+              name={selected}
+              tab={panelTab}
+              onTab={setPanelTab}
+              onClose={closePanel}
+              inline={wide}
+              rev={panelRev}
+              row={all?.find((u) => u.name === selected)}
+              run={run}
+              busy={busy.has(selected)}
+              onOpenUnit={(n) => openUnit(n)}
+              onChanged={() => refreshAfter(selected, 'enable')}
             />
           )}
-          <div className="svc-body">
-            <ServicesBody
-              t={t}
-              win={win}
-              error={error}
-              all={all}
-              rows={rows}
-              view={view}
-              columns={columns}
-              selected={selected}
-              renderCard={renderCard}
-              onOpen={(n) => openUnit(n)}
-              onRetry={retry}
-            />
-          </div>
         </div>
-        {selected && (
-          <UnitPanel
-            key={selected}
-            name={selected}
-            tab={panelTab}
-            onTab={setPanelTab}
-            onClose={closePanel}
-            inline={wide}
-            rev={panelRev}
-            row={all?.find((u) => u.name === selected)}
-            run={run}
-            busy={busy.has(selected)}
-            onOpenUnit={(n) => openUnit(n)}
-            onChanged={() => refreshAfter(selected, 'enable')}
-          />
-        )}
-      </div>
-      {dialog}
-    </Page>
+        {dialog}
+      </Page>
+    </NativeAppFrame>
   );
 }
 

@@ -8,11 +8,13 @@ import (
 // winProc is one process as sampled from the Windows toolhelp snapshot.
 // It is platform neutral so the CPU math can be tested anywhere.
 type winProc struct {
-	pid, ppid int //nolint:unused // used by the windows build
-	name      string
-	threads   uint32 //nolint:unused // used by the windows build
-	cpu100ns  uint64 // kernel + user time, 100ns units
-	rss       uint64 // working set bytes
+	pid, ppid             int //nolint:unused // used by the windows build
+	name                  string
+	threads               uint32 //nolint:unused // used by the windows build
+	cpu100ns              uint64 // kernel + user time, 100ns units
+	rss                   uint64 // working set bytes
+	created               uint64
+	cpuKnown, memoryKnown bool
 }
 
 // cpuPercent converts a delta of 100ns CPU time over elapsed wall time into

@@ -19,6 +19,7 @@ func Register(r *rpc.Registry) {
 	// run it in the root bridge for actions flagged "run as administrator".
 	r.Handle("overview.actionRun", rpc.User, actionRun)
 	r.Handle("overview.processes", rpc.User, processes)
+	registerTaskManager(r)
 	r.Handle("overview.unitStatus", rpc.User, unitStatus)
 	r.Handle("overview.logTail", rpc.User, logTail)
 }

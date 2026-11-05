@@ -1,4 +1,7 @@
 # Decisions (date · decision · why)
+2026-11-05 · Add ErvisiOS as an optional shell, keep classic and the same backend boundaries · User requested concept.html desktop, real section windows, automatic plugin apps and a per-user switch.
+2026-11-05 · Virtual desktop folders live only in shell.desktop user preferences · They organize app shortcuts; real files remain in the existing file manager and transfer APIs.
+2026-11-05 · Plugin contract v4 adds optional native page metadata and an AI-only local intent bridge · Legacy page layouts remain usable inside windows; native views share the same capabilities and opaque-origin sandbox.
 2026-11-04 · Record existing architecture, not new product decisions · Initialization indexes current contracts without changing application behavior.
 2026-11-04 · Keep daemon and user/admin bridges separate · System operations belong behind the session and privilege boundary; see docs/ARCHITECTURE.md and map/server.md.
 2026-11-04 · Preserve approved screens and shared UI/theme primitives · docs/DESIGN-RULES.md governs visual work rather than independent section styling.

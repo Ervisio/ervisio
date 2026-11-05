@@ -1,8 +1,11 @@
 import { useEffect, useSyncExternalStore } from 'react';
-import { ApiError, call } from '../../api';
-import type { App, Pkg, Summary, Update } from './types';
+import { ApiError, call, errorMessage } from '../../api';
+import { useAccountScope } from '../../lib/accountScope';
+import { ScopedReadCache } from '../../lib/scopedReadCache';
+import { useWindowActivity } from '../../lib/windowActivity';
+import type { App, Pkg, SearchResult, Summary, Update } from './types';
 
-/** Shared state: the page, the rail badge and the palette all read it. */
+/** Shared, account/host-scoped state for the page, rail badge and palette. */
 interface State {
   summary: Summary | null;
   updates: Update[] | null;
@@ -11,97 +14,196 @@ interface State {
   checking: boolean;
   error: ApiError | null;
 }
-
-let state: State = {
+type Resource = 'summary' | 'updates' | 'installed' | 'apps';
+interface ScopeState {
+  state: State;
+  errors: Partial<Record<Resource | 'check', ApiError>>;
+  suggestionsRevision: number;
+  visited: Set<Resource>;
+}
+const empty = (): State => ({
   summary: null,
   updates: null,
   installed: null,
   apps: null,
   checking: false,
   error: null,
-};
+});
+const anonymous = empty();
+const scopes = new Map<string, ScopeState>();
+const summaryCache = new ScopedReadCache<Summary>();
+const updatesCache = new ScopedReadCache<Update[]>();
+const installedCache = new ScopedReadCache<Pkg[]>();
+const appsCache = new ScopedReadCache<App[]>();
+const suggestionsCache = new ScopedReadCache<SearchResult[]>();
+const SUMMARY_TTL = 60_000;
+const CATALOG_TTL = 5 * 60_000;
+let activeScope: string | null = null;
 const subs = new Set<() => void>();
-const set = (p: Partial<State>) => {
-  state = { ...state, ...p };
-  subs.forEach((s) => s());
-};
 const subscribe = (cb: () => void) => (subs.add(cb), () => void subs.delete(cb));
-export const useSoftware = () => useSyncExternalStore(subscribe, () => state);
-export const getSoftware = () => state;
 
-const fail = (e: unknown) => {
-  if (e instanceof ApiError) set({ error: e });
-};
+function slot(scope: string): ScopeState {
+  let value = scopes.get(scope);
+  if (!value) {
+    value = { state: empty(), errors: {}, suggestionsRevision: 0, visited: new Set() };
+    scopes.set(scope, value);
+    if (scopes.size > 8) scopes.delete(scopes.keys().next().value!);
+  }
+  return value;
+}
+function set(scope: string, patch: Partial<State>) {
+  const value = slot(scope);
+  value.state = { ...value.state, ...patch };
+  subs.forEach((notify) => notify());
+}
+function result(scope: string, resource: Resource | 'check', error?: unknown) {
+  const value = slot(scope);
+  if (error !== undefined)
+    value.errors[resource] =
+      error instanceof ApiError ? error : new ApiError('network', errorMessage(error));
+  else delete value.errors[resource];
+  set(scope, { error: Object.values(value.errors)[0] ?? null });
+}
+export function useSoftware() {
+  const scope = useAccountScope();
+  activeScope = scope;
+  return useSyncExternalStore(subscribe, () => (scope ? slot(scope).state : anonymous));
+}
+export const getSoftware = () => (activeScope ? slot(activeScope).state : anonymous);
 
-export async function loadSummary(force = false): Promise<void> {
+export async function loadSummary(force = false, scope = activeScope): Promise<void> {
+  if (!scope) return;
   try {
-    const s = await call<Summary>('software.summary');
-    set({ summary: s, error: null });
-    if (force) await loadUpdates(true);
-  } catch (e) {
-    fail(e);
+    await summaryCache.load(scope, () => call<Summary>('software.summary'), SUMMARY_TTL, force);
+    set(scope, { summary: summaryCache.peek(scope) ?? null });
+    result(scope, 'summary');
+  } catch (error) {
+    result(scope, 'summary', error);
   }
 }
 
-export async function loadUpdates(force = false): Promise<void> {
+export async function loadUpdates(force = false, scope = activeScope): Promise<void> {
+  if (!scope) return;
+  await Promise.all([
+    loadSummary(force, scope),
+    (async () => {
+      try {
+        await updatesCache.load(
+          scope,
+          () => call<Update[]>('software.updates', { force }),
+          SUMMARY_TTL,
+          force,
+        );
+        set(scope, { updates: updatesCache.peek(scope) ?? null });
+        result(scope, 'updates');
+      } catch (error) {
+        result(scope, 'updates', error);
+      }
+    })(),
+  ]);
+}
+
+export async function loadInstalled(force = false, scope = activeScope): Promise<void> {
+  if (!scope) return;
+  slot(scope).visited.add('installed');
   try {
-    const [u, s] = await Promise.all([
-      call<Update[]>('software.updates', { force }),
-      call<Summary>('software.summary'),
-    ]);
-    set({ updates: u, summary: s, error: null });
-  } catch (e) {
-    fail(e);
+    await installedCache.load(
+      scope,
+      () => call<Pkg[]>('software.installed', { filter: 'all', force }),
+      CATALOG_TTL,
+      force,
+    );
+    set(scope, { installed: installedCache.peek(scope) ?? null });
+    result(scope, 'installed');
+  } catch (error) {
+    result(scope, 'installed', error);
   }
 }
 
-export async function loadInstalled(force = false): Promise<void> {
+export async function loadApps(force = false, scope = activeScope): Promise<void> {
+  if (!scope) return;
+  slot(scope).visited.add('apps');
   try {
-    set({ installed: await call<Pkg[]>('software.installed', { filter: 'all', force }) });
-  } catch (e) {
-    fail(e);
+    await appsCache.load(scope, () => call<App[]>('software.apps'), CATALOG_TTL, force);
+    set(scope, { apps: appsCache.peek(scope) ?? null });
+    result(scope, 'apps');
+  } catch (error) {
+    result(scope, 'apps', error);
   }
 }
 
-export async function loadApps(): Promise<void> {
-  try {
-    set({ apps: await call<App[]>('software.apps') });
-  } catch (e) {
-    fail(e);
-  }
+const suggestionKey = (scope: string, category: string) =>
+  JSON.stringify([scope, category, slot(scope).suggestionsRevision]);
+export const suggestionsRevision = (scope: string | null) =>
+  scope ? slot(scope).suggestionsRevision : 0;
+export const peekSuggestions = (category: string, scope = activeScope) =>
+  scope ? suggestionsCache.peek(suggestionKey(scope, category)) : undefined;
+export function loadSuggestions(category: string, scope = activeScope): Promise<SearchResult[]> {
+  return scope
+    ? suggestionsCache.load(
+        suggestionKey(scope, category),
+        () => call<SearchResult[]>('software.suggest', { category }),
+        CATALOG_TTL,
+      )
+    : Promise.resolve([]);
 }
 
-/** Check now: refresh the package databases, then recompute the updates. Returns the warnings. */
+/** A real package database refresh is always sent to the server; never cached. */
 export async function checkNow(): Promise<string[]> {
-  if (state.checking) return [];
-  set({ checking: true });
+  const scope = activeScope;
+  if (!scope || slot(scope).state.checking) return [];
+  set(scope, { checking: true });
+  summaryCache.invalidate(scope);
+  updatesCache.invalidate(scope);
   try {
-    const s = await call<Summary>('software.check');
-    const u = await call<Update[]>('software.updates');
-    set({ summary: s, updates: u, error: null, checking: false });
-    return s.warnings;
-  } catch (e) {
-    set({ checking: false });
-    fail(e);
-    throw e;
+    const summary = await call<Summary>('software.check');
+    summaryCache.put(scope, summary);
+    set(scope, { summary });
+    // Do not start a follow-up request under a different account's new cookie.
+    if (scope === activeScope) {
+      const updates = await call<Update[]>('software.updates');
+      updatesCache.put(scope, updates);
+      set(scope, { updates });
+      result(scope, 'updates');
+    }
+    result(scope, 'summary');
+    result(scope, 'check');
+    return summary.warnings;
+  } catch (error) {
+    result(scope, 'check', error);
+    throw error;
+  } finally {
+    set(scope, { checking: false });
   }
 }
 
-/** After a transaction everything may have changed. */
+/** Invalidate real reads after a transaction, retaining the last value during refresh.
+ * Catalogs the user never opened remain lazy. Mutations themselves never enter a cache. */
 export async function reloadAll(): Promise<void> {
-  set({ installed: null, apps: null });
-  await Promise.all([loadUpdates(true), loadInstalled(true), loadApps()]);
+  const scope = activeScope;
+  if (!scope) return;
+  const { visited } = slot(scope);
+  summaryCache.invalidate(scope);
+  updatesCache.invalidate(scope);
+  installedCache.invalidate(scope);
+  appsCache.invalidate(scope);
+  slot(scope).suggestionsRevision++;
+  await Promise.all([
+    loadUpdates(true, scope),
+    ...(visited.has('installed') ? [loadInstalled(true, scope)] : []),
+    ...(visited.has('apps') ? [loadApps(true, scope)] : []),
+  ]);
 }
 
-let started = false;
-/** Called by the always-on rail badge hook: one summary now and every 5 minutes (the server caches for 10). */
+/** The badge performs inexpensive summary reads; reopening the page shares this cache. */
 export function useBackgroundSummary() {
+  const scope = useAccountScope();
+  const active = useWindowActivity();
+  activeScope = scope;
   useEffect(() => {
-    if (!started) {
-      started = true;
-      void loadSummary();
-    }
-    const id = window.setInterval(() => !document.hidden && void loadSummary(), 5 * 60_000);
+    if (!scope || !active) return;
+    void loadSummary(false, scope);
+    const id = window.setInterval(() => void loadSummary(false, scope), 5 * 60_000);
     return () => window.clearInterval(id);
-  }, []);
+  }, [scope, active]);
 }

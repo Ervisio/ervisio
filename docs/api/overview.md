@@ -61,6 +61,59 @@ Params `{"sort":"cpu"|"mem","limit":5}` (default cpu, 5; limit at most 100). Tak
 ```
 `cpu` is percent of one core (250 = 2.5 cores busy), `memory` resident bytes. Errors: `invalid`.
 
+## `overview.taskManager` (user) → TaskSnapshot
+
+Params `{}`. Returns all processes visible to the calling bridge, with no top-100
+limit. It does not elevate the account: the usual optional `admin:true` routing
+uses an already unlocked administrator bridge. Restricted measurements remain
+unavailable rather than being presented as actual zeroes.
+
+```ts
+{
+  source: 'host', platform: string, time: number, interval: number,
+  cpuCores: number, scope: 'visible', privileged: boolean,
+  processes: Array<{
+    pid: number, ppid: number, threads: number, name: string, command: string,
+    user: string, state: string, cpu: number, memory: number, memPercent: number,
+    cpuAvailable: boolean, memoryAvailable: boolean
+  }>,
+  gpus: Array<{
+    id: string, name: string, utilization: number | null,
+    memoryUsed: number | null, memoryTotal: number | null
+  }>,
+  capabilities: {
+    perProcessNetwork: { supported: false, reason: 'not_available' },
+    perProcessGPU: { supported: false, reason: 'not_available' },
+    gpu: { supported: boolean, reason?: 'not_available' }
+  }
+}
+```
+
+`time` is Unix milliseconds; `interval` is the CPU sampling interval in seconds.
+`cpu` uses one-core percent (250 = 2.5 cores), and memory is RSS on Linux or working
+set on Windows, in bytes. A newly seen/reused PID needs another sample before its
+CPU is available. `command` is the executable image path when readable, otherwise
+`[name]`; this API does not collect process command-line arguments. Linux process
+state is the kernel's state code; Windows leaves it empty. Unsupported state,
+owner and executable fields may be empty. `privileged` identifies the bridge's
+actual administrator context, not whether every process is readable.
+
+The first call samples twice 400 ms apart. Later calls use the previous sample;
+each bridge shares a one-second cache and serializes scans, so concurrent windows
+do not create duplicate work. Closing or minimizing the UI should stop polling.
+
+GPU counters are **global device** measurements. Linux reads AMD-compatible DRM
+sysfs sensors and, when installed, a bounded read-only `nvidia-smi` query. Unknown
+individual counters are `null`. Other GPUs and Windows currently report an
+unsupported capability with an empty array. Per-process GPU and network rates are
+not exposed; use `system.metricsStream` for explicitly labeled host/interface
+network rates. An unsupported counter must never be displayed as measured `0`.
+
+Sources for sensor semantics: [Linux procfs](https://www.kernel.org/doc/html/latest/filesystems/proc.html),
+[AMD GPU sysfs](https://kernel.org/doc/html/latest/gpu/amdgpu/thermal.html),
+[NVIDIA SMI](https://docs.nvidia.com/deploy/nvidia-smi/), and
+[Windows process snapshots](https://learn.microsoft.com/en-us/windows/win32/toolhelp/process-walking).
+
 ## `overview.unitStatus` (user) → UnitStatus[]
 
 Params `{"units":["nginx","sshd.service"]}` (1–30; a name without a suffix gets `.service`).

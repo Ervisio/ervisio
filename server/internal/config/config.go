@@ -62,7 +62,14 @@ type Config struct {
 	Plugins   Plugins `toml:"plugins"`
 	Updates   Updates `toml:"updates"`
 	Web       Web     `toml:"web"`
+	UI        UI      `toml:"ui"`
 	Audit     Audit   `toml:"audit"`
+}
+
+// UI holds the initial interface for accounts without a personal choice.
+// A user's shell.mode preference always takes priority.
+type UI struct {
+	DefaultShell string `toml:"default_shell"`
 }
 
 // Audit holds the activity log settings (internal/audit).
@@ -127,6 +134,9 @@ type TLS struct {
 type Plugins struct {
 	AllowUnsigned bool `toml:"allow_unsigned"`
 	Dev           bool `toml:"dev"`
+	// TrustedKeys adds private/deployment plugin signers to the embedded team
+	// keys. These public keys do not grant authority over marketplace catalogs.
+	TrustedKeys []string `toml:"trusted_keys"`
 	// CatalogURL is the https address of the marketplace catalog shown in
 	// Plugins › Browse (default: the Ervisio registry on GitHub Pages; empty
 	// turns the remote catalog off). The catalog must carry a valid
@@ -179,6 +189,7 @@ func Default() *Config {
 		Plugins: Plugins{AllowUnsigned: false, CatalogURL: brand.PluginCatalogURL},
 		Updates: Updates{Channel: "stable", AutoCheck: true, AutoInstall: false, AutoInstallAt: "03:30"},
 		Web:     Web{TrustedProxies: []string{"127.0.0.0/8", "::1/128"}},
+		UI:      UI{DefaultShell: "classic"},
 		Audit:   Audit{Enabled: true, RetentionDays: 90},
 	}
 }
@@ -190,6 +201,7 @@ func (c *Config) Clone() *Config {
 	cp.Auth.AllowGroups = append([]string(nil), c.Auth.AllowGroups...)
 	cp.Web.AllowedOrigins = append([]string(nil), c.Web.AllowedOrigins...)
 	cp.Web.TrustedProxies = append([]string(nil), c.Web.TrustedProxies...)
+	cp.Plugins.TrustedKeys = append([]string(nil), c.Plugins.TrustedKeys...)
 	return &cp
 }
 

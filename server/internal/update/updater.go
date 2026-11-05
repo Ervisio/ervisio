@@ -105,22 +105,25 @@ type Updater struct {
 	Launch   Launcher
 	// Current is the running version (brand.Version).
 	Current string
-	Limits  Limits
+	// ConfigPath is the active daemon configuration, also used by the detached health checker.
+	ConfigPath string
+	Limits     Limits
 }
 
 // New returns an updater for this machine.
 func New(checker *Checker) *Updater {
 	return &Updater{
-		Layout:   DefaultLayout(),
-		State:    DefaultState(brand.UpdatesDir),
-		Checker:  checker,
-		Download: NewDownloader(),
-		Keys:     TrustedKeys,
-		Arch:     Arch,
-		Probe:    ProbeBinary,
-		Launch:   SystemdRun,
-		Current:  brand.Version,
-		Limits:   DefaultLimits,
+		Layout:     DefaultLayout(),
+		State:      DefaultState(brand.UpdatesDir),
+		Checker:    checker,
+		Download:   NewDownloader(),
+		Keys:       TrustedKeys,
+		Arch:       Arch,
+		Probe:      ProbeBinary,
+		Launch:     SystemdRun,
+		Current:    brand.Version,
+		ConfigPath: brand.ConfigPath,
+		Limits:     DefaultLimits,
 	}
 }
 
@@ -222,6 +225,9 @@ func (u *Updater) Apply(ctx context.Context, channel, want string, auto bool, pr
 
 	unit := UnitName(v)
 	argv := []string{u.Layout.DaemonPath(v), HelperFlag, v, "--kind", KindUpdate}
+	if u.ConfigPath != "" {
+		argv = append(argv, "--config", u.ConfigPath)
+	}
 	if auto {
 		argv = append(argv, "--auto")
 	}
@@ -402,6 +408,9 @@ func (u *Updater) Rollback(ctx context.Context, want string) (string, string, er
 	}
 	unit := UnitName(prev)
 	argv := []string{u.Layout.DaemonPath(cur), HelperFlag, prev, "--kind", KindRollback}
+	if u.ConfigPath != "" {
+		argv = append(argv, "--config", u.ConfigPath)
+	}
 	if err := u.Launch(ctx, unit, argv); err != nil {
 		return "", "", err
 	}

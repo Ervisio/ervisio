@@ -14,6 +14,8 @@ import { checkNow, loadApps, loadInstalled, loadSummary, loadUpdates, useSoftwar
 import { attachIfBusy, closePanel, registerRuntime, useTx } from './tx';
 import type { Detail, Pkg, SearchResult } from './types';
 import './software.css';
+import { NativeAppFrame } from '../../ui/NativeAppFrame';
+import { useAccountScope } from '../../lib/accountScope';
 
 type Tab = 'updates' | 'store' | 'installed' | 'history';
 const TABS: Tab[] = ['updates', 'store', 'installed', 'history'];
@@ -25,6 +27,7 @@ export default function SoftwarePage() {
   const [params, setParams] = useSearchParams();
   const tab: Tab = TABS.includes(params.get('tab') as Tab) ? (params.get('tab') as Tab) : 'updates';
   const { summary, updates, installed, apps, checking, error } = useSoftware();
+  const scope = useAccountScope();
   const tx = useTx();
   const acts = useActions();
   const [pkg, setPkg] = useState<PkgTarget | null>(null);
@@ -34,12 +37,25 @@ export default function SoftwarePage() {
   }, [t, nav]);
 
   useEffect(() => {
-    void loadSummary();
-    void loadUpdates();
-    void loadInstalled();
-    void loadApps();
+    if (!scope) return;
+    void loadSummary(false, scope);
     void attachIfBusy();
-  }, []);
+  }, [scope]);
+
+  useEffect(() => {
+    if (!scope) return;
+    if (tab === 'updates' || tab === 'store') void loadUpdates(false, scope);
+    if (tab === 'installed' || tab === 'store') void loadInstalled(false, scope);
+    // The full application catalog is only needed by Find software.
+    if (tab === 'store') void loadApps(false, scope);
+  }, [tab, scope]);
+
+  const retryReads = () => {
+    if (tab === 'updates' || tab === 'store') void loadUpdates(true);
+    else void loadSummary(true);
+    if (tab === 'installed' || tab === 'store') void loadInstalled(true);
+    if (tab === 'store') void loadApps(true);
+  };
 
   const setTab = (id: Tab) => {
     setParams(id === 'updates' ? {} : { tab: id }, { replace: true });
@@ -121,65 +137,92 @@ export default function SoftwarePage() {
   const unsupported = error?.code === 'unavailable' && !summary;
 
   return (
-    <Page flush hue="sw">
-      <div className="sw-root hue-sw">
-        <div className="sw-bar">
-          <Tabs
-            variant="pill"
-            hue="sw"
-            items={items}
-            value={tab}
-            onChange={setTab}
-            aria-label={t('title')}
-          />
-          <span className="sw-sp" />
-          {summary && summary.lastCheck > 0 && (
-            <span className="sw-muted sw-checked">
-              {t('checked', { when: relativeTime(summary.lastCheck, lang) })}
-            </span>
+    <NativeAppFrame
+      title={t('title')}
+      icon="software"
+      items={items.map((item) => ({
+        ...item,
+        icon: (
+          { updates: 'download', store: 'grid', installed: 'software', history: 'clock' } as const
+        )[item.id],
+      }))}
+      active={tab}
+      onSelect={setTab}
+    >
+      <Page flush hue="sw">
+        <div className="sw-root hue-sw">
+          <div className="sw-bar">
+            <Tabs
+              variant="pill"
+              hue="sw"
+              items={items}
+              value={tab}
+              onChange={setTab}
+              aria-label={t('title')}
+            />
+            <span className="sw-sp" />
+            {summary && summary.lastCheck > 0 && (
+              <span className="sw-muted sw-checked">
+                {t('checked', { when: relativeTime(summary.lastCheck, lang) })}
+              </span>
+            )}
+            <Button icon="refresh" loading={checking} onClick={() => void doCheck()}>
+              {t('checkNow')}
+            </Button>
+          </div>
+          {error && !unsupported && (summary || updates || installed || apps) && (
+            <div className="sw-read-error" role="alert">
+              <span>
+                <strong>{t('error.load')}</strong> {error.message}
+              </span>
+              <Button size="sm" onClick={retryReads}>
+                {t('retry')}
+              </Button>
+            </div>
           )}
-          <Button icon="refresh" loading={checking} onClick={() => void doCheck()}>
-            {t('checkNow')}
-          </Button>
+          {unsupported ? (
+            <EmptyState
+              icon="software"
+              hue="sw"
+              title={t('unsupported.title')}
+              text={error?.message}
+            />
+          ) : tab === 'updates' ? (
+            <UpdatesTab actions={acts} />
+          ) : tab === 'store' ? (
+            <StoreTab
+              actions={acts}
+              onOpen={openFromStore}
+              goInstalled={() => setTab('installed')}
+            />
+          ) : tab === 'installed' ? (
+            <InstalledTab
+              activeKey={pkg ? `${pkg.kind}:${pkg.scope ?? ''}:${pkg.name}` : undefined}
+              onOpen={openFromTable}
+              onRemove={acts.askRemove}
+              busy={acts.busy}
+            />
+          ) : (
+            <HistoryTab reloadKey={tx.phase === 'done' ? tx.startedAt : 0} />
+          )}
         </div>
-        {unsupported ? (
-          <EmptyState
-            icon="software"
-            hue="sw"
-            title={t('unsupported.title')}
-            text={error?.message}
-          />
-        ) : tab === 'updates' ? (
-          <UpdatesTab actions={acts} />
-        ) : tab === 'store' ? (
-          <StoreTab actions={acts} onOpen={openFromStore} goInstalled={() => setTab('installed')} />
-        ) : tab === 'installed' ? (
-          <InstalledTab
-            activeKey={pkg ? `${pkg.kind}:${pkg.scope ?? ''}:${pkg.name}` : undefined}
-            onOpen={openFromTable}
-            onRemove={acts.askRemove}
-            busy={acts.busy}
-          />
-        ) : (
-          <HistoryTab reloadKey={tx.phase === 'done' ? tx.startedAt : 0} />
-        )}
-      </div>
-      <TxPanel tx={tx} openTerminal={acts.openTerminal} />
-      <PkgPanel
-        target={pkg}
-        update={pkgUpdate}
-        busy={acts.busy}
-        onClose={() => setPkg(null)}
-        onInstall={onInstallFromPanel}
-        onRemove={onRemoveFromPanel}
-        onUpdate={(u) => {
-          setPkg(null);
-          acts.updateSome([u]);
-        }}
-        openTerminal={acts.openTerminal}
-        aurHelper={acts.aurHelper}
-      />
-      {acts.ui}
-    </Page>
+        <TxPanel tx={tx} openTerminal={acts.openTerminal} />
+        <PkgPanel
+          target={pkg}
+          update={pkgUpdate}
+          busy={acts.busy}
+          onClose={() => setPkg(null)}
+          onInstall={onInstallFromPanel}
+          onRemove={onRemoveFromPanel}
+          onUpdate={(u) => {
+            setPkg(null);
+            acts.updateSome([u]);
+          }}
+          openTerminal={acts.openTerminal}
+          aurHelper={acts.aurHelper}
+        />
+        {acts.ui}
+      </Page>
+    </NativeAppFrame>
   );
 }

@@ -25,6 +25,8 @@ export type Shortcut =
   | 'details';
 
 export interface PaneProps {
+  native?: boolean;
+  navigationKey?: string;
   /** "Left" / "Right" chip, only in split view. */
   label?: string;
   active: boolean;

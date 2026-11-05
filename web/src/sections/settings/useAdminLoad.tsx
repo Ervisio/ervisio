@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useWindowActivity } from '../../lib/windowActivity';
 import { ApiError, requestUnlock, useSession, errorMessage } from '../../api';
 import { useT } from '../../i18n';
 import { Button, Icon } from '../../ui';
@@ -11,6 +12,7 @@ export type LoadState = 'loading' | 'ready' | 'locked' | 'failed';
  * (see LockedPanel). It loads again when the rights are unlocked, and every `poll` ms while mounted.
  */
 export function useAdminLoad<T>(fn: () => Promise<T>, poll = 0) {
+  const active = useWindowActivity();
   const { isUnlocked } = useSession();
   const [data, setData] = useState<T | null>(null);
   const [state, setState] = useState<LoadState>('loading');
@@ -32,15 +34,15 @@ export function useAdminLoad<T>(fn: () => Promise<T>, poll = 0) {
     }
   }, []);
   useEffect(() => {
-    void load();
-  }, [load, isUnlocked]);
+    if (active) void load();
+  }, [load, isUnlocked, active]);
   useEffect(() => {
-    if (!poll) return;
+    if (!poll || !active) return;
     const id = window.setInterval(() => {
       if (!document.hidden) void load(true);
     }, poll);
     return () => window.clearInterval(id);
-  }, [poll, load]);
+  }, [poll, load, active]);
   return { data, state, error, reload: () => load(true), setData };
 }
 
