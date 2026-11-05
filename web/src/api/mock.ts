@@ -1,5 +1,6 @@
 // Tiny in-browser fake daemon for `VITE_MOCK=1 npm run dev`.
 import { ApiError, type PublicHost, type Session } from './types';
+import { mockRemoteCall } from '../sections/files/remoteMock';
 
 const LS = 'ervisio.mock.';
 const rd = <T>(k: string, d: T): T => {
@@ -173,7 +174,42 @@ const mockState = () => ({
 });
 
 export async function mockCall(method: string, params: any, _admin?: boolean): Promise<any> {
+  if (method.startsWith('remote.')) return mockRemoteCall(method, params);
   switch (method) {
+    case 'terminal.list':
+      return delay(
+        { sessions: rd<any[]>('terminals', []).filter((s) => !!s.admin === !!_admin) },
+        15,
+      );
+    case 'terminal.create': {
+      const id = crypto.randomUUID();
+      const session = {
+        ...params,
+        id,
+        admin: !!_admin,
+        name: params.name || 'alice@arch',
+        title: params.cwd || '~',
+        running: true,
+        pid: 123,
+        createdAt: Date.now(),
+      };
+      wr('terminals', [...rd<any[]>('terminals', []), session]);
+      return delay({ id }, 15);
+    }
+    case 'terminal.kill':
+      wr(
+        'terminals',
+        rd<any[]>('terminals', []).filter((s) => s.id !== params.id),
+      );
+      return delay({}, 15);
+    case 'terminal.rename':
+      wr(
+        'terminals',
+        rd<any[]>('terminals', []).map((s) =>
+          s.id === params.id ? { ...s, name: params.name } : s,
+        ),
+      );
+      return delay({}, 15);
     // Read-only browser fixtures for Files interaction tests; never used by a production build.
     case 'files.list': {
       const folders = rd<Record<string, any[]>>('files', {});
@@ -192,8 +228,36 @@ export async function mockCall(method: string, params: any, _admin?: boolean): P
       }
       throw new ApiError('not_found', 'Fixture file not found');
     }
-    case 'files.readText':
-      return delay({ text: '', encoding: 'utf-8', eol: 'lf', size: 0, truncated: false }, 15);
+    case 'files.readText': {
+      const entry = rd<Record<string, any>>('texts', {})[params.path];
+      return delay(
+        {
+          content: entry?.content ?? '',
+          mtime: entry?.mtime ?? 1,
+          encoding: entry?.encoding ?? 'utf-8',
+          truncated: entry?.truncated ?? false,
+        },
+        15,
+      );
+    }
+    case 'files.create': {
+      const files = rd<Record<string, any>>('texts', {});
+      if (files[params.path]) throw new ApiError('conflict', 'File already exists.');
+      const mtime = Date.now();
+      files[params.path] = { content: '', encoding: 'utf-8', mtime };
+      wr('texts', files);
+      return delay({ path: params.path, mtime }, 15);
+    }
+    case 'files.writeText': {
+      const files = rd<Record<string, any>>('texts', {});
+      const previous = files[params.path];
+      if (params.expectedMtime && previous?.mtime !== params.expectedMtime)
+        throw new ApiError('conflict', 'File changed since opening.');
+      const mtime = Date.now();
+      files[params.path] = { content: params.content, encoding: params.encoding, mtime };
+      wr('texts', files);
+      return delay({ path: params.path, mtime }, 15);
+    }
     case 'system.connectivity': {
       const failure = rd<string | null>('connectivityError', null);
       if (failure) throw new ApiError('unavailable', failure);

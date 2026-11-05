@@ -25,7 +25,10 @@ import { AppWindow, type DesktopWindow } from './AppWindow';
 import {
   addShortcut,
   clampBounds,
+  DESKTOP_CELL,
+  layoutDesktopItems,
   moveItem,
+  placeDesktopItems,
   readDesktop,
   removeFolder,
   type DesktopData,
@@ -34,6 +37,7 @@ import {
 import { Wallpaper } from './Wallpaper';
 import { Connectivity } from './Connectivity';
 import { WindowActivityProvider, useWindowActivity } from '../lib/windowActivity';
+import { requestWindowClose } from '../lib/windowClose';
 import { collectDropped, type Dropped } from '../sections/files/dropfiles';
 import './desktop.css';
 
@@ -223,6 +227,22 @@ export function DesktopShell() {
   const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [saveError, setSaveError] = useState('');
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [gridSize, setGridSize] = useState({ columns: 1, rows: 1 });
+  const [selectionRect, setSelectionRect] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const selectionAnchor = useRef<string | null>(null);
+  const selectionStart = useRef<{
+    x: number;
+    y: number;
+    selected: string[];
+    additive: boolean;
+  } | null>(null);
+  const desktopGrid = useRef<HTMLDivElement>(null);
   const surface = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const contextRef = useRef<HTMLDivElement>(null);
@@ -275,6 +295,20 @@ export function DesktopShell() {
   );
   const appIds = useMemo(() => apps.map((a) => a.key), [apps]);
   const data = useMemo(() => readDesktop(prefs['shell.desktop'], appIds), [prefs, appIds]);
+  const desktopIds = useMemo(
+    () => [
+      ...data.folders.filter((folder) => folder.parent === null).map((folder) => folder.id),
+      ...data.shortcuts
+        .filter((shortcut) => shortcut.folder === null && appIds.includes(shortcut.app))
+        .map((shortcut) => shortcut.id),
+    ],
+    [data.folders, data.shortcuts, appIds],
+  );
+  const gridRows = Math.max(gridSize.rows, Math.ceil(desktopIds.length / gridSize.columns));
+  const gridPositions = useMemo(
+    () => layoutDesktopItems(desktopIds, data.positions, gridSize.columns, gridRows),
+    [desktopIds, data.positions, gridSize.columns, gridRows],
+  );
   const dataRef = useRef(data);
   dataRef.current = data;
   const windowsRef = useRef(windows);
@@ -309,6 +343,141 @@ export function DesktopShell() {
   );
   const changeData = (fn: (d: DesktopData) => DesktopData) => save(fn(dataRef.current));
   const findApp = (id: string) => apps.find((a) => a.key === id);
+  useEffect(() => {
+    const area = surface.current;
+    if (!area) return;
+    const resize = () => {
+      const columns = Math.max(1, Math.floor((area.clientWidth - 30) / DESKTOP_CELL.width));
+      const rows = Math.max(1, Math.floor((area.clientHeight - 36) / DESKTOP_CELL.height));
+      setGridSize((old) =>
+        old.columns === columns && old.rows === rows ? old : { columns, rows },
+      );
+    };
+    resize();
+    const observer = new ResizeObserver(resize);
+    observer.observe(area);
+    return () => observer.disconnect();
+  }, []);
+
+  const selectItem = (event: React.MouseEvent, id: string, folder: string | null) => {
+    if (folder !== null) return;
+    const additive = event.ctrlKey || event.metaKey;
+    if (event.shiftKey && selectionAnchor.current) {
+      const ordered = [...desktopIds].sort(
+        (a, b) =>
+          gridPositions[a].column - gridPositions[b].column ||
+          gridPositions[a].row - gridPositions[b].row,
+      );
+      const from = ordered.indexOf(selectionAnchor.current),
+        to = ordered.indexOf(id);
+      const range = ordered.slice(Math.min(from < 0 ? to : from, to), Math.max(from, to) + 1);
+      setSelectedItems(additive ? [...new Set([...selectedItems, ...range])] : range);
+    } else
+      setSelectedItems(
+        additive
+          ? selectedItems.includes(id)
+            ? selectedItems.filter((item) => item !== id)
+            : [...selectedItems, id]
+          : [id],
+      );
+    if (!event.shiftKey) selectionAnchor.current = id;
+  };
+  const beginSelection = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (
+      event.button !== 0 ||
+      event.pointerType === 'touch' ||
+      (event.target as Element).closest('.eos-shortcut')
+    )
+      return;
+    event.preventDefault();
+    event.currentTarget.focus();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setPanel(null);
+    setContext(null);
+    const box = event.currentTarget.getBoundingClientRect();
+    selectionStart.current = {
+      x: event.clientX - box.left,
+      y: event.clientY - box.top,
+      selected: selectedItems,
+      additive: event.ctrlKey || event.metaKey || event.shiftKey,
+    };
+    if (!selectionStart.current.additive) setSelectedItems([]);
+  };
+  const updateSelection = (event: React.PointerEvent<HTMLDivElement>) => {
+    const start = selectionStart.current;
+    if (!start) return;
+    const box = event.currentTarget.getBoundingClientRect();
+    const endX = Math.max(0, Math.min(box.width, event.clientX - box.left));
+    const endY = Math.max(0, Math.min(box.height, event.clientY - box.top));
+    const rect = {
+      x: Math.min(start.x, endX),
+      y: Math.min(start.y, endY),
+      width: Math.abs(start.x - endX),
+      height: Math.abs(start.y - endY),
+    };
+    if (rect.width < 3 && rect.height < 3) return;
+    setSelectionRect(rect);
+    const intersected = desktopIds.filter((id) => {
+      const cell = gridPositions[id];
+      const x = cell.column * DESKTOP_CELL.width,
+        y = cell.row * DESKTOP_CELL.height;
+      return (
+        x < rect.x + rect.width && x + 94 > rect.x && y < rect.y + rect.height && y + 94 > rect.y
+      );
+    });
+    setSelectedItems(
+      start.additive ? [...new Set([...start.selected, ...intersected])] : intersected,
+    );
+  };
+  const endSelection = (event: React.PointerEvent<HTMLDivElement>) => {
+    selectionStart.current = null;
+    setSelectionRect(null);
+    if (event.currentTarget.hasPointerCapture(event.pointerId))
+      event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+  const desktopKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+      event.preventDefault();
+      setSelectedItems(desktopIds);
+      return;
+    }
+    if (event.key === 'Escape') {
+      setSelectedItems([]);
+      return;
+    }
+    const delta = (
+      { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] } as Record<
+        string,
+        number[]
+      >
+    )[event.key];
+    if (!delta) return;
+    const focused = (event.target as HTMLElement).closest<HTMLElement>('[data-desktop-item]')
+      ?.dataset.desktopItem;
+    const current = gridPositions[focused ?? selectedItems.at(-1) ?? desktopIds[0]];
+    if (!current) return;
+    event.preventDefault();
+    const candidates = desktopIds
+      .filter((id) => {
+        const cell = gridPositions[id];
+        return delta[0]
+          ? Math.sign(cell.column - current.column) === delta[0]
+          : Math.sign(cell.row - current.row) === delta[1];
+      })
+      .sort((a, b) => {
+        const score = (id: string) =>
+          Math.abs(gridPositions[id].column - current.column) * (delta[0] ? 1 : 100) +
+          Math.abs(gridPositions[id].row - current.row) * (delta[1] ? 1 : 100);
+        return score(a) - score(b);
+      });
+    const next = candidates[0];
+    if (!next) return;
+    setSelectedItems(event.shiftKey ? [...new Set([...selectedItems, next])] : [next]);
+    selectionAnchor.current = next;
+    [...(desktopGrid.current?.querySelectorAll<HTMLElement>('[data-desktop-item]') ?? [])]
+      .find((element) => element.dataset.desktopItem === next)
+      ?.focus();
+  };
   const focus = useCallback(
     (id: string) =>
       setWindows((list) => {
@@ -415,15 +584,20 @@ export function DesktopShell() {
     const action = (event: Event) => {
       const d = (event as CustomEvent<{ action: string; to?: string }>).detail;
       if (d.action === 'open-app' && d.to) {
-        const app = appRef.current.find((a) => a.to === d.to);
+        const path = d.to.split(/[?#]/)[0];
+        const app =
+          appRef.current.find((a) => a.to === d.to) ??
+          appRef.current.find((a) => a.key !== 'this-pc' && a.to === path);
         if (app) open(app, d.to);
       } else if (d.action === 'show-desktop')
         setWindows((list) => list.map((w) => ({ ...w, minimized: true })));
-      else if (d.action === 'close-window')
-        setWindows((list) =>
-          list.filter((w) => w.id !== [...list].reverse().find((x) => !x.minimized)?.id),
-        );
-      else if (d.action === 'minimize-window')
+      else if (d.action === 'close-window') {
+        const activeWindow = [...windowsRef.current].reverse().find((win) => !win.minimized);
+        if (activeWindow)
+          requestWindowClose(activeWindow.id, () =>
+            setWindows((list) => list.filter((win) => win.id !== activeWindow.id)),
+          );
+      } else if (d.action === 'minimize-window')
         setWindows((list) => {
           const active = [...list].reverse().find((w) => !w.minimized);
           return list.map((w) => (w.id === active?.id ? { ...w, minimized: true } : w));
@@ -498,8 +672,17 @@ export function DesktopShell() {
     setEditing(null);
   };
   const dragStart = (e: DragEvent, payload: { item?: string; app?: string }) => {
-    e.dataTransfer.setData(DRAG_TYPE, JSON.stringify(payload));
+    const items =
+      payload.item && desktopIds.includes(payload.item) && selectedItems.includes(payload.item)
+        ? selectedItems.filter((id) => desktopIds.includes(id))
+        : payload.item
+          ? [payload.item]
+          : undefined;
+    if (items) setSelectedItems(items);
+    e.dataTransfer.setData(DRAG_TYPE, JSON.stringify({ ...payload, items }));
     e.dataTransfer.effectAllowed = 'copyMove';
+    setSelectionRect(null);
+    selectionStart.current = null;
   };
   const drop = (e: DragEvent, folder: string | null) => {
     setDraggingApp(false);
@@ -521,12 +704,69 @@ export function DesktopShell() {
     e.preventDefault();
     e.stopPropagation();
     try {
-      const payload: { item?: string; app?: string } = JSON.parse(
+      const payload: { item?: string; app?: string; items?: string[] } = JSON.parse(
         e.dataTransfer.getData(DRAG_TYPE),
       );
-      if (payload.item) changeData((d) => moveItem(d, payload.item!, folder));
-      else if (payload.app && findApp(payload.app))
-        changeData((d) => addShortcut(d, payload.app!, folder));
+      const grid = desktopGrid.current;
+      const box = grid?.getBoundingClientRect();
+      const target = box
+        ? {
+            column: Math.max(
+              0,
+              Math.min(
+                gridSize.columns - 1,
+                Math.round((e.clientX - box.left - 47) / DESKTOP_CELL.width),
+              ),
+            ),
+            row: Math.max(
+              0,
+              Math.min(gridRows - 1, Math.round((e.clientY - box.top - 47) / DESKTOP_CELL.height)),
+            ),
+          }
+        : { column: 0, row: 0 };
+      if (payload.item) {
+        const items = Array.isArray(payload.items)
+          ? payload.items.filter((id): id is string => typeof id === 'string').slice(0, 1280)
+          : [payload.item];
+        if (!items.includes(payload.item)) items.unshift(payload.item);
+        changeData((d) => {
+          const next = items.reduce((state, id) => moveItem(state, id, folder), d);
+          if (folder !== null) return next;
+          const visible = [
+            ...next.folders.filter((item) => item.parent === null).map((item) => item.id),
+            ...next.shortcuts
+              .filter((item) => item.folder === null && appIds.includes(item.app))
+              .map((item) => item.id),
+          ];
+          return placeDesktopItems(
+            next,
+            visible,
+            items,
+            payload.item!,
+            target,
+            gridSize.columns,
+            gridRows,
+          );
+        });
+      } else if (payload.app && findApp(payload.app))
+        changeData((d) => {
+          const next = addShortcut(d, payload.app!, folder);
+          if (folder !== null) return next;
+          const shortcut = next.shortcuts.find(
+            (item) => item.app === payload.app && item.folder === null,
+          );
+          if (!shortcut) return next;
+          const visible = [...desktopIds.filter((id) => id !== shortcut.id), shortcut.id];
+          return placeDesktopItems(
+            next,
+            visible,
+            [shortcut.id],
+            shortcut.id,
+            target,
+            gridSize.columns,
+            gridRows,
+          );
+        });
       setPanel(null);
     } catch {
       /* Ignore other applications' drag payloads. */
@@ -540,6 +780,7 @@ export function DesktopShell() {
     e.preventDefault();
     e.stopPropagation();
     setPanel(null);
+    if (value.item && !selectedItems.includes(value.item)) setSelectedItems([value.item]);
     setContext({
       ...value,
       x: Math.max(8, Math.min(e.clientX, window.innerWidth - 255)),
@@ -549,7 +790,18 @@ export function DesktopShell() {
 
   const renderItems = (folder: string | null) => (
     <div
-      className="eos-icon-grid"
+      className={`eos-icon-grid${folder === null ? ' eos-desktop-grid' : ''}`}
+      ref={folder === null ? desktopGrid : undefined}
+      role={folder === null ? 'listbox' : undefined}
+      aria-label={folder === null ? t('desktop.icons') : undefined}
+      aria-multiselectable={folder === null ? true : undefined}
+      tabIndex={folder === null ? 0 : undefined}
+      style={folder === null ? { minHeight: gridRows * DESKTOP_CELL.height } : undefined}
+      onPointerDown={folder === null ? beginSelection : undefined}
+      onPointerMove={folder === null ? updateSelection : undefined}
+      onPointerUp={folder === null ? endSelection : undefined}
+      onPointerCancel={folder === null ? endSelection : undefined}
+      onKeyDown={folder === null ? desktopKey : undefined}
       onDragOver={allowDrop}
       onDrop={(e) => drop(e, folder)}
       onContextMenu={(e) => menu(e, { folder })}
@@ -559,13 +811,25 @@ export function DesktopShell() {
         .map((f) => (
           <button
             key={f.id}
-            className="eos-shortcut eos-folder"
+            className={`eos-shortcut eos-folder${folder === null && selectedItems.includes(f.id) ? ' is-selected' : ''}`}
+            data-desktop-item={folder === null ? f.id : undefined}
+            role={folder === null ? 'option' : undefined}
+            aria-selected={folder === null ? selectedItems.includes(f.id) : undefined}
+            style={
+              folder === null
+                ? {
+                    left: gridPositions[f.id]?.column * DESKTOP_CELL.width,
+                    top: gridPositions[f.id]?.row * DESKTOP_CELL.height,
+                  }
+                : undefined
+            }
             draggable
             onDragStart={(e) => dragStart(e, { item: f.id })}
             onDragOver={allowDrop}
             onDrop={(e) => drop(e, f.id)}
             onDoubleClick={() => openFolder(f.id)}
             onClick={(e) => {
+              selectItem(e, f.id, folder);
               if (e.detail === 0 || window.matchMedia('(pointer: coarse)').matches)
                 openFolder(f.id);
             }}
@@ -594,11 +858,23 @@ export function DesktopShell() {
           return (
             <button
               key={s.id}
-              className={`eos-shortcut ${app.hueClass}`}
+              className={`eos-shortcut ${app.hueClass}${folder === null && selectedItems.includes(s.id) ? ' is-selected' : ''}`}
+              data-desktop-item={folder === null ? s.id : undefined}
+              role={folder === null ? 'option' : undefined}
+              aria-selected={folder === null ? selectedItems.includes(s.id) : undefined}
+              style={
+                folder === null
+                  ? {
+                      left: gridPositions[s.id]?.column * DESKTOP_CELL.width,
+                      top: gridPositions[s.id]?.row * DESKTOP_CELL.height,
+                    }
+                  : undefined
+              }
               draggable
               onDragStart={(e) => dragStart(e, { item: s.id })}
               onDoubleClick={() => open(app)}
               onClick={(e) => {
+                selectItem(e, s.id, folder);
                 if (e.detail === 0 || window.matchMedia('(pointer: coarse)').matches) open(app);
               }}
               onContextMenu={(e) => menu(e, { item: s.id, app: app.key, folder })}
@@ -610,6 +886,23 @@ export function DesktopShell() {
             </button>
           );
         })}
+      {folder === null && selectionRect && (
+        <div
+          className="eos-selection-rectangle"
+          aria-hidden="true"
+          style={{
+            left: selectionRect.x,
+            top: selectionRect.y,
+            width: selectionRect.width,
+            height: selectionRect.height,
+          }}
+        />
+      )}
+      {folder === null && (
+        <span className="eos-selection-status" role="status">
+          {selectedItems.length ? t('desktop.selectedIcons', { count: selectedItems.length }) : ''}
+        </span>
+      )}
     </div>
   );
   const active = [...windows].reverse().find((w) => !w.minimized)?.id;
@@ -713,7 +1006,11 @@ export function DesktopShell() {
               onFocus={() => {
                 if (active !== win.id) focus(win.id);
               }}
-              onClose={() => setWindows((list) => list.filter((w) => w.id !== win.id))}
+              onClose={() =>
+                requestWindowClose(win.id, () =>
+                  setWindows((list) => list.filter((w) => w.id !== win.id)),
+                )
+              }
               onChange={(delta) => patch(win.id, delta)}
               onSaveBounds={(bounds: WindowBounds) =>
                 changeData((d) => ({ ...d, bounds: { ...d.bounds, [win.app]: bounds } }))

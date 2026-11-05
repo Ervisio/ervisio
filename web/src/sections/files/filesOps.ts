@@ -1,8 +1,8 @@
-import { ApiError, downloadUrl, errorMessage } from '../../api';
+import { ApiError, errorMessage } from '../../api';
 import type { TFn } from '../../i18n';
 import { copyToClipboard } from '../../lib/clipboard';
 import { toast } from '../../ui';
-import { emitChanged, fcall } from './fapi';
+import { emitChanged, fcall, fileDownloadUrl } from './fapi';
 import type { BatchFailure, NameMode } from './filesPageTypes';
 import { enqueueUpload, ensureDir } from './transfers';
 import { isDirLike, type FEntry } from './types';
@@ -38,7 +38,7 @@ export function downloadEntries(es: FEntry[], admin: boolean, t: TFn) {
   if (files.length === 0) return toast.info(t('err.noFolderDownload'));
   files.forEach((e, i) =>
     window.setTimeout(
-      () => clickDownload(downloadUrl(e.path, admin), e.name),
+      () => clickDownload(fileDownloadUrl(e.path, admin), e.name),
       i * DOWNLOAD_STAGGER_MS,
     ),
   );

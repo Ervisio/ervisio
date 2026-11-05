@@ -1,0 +1,62 @@
+.files-remote-dialog {
+  width: min(560px, calc(100vw - 32px));
+}
+.files-remote-form {
+  display: grid;
+  gap: 14px;
+}
+.files-remote-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 100px;
+  gap: 12px;
+}
+.files-remote-trust {
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--warn, #e9a945) 12%, transparent);
+}
+.files-remote-trust p,
+.files-remote-fingerprint {
+  margin: 0;
+  font-size: 12px;
+}
+.files-remote-trust code,
+.files-remote-fingerprint code {
+  display: block;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.files-remote-fingerprint {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+}
+.files-remote-error {
+  color: var(--err, #f97983);
+  margin: 0;
+}
+.files-remote-success {
+  color: var(--ok, #6bcb9a);
+  margin: 0;
+}
+.files-remote-actions {
+  display: inline-flex;
+  margin-left: auto;
+}
+.files-remote-actions button {
+  padding: 5px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+}
+.files-remote-actions button:hover {
+  color: var(--fg);
+  background: var(--hover);
+}
+.files-remote-actions svg {
+  width: 13px;
+  height: 13px;
+}

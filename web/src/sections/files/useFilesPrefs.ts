@@ -3,7 +3,7 @@ import { usePrefs } from '../../api';
 import type { TFn } from '../../i18n';
 import { toast } from '../../ui';
 import { fail } from './filesOps';
-import type { FEntry, Remote } from './types';
+import type { FEntry } from './types';
 import { basename } from './util';
 
 type Prefs = ReturnType<typeof usePrefs>['prefs'];
@@ -13,17 +13,14 @@ function readFilePrefs(prefs: Prefs) {
   const bookmarks: string[] = Array.isArray(prefs['files.bookmarks'])
     ? prefs['files.bookmarks'].filter((x: unknown) => typeof x === 'string')
     : [];
-  const remotes: Remote[] = Array.isArray(prefs['files.remotes'])
-    ? prefs['files.remotes'].filter((r: any) => r && typeof r.name === 'string')
-    : [];
   const showHidden = !!prefs['files.showHidden'];
-  return { starredList, bookmarks, remotes, showHidden };
+  return { starredList, bookmarks, showHidden };
 }
 
-/** File-manager prefs (stars, bookmarks, remotes, hidden files) and the actions that change them. */
+/** File-manager preferences; remote credentials live only in the bridge connection store. */
 export function useFilesPrefs(t: TFn) {
   const { prefs, ready, set } = usePrefs();
-  const { starredList, bookmarks, remotes, showHidden } = readFilePrefs(prefs);
+  const { starredList, bookmarks, showHidden } = readFilePrefs(prefs);
   const starred = useMemo(() => new Set(starredList), [starredList.join('\n')]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleStar = async (e: FEntry) => {
@@ -54,7 +51,6 @@ export function useFilesPrefs(t: TFn) {
     starredList,
     starred,
     bookmarks,
-    remotes,
     showHidden,
     toggleStar,
     addBookmark,

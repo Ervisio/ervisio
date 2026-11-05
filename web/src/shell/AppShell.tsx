@@ -9,6 +9,7 @@ import { usePlugins } from '../plugins';
 import { UpdateNotifier } from '../sections/settings/UpdateNotifier';
 import { usePrefs, useSession } from '../api';
 import { useShellCommands } from './useShellCommands';
+import { EditorDraftsProvider } from '../sections/editor/DraftsProvider';
 import './shell.css';
 
 const DesktopShell = lazy(() =>
@@ -74,7 +75,7 @@ export function AppShell() {
       </div>
     );
   return (
-    <>
+    <EditorDraftsProvider key={session?.user}>
       <Suspense
         fallback={
           <div className="app-loading">
@@ -90,6 +91,6 @@ export function AppShell() {
       </Suspense>
       <CommandPalette open={palette} onClose={() => setPalette(false)} />
       <UpdateNotifier />
-    </>
+    </EditorDraftsProvider>
   );
 }

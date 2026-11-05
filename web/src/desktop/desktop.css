@@ -4,7 +4,8 @@
   --eos-glass-strong: color-mix(in srgb, var(--surface) 96%, transparent);
   --eos-edge: color-mix(in srgb, var(--ink) 13%, transparent);
   --eos-highlight: color-mix(in srgb, var(--ink) 7%, transparent);
-  --eos-shadow: 0 22px 70px color-mix(in srgb, var(--bg) 42%, transparent),
+  --eos-shadow:
+    0 22px 70px color-mix(in srgb, var(--bg) 42%, transparent),
     0 2px 8px color-mix(in srgb, var(--bg) 20%, transparent);
   --eos-blue: #2678e9;
   --eos-cyan: #4cd5e5;
@@ -99,7 +100,7 @@
 .eos-desktop-items {
   height: 100%;
   overflow: auto;
-  width: fit-content;
+  width: 100%;
   max-width: 100%;
   padding: 18px 15px;
 }
@@ -131,6 +132,43 @@
 }
 .eos-shortcut:focus {
   background: #edf6ff24;
+}
+.eos-desktop-grid {
+  position: relative;
+  display: block;
+  min-width: 0;
+  width: 100%;
+  outline: none;
+  user-select: none;
+}
+.eos-desktop-grid > .eos-shortcut {
+  position: absolute;
+  height: 94px;
+  touch-action: manipulation;
+}
+.eos-desktop-grid > .eos-shortcut.is-selected {
+  background: color-mix(in srgb, var(--acc) 24%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--acc) 65%, transparent);
+}
+.eos-desktop-grid > .eos-shortcut:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: -2px;
+}
+.eos-selection-rectangle {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--acc) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--acc) 85%, transparent);
+  border-radius: 2px;
+}
+.eos-selection-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .eos-shortcut > span:last-child {
   max-width: 100%;

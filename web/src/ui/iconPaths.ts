@@ -92,5 +92,6 @@ export const ICON_PATHS: Record<string, string> = {
     '<path d="M14 4h6v6M20 4l-9 9M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/>',
   check2: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/>',
   minus: '<path d="M5 12h14"/>',
+  save: '<path d="M5 3h12l4 4v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M7 3v6h10V3M7 21v-8h10v8M14 5v2"/>',
   x: '<path d="M6 6l12 12M18 6L6 18"/>',
 };

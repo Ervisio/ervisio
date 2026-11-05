@@ -9,6 +9,7 @@ Purpose: persistent browser terminals (local, root and SSH shells) backed by bri
 - `run.go:RunPTY`: sessionless PTY for one stream, used by `plugins.pty`; same frames, kills the process group on close.
 - Frontend `web/src/sections/terminal/`: `index.tsx` (tabs, layout, create/rename/kill, prefs), `TerminalView.tsx` (xterm + FitAddon + attach/reconnect), `Sidebar`, `Palette`, `Snippets`, `Dialogs`, `ExtraKeys` (mobile keys), `xtermTheme.ts`.
 - Prefs: `terminal` (theme, fontSize, copyOnSelect, snippets), `terminal.hosts`, `terminal.history`, `terminal.snippets`; layout in `localStorage`.
+- Directory links: `/terminal?cwd=<encoded absolute path>&admin=1&launch=<nonce>` create a fresh session using PTY cwd metadata, then consume launch parameters. Both Files interfaces expose Open in Terminal; ErvisiOS portals session tabs into AppWindow's titlebar, while Classic retains its normal page layout.
 
 ## Flow
 - `create` -> `buildSpec` -> `mgr.Create` -> `startPTY` -> `Session.pump` goroutine copies PTY output into a ring and to every subscriber.

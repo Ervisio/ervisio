@@ -97,7 +97,7 @@
   "focusTip": "Focus mode (hides the app, F11 or Ctrl+Shift+F to leave)",
   "focusMode": "Focus mode",
   "focusOff": "Leave focus mode",
-  "paletteTip": "Command palette (Ctrl+Shift+P)",
+  "paletteTip": "Search commands, sessions and history (Ctrl+Shift+P)",
   "showSnippets": "Show snippet chips",
   "hideSnippets": "Hide snippet chips",
   "extraKeys": "Extra keys",
@@ -106,7 +106,7 @@
   "keyLeft": "Arrow left",
   "keyRight": "Arrow right",
   "palette": {
-    "title": "Palette",
+    "title": "Commands",
     "placeholder": "Search snippets, sessions and history",
     "empty": "Nothing matches. Try another word.",
     "snippets": "Snippets",

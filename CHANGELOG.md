@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- Notepad and a lazy-loaded CodeMirror code editor in both interfaces, with document tabs, syntax highlighting, search, encoding/line-ending preservation and conflict-aware saves.
+- Open in Terminal from directory and file context menus in both interfaces, starting a fresh session in the selected working directory.
+- Saved per-user SFTP and SMB network folders in File Explorer, including Windows UNC paths, host-key verification, remote editing and streamed transfers.
+- ErvisiOS desktop grid placement, rectangle/multiple selection and group dragging, with positions retained across screen sizes.
+
+### Changed
+- ErvisiOS Terminal tabs share the window titlebar; Commands is clearly separate from appearance settings.
+- Editor drafts remain in signed-in session memory across navigation and interface switches; closing a window or tab asks before discarding edits.
+
 ## [0.7.0] - 2026-11-05
 
 ### Added

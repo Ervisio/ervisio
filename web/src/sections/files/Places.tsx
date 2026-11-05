@@ -6,12 +6,12 @@ import {
   Button,
   Icon,
   Progress,
-  toast,
   type IconName,
   type MenuItem,
 } from '../../ui';
 import type { Disk, Places as PlacesData, Remote } from './types';
 import { basename } from './util';
+import { remoteTarget } from './remoteLocation';
 
 export interface PlacesProps {
   native?: boolean;
@@ -22,6 +22,10 @@ export interface PlacesProps {
   loc: string;
   bookmarks: string[];
   remotes: Remote[];
+  onRemote(remote: Remote): void;
+  onAddRemote(): void;
+  onEditRemote(remote: Remote): void;
+  onForgetRemote(remote: Remote): void;
   onGo(loc: string): void;
   onRemoveBookmark(path: string): void;
   onNew: MenuItem[];
@@ -131,23 +135,52 @@ export function PlacesList(p: PlacesProps) {
       <div className="files-pg">
         {p.remotes.map((r) => (
           <a
-            key={r.name}
+            key={r.id}
             href="#"
+            className={remoteTarget(p.loc)?.conn === r.id ? 'is-on' : ''}
+            aria-current={remoteTarget(p.loc)?.conn === r.id ? 'page' : undefined}
             onClick={(e) => {
               e.preventDefault();
-              toast.info(t('remote.soon'), t('remote.soonHint'));
+              p.onRemote(r);
+              p.onPicked?.();
             }}
           >
             <Icon name="server" />
             <span className="files-pl-n">{r.name}</span>
-            <span className="files-sftp">SFTP</span>
+            <span className="files-sftp">{r.kind.toUpperCase()}</span>
+            <span className="files-remote-actions">
+              {(r.kind === 'sftp' || r.kind === 'smb') && (
+                <button
+                  type="button"
+                  aria-label={t('remote.editNamed', { name: r.name })}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    p.onEditRemote(r);
+                  }}
+                >
+                  <Icon name="edit" />
+                </button>
+              )}
+              <button
+                type="button"
+                aria-label={t('remote.forgetNamed', { name: r.name })}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  p.onForgetRemote(r);
+                }}
+              >
+                <Icon name="close" />
+              </button>
+            </span>
           </a>
         ))}
         <a
           href="#"
           onClick={(e) => {
             e.preventDefault();
-            toast.info(t('remote.soon'), t('remote.soonHint'));
+            p.onAddRemote();
           }}
         >
           <Icon name="plus" />

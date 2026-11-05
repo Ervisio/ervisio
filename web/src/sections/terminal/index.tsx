@@ -43,12 +43,12 @@ import { useTerminalPanes } from './useTerminalPanes';
 import { NativeTerminalChrome } from './NativeTerminalChrome';
 import { NativeTerminalAppearance } from './NativeTerminalAppearance';
 import { nativeAppearance, terminalFont, type NativeAppearance } from './appearance';
+import { terminalLink } from './terminalLink';
 import './terminal.css';
 import './terminal-native.css';
 
 const REFRESH_MS = 4000;
 const DEFAULT_FONT_SIZE = 14;
-const LINK_CMD_MAX = 1000;
 const KIND_DOT = 'terminal-dot terminal-k-';
 
 type SetBool = Dispatch<SetStateAction<boolean>>;
@@ -176,30 +176,40 @@ function useTerminalSessions(adminOk: boolean) {
   return { sessions, loaded, loadError, lastInfo, refresh };
 }
 
-// ?cmd=… (links from other sections, e.g. Software's AUR "Open in terminal"):
-// a new session with the command typed at the prompt, not run, so the user reviews it first.
+// Links open a new session in cwd. Optional cmd is typed at the prompt, never run.
 function useCommandLink(
   loaded: boolean,
   loadError: string,
-  create: (p: Record<string, unknown>) => Promise<string | null>,
+  create: (p: Record<string, unknown>, admin?: boolean) => Promise<string | null>,
 ) {
   const [params, setParams] = useSearchParams();
-  const linkCmd = params.get('cmd');
+  const linkKey = params.toString();
+  const handled = useRef<string | null>(null);
   const [pendingInput, setPendingInput] = useState<{ id: string; text: string } | null>(null);
   useEffect(() => {
-    if (!loaded || loadError || !linkCmd) return;
-    const cmd = linkCmd.replace(/[\r\n]+/g, ' ').slice(0, LINK_CMD_MAX);
+    const link = terminalLink(new URLSearchParams(linkKey));
+    if (!link) {
+      handled.current = null;
+      return;
+    }
+    if (!loaded || loadError || handled.current === linkKey) return;
+    handled.current = linkKey;
     setParams(
       (p) => {
         const n = new URLSearchParams(p);
         n.delete('cmd');
+        n.delete('cwd');
+        n.delete('admin');
+        n.delete('launch');
         return n;
       },
       { replace: true },
     );
-    void create({}).then((id) => id && setPendingInput({ id, text: cmd }));
+    void create({ ...(link.cwd ? { cwd: link.cwd } : {}) }, link.admin).then((id) => {
+      if (id && link.command) setPendingInput({ id, text: link.command });
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, loadError, linkCmd]);
+  }, [loaded, loadError, linkKey]);
   return { pendingInput, setPendingInput };
 }
 
@@ -383,7 +393,7 @@ function Toolbar(p: ToolbarProps) {
       <ToolToggle
         on={p.paletteOpen}
         title={t('paletteTip')}
-        icon="search"
+        icon="code"
         label={t('palette.title')}
         onClick={p.onPalette}
       />
@@ -419,10 +429,20 @@ export default function TerminalPage() {
   const compact = useMediaQuery('(max-width: 1100px)');
   const prefs = useTerminalPrefs(t, session?.os === 'windows');
   const { hosts, history, save, snippets, showSnippets } = prefs;
+  const [launchParams] = useSearchParams();
 
   const adminOk = isUnlocked && unlockLeft > 2 && !session?.isRoot;
   const { sessions, loaded, loadError, lastInfo, refresh } = useTerminalSessions(adminOk);
-  const panesCtl = useTerminalPanes({ t, mobile, sessions, loaded, loadError, lastInfo, refresh });
+  const panesCtl = useTerminalPanes({
+    t,
+    mobile,
+    sessions,
+    loaded,
+    loadError,
+    lastInfo,
+    refresh,
+    launchRequested: !!terminalLink(launchParams),
+  });
   const { splitShown, activePane, setActive, visible, activeId, showSession, create } = panesCtl;
   const [focus, setFocus] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -466,7 +486,14 @@ export default function TerminalPage() {
     }
   };
   const nativeKeys = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (!native || !(event.target instanceof Node) || !rootRef.current?.contains(event.target))
+    if (
+      !native ||
+      !(event.target instanceof Node) ||
+      !(
+        rootRef.current?.contains(event.target) ||
+        rootRef.current?.closest('.eos-window')?.contains(event.target)
+      )
+    )
       return;
     if (event.ctrlKey && event.shiftKey && event.code === 'KeyT') {
       event.preventDefault();
