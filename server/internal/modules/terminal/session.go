@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"sort"
@@ -189,46 +188,50 @@ func (s *Session) pump() {
 	for {
 		n, err := s.ptmx.Read(buf)
 		if n > 0 {
-			chunk := append([]byte(nil), buf[:n]...)
-			s.mu.Lock()
-			s.ring.Write(chunk)
-			if t, ok := s.osc.feed(chunk); ok {
-				s.title = t
-			}
-			for sub := range s.subs {
-				select {
-				case sub.ch <- chunk:
-				default:
-					sub.drop()
-					delete(s.subs, sub)
-				}
-			}
-			s.mu.Unlock()
+			s.broadcast(append([]byte(nil), buf[:n]...))
 		}
 		if err != nil {
-			if !errors.Is(err, io.EOF) && !isPTYClosed(err) && !errors.Is(err, os.ErrClosed) {
-				// unexpected read error: treat like the end of the session
-				_ = err
-			}
 			break
 		}
 	}
-	err := s.cmd.Wait()
-	code := 0
-	if err != nil {
-		var ee *exec.ExitError
-		if errors.As(err, &ee) {
-			code = ee.ExitCode()
-		} else {
-			code = -1
-		}
-	}
+	code := exitCodeOf(s.cmd.Wait())
 	_ = s.ptmx.Close()
 	s.exitCode = code
 	if s.onExit != nil {
 		s.onExit(s)
 	}
 	close(s.done)
+}
+
+// broadcast stores chunk in the ring, tracks the window title and hands it
+// to every subscriber, dropping those that cannot keep up.
+func (s *Session) broadcast(chunk []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ring.Write(chunk)
+	if t, ok := s.osc.feed(chunk); ok {
+		s.title = t
+	}
+	for sub := range s.subs {
+		select {
+		case sub.ch <- chunk:
+		default:
+			sub.drop()
+			delete(s.subs, sub)
+		}
+	}
+}
+
+// exitCodeOf maps the result of cmd.Wait to an exit code (-1 when unknown).
+func exitCodeOf(err error) int {
+	if err == nil {
+		return 0
+	}
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		return ee.ExitCode()
+	}
+	return -1
 }
 
 // Subscribe returns the scrollback and a live output channel, atomically.
@@ -335,7 +338,7 @@ func (o *oscState) feed(chunk []byte) (string, bool) {
 	for i := 0; i < len(chunk); i++ {
 		c := chunk[i]
 		if !o.in {
-			if c == 0x1b && i+3 < len(chunk) && chunk[i+1] == ']' && (chunk[i+2] == '0' || chunk[i+2] == '2') && chunk[i+3] == ';' {
+			if isOSCTitleStart(chunk, i) {
 				o.in = true
 				o.buf = o.buf[:0]
 				i += 3
@@ -352,6 +355,11 @@ func (o *oscState) feed(chunk []byte) (string, bool) {
 		o.buf = append(o.buf, c)
 	}
 	return title, found && title != ""
+}
+
+// isOSCTitleStart reports whether chunk[i:] begins ESC ] 0 ; or ESC ] 2 ;.
+func isOSCTitleStart(chunk []byte, i int) bool {
+	return chunk[i] == 0x1b && i+3 < len(chunk) && chunk[i+1] == ']' && (chunk[i+2] == '0' || chunk[i+2] == '2') && chunk[i+3] == ';'
 }
 
 func sanitizeTitle(s string) string {

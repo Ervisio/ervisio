@@ -245,29 +245,7 @@ func (l *Layout) Migrate(name string) (string, error) {
 		os.RemoveAll(l.VersionDir(name))
 	}
 	tmp := filepath.Join(l.VersionsDir(), "."+name+".partial-"+randHex(6))
-	err := func() error {
-		if err := os.MkdirAll(filepath.Join(tmp, "bin"), 0o755); err != nil {
-			return err
-		}
-		if err := copyFile(l.BinLink, filepath.Join(tmp, "bin", brand.DaemonBinary), 0o755); err != nil {
-			return err
-		}
-		if err := copyFile(l.bridgeCompat(), filepath.Join(tmp, "bin", brand.BridgeBinary), 0o755); err != nil {
-			return err
-		}
-		for src, dst := range map[string]string{l.FlatWeb: "web", l.FlatPlugins: "plugins"} {
-			if fi, err := os.Lstat(src); err == nil && fi.IsDir() {
-				if err := copyTree(src, filepath.Join(tmp, dst)); err != nil {
-					return err
-				}
-			}
-		}
-		if err := os.WriteFile(filepath.Join(tmp, "VERSION"), []byte(name+"\n"), 0o644); err != nil {
-			return err
-		}
-		return os.Rename(tmp, l.VersionDir(name))
-	}()
-	if err != nil {
+	if err := l.stageFlatCopy(tmp, name); err != nil {
 		os.RemoveAll(tmp)
 		return "", fmt.Errorf("migrate flat install: %w", err)
 	}
@@ -278,6 +256,31 @@ func (l *Layout) Migrate(name string) (string, error) {
 		return "", err
 	}
 	return name, nil
+}
+
+// stageFlatCopy copies the flat install into tmp and renames it to
+// versions/<name>.
+func (l *Layout) stageFlatCopy(tmp, name string) error {
+	if err := os.MkdirAll(filepath.Join(tmp, "bin"), 0o755); err != nil {
+		return err
+	}
+	if err := copyFile(l.BinLink, filepath.Join(tmp, "bin", brand.DaemonBinary), 0o755); err != nil {
+		return err
+	}
+	if err := copyFile(l.bridgeCompat(), filepath.Join(tmp, "bin", brand.BridgeBinary), 0o755); err != nil {
+		return err
+	}
+	for src, dst := range map[string]string{l.FlatWeb: "web", l.FlatPlugins: "plugins"} {
+		if fi, err := os.Lstat(src); err == nil && fi.IsDir() {
+			if err := copyTree(src, filepath.Join(tmp, dst)); err != nil {
+				return err
+			}
+		}
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "VERSION"), []byte(name+"\n"), 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, l.VersionDir(name))
 }
 
 // InstallFrom moves an extracted release folder (on the same file system,

@@ -261,26 +261,11 @@ func (s *Spec) Normalise() {
 	*s = Spec{ID: keep.ID, Name: keep.Name, Type: keep.Type, Enabled: keep.Enabled, MinLevel: keep.MinLevel, Events: keep.Events}
 	switch keep.Type {
 	case TypeEmail:
-		s.Host, s.Port, s.Security, s.Username, s.Password, s.From, s.To = strings.TrimSpace(keep.Host), keep.Port, keep.Security, strings.TrimSpace(keep.Username), keep.Password, strings.TrimSpace(keep.From), keep.To
-		if s.Security == "" {
-			s.Security = "starttls"
-		}
-		if s.Port == 0 {
-			s.Port = map[string]int{"tls": 465, "starttls": 587, "none": 25}[s.Security]
-		}
-		for i := range s.To {
-			s.To[i] = strings.TrimSpace(s.To[i])
-		}
+		s.normaliseEmail(keep)
 	case TypeTelegram:
 		s.BotToken, s.ChatID = strings.TrimSpace(keep.BotToken), strings.TrimSpace(keep.ChatID)
 	case TypeWebhook:
-		s.URL, s.Method, s.Template, s.HeaderName, s.HeaderValue = strings.TrimSpace(keep.URL), keep.Method, keep.Template, strings.TrimSpace(keep.HeaderName), keep.HeaderValue
-		if s.Method == "" {
-			s.Method = "POST"
-		}
-		if s.Template == "" {
-			s.Template = DefaultTemplate
-		}
+		s.normaliseWebhook(keep)
 	case TypeNtfy:
 		s.Server, s.Topic, s.Token = strings.TrimRight(strings.TrimSpace(keep.Server), "/"), strings.TrimSpace(keep.Topic), strings.TrimSpace(keep.Token)
 		if s.Server == "" {
@@ -288,6 +273,29 @@ func (s *Spec) Normalise() {
 		}
 	case TypeGotify:
 		s.Server, s.Token = strings.TrimRight(strings.TrimSpace(keep.Server), "/"), strings.TrimSpace(keep.Token)
+	}
+}
+
+func (s *Spec) normaliseEmail(keep Spec) {
+	s.Host, s.Port, s.Security, s.Username, s.Password, s.From, s.To = strings.TrimSpace(keep.Host), keep.Port, keep.Security, strings.TrimSpace(keep.Username), keep.Password, strings.TrimSpace(keep.From), keep.To
+	if s.Security == "" {
+		s.Security = "starttls"
+	}
+	if s.Port == 0 {
+		s.Port = map[string]int{"tls": 465, "starttls": 587, "none": 25}[s.Security]
+	}
+	for i := range s.To {
+		s.To[i] = strings.TrimSpace(s.To[i])
+	}
+}
+
+func (s *Spec) normaliseWebhook(keep Spec) {
+	s.URL, s.Method, s.Template, s.HeaderName, s.HeaderValue = strings.TrimSpace(keep.URL), keep.Method, keep.Template, strings.TrimSpace(keep.HeaderName), keep.HeaderValue
+	if s.Method == "" {
+		s.Method = "POST"
+	}
+	if s.Template == "" {
+		s.Template = DefaultTemplate
 	}
 }
 
@@ -345,6 +353,16 @@ func isKnownEvent(e string) bool {
 }
 
 func (s *Spec) validateEmail() error {
+	if err := s.validateSMTP(); err != nil {
+		return err
+	}
+	if err := s.validateCredentials(); err != nil {
+		return err
+	}
+	return s.validateAddresses()
+}
+
+func (s *Spec) validateSMTP() error {
 	if !hostRe.MatchString(s.Host) {
 		return errors.New("Give the SMTP server's host name.")
 	}
@@ -354,24 +372,37 @@ func (s *Spec) validateEmail() error {
 	if s.Security != "none" && s.Security != "starttls" && s.Security != "tls" {
 		return errors.New("Security must be none, starttls or tls.")
 	}
+	return nil
+}
+
+func (s *Spec) validateCredentials() error {
 	if strings.ContainsAny(s.Username, "\r\n\x00") || strings.ContainsAny(s.Password, "\r\n\x00") || len(s.Username) > 256 || len(s.Password) > 512 {
 		return errors.New("The user name or password is not valid.")
 	}
 	if (s.Username == "") != (s.Password == "") {
 		return errors.New("Give both the user name and the password, or neither.")
 	}
-	if _, err := mail.ParseAddress(s.From); err != nil || strings.ContainsAny(s.From, "\r\n") {
+	return nil
+}
+
+func (s *Spec) validateAddresses() error {
+	if !validAddress(s.From) {
 		return errors.New("The From address is not valid.")
 	}
 	if len(s.To) < 1 || len(s.To) > 10 {
 		return errors.New("Give between 1 and 10 recipient addresses.")
 	}
 	for _, a := range s.To {
-		if _, err := mail.ParseAddress(a); err != nil || strings.ContainsAny(a, "\r\n") {
+		if !validAddress(a) {
 			return fmt.Errorf("%q is not a valid email address.", a)
 		}
 	}
 	return nil
+}
+
+func validAddress(a string) bool {
+	_, err := mail.ParseAddress(a)
+	return err == nil && !strings.ContainsAny(a, "\r\n")
 }
 
 func (s *Spec) validateTelegram() error {
@@ -477,12 +508,17 @@ func (st *Store) write(list []Spec) error {
 	if err := os.MkdirAll(filepath.Dir(st.Path), 0o755); err != nil {
 		return err
 	}
-	// Created 0600 before any secret is written, renamed over the old file.
-	tmp, err := os.OpenFile(st.Path+".tmp", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	return WriteFileAtomic(st.Path, append(b, '\n'))
+}
+
+// WriteFileAtomic writes data to path as a 0600 file: created before any
+// secret is written, then renamed over the old file.
+func WriteFileAtomic(path string, data []byte) error {
+	tmp, err := os.OpenFile(path+".tmp", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err
 	}
-	if _, err := tmp.Write(append(b, '\n')); err != nil {
+	if _, err := tmp.Write(data); err != nil {
 		tmp.Close()
 		os.Remove(tmp.Name())
 		return err
@@ -491,7 +527,7 @@ func (st *Store) write(list []Spec) error {
 		os.Remove(tmp.Name())
 		return err
 	}
-	return os.Rename(tmp.Name(), st.Path)
+	return os.Rename(tmp.Name(), path)
 }
 
 // Save stores a channel: a new one when spec.ID is empty, else it replaces
@@ -504,12 +540,7 @@ func (st *Store) Save(spec Spec) (Spec, error) {
 	if err != nil {
 		return Spec{}, err
 	}
-	idx := -1
-	for i := range list {
-		if list[i].ID == spec.ID && spec.ID != "" {
-			idx = i
-		}
-	}
+	idx := indexOfID(list, spec.ID)
 	if spec.ID != "" && idx < 0 {
 		return Spec{}, ErrNotFound
 	}
@@ -533,6 +564,18 @@ func (st *Store) Save(spec Spec) (Spec, error) {
 		return Spec{}, err
 	}
 	return spec, nil
+}
+
+// indexOfID returns the position of the channel with the given non-empty id
+// (the last match), or -1.
+func indexOfID(list []Spec, id string) int {
+	idx := -1
+	for i := range list {
+		if list[i].ID == id && id != "" {
+			idx = i
+		}
+	}
+	return idx
 }
 
 // Delete removes a channel.

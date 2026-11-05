@@ -30,38 +30,11 @@ func copyTree(src, dst string, skip func(rel string) bool) error {
 			}
 			return nil
 		}
-		target := filepath.Join(dst, rel)
 		fi, err := os.Lstat(p)
 		if err != nil {
 			return err
 		}
-		switch {
-		case fi.IsDir():
-			if err := os.Mkdir(target, 0o700); err != nil {
-				return err
-			}
-			lchown(target, fi)
-			dirModes[target] = fi.Mode().Perm() | fi.Mode()&(fs.ModeSetgid|fs.ModeSticky)
-			return nil
-		case fi.Mode()&fs.ModeSymlink != 0:
-			t, err := os.Readlink(p)
-			if err != nil {
-				return err
-			}
-			if err := os.Symlink(t, target); err != nil {
-				return err
-			}
-			lchown(target, fi)
-			return nil
-		case fi.Mode().IsRegular():
-			if err := copyFile(p, target, fi.Mode().Perm()); err != nil {
-				return err
-			}
-		default:
-			return nil // sockets, FIFOs, devices: not ours to copy
-		}
-		lchown(target, fi)
-		return os.Chmod(target, fi.Mode().Perm())
+		return copyEntry(p, filepath.Join(dst, rel), fi, dirModes)
 	})
 	if err != nil {
 		return err
@@ -72,6 +45,37 @@ func copyTree(src, dst string, skip func(rel string) bool) error {
 		}
 	}
 	return nil
+}
+
+// copyEntry copies one folder, symlink or regular file p to target. A
+// folder's final mode is recorded in dirModes instead of being applied.
+func copyEntry(p, target string, fi fs.FileInfo, dirModes map[string]fs.FileMode) error {
+	switch {
+	case fi.IsDir():
+		if err := os.Mkdir(target, 0o700); err != nil {
+			return err
+		}
+		lchown(target, fi)
+		dirModes[target] = fi.Mode().Perm() | fi.Mode()&(fs.ModeSetgid|fs.ModeSticky)
+		return nil
+	case fi.Mode()&fs.ModeSymlink != 0:
+		t, err := os.Readlink(p)
+		if err != nil {
+			return err
+		}
+		if err := os.Symlink(t, target); err != nil {
+			return err
+		}
+		lchown(target, fi)
+		return nil
+	case fi.Mode().IsRegular():
+		if err := copyFile(p, target, fi.Mode().Perm()); err != nil {
+			return err
+		}
+		lchown(target, fi)
+		return os.Chmod(target, fi.Mode().Perm())
+	}
+	return nil // sockets, FIFOs, devices: not ours to copy
 }
 
 // lchown gives target the owner of fi when running as root.

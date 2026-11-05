@@ -157,20 +157,7 @@ func writeJSON(path string, v any) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	tmp, err := os.OpenFile(path+".tmp", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
-	if err != nil {
-		return err
-	}
-	if _, err := tmp.Write(b); err != nil {
-		tmp.Close()
-		os.Remove(tmp.Name())
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmp.Name())
-		return err
-	}
-	return os.Rename(tmp.Name(), path)
+	return notify.WriteFileAtomic(path, b)
 }
 
 // saveLocked persists the instances; the caller holds m.mu.
@@ -435,29 +422,13 @@ const (
 
 // check says whether the instance may run now and, when not, why.
 func (m *Manager) check(in *Instance) (*checked, string, int) {
-	a, err := m.env.Account(in.Owner)
-	if err != nil || a == nil {
-		return nil, fmt.Sprintf("The account %s no longer exists.", in.Owner), checkDisable
+	a, why := m.checkOwner(in)
+	if why != "" {
+		return nil, why, checkDisable
 	}
-	if a.UID != in.OwnerUID {
-		return nil, fmt.Sprintf("The account %s is not the one that created this job.", in.Owner), checkDisable
-	}
-	if why := m.env.OwnerOK(a); why != "" {
-		return nil, fmt.Sprintf("%s may no longer run jobs: %s", in.Owner, why), checkDisable
-	}
-	man, err := m.env.Manifest(in.Plugin)
-	if err != nil || man == nil {
-		if err == nil {
-			err = fmt.Errorf("The plugin %s is not available.", in.Plugin)
-		}
-		return nil, err.Error(), checkLater
-	}
-	job := man.Job(in.Job)
-	if job == nil {
-		return nil, fmt.Sprintf("%s no longer declares the job %s.", man.Name, in.Job), checkLater
-	}
-	if !man.CanBeUsedBy(groupSet(a), a.CanSudo()) {
-		return nil, fmt.Sprintf("%s is not available to %s.", man.Name, in.Owner), checkLater
+	man, job, why := m.checkJob(in, a)
+	if why != "" {
+		return nil, why, checkLater
 	}
 	c := &checked{man: man, job: job, owner: a}
 	if man.JobNeedsAdmin(job, a.IsRoot(), groupSet(a)) {
@@ -470,6 +441,42 @@ func (m *Manager) check(in *Instance) (*checked, string, int) {
 		}
 	}
 	return c, "", checkOK
+}
+
+// checkOwner returns the instance's owner account, or why it may not run
+// jobs any more.
+func (m *Manager) checkOwner(in *Instance) (*account.Account, string) {
+	a, err := m.env.Account(in.Owner)
+	if err != nil || a == nil {
+		return nil, fmt.Sprintf("The account %s no longer exists.", in.Owner)
+	}
+	if a.UID != in.OwnerUID {
+		return nil, fmt.Sprintf("The account %s is not the one that created this job.", in.Owner)
+	}
+	if why := m.env.OwnerOK(a); why != "" {
+		return nil, fmt.Sprintf("%s may no longer run jobs: %s", in.Owner, why)
+	}
+	return a, ""
+}
+
+// checkJob returns the plugin manifest and job of the instance, or why the
+// owner cannot run it now.
+func (m *Manager) checkJob(in *Instance, a *account.Account) (*plugins.Manifest, *plugins.JobDef, string) {
+	man, err := m.env.Manifest(in.Plugin)
+	if err != nil || man == nil {
+		if err == nil {
+			err = fmt.Errorf("The plugin %s is not available.", in.Plugin)
+		}
+		return nil, nil, err.Error()
+	}
+	job := man.Job(in.Job)
+	if job == nil {
+		return nil, nil, fmt.Sprintf("%s no longer declares the job %s.", man.Name, in.Job)
+	}
+	if !man.CanBeUsedBy(groupSet(a), a.CanSudo()) {
+		return nil, nil, fmt.Sprintf("%s is not available to %s.", man.Name, in.Owner)
+	}
+	return man, job, ""
 }
 
 // approvalMissing says why an instance whose job needs administrator rights
