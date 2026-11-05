@@ -142,9 +142,7 @@ for (const shell of ['classic', 'ervisios']) {
     await expect(
       page.locator('[data-path="remote:0123456789abcdef:/srv/config"]').first(),
     ).toBeVisible();
-    let requested = '';
-    await page.route('**/api/files/download?**', async (route) => {
-      requested = route.request().url();
+    await page.context().route('**/api/files/download?**', async (route) => {
       await route.fulfill({
         status: 200,
         headers: { 'Content-Disposition': 'attachment; filename="app.yaml"' },
@@ -154,8 +152,8 @@ for (const shell of ['classic', 'ervisios']) {
     await item.click({ button: 'right' });
     const download = page.waitForEvent('download');
     await page.getByRole('menuitem', { name: 'Download', exact: true }).click();
-    await download;
-    const url = new URL(requested);
+    const downloaded = await download;
+    const url = new URL(downloaded.url());
     expect(url.searchParams.get('remote')).toBe('0123456789abcdef');
     expect(url.searchParams.get('path')).toBe('/srv/app.yaml');
     expect(url.searchParams.get('admin')).toBe('0');
