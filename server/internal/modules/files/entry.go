@@ -38,32 +38,40 @@ var (
 	grpName  = map[int]string{}
 )
 
-func lookupUser(uid int) string {
+// cachedName returns the cached name for id, resolving and caching it on a miss.
+// It falls back to the numeric id when resolve fails.
+func cachedName(cache map[int]string, id int, resolve func(string) (string, error)) string {
 	nameMu.Lock()
 	defer nameMu.Unlock()
-	if n, ok := userName[uid]; ok {
+	if n, ok := cache[id]; ok {
 		return n
 	}
-	n := strconv.Itoa(uid)
-	if u, err := user.LookupId(n); err == nil {
-		n = u.Username
+	n := strconv.Itoa(id)
+	if resolved, err := resolve(n); err == nil {
+		n = resolved
 	}
-	userName[uid] = n
+	cache[id] = n
 	return n
 }
 
+func lookupUser(uid int) string {
+	return cachedName(userName, uid, func(id string) (string, error) {
+		u, err := user.LookupId(id)
+		if err != nil {
+			return "", err
+		}
+		return u.Username, nil
+	})
+}
+
 func lookupGroup(gid int) string {
-	nameMu.Lock()
-	defer nameMu.Unlock()
-	if n, ok := grpName[gid]; ok {
-		return n
-	}
-	n := strconv.Itoa(gid)
-	if g, err := user.LookupGroupId(n); err == nil {
-		n = g.Name
-	}
-	grpName[gid] = n
-	return n
+	return cachedName(grpName, gid, func(id string) (string, error) {
+		g, err := user.LookupGroupId(id)
+		if err != nil {
+			return "", err
+		}
+		return g.Name, nil
+	})
 }
 
 func typeOf(m os.FileMode) string {
@@ -277,14 +285,19 @@ func statEntry(path string) (Entry, error) {
 	return e, nil
 }
 
-func hStat(ctx context.Context, c *rpc.Call) (any, error) {
+// bindPath reads the path param of c and returns it cleaned.
+func bindPath(c *rpc.Call) (string, error) {
 	var p struct {
 		Path string `json:"path"`
 	}
 	if err := c.Bind(&p); err != nil {
-		return nil, err
+		return "", err
 	}
-	path, err := cleanPath(p.Path)
+	return cleanPath(p.Path)
+}
+
+func hStat(ctx context.Context, c *rpc.Call) (any, error) {
+	path, err := bindPath(c)
 	if err != nil {
 		return nil, err
 	}
@@ -316,13 +329,7 @@ func hMkdir(ctx context.Context, c *rpc.Call) (any, error) {
 }
 
 func hCreate(ctx context.Context, c *rpc.Call) (any, error) {
-	var p struct {
-		Path string `json:"path"`
-	}
-	if err := c.Bind(&p); err != nil {
-		return nil, err
-	}
-	path, err := cleanPath(p.Path)
+	path, err := bindPath(c)
 	if err != nil {
 		return nil, err
 	}

@@ -23,8 +23,6 @@ import (
 
 const showProps = "Id,Description,MemoryCurrent,CPUUsageNSec,MainPID,StateChangeTimestamp,UnitFileState,NextElapseUSecRealtime,LastTriggerUSec,Triggers,Listen"
 
-// ---- systemctl helpers ----
-
 func systemctl(ctx context.Context, args ...string) ([]byte, error) {
 	full := append([]string{"--no-pager"}, args...)
 	out, err := sys.Output(ctx, "systemctl", full...)
@@ -231,8 +229,6 @@ func detailUnits(ctx context.Context, units []*Unit) {
 	}
 }
 
-// ---- services.list ----
-
 func handleList(ctx context.Context, c *rpc.Call) (any, error) {
 	var p listParams
 	if err := c.Bind(&p); err != nil {
@@ -249,8 +245,6 @@ func handleList(ctx context.Context, c *rpc.Call) (any, error) {
 	detailUnits(ctx, units)
 	return map[string]any{"units": units}, nil
 }
-
-// ---- services.summary ----
 
 func handleSummary(ctx context.Context, c *rpc.Call) (any, error) {
 	svc, err := baseUnits(ctx, "service", false)
@@ -326,8 +320,6 @@ func failedUnits(ctx context.Context, names []string, desc map[string]string, ac
 	return failed
 }
 
-// ---- services.get ----
-
 func showOne(ctx context.Context, name string) (map[string]string, error) {
 	out, err := systemctl(ctx, "show", "--timestamp=unix", "--", name)
 	if err != nil {
@@ -344,21 +336,31 @@ func showOne(ctx context.Context, name string) (map[string]string, error) {
 	return p, nil
 }
 
-func handleGet(ctx context.Context, c *rpc.Call) (any, error) {
+// bindUnitShow reads the unit name param of c and returns the name with the
+// unit's show properties.
+func bindUnitShow(ctx context.Context, c *rpc.Call) (string, map[string]string, error) {
 	var p nameParams
 	if err := c.Bind(&p); err != nil {
-		return nil, err
+		return "", nil, err
 	}
 	if err := checkName(p.Name); err != nil {
-		return nil, err
+		return "", nil, err
 	}
 	props, err := showOne(ctx, p.Name)
+	if err != nil {
+		return "", nil, err
+	}
+	return p.Name, props, nil
+}
+
+func handleGet(ctx context.Context, c *rpc.Call) (any, error) {
+	name, props, err := bindUnitShow(ctx, c)
 	if err != nil {
 		return nil, err
 	}
 	u := &Unit{
-		Name: p.Name, Description: props["Description"], Load: props["LoadState"],
-		Active: props["ActiveState"], Sub: props["SubState"], Purpose: PurposeOf(p.Name),
+		Name: name, Description: props["Description"], Load: props["LoadState"],
+		Active: props["ActiveState"], Sub: props["SubState"], Purpose: PurposeOf(name),
 	}
 	u.State = stateOf(u.Active, u.Sub)
 	applyShow(u, props)
@@ -395,8 +397,6 @@ func handleGet(ctx context.Context, c *rpc.Call) (any, error) {
 	}, nil
 }
 
-// ---- services.action ----
-
 func handleAction(ctx context.Context, c *rpc.Call) (any, error) {
 	var p actionParams
 	if err := c.Bind(&p); err != nil {
@@ -420,8 +420,6 @@ func handleAction(ctx context.Context, c *rpc.Call) (any, error) {
 	}
 	return map[string]any{"ok": true}, nil
 }
-
-// ---- unit file and overrides ----
 
 // overrideRoot is where administrator overrides live. Variable for tests.
 var overrideRoot = "/etc/systemd/system"
@@ -449,14 +447,7 @@ func overridePath(name string) string {
 }
 
 func handleUnitFile(ctx context.Context, c *rpc.Call) (any, error) {
-	var p nameParams
-	if err := c.Bind(&p); err != nil {
-		return nil, err
-	}
-	if err := checkName(p.Name); err != nil {
-		return nil, err
-	}
-	props, err := showOne(ctx, p.Name)
+	name, props, err := bindUnitShow(ctx, c)
 	if err != nil {
 		return nil, err
 	}
@@ -467,8 +458,8 @@ func handleUnitFile(ctx context.Context, c *rpc.Call) (any, error) {
 	}
 	ovs := readDropIns(props["DropInPaths"])
 	res["overrides"] = ovs
-	res["overridePath"] = overridePath(p.Name)
-	res["override"] = currentOverride(p.Name, ovs)
+	res["overridePath"] = overridePath(name)
+	res["override"] = currentOverride(name, ovs)
 	return res, nil
 }
 
@@ -550,8 +541,6 @@ func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
 	return cfg.WriteAtomic(path, data, perm)
 }
 
-// ---- services.logs ----
-
 func handleLogs(ctx context.Context, c *rpc.Call) (any, error) {
 	var p logsParams
 	if err := c.Bind(&p); err != nil {
@@ -576,8 +565,6 @@ func handleLogs(ctx context.Context, c *rpc.Call) (any, error) {
 	}
 	return map[string]any{"lines": parseJournal(out)}, nil
 }
-
-// ---- services.watch ----
 
 func handleWatch(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
 	var p listParams

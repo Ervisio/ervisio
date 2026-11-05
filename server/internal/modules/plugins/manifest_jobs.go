@@ -122,17 +122,10 @@ type JobNotify struct {
 	Link  string `json:"link,omitempty"`
 }
 
-// JobCond guards a step on an earlier step of the same job.
-//
-//	ok         the step ran and succeeded (exit code 0, or an HTTP 2xx)
-//	failed     the step ran and failed
-//	changed    the step's output differs from the previous run's of this instance (or there is none)
-//	unchanged  the opposite
-//	differs    the step's output differs from step Other's output in this run
-//	same       the outputs are equal
-//
-// Outputs are the trimmed stdout of a command or the body of an HTTP call.
-// A condition on a step that did not run is false.
+// JobCond guards a step on an earlier step of the same job. ok means exit 0 or
+// HTTP 2xx. Outputs are the trimmed stdout or HTTP body; changed compares with
+// this instance's previous run (true when there is none). A condition on a step
+// that did not run is false.
 type JobCond struct {
 	Step  string `json:"step"`
 	When  string `json:"when"`
