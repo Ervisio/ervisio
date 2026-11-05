@@ -3,7 +3,6 @@
 package terminal
 
 import (
-	"errors"
 	"os"
 	"os/exec"
 	"syscall"
@@ -38,10 +37,4 @@ func hangupProc(pid int, self bool) {
 func killProc(pid int) {
 	_ = syscall.Kill(-pid, syscall.SIGKILL)
 	_ = syscall.Kill(pid, syscall.SIGKILL)
-}
-
-// isPTYClosed reports whether a read error just means the pty ended (EIO is
-// what Linux returns once the slave side is gone).
-func isPTYClosed(err error) bool {
-	return errors.Is(err, syscall.EIO)
 }

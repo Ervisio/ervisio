@@ -278,9 +278,3 @@ func killProc(pid int) {
 	defer windows.CloseHandle(h)
 	_ = windows.TerminateProcess(h, 1)
 }
-
-// isPTYClosed reports whether a read error just means the pty ended (the
-// console host closing the pipe shows up as io.EOF or a broken pipe).
-func isPTYClosed(err error) bool {
-	return errors.Is(err, windows.ERROR_BROKEN_PIPE) || errors.Is(err, os.ErrClosed)
-}
