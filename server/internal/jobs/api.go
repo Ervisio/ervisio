@@ -80,7 +80,7 @@ type AdminStep struct {
 // runsAsRoot tells whether a command or API marked admin runs as root for
 // an owner with these groups.
 func runsAsRoot(admin bool, unlessGroup string, groups map[string]bool) bool {
-	return admin && !(unlessGroup != "" && groups[unlessGroup])
+	return admin && (unlessGroup == "" || !groups[unlessGroup])
 }
 
 // adminSteps lists the steps of job that run as root for an owner with

@@ -27,7 +27,7 @@ func NewRemote(ctx context.Context, conn io.ReadWriteCloser, tag string) (*Proc,
 	}
 	p.Hello = h
 	go func() {
-		<-p.Client.Done()
+		<-p.Done()
 		close(p.waited)
 	}()
 	return p, nil

@@ -181,7 +181,7 @@ func (v View) MarshalJSON() ([]byte, error) {
 		HasSecrets map[string]bool `json:"hasSecrets"`
 		Status     *Status         `json:"status,omitempty"`
 	}
-	return json.Marshal(flat{v.Env, v.HasSecrets, v.Status})
+	return json.Marshal(flat(v))
 }
 
 // Brief is what plugins.envs.list gives a plugin.

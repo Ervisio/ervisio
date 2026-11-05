@@ -173,16 +173,16 @@ func setupV3(t *testing.T) *v3env {
 		case e.lastReq <- r:
 		default:
 		}
-		switch {
-		case r.URL.Path == "/redirect":
+		switch r.URL.Path {
+		case "/redirect":
 			http.Redirect(w, r, "/echo", http.StatusFound)
-		case r.URL.Path == "/big":
+		case "/big":
 			w.Write(bytes.Repeat([]byte("x"), 2048))
-		case r.URL.Path == "/bin":
+		case "/bin":
 			w.Write([]byte{0xff, 0x00, 0xfe})
-		case r.URL.Path == "/slow":
+		case "/slow":
 			time.Sleep(3 * time.Second)
-		case r.URL.Path == "/stream":
+		case "/stream":
 			w.Header().Set("X-Kind", "stream")
 			w.Header().Add("Set-Cookie", "a=b")
 			fl := w.(http.Flusher)

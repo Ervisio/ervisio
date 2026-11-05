@@ -11,7 +11,6 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"hash"
 	"io"
 	"net"
 	"net/http"
@@ -289,7 +288,7 @@ type digestRequest struct {
 
 func digestHeader(ch map[string]string, rq digestRequest) string {
 	alg := strings.ToUpper(ch["algorithm"])
-	var h func() hash.Hash = md5.New
+	var h = md5.New
 	if alg == "SHA-256" {
 		h = sha256.New
 	}

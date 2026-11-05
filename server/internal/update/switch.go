@@ -247,7 +247,7 @@ func (h *HTTPHealth) Wait(ctx context.Context, want string, timeout time.Duratio
 	if every <= 0 {
 		every = time.Second
 	}
-	var last error = errors.New("no answer")
+	var last = errors.New("no answer")
 	for {
 		if err := h.once(ctx, want); err == nil {
 			return nil

@@ -156,7 +156,7 @@ func (s *Spec) start(cmd *exec.Cmd, tag string, onStderr func(string)) (*Proc, i
 	p := &Proc{cmd: cmd, stdin: stdin, waited: make(chan struct{}), log: lg, tag: tag}
 	p.Client = rpc.NewClient(stdout, stdin, lg)
 	go func() {
-		<-p.Client.Done()
+		<-p.Done()
 		p.wait()
 	}()
 	return p, stdin, nil

@@ -446,7 +446,7 @@ func (m *Manifest) validateLook() error {
 }
 
 func (m *Manifest) validateFiles() error {
-	if !validRelPath(m.Entry) || !(strings.HasSuffix(m.Entry, ".js") || strings.HasSuffix(m.Entry, ".mjs")) {
+	if !validRelPath(m.Entry) || (!strings.HasSuffix(m.Entry, ".js") && !strings.HasSuffix(m.Entry, ".mjs")) {
 		return fmt.Errorf("entry %q must be a relative .js or .mjs path inside the plugin folder", m.Entry)
 	}
 	for p, h := range m.Files {

@@ -164,7 +164,7 @@ func hasFiles(dir string) bool {
 		if err != nil || found {
 			return filepath.SkipDir
 		}
-		if !d.IsDir() && !(filepath.Dir(p) == dir && d.Name() == importMarker) {
+		if !d.IsDir() && (filepath.Dir(p) != dir || d.Name() != importMarker) {
 			found = true
 			return filepath.SkipDir
 		}

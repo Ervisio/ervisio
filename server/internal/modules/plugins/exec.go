@@ -171,7 +171,7 @@ func checkRights(c *rpc.Call, p ExecParams, m *Manifest, cmd *Command, who calle
 		return rpc.Errorf(rpc.Forbidden, "%s declares %q as a user command; it does not run with administrator rights.", m.Name, p.Command)
 	}
 	root := c.Admin || os.Geteuid() == 0
-	if cmd.Admin && !root && !(cmd.AdminUnlessGroup != "" && who.Groups[cmd.AdminUnlessGroup]) {
+	if cmd.Admin && !root && (cmd.AdminUnlessGroup == "" || !who.Groups[cmd.AdminUnlessGroup]) {
 		return rpc.Errorf(rpc.NeedsAdmin, "%s needs administrator rights to run %q.", m.Name, p.Command)
 	}
 	return nil

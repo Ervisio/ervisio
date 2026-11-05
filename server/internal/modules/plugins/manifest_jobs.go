@@ -285,7 +285,7 @@ func (m *Manifest) JobNeedsAdmin(j *JobDef, isRoot bool, groups map[string]bool)
 // adminApplies reports whether an admin-only command or API still needs the
 // root bridge for a user in these groups.
 func adminApplies(admin bool, unlessGroup string, groups map[string]bool) bool {
-	return admin && !(unlessGroup != "" && groups[unlessGroup])
+	return admin && (unlessGroup == "" || !groups[unlessGroup])
 }
 
 // ---- templates ----

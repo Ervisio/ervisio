@@ -175,7 +175,7 @@ func (s *store) list() []*Env {
 	defer s.mu.Unlock()
 	out := make([]*Env, 0, len(s.data.Envs))
 	for _, r := range s.data.Envs {
-		out = append(out, r.Env.clone())
+		out = append(out, r.clone())
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Name != out[j].Name {
@@ -191,7 +191,7 @@ func (s *store) get(id string) *Env {
 	defer s.mu.Unlock()
 	for _, r := range s.data.Envs {
 		if r.ID == id {
-			return r.Env.clone()
+			return r.clone()
 		}
 	}
 	return nil

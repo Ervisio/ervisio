@@ -279,7 +279,7 @@ func httpSocket(c *rpc.Call, m *Manifest, api *HTTPAPI, who caller, envSocket st
 		return "", rpc.Errorf(rpc.Forbidden, "%s declares %q as a user API; it is not called with administrator rights.", m.Name, api.Name)
 	}
 	root := c.Admin || os.Geteuid() == 0
-	if api.Admin && !root && !(api.AdminUnlessGroup != "" && who.Groups[api.AdminUnlessGroup]) {
+	if api.Admin && !root && (api.AdminUnlessGroup == "" || !who.Groups[api.AdminUnlessGroup]) {
 		return "", rpc.Errorf(rpc.NeedsAdmin, "%s needs administrator rights to use %q.", m.Name, api.Name)
 	}
 	return api.Socket, nil
@@ -329,7 +329,7 @@ func httpHeaders(m *Manifest, api *HTTPAPI, p HTTPParams) (http.Header, error) {
 		if len(v) > maxHeaderValue || strings.ContainsAny(v, "\r\n\x00") {
 			return nil, rpc.Errorf(rpc.Invalid, "The value of the header %q is not allowed.", k)
 		}
-		hdr.Set(http.CanonicalHeaderKey(k), v)
+		hdr.Set(k, v)
 	}
 	if p.JSON && hdr.Get("Content-Type") == "" {
 		hdr.Set("Content-Type", "application/json")

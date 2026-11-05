@@ -255,7 +255,7 @@ func approver() string {
 func withApproval(list []ApprovedHost, a ApprovedHost) []ApprovedHost {
 	kept := list[:0]
 	for _, x := range list {
-		if !(x.Plugin == a.Plugin && x.Host == a.Host) {
+		if x.Plugin != a.Plugin || x.Host != a.Host {
 			kept = append(kept, x)
 		}
 	}

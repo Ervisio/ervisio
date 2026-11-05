@@ -145,7 +145,7 @@ func pluginPath(c *rpc.Call, p FileParams, write bool) (*Found, capRoot, error) 
 		return nil, capRoot{}, rpc.Errorf(rpc.Forbidden, "Plugin file access runs with your own rights, not as administrator.")
 	}
 	root := c.Admin || os.Geteuid() == 0
-	if r.folder.Admin && !root && !(r.folder.AdminUnlessGroup != "" && who.Groups[r.folder.AdminUnlessGroup]) {
+	if r.folder.Admin && !root && (r.folder.AdminUnlessGroup == "" || !who.Groups[r.folder.AdminUnlessGroup]) {
 		return nil, capRoot{}, rpc.Errorf(rpc.NeedsAdmin, "%s needs administrator rights to use %s.", f.M.Name, r.dir)
 	}
 	return f, r, nil
