@@ -40,7 +40,6 @@ type FS interface {
 	Rename(ctx context.Context, from, to string) error
 	// Remove deletes a file, or an empty folder when dir is set.
 	Remove(ctx context.Context, p string, dir bool) error
-	// Open reads a file.
 	Open(ctx context.Context, p string) (io.ReadCloser, error)
 	// Create writes a new file; size is the final size, or -1 when not
 	// known. Close commits it; a writer that implements aborter is aborted
@@ -65,7 +64,6 @@ const maxList = 50000
 
 var mimeOf = files.MimeOf
 
-// cleanRemote validates a remote path.
 func cleanRemote(p string) (string, error) {
 	if p == "" {
 		return "", rpc.Errorf(rpc.Invalid, "A path is missing.")

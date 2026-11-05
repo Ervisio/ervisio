@@ -99,8 +99,6 @@ func parseJournalLine(line string) (*Entry, bool) {
 	return e, true
 }
 
-// ---------- access ----------
-
 // journalReadable reports whether this process can read the system journal
 // files. When nothing is found (containers, no persistent journal) it
 // returns true and lets journalctl decide.
@@ -160,8 +158,6 @@ func journalDirReadable(dir string) (ok, denied bool) {
 func errNeedsAdmin() error {
 	return rpc.Errorf(rpc.NeedsAdmin, "Reading the system journal needs administrator rights, or membership of the systemd-journal group.")
 }
-
-// ---------- journalctl invocation ----------
 
 // jgroup is one journalctl invocation: a set of match arguments.
 type jgroup struct {

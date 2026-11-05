@@ -325,8 +325,6 @@ func nextCursor(page []Entry, until int64, skip int) string {
 	return strconv.FormatInt(last, 10) + "." + strconv.Itoa(n)
 }
 
-// ---------- histogram ----------
-
 // Bucket counts entries per level in [T, T+step).
 type Bucket struct {
 	T     int64 `json:"t"`
@@ -533,8 +531,6 @@ func (c *histCounter) countEventLog(ctx context.Context, s spec, f filter) {
 		c.fail(err)
 	}
 }
-
-// ---------- context ----------
 
 type contextParams struct {
 	Source   string    `json:"source"`
