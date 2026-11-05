@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/url"
 	"os"
@@ -161,6 +162,25 @@ func (l *Log) Add(e Entry) error {
 	if !l.Enabled() {
 		return nil
 	}
+	l.normalize(&e)
+	line, err := json.Marshal(e)
+	if err != nil {
+		return err
+	}
+	line = append(line, '\n')
+
+	l.mu.Lock()
+	prune, err := l.appendLocked(e.Time, line)
+	l.mu.Unlock()
+	// Once a day, after the write and outside the lock: delete the files past the retention.
+	if prune {
+		l.Prune()
+	}
+	return err
+}
+
+// normalize sets the defaults of e and clips its text fields.
+func (l *Log) normalize(e *Entry) {
 	if e.Time.IsZero() {
 		e.Time = l.now()
 	}
@@ -173,38 +193,19 @@ func (l *Log) Add(e Entry) error {
 	if e.Result == "" {
 		e.Result = OK
 	}
-	line, err := json.Marshal(e)
-	if err != nil {
-		return err
-	}
-	line = append(line, '\n')
+}
 
-	// Once a day, after the write and outside the lock: delete the files past the retention.
-	prune := false
-	defer func() {
-		if prune {
-			l.Prune()
-		}
-	}()
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	day := e.Time.Format(dayLayout)
+// appendLocked writes line to the file of t's day and reports whether the
+// daily prune is due. The caller holds l.mu.
+func (l *Log) appendLocked(t time.Time, line []byte) (prune bool, err error) {
+	day := t.Format(dayLayout)
 	if today := l.now().UTC().Format(dayLayout); day > today {
 		day = today // a clock that went back: never write into a future file
 	}
 	if l.f == nil || l.day != day {
-		if l.f != nil {
-			l.f.Close()
-			l.f = nil
+		if err := l.openDay(day); err != nil {
+			return false, err
 		}
-		if err := os.MkdirAll(l.dir, 0o700); err != nil {
-			return err
-		}
-		f, err := os.OpenFile(filepath.Join(l.dir, filePrefix+day+fileSuffix), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
-		if err != nil {
-			return err
-		}
-		l.f, l.day = f, day
 	}
 	if l.pruned != day {
 		l.pruned = day
@@ -220,7 +221,24 @@ func (l *Log) Add(e Entry) error {
 		}
 		l.f = nil
 	}
-	return err
+	return prune, err
+}
+
+// openDay closes the current file and opens the one of day.
+func (l *Log) openDay(day string) error {
+	if l.f != nil {
+		l.f.Close()
+		l.f = nil
+	}
+	if err := os.MkdirAll(l.dir, 0o700); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(filepath.Join(l.dir, filePrefix+day+fileSuffix), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
+	if err != nil {
+		return err
+	}
+	l.f, l.day = f, day
+	return nil
 }
 
 // Close closes the current file.
@@ -303,16 +321,28 @@ func (q *Query) match(e *Entry) bool {
 	if q.Action != "" && e.Action != q.Action {
 		return false
 	}
+	return q.matchTime(e) && q.matchText(e)
+}
+
+func (q *Query) matchTime(e *Entry) bool {
 	if !q.Since.IsZero() && e.Time.Before(q.Since) {
 		return false
 	}
-	if !q.Until.IsZero() && e.Time.After(q.Until) {
-		return false
-	}
-	if q.Text != "" && !strings.Contains(strings.ToLower(e.Target+" "+e.Detail), strings.ToLower(q.Text)) {
-		return false
-	}
-	return true
+	return q.Until.IsZero() || !e.Time.After(q.Until)
+}
+
+func (q *Query) matchText(e *Entry) bool {
+	return q.Text == "" || strings.Contains(strings.ToLower(e.Target+" "+e.Detail), strings.ToLower(q.Text))
+}
+
+// beforeSince reports whether day is older than the Since bound.
+func (q *Query) beforeSince(day string) bool {
+	return !q.Since.IsZero() && day < q.Since.UTC().Format(dayLayout)
+}
+
+// afterUntil reports whether day is newer than the Until bound.
+func (q *Query) afterUntil(day string) bool {
+	return !q.Until.IsZero() && day > q.Until.UTC().Format(dayLayout)
 }
 
 // ErrCursor is returned for a cursor that List did not produce.
@@ -363,18 +393,17 @@ func (l *Log) List(q Query) ([]Entry, string, error) {
 		if curDay != "" && f.day > curDay {
 			continue
 		}
-		if !q.Since.IsZero() && f.day < q.Since.UTC().Format(dayLayout) {
+		if q.beforeSince(f.day) {
 			break
 		}
-		if !q.Until.IsZero() && f.day > q.Until.UTC().Format(dayLayout) {
+		if q.afterUntil(f.day) {
 			continue
 		}
 		before := -1
 		if f.day == curDay {
 			before = curLine
 		}
-		need := limit - len(out)
-		got, over, err := l.scan(f, &q, before, need)
+		got, over, err := l.scan(f, &q, before, limit-len(out))
 		if err != nil {
 			return nil, "", err
 		}
@@ -407,8 +436,7 @@ func (l *Log) scan(f logFile, q *Query, before, need int) ([]pos, bool, error) {
 		return nil, false, err
 	}
 	defer fh.Close()
-	sc := bufio.NewScanner(fh)
-	sc.Buffer(make([]byte, 64<<10), maxLine)
+	sc := newLineScanner(fh)
 	ring := make([]pos, 0, need+1)
 	n := -1
 	for sc.Scan() {
@@ -437,6 +465,12 @@ func (l *Log) scan(f logFile, q *Query, before, need int) ([]pos, bool, error) {
 	return ring, over, nil
 }
 
+func newLineScanner(r io.Reader) *bufio.Scanner {
+	sc := bufio.NewScanner(r)
+	sc.Buffer(make([]byte, 64<<10), maxLine)
+	return sc
+}
+
 // Each calls fn for every matching entry, oldest first (used by exports).
 // It stops at fn's first error.
 func (l *Log) Each(q Query, fn func(Entry) error) error {
@@ -446,32 +480,35 @@ func (l *Log) Each(q Query, fn func(Entry) error) error {
 	}
 	for i := len(files) - 1; i >= 0; i-- {
 		f := files[i]
-		if !q.Since.IsZero() && f.day < q.Since.UTC().Format(dayLayout) {
+		if q.beforeSince(f.day) || q.afterUntil(f.day) {
 			continue
 		}
-		if !q.Until.IsZero() && f.day > q.Until.UTC().Format(dayLayout) {
-			continue
-		}
-		fh, err := os.Open(filepath.Join(l.dir, f.name))
-		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
-				continue
-			}
+		if err := l.eachInFile(f, &q, fn); err != nil {
 			return err
 		}
-		sc := bufio.NewScanner(fh)
-		sc.Buffer(make([]byte, 64<<10), maxLine)
-		for sc.Scan() {
-			var e Entry
-			if json.Unmarshal(sc.Bytes(), &e) != nil || !q.match(&e) {
-				continue
-			}
-			if err := fn(e); err != nil {
-				fh.Close()
-				return err
-			}
+	}
+	return nil
+}
+
+// eachInFile calls fn for every entry of f that matches q.
+func (l *Log) eachInFile(f logFile, q *Query, fn func(Entry) error) error {
+	fh, err := os.Open(filepath.Join(l.dir, f.name))
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
 		}
-		fh.Close()
+		return err
+	}
+	defer fh.Close()
+	sc := newLineScanner(fh)
+	for sc.Scan() {
+		var e Entry
+		if json.Unmarshal(sc.Bytes(), &e) != nil || !q.match(&e) {
+			continue
+		}
+		if err := fn(e); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -581,8 +618,7 @@ func CommandTarget(command string, args []string) string {
 	hide := false
 	for _, a := range args {
 		b.WriteByte(' ')
-		switch {
-		case hide:
+		if hide {
 			hide = false
 			if portMapping.MatchString(a) {
 				b.WriteString(a)
@@ -590,36 +626,48 @@ func CommandTarget(command string, args []string) string {
 				b.WriteString(Redacted)
 			}
 			continue
-		case a == "-p":
-			hide = true
-			b.WriteString(a)
-			continue
-		case strings.HasPrefix(a, "-"):
-			name, val, hasV := strings.Cut(strings.TrimLeft(a, "-"), "=")
-			if SecretName(name) {
-				if hasV {
-					b.WriteString(a[:len(a)-len(val)] + Redacted)
-				} else {
-					hide = true
-					b.WriteString(a)
-				}
-				continue
-			}
-			if hasV {
-				if k, v, ok := strings.Cut(val, "="); ok && v != "" && SecretName(k) {
-					b.WriteString(clip(a[:len(a)-len(val)]+k+"="+Redacted, maxArg))
-					continue
-				}
-			}
-		default:
-			if k, v, ok := strings.Cut(a, "="); ok && v != "" && SecretName(k) && !strings.ContainsAny(k, " /") {
-				b.WriteString(clip(k, maxArg) + "=" + Redacted)
-				continue
-			}
 		}
-		b.WriteString(clip(redactValue(a), maxArg))
+		var out string
+		out, hide = redactArg(a)
+		b.WriteString(out)
 	}
 	return clip(b.String(), maxTarget)
+}
+
+// redactArg returns the redacted form of one argument and whether the next
+// argument is the value of a secret flag.
+func redactArg(a string) (string, bool) {
+	switch {
+	case a == "-p":
+		return a, true
+	case strings.HasPrefix(a, "-"):
+		if out, hide, ok := redactFlag(a); ok {
+			return out, hide
+		}
+	default:
+		if k, v, ok := strings.Cut(a, "="); ok && v != "" && SecretName(k) && !strings.ContainsAny(k, " /") {
+			return clip(k, maxArg) + "=" + Redacted, false
+		}
+	}
+	return clip(redactValue(a), maxArg), false
+}
+
+// redactFlag handles a "-" argument that carries a secret: ok is false when
+// it does not and the generic redaction applies.
+func redactFlag(a string) (out string, hide, ok bool) {
+	name, val, hasV := strings.Cut(strings.TrimLeft(a, "-"), "=")
+	if SecretName(name) {
+		if hasV {
+			return a[:len(a)-len(val)] + Redacted, false, true
+		}
+		return a, true, true
+	}
+	if hasV {
+		if k, v, found := strings.Cut(val, "="); found && v != "" && SecretName(k) {
+			return clip(a[:len(a)-len(val)]+k+"="+Redacted, maxArg), false, true
+		}
+	}
+	return "", false, false
 }
 
 // CSVRecord is the entry as the columns of the CSV export.

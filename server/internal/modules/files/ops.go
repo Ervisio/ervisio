@@ -75,13 +75,18 @@ type copyParams struct {
 	Move bool     `json:"move"`
 }
 
-func hCopy(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
-	var p copyParams
-	if err := c.Bind(&p); err != nil {
-		return err
+// streamHandler binds the call's params to P and runs do on them.
+func streamHandler[P any](do func(context.Context, P, rpc.Stream) error) func(context.Context, *rpc.Call, rpc.Stream) error {
+	return func(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
+		var p P
+		if err := c.Bind(&p); err != nil {
+			return err
+		}
+		return do(ctx, p, s)
 	}
-	return doCopy(ctx, p, s)
 }
+
+var hCopy = streamHandler(doCopy)
 
 // ---- delete / trash ----
 
@@ -112,23 +117,7 @@ func doDelete(paths []string, trash bool) (any, error) {
 	failed := []failure{}
 	var firstErr error
 	for _, p := range paths {
-		err := checkNotProtected(p)
-		if err == nil && home != "" && p == home {
-			err = rpc.Errorf(rpc.Forbidden, "Your home folder cannot be deleted from here.")
-		}
-		if err == nil {
-			if e := checkExists(p); e != nil {
-				err = e
-			}
-		}
-		if err == nil {
-			if trash {
-				err = moveToTrash(p)
-			} else {
-				err = removePath(p) // never follows symlinks, not even in parent folders as root
-			}
-		}
-		if err != nil {
+		if err := deleteOne(p, home, trash); err != nil {
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -142,6 +131,23 @@ func doDelete(paths []string, trash bool) (any, error) {
 		return nil, firstErr // lets needs_admin reach the client
 	}
 	return map[string]any{"deleted": deleted, "failed": failed}, nil
+}
+
+// deleteOne trashes or removes p after the safety checks.
+func deleteOne(p, home string, trash bool) error {
+	if err := checkNotProtected(p); err != nil {
+		return err
+	}
+	if home != "" && p == home {
+		return rpc.Errorf(rpc.Forbidden, "Your home folder cannot be deleted from here.")
+	}
+	if err := checkExists(p); err != nil {
+		return err
+	}
+	if trash {
+		return moveToTrash(p)
+	}
+	return removePath(p) // never follows symlinks, not even in parent folders as root
 }
 
 // homeOverride lets tests pick the home directory.
