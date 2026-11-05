@@ -105,25 +105,12 @@ func cleanHTTPPath(raw string) (string, bool) {
 	if raw == "" || raw[0] != '/' || len(raw) > maxHTTPPath || strings.HasPrefix(raw, "//") {
 		return "", false
 	}
-	for i := 0; i < len(raw); i++ {
-		if c := raw[i]; c <= 0x20 || c == 0x7f || c == '?' || c == '#' || c == '\\' {
-			return "", false
-		}
-	}
-	low := strings.ToLower(raw)
-	for _, bad := range []string{"%2f", "%5c", "%00", "%0a", "%0d"} {
-		if strings.Contains(low, bad) {
-			return "", false
-		}
-	}
-	dec, err := url.PathUnescape(raw)
-	if err != nil || !utf8.ValidString(dec) {
+	if hasBadRawPathByte(raw) || hasEncodedSeparator(raw) {
 		return "", false
 	}
-	for _, r := range dec {
-		if r < 0x20 || r == 0x7f || r == '\\' {
-			return "", false
-		}
+	dec, err := url.PathUnescape(raw)
+	if err != nil || !utf8.ValidString(dec) || hasBadDecodedRune(dec) {
+		return "", false
 	}
 	if dec != "/" && path.Clean(dec) != dec {
 		return "", false // "//", "/./", "/../" or a trailing "/"
@@ -134,6 +121,34 @@ func cleanHTTPPath(raw string) (string, bool) {
 		}
 	}
 	return dec, true
+}
+
+func hasBadRawPathByte(raw string) bool {
+	for i := 0; i < len(raw); i++ {
+		if c := raw[i]; c <= 0x20 || c == 0x7f || c == '?' || c == '#' || c == '\\' {
+			return true
+		}
+	}
+	return false
+}
+
+func hasEncodedSeparator(raw string) bool {
+	low := strings.ToLower(raw)
+	for _, bad := range []string{"%2f", "%5c", "%00", "%0a", "%0d"} {
+		if strings.Contains(low, bad) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasBadDecodedRune(dec string) bool {
+	for _, r := range dec {
+		if r < 0x20 || r == 0x7f || r == '\\' {
+			return true
+		}
+	}
+	return false
 }
 
 // validQuery accepts printable ASCII without spaces or "#".
@@ -257,15 +272,7 @@ func findHTTPAPI(m *Manifest, name string) *HTTPAPI {
 // rules for it.
 func httpSocket(c *rpc.Call, m *Manifest, api *HTTPAPI, who caller, envSocket string) (string, error) {
 	if envSocket != "" {
-		// An environment replaces the socket; the API must opt in, and the
-		// daemon's tunnel is the user's own, so no administrator rights apply.
-		if api.Remote == "" || c.Admin {
-			return "", rpc.Errorf(rpc.Forbidden, "%s does not allow %q to target an environment.", m.Name, api.Name)
-		}
-		if err := envSocketOK(envSocket); err != nil {
-			return "", err
-		}
-		return envSocket, nil
+		return envHTTPSocket(c, m, api, envSocket)
 	}
 	// As for commands: a user-level API is never called from the root bridge.
 	if c.Admin && !api.Admin {
@@ -276,6 +283,18 @@ func httpSocket(c *rpc.Call, m *Manifest, api *HTTPAPI, who caller, envSocket st
 		return "", rpc.Errorf(rpc.NeedsAdmin, "%s needs administrator rights to use %q.", m.Name, api.Name)
 	}
 	return api.Socket, nil
+}
+
+// envHTTPSocket checks an environment socket: the API must opt in, and the
+// daemon's tunnel is the user's own, so no administrator rights apply.
+func envHTTPSocket(c *rpc.Call, m *Manifest, api *HTTPAPI, envSocket string) (string, error) {
+	if api.Remote == "" || c.Admin {
+		return "", rpc.Errorf(rpc.Forbidden, "%s does not allow %q to target an environment.", m.Name, api.Name)
+	}
+	if err := envSocketOK(envSocket); err != nil {
+		return "", err
+	}
+	return envSocket, nil
 }
 
 // checkHTTPTarget checks the method, path and query against the API's

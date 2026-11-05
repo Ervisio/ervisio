@@ -62,32 +62,15 @@ func (Systemctl) IsEnabled(ctx context.Context, unit string) bool {
 func MigrateSchedule(ctx context.Context, p Paths, sd Systemd, logf func(string, ...any)) error {
 	oldT, oldS := p.At(systemdDir+"/"+legacyTimer), p.At(systemdDir+"/"+legacyTimerSvc)
 	newT, newS := p.At(systemdDir+"/"+newTimer), p.At(systemdDir+"/"+newTimerSvc)
-	t, err := os.ReadFile(oldT)
-	if err != nil {
+	t, s, ok := readLegacyTimer(oldT, oldS)
+	if !ok {
 		return nil
-	}
-	s, err := os.ReadFile(oldS)
-	if err != nil {
-		return nil
-	}
-	written := "# Written by " + brand.LegacyName
-	if !strings.HasPrefix(string(t), written) || !strings.HasPrefix(string(s), written) {
-		return nil
-	}
-	rename := func(b []byte) []byte {
-		lines := strings.SplitAfter(string(b), "\n")
-		for i, l := range lines {
-			if strings.HasPrefix(l, "#") || strings.HasPrefix(l, "Description=") {
-				lines[i] = strings.ReplaceAll(l, brand.LegacyName, brand.Name)
-			}
-		}
-		return []byte(strings.Join(lines, ""))
 	}
 	if !exists(newT) {
-		if err := writeFileAtomic(newS, rename(s), 0o644); err != nil {
+		if err := writeFileAtomic(newS, renameLegacyUnit(s), 0o644); err != nil {
 			return err
 		}
-		if err := writeFileAtomic(newT, rename(t), 0o644); err != nil {
+		if err := writeFileAtomic(newT, renameLegacyUnit(t), 0o644); err != nil {
 			return err
 		}
 	}
@@ -104,6 +87,34 @@ func MigrateSchedule(ctx context.Context, p Paths, sd Systemd, logf func(string,
 		logf("moved the scheduled update to %s", newTimer)
 	}
 	return nil
+}
+
+// readLegacyTimer returns the timer and service files when both exist and
+// were written by LinuxAdmin.
+func readLegacyTimer(timerPath, servicePath string) (timer, service []byte, ok bool) {
+	timer, err := os.ReadFile(timerPath)
+	if err != nil {
+		return nil, nil, false
+	}
+	service, err = os.ReadFile(servicePath)
+	if err != nil {
+		return nil, nil, false
+	}
+	written := "# Written by " + brand.LegacyName
+	if !strings.HasPrefix(string(timer), written) || !strings.HasPrefix(string(service), written) {
+		return nil, nil, false
+	}
+	return timer, service, true
+}
+
+func renameLegacyUnit(b []byte) []byte {
+	lines := strings.SplitAfter(string(b), "\n")
+	for i, l := range lines {
+		if strings.HasPrefix(l, "#") || strings.HasPrefix(l, "Description=") {
+			lines[i] = strings.ReplaceAll(l, brand.LegacyName, brand.Name)
+		}
+	}
+	return []byte(strings.Join(lines, ""))
 }
 
 // InstallUnit writes /etc/systemd/system/ervisio.service from the unit file

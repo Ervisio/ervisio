@@ -162,6 +162,12 @@ function useWidgetDrag({ gridRef, dropRef, draftRef, moveWidget, addItem, announ
   const onMove = useRef<(e: PointerEvent) => void>(() => undefined);
   const onUp = useRef<(e: PointerEvent) => void>(() => undefined);
 
+  const reorderOver = (d: DragRun, over: string | undefined) => {
+    if (!d.id || !over || over === d.id) return;
+    const idx = draftRef.current?.findIndex((w) => w.id === over) ?? -1;
+    moveWidget(d.id, idx, false);
+  };
+
   onMove.current = (e) => {
     const d = dragRun.current;
     if (!d) return;
@@ -178,10 +184,7 @@ function useWidgetDrag({ gridRef, dropRef, draftRef, moveWidget, addItem, announ
     if (d.ghost) d.ghost.style.transform = `translate(${e.clientX - d.sx}px, ${e.clientY - d.sy}px)`;
     const over = widgetAt(gridRef.current, e.clientX, e.clientY);
     if (d.kind === 'widget') {
-      if (d.id && over && over !== d.id) {
-        const idx = draftRef.current?.findIndex((w) => w.id === over) ?? -1;
-        moveWidget(d.id, idx, false);
-      }
+      reorderOver(d, over);
       return;
     }
     const overEnd = !over && (isInside(dropRef.current, e.clientX, e.clientY) || isInside(gridRef.current, e.clientX, e.clientY));
@@ -204,6 +207,11 @@ function useWidgetDrag({ gridRef, dropRef, draftRef, moveWidget, addItem, announ
     dragRun.current = null;
     setDragUi(null);
   };
+  const dropNewItem = (item: LibItem, started: boolean, dropOver: string | undefined, dropEnd?: boolean) => {
+    if (!started) addItem(item); // a plain click adds at the end
+    else if (dropOver) addItem(item, draftRef.current?.findIndex((w) => w.id === dropOver));
+    else if (dropEnd) addItem(item);
+  };
   onUp.current = (e) => {
     const d = dragRun.current;
     if (!d) return;
@@ -212,13 +220,8 @@ function useWidgetDrag({ gridRef, dropRef, draftRef, moveWidget, addItem, announ
     const ok = e.type === 'pointerup';
     endDrag.current();
     if (!ok) return;
-    if (d.kind === 'new' && d.item) {
-      if (!d.started) addItem(d.item); // a plain click adds at the end
-      else if (dropOver) addItem(d.item, draftRef.current?.findIndex((w) => w.id === dropOver));
-      else if (dropEnd) addItem(d.item);
-    } else if (d.kind === 'widget' && d.started && d.id) {
-      announceMoved(d.id);
-    }
+    if (d.kind === 'new' && d.item) dropNewItem(d.item, d.started, dropOver, dropEnd);
+    else if (d.kind === 'widget' && d.started && d.id) announceMoved(d.id);
   };
   // stable listener identities, so they can be removed
   const handlePointerMove = useCallback((e: PointerEvent) => onMove.current(e), []);
