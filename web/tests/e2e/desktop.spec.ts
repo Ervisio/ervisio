@@ -96,7 +96,7 @@ test('local app commands restore the same window without a provider', async ({ p
   expect(await command('Mostra desktop')).toMatchObject({ handled: true });
   await expect(page.locator('.eos-window:visible')).toHaveCount(0);
   expect(await command('Apri questo PC')).toMatchObject({ handled: true });
-  await expect(page.getByRole('region', { name: 'Questo PC', exact: true })).toBeVisible();
+  await expect(page.locator('.eos-window').and(page.getByRole('region', { name: 'Questo PC', exact: true }))).toBeVisible();
   expect(await command('Analizza i log del server')).toEqual({ handled: false });
 });
 

@@ -279,4 +279,11 @@ test('This PC landing migration keeps saved folders and explicit file links take
   await page.goto('/files?path=/home/alice/one.txt');
   await expect(page.locator('[data-path="/home/alice/one.txt"]').first()).toBeVisible();
   await expect(page.locator('.files-computer')).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('ervisio.mock.prefs') || '{}')['files.tabs'];
+    return saved?.landingVersion === 2 && saved.tabs.find((tab: any) => tab.id === saved.active)?.left.loc;
+  })).toBe('/home/alice');
+  await page.goto('/files');
+  await expect(page.locator('.files-computer')).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Home Close Home', exact: true })).toBeVisible();
 });

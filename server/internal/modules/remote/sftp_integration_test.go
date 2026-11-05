@@ -25,6 +25,20 @@ import (
 // This is a real SSH/SFTP endpoint backed by memory, never an external host.
 func sftpFixture(t *testing.T) (string, int, ssh.PublicKey, *atomic.Int32) {
 	t.Helper()
+	return sftpFixtureWithStatVFSError(t, sftp.ErrSSHFxOpUnsupported)
+}
+
+type fixtureFileCmder struct {
+	sftp.FileCmder
+	statVFSError error
+}
+
+func (f fixtureFileCmder) StatVFS(*sftp.Request) (*sftp.StatVFS, error) {
+	return nil, f.statVFSError
+}
+
+func sftpFixtureWithStatVFSError(t *testing.T, statVFSError error) (string, int, ssh.PublicKey, *atomic.Int32) {
+	t.Helper()
 	_, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -47,6 +61,10 @@ func sftpFixture(t *testing.T) (string, int, ssh.PublicKey, *atomic.Int32) {
 		t.Fatal(err)
 	}
 	handlers := sftp.InMemHandler()
+	// InMemHandler.StatVFS queries the host OS rather than its in-memory tree.
+	// Explicit protocol responses keep this fixture independent of host paths
+	// and allow real missing/permission errors to remain distinguishable.
+	handlers.FileCmd = fixtureFileCmder{FileCmder: handlers.FileCmd, statVFSError: statVFSError}
 	var mu sync.Mutex
 	var connections []net.Conn
 	closed := make(chan struct{})
@@ -226,5 +244,37 @@ func TestSFTPTrustTransfersAndSavedCredentials(t *testing.T) {
 	}
 	if _, err := st.get(view.ID); !rpc.IsCode(err, rpc.NotFound) {
 		t.Fatalf("forgotten credentials still available: %v", err)
+	}
+}
+
+func TestSFTPCapacityPreservesRemoteErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		code rpc.Code
+	}{
+		{"missing", sftp.ErrSSHFxNoSuchFile, rpc.NotFound},
+		{"permission", sftp.ErrSSHFxPermissionDenied, rpc.Forbidden},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			host, port, serverKey, _ := sftpFixtureWithStatVFSError(t, tc.err)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			st := &store{dir: t.TempDir()}
+			m := &module{st: st, pool: newPool(st)}
+			saved, err := m.hSave(ctx, remoteCall(map[string]any{
+				"name": "Fixture", "kind": "sftp", "host": host, "port": port,
+				"user": "fixture", "auth": "password", "password": "fixture-test-secret",
+				"path": "/", "hostKey": formatHostKey(serverKey),
+			}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			view := saved.(View)
+			defer m.pool.drop(view.ID)
+			if _, err := m.hStatfs(ctx, remoteCall(map[string]any{"conn": view.ID, "path": "/app"})); !rpc.IsCode(err, tc.code) {
+				t.Fatalf("capacity must preserve %s instead of reporting unsupported: %v", tc.code, err)
+			}
+		})
 	}
 }

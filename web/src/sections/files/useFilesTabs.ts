@@ -173,7 +173,7 @@ export function useFilesTabs({ home, mobile, ready, savedTabs, set }: TabsArgs) 
       setTabs(r.tabs);
       setActiveId(r.active);
     },
-    params.get('view') === 'computer',
+    params.get('view') === 'computer' || !params.has('path'),
   );
   useLinkPath(ready, (dir, select) => {
     const nt = newTab(home, dir);
