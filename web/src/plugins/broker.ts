@@ -415,51 +415,14 @@ const str = (v: unknown, max: number): string | null => (typeof v === 'string' &
 export function authorize(m: BrokerManifest, op: FrameOp | string, args: Record<string, unknown>, u: BrokerUser): Plan {
   const a = args && typeof args === 'object' ? args : {};
   switch (op) {
-    case 'exec': {
-      const c = command(m, a.command);
-      if (!c) return deny(`${m.id} does not declare a command ${JSON.stringify(a.command)}.`);
-      if (c.pty) return deny(`${c.name} is a terminal command: open it with sdk.api.pty.`, 'invalid');
-      const list = argList(a.args);
-      if (!list) return deny('Command arguments must be a list of at most 16 strings.', 'invalid');
-      const env = remoteEnv(m, c, a.env);
-      if (typeof env === 'object' && env) return env;
-      return { kind: 'call', method: 'plugins.exec', params: { plugin: m.id, command: c.name, args: list, ...(env ? { env } : {}) }, admin: env ? false : needsAdmin(c, u) };
-    }
+    case 'exec':
+      return commandPlan('call', 'plugins.exec', m, a.command, a.args, u, a.env);
     case 'readFile':
     case 'listDir':
     case 'writeFile':
     case 'mkdir':
-    case 'remove': {
-      const path = str(a.path, MAX_PATH);
-      if (!path) return deny('Give an absolute path.', 'invalid');
-      const files = m.capabilities?.files ?? {};
-      const write = op === 'writeFile' || op === 'mkdir' || op === 'remove';
-      const declared = write ? files.write ?? [] : [...(files.read ?? []), ...(files.write ?? [])];
-      if (!declared.length) return deny(`${m.id} declares no files it may ${write ? 'write' : 'read'}.`);
-      // Paths with ~ are checked by the daemon when the home is unknown here (admin folders are never under ~).
-      const tilde = path === '~' || path.startsWith('~/');
-      const folder = tilde && !u.home ? { path } : matchFolder(path, declared, u.home);
-      if (!folder) return deny(`${m.id} did not declare that it may ${write ? 'write' : 'read'} ${path}.`);
-      // An environment (a paired server): the folder lives there, so ~ means nothing here, and the call runs as the
-      // mapped user on that server, under its manifest: no administrator rights apply on this side.
-      const env = envId(a.env);
-      if (env === null) return deny('env must be the id of an environment.', 'invalid');
-      if (env) {
-        if (tilde) return deny('A path on an environment must be absolute (~ is not expanded there).', 'invalid');
-        const remote = [...(m.capabilities?.http ?? []), ...(m.capabilities?.commands ?? [])].some((x) => x.remote);
-        if (!remote) return deny(`${m.id} does not allow targeting an environment.`);
-      }
-      const admin = env ? false : needsAdmin(folder, u);
-      const e = env ? { env } : {};
-      if (op === 'writeFile') {
-        const data = str(a.data, Math.ceil((MAX_WRITE * 4) / 3) + 4);
-        if (data === null) return deny('The data to write is missing or too large.', 'invalid');
-        return { kind: 'call', method: 'plugins.writeFile', params: { plugin: m.id, path, data, b64: a.b64 === true, ...e }, admin };
-      }
-      if (op === 'mkdir' || op === 'remove') return { kind: 'call', method: `plugins.${op}`, params: { plugin: m.id, path, ...e }, admin };
-      const method = op === 'readFile' ? 'plugins.readFile' : 'plugins.listDir';
-      return { kind: 'call', method, params: { plugin: m.id, path, ...(op === 'readFile' && a.b64 === true ? { b64: true } : {}), ...e }, admin };
-    }
+    case 'remove':
+      return authorizeFileOp(m, op, a, u);
     case 'http': {
       const r = httpRequest(m, a, u);
       if ('kind' in r) return r;
@@ -473,37 +436,110 @@ export function authorize(m: BrokerManifest, op: FrameOp | string, args: Record<
       return authorizeAuditList(m, a);
     case 'envs':
       return { kind: 'call', method: 'plugins.envs.list', params: {}, admin: false };
-    case 'network': {
-      if (!m.capabilities?.userHosts) return deny(`${m.id} does not declare capabilities.network.userHosts.`);
-      const host = typeof a.host === 'string' ? a.host.trim().toLowerCase() : '';
-      const scheme = a.scheme === 'http' ? 'http' : 'https';
-      if (!host || host.length > 253 || !HOST_RE.test(host)) return deny('Give a host name with an optional port, like registry.example.org:5000.', 'invalid');
-      return { kind: 'network', host, scheme };
-    }
+    case 'network':
+      return authorizeNetwork(m, a);
     case 'asset':
       if (!validAsset(a.path)) return deny('Give a relative path inside the plugin folder.', 'invalid');
       return { kind: 'asset', path: a.path };
-    case 'toast': {
-      const tone = a.tone === 'err' || a.tone === 'info' ? a.tone : 'ok';
-      const title = str(a.title, 200);
-      if (!title) return deny('A toast needs a short title.', 'invalid');
-      const detail = a.detail === undefined ? undefined : str(a.detail, 1000) ?? undefined;
-      return { kind: 'toast', tone, title, detail };
-    }
-    case 'open': {
-      const page = (m.contributes?.pages ?? []).find((p) => p.id === a.page);
-      if (!page) return deny(`${m.id} has no page ${JSON.stringify(a.page)}.`);
-      return { kind: 'open', to: `/p/${m.id}/${page.id}` };
-    }
-    case 'openUrl': {
-      const url = externalUrl(a.url);
-      if (!url) return deny('Only http and https addresses without credentials can be opened.', 'invalid');
-      if (u.appOrigin && new URL(url).origin === u.appOrigin) return deny('Plugins cannot open pages of this app in a new tab.', 'invalid');
-      return { kind: 'openUrl', url };
-    }
+    case 'toast':
+      return authorizeToast(a);
+    case 'open':
+      return authorizeOpen(m, a);
+    case 'openUrl':
+      return authorizeOpenUrl(a, u);
   }
   if (op === 'jobs' || op === 'notify') return authorizeJobsOp(m, op, a);
   return deny(`Plugins cannot use ${JSON.stringify(op)}.`);
+}
+
+/** A declared non-terminal command with checked arguments, run as `method` (plugins.exec or plugins.execStream). */
+function commandPlan(kind: 'call' | 'stream', method: string, m: BrokerManifest, cmd: unknown, args: unknown, u: BrokerUser, envArg: unknown): Plan {
+  const c = command(m, cmd);
+  if (!c) return deny(`${m.id} does not declare a command ${JSON.stringify(cmd)}.`);
+  if (c.pty) return deny(`${c.name} is a terminal command: open it with sdk.api.pty.`, 'invalid');
+  const list = argList(args);
+  if (!list) return deny('Command arguments must be a list of at most 16 strings.', 'invalid');
+  const env = remoteEnv(m, c, envArg);
+  if (typeof env === 'object' && env) return env;
+  return { kind, method, params: { plugin: m.id, command: c.name, args: list, ...(env ? { env } : {}) }, admin: env ? false : needsAdmin(c, u) };
+}
+
+type FileOp = 'readFile' | 'listDir' | 'writeFile' | 'mkdir' | 'remove';
+
+function authorizeFileOp(m: BrokerManifest, op: FileOp, a: Record<string, unknown>, u: BrokerUser): Plan {
+  const path = str(a.path, MAX_PATH);
+  if (!path) return deny('Give an absolute path.', 'invalid');
+  const write = op === 'writeFile' || op === 'mkdir' || op === 'remove';
+  const declared = declaredFolders(m, write);
+  if (!declared.length) return deny(`${m.id} declares no files it may ${write ? 'write' : 'read'}.`);
+  // Paths with ~ are checked by the daemon when the home is unknown here (admin folders are never under ~).
+  const tilde = path === '~' || path.startsWith('~/');
+  const folder = tilde && !u.home ? { path } : matchFolder(path, declared, u.home);
+  if (!folder) return deny(`${m.id} did not declare that it may ${write ? 'write' : 'read'} ${path}.`);
+  const env = fileEnv(m, a.env, tilde);
+  if (typeof env === 'object' && env) return env;
+  const admin = env ? false : needsAdmin(folder, u);
+  return filePlan(m, op, a, path, env ? { env } : {}, admin);
+}
+
+function declaredFolders(m: BrokerManifest, write: boolean): BrokerFolder[] {
+  const files = m.capabilities?.files ?? {};
+  return write ? files.write ?? [] : [...(files.read ?? []), ...(files.write ?? [])];
+}
+
+/**
+ * The environment a file op targets: its id, undefined for none, or a denial. On an environment (a paired server)
+ * the folder lives there, so ~ means nothing here, and the call runs as the mapped user on that server, under its
+ * manifest: no administrator rights apply on this side.
+ */
+function fileEnv(m: BrokerManifest, v: unknown, tilde: boolean): string | Plan | undefined {
+  const env = envId(v);
+  if (env === null) return deny('env must be the id of an environment.', 'invalid');
+  if (!env) return env;
+  if (tilde) return deny('A path on an environment must be absolute (~ is not expanded there).', 'invalid');
+  const remote = [...(m.capabilities?.http ?? []), ...(m.capabilities?.commands ?? [])].some((x) => x.remote);
+  if (!remote) return deny(`${m.id} does not allow targeting an environment.`);
+  return env;
+}
+
+function filePlan(m: BrokerManifest, op: FileOp, a: Record<string, unknown>, path: string, e: { env?: string }, admin: boolean): Plan {
+  if (op === 'writeFile') {
+    const data = str(a.data, Math.ceil((MAX_WRITE * 4) / 3) + 4);
+    if (data === null) return deny('The data to write is missing or too large.', 'invalid');
+    return { kind: 'call', method: 'plugins.writeFile', params: { plugin: m.id, path, data, b64: a.b64 === true, ...e }, admin };
+  }
+  if (op === 'mkdir' || op === 'remove') return { kind: 'call', method: `plugins.${op}`, params: { plugin: m.id, path, ...e }, admin };
+  const method = op === 'readFile' ? 'plugins.readFile' : 'plugins.listDir';
+  return { kind: 'call', method, params: { plugin: m.id, path, ...(op === 'readFile' && a.b64 === true ? { b64: true } : {}), ...e }, admin };
+}
+
+function authorizeNetwork(m: BrokerManifest, a: Record<string, unknown>): Plan {
+  if (!m.capabilities?.userHosts) return deny(`${m.id} does not declare capabilities.network.userHosts.`);
+  const host = typeof a.host === 'string' ? a.host.trim().toLowerCase() : '';
+  const scheme = a.scheme === 'http' ? 'http' : 'https';
+  if (!host || host.length > 253 || !HOST_RE.test(host)) return deny('Give a host name with an optional port, like registry.example.org:5000.', 'invalid');
+  return { kind: 'network', host, scheme };
+}
+
+function authorizeToast(a: Record<string, unknown>): Plan {
+  const tone = a.tone === 'err' || a.tone === 'info' ? a.tone : 'ok';
+  const title = str(a.title, 200);
+  if (!title) return deny('A toast needs a short title.', 'invalid');
+  const detail = a.detail === undefined ? undefined : str(a.detail, 1000) ?? undefined;
+  return { kind: 'toast', tone, title, detail };
+}
+
+function authorizeOpen(m: BrokerManifest, a: Record<string, unknown>): Plan {
+  const page = (m.contributes?.pages ?? []).find((p) => p.id === a.page);
+  if (!page) return deny(`${m.id} has no page ${JSON.stringify(a.page)}.`);
+  return { kind: 'open', to: `/p/${m.id}/${page.id}` };
+}
+
+function authorizeOpenUrl(a: Record<string, unknown>, u: BrokerUser): Plan {
+  const url = externalUrl(a.url);
+  if (!url) return deny('Only http and https addresses without credentials can be opened.', 'invalid');
+  if (u.appOrigin && new URL(url).origin === u.appOrigin) return deny('Plugins cannot open pages of this app in a new tab.', 'invalid');
+  return { kind: 'openUrl', url };
 }
 
 /** An http(s) URL without user info, as a normalised string, or null. */
@@ -529,14 +565,7 @@ function remoteEnv(m: BrokerManifest, c: BrokerCommand, v: unknown): string | Pl
 
 /** Decision for a streamed command (plugins.execStream). */
 export function authorizeStream(m: BrokerManifest, cmd: unknown, args: unknown, u: BrokerUser, envArg?: unknown): Plan {
-  const c = command(m, cmd);
-  if (!c) return deny(`${m.id} does not declare a command ${JSON.stringify(cmd)}.`);
-  if (c.pty) return deny(`${c.name} is a terminal command: open it with sdk.api.pty.`, 'invalid');
-  const list = argList(args);
-  if (!list) return deny('Command arguments must be a list of at most 16 strings.', 'invalid');
-  const env = remoteEnv(m, c, envArg);
-  if (typeof env === 'object' && env) return env;
-  return { kind: 'stream', method: 'plugins.execStream', params: { plugin: m.id, command: c.name, args: list, ...(env ? { env } : {}) }, admin: env ? false : needsAdmin(c, u) };
+  return commandPlan('stream', 'plugins.execStream', m, cmd, args, u, envArg);
 }
 
 /** Decision for a streamed HTTP request (plugins.httpStream). */
