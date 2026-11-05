@@ -86,6 +86,13 @@ type Built = { settings?: Record<string, any>; error?: string };
 
 const isAbsPath = (p: string, win: boolean) => (win ? /^([a-zA-Z]:[\\/]|\\\\)/.test(p) : p.startsWith('/'));
 
+function metricSettings(metric: string, mount: string, iface: string, range: string | undefined, withIface: boolean): Built {
+  const settings: Record<string, any> = range ? { metric, range } : { metric };
+  if (metric === 'disk' && mount) settings.mount = mount;
+  if (withIface && metric === 'network' && iface !== 'auto') settings.iface = iface;
+  return { settings };
+}
+
 function serviceSettings(units: string, t: T): Built {
   const list = units.split(/[\s,]+/).map((u) => u.trim()).filter(Boolean);
   if (list.length > 30) return { error: t('settings.errUnits') };
@@ -169,19 +176,12 @@ function Inner({ widget, onClose, onSave, pluginTitle }: { widget: Widget; onClo
 
   const settingsFor = (tt: string): Built => {
     switch (type) {
-      case 'stat': {
-        const settings: Record<string, any> = { metric };
-        if (metric === 'disk' && mount) settings.mount = mount;
-        if (metric === 'network' && iface !== 'auto') settings.iface = iface;
-        return { settings };
-      }
+      case 'stat':
+        return metricSettings(metric, mount, iface, undefined, true);
       case 'activity':
         return { settings: { range } };
-      case 'chart': {
-        const settings: Record<string, any> = { metric, range };
-        if (metric === 'disk' && mount) settings.mount = mount;
-        return { settings };
-      }
+      case 'chart':
+        return metricSettings(metric, mount, iface, range, false);
       case 'alerts':
         return { settings: { showOk, max: Math.max(3, Math.min(12, parseInt(max, 10) || 6)) } };
       case 'service':

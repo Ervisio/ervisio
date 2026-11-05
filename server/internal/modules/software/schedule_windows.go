@@ -79,20 +79,9 @@ func wingetExe() (string, error) {
 }
 
 func setScheduleOS(ctx context.Context, plans []Plan, at string) (string, error) {
-	var acts []taskAction
-	for _, p := range plans {
-		for _, s := range p.Steps {
-			path := s.Name
-			if s.Name == "winget" {
-				var err error
-				if path, err = wingetExe(); err != nil {
-					return "", err
-				}
-			} else if p, err := exec.LookPath(s.Name); err == nil {
-				path = p
-			}
-			acts = append(acts, taskAction{Path: path, Args: s.Args})
-		}
+	acts, err := taskActions(plans)
+	if err != nil {
+		return "", err
 	}
 	if len(acts) == 0 {
 		return "", rpc.Errorf(rpc.Unavailable, "Nothing to schedule.")
@@ -102,17 +91,45 @@ func setScheduleOS(ctx context.Context, plans []Plan, at string) (string, error)
 		return "", err
 	}
 	defer os.Remove(f.Name())
-	_, werr := f.Write(encodeUTF16(renderTaskXML(at, acts)))
-	if cerr := f.Close(); werr == nil {
-		werr = cerr
-	}
-	if werr != nil {
-		return "", werr
+	if err := writeTaskFile(f, renderTaskXML(at, acts)); err != nil {
+		return "", err
 	}
 	if _, err := schtasks(ctx, "/Create", "/TN", taskName, "/XML", f.Name(), "/F"); err != nil {
 		return "", err
 	}
 	return at, nil
+}
+
+func taskActions(plans []Plan) ([]taskAction, error) {
+	var acts []taskAction
+	for _, p := range plans {
+		for _, s := range p.Steps {
+			path, err := stepPath(s.Name)
+			if err != nil {
+				return nil, err
+			}
+			acts = append(acts, taskAction{Path: path, Args: s.Args})
+		}
+	}
+	return acts, nil
+}
+
+func stepPath(name string) (string, error) {
+	if name == "winget" {
+		return wingetExe()
+	}
+	if p, err := exec.LookPath(name); err == nil {
+		return p, nil
+	}
+	return name, nil
+}
+
+func writeTaskFile(f *os.File, xml string) error {
+	_, werr := f.Write(encodeUTF16(xml))
+	if cerr := f.Close(); werr == nil {
+		werr = cerr
+	}
+	return werr
 }
 
 // osUpdatesCount counts pending Windows Update items (read-only, via the

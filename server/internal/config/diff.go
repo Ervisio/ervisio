@@ -7,7 +7,11 @@ import "strings"
 func Diff(a, b string) string {
 	x := splitLines(a)
 	y := splitLines(b)
-	// Longest common subsequence table; config files are tiny.
+	return walkDiff(x, y, lcsTable(x, y))
+}
+
+// lcsTable builds the longest-common-subsequence table; config files are tiny.
+func lcsTable(x, y []string) [][]int {
 	n, m := len(x), len(y)
 	lcs := make([][]int, n+1)
 	for i := range lcs {
@@ -22,6 +26,11 @@ func Diff(a, b string) string {
 			}
 		}
 	}
+	return lcs
+}
+
+func walkDiff(x, y []string, lcs [][]int) string {
+	n, m := len(x), len(y)
 	var sb strings.Builder
 	i, j := 0, 0
 	for i < n || j < m {
