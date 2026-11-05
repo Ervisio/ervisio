@@ -52,12 +52,43 @@ func desktopDirs() []string {
 
 var localeKeyRe = regexp.MustCompile(`^(Name|Comment)\[`)
 
+// desktopEntry collects the keys of a [Desktop Entry] group.
+type desktopEntry struct {
+	app    App
+	typ    string
+	hidden bool
+}
+
+func (d *desktopEntry) set(k, v string) {
+	switch k {
+	case "Type":
+		d.typ = v
+	case "Name":
+		d.app.Name = v
+	case "Comment":
+		d.app.Comment = v
+	case "Icon":
+		d.app.Icon = v
+	case "Exec":
+		d.app.Exec = v
+	case "Categories":
+		for _, c := range strings.Split(v, ";") {
+			if c != "" {
+				d.app.Categories = append(d.app.Categories, c)
+			}
+		}
+	case "NoDisplay", "Hidden":
+		if v == "true" {
+			d.hidden = true
+		}
+	}
+}
+
 // parseDesktop reads the [Desktop Entry] group. It returns ok=false for
 // entries that must not be listed (hidden, not applications).
 func parseDesktop(content string) (a App, ok bool) {
 	in := false
-	var typ string
-	hidden := false
+	var d desktopEntry
 	sc := bufio.NewScanner(strings.NewReader(content))
 	sc.Buffer(make([]byte, 64<<10), 1<<20)
 	for sc.Scan() {
@@ -73,37 +104,15 @@ func parseDesktop(content string) (a App, ok bool) {
 		if !found {
 			continue
 		}
-		k, v = strings.TrimSpace(k), strings.TrimSpace(v)
-		switch k {
-		case "Type":
-			typ = v
-		case "Name":
-			a.Name = v
-		case "Comment":
-			a.Comment = v
-		case "Icon":
-			a.Icon = v
-		case "Exec":
-			a.Exec = v
-		case "Categories":
-			for _, c := range strings.Split(v, ";") {
-				if c != "" {
-					a.Categories = append(a.Categories, c)
-				}
-			}
-		case "NoDisplay", "Hidden":
-			if v == "true" {
-				hidden = true
-			}
-		}
+		d.set(strings.TrimSpace(k), strings.TrimSpace(v))
 	}
-	if typ != "Application" || hidden || a.Name == "" {
-		return a, false
+	if d.typ != "Application" || d.hidden || d.app.Name == "" {
+		return d.app, false
 	}
-	if a.Categories == nil {
-		a.Categories = []string{}
+	if d.app.Categories == nil {
+		d.app.Categories = []string{}
 	}
-	return a, true
+	return d.app, true
 }
 
 // scanApps reads every .desktop file, once per id (user files win).
@@ -111,34 +120,7 @@ func scanApps() []App {
 	byID := map[string]App{}
 	dirs := desktopDirs()
 	for i := len(dirs) - 1; i >= 0; i-- { // later dirs (user) override
-		ents, err := os.ReadDir(dirs[i])
-		if err != nil {
-			continue
-		}
-		for _, e := range ents {
-			if !strings.HasSuffix(e.Name(), ".desktop") {
-				continue
-			}
-			p := filepath.Join(dirs[i], e.Name())
-			b, err := os.ReadFile(p)
-			if err != nil || len(b) > 256<<10 {
-				continue
-			}
-			a, ok := parseDesktop(string(b))
-			if !ok {
-				delete(byID, e.Name())
-				continue
-			}
-			a.ID, a.file = strings.TrimSuffix(e.Name(), ".desktop"), p
-			if strings.Contains(p, "flatpak/exports") {
-				a.Kind, a.Source, a.Package = KindFlatpak, "flatpak", a.ID
-				a.Scope = "system"
-				if strings.Contains(p, "/.local/") {
-					a.Scope = "user"
-				}
-			}
-			byID[e.Name()] = a
-		}
+		scanDesktopDir(dirs[i], byID)
 	}
 	apps := make([]App, 0, len(byID))
 	for _, a := range byID {
@@ -146,6 +128,41 @@ func scanApps() []App {
 	}
 	sort.Slice(apps, func(i, j int) bool { return strings.ToLower(apps[i].Name) < strings.ToLower(apps[j].Name) })
 	return apps
+}
+
+func scanDesktopDir(dir string, byID map[string]App) {
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, e := range ents {
+		if !strings.HasSuffix(e.Name(), ".desktop") {
+			continue
+		}
+		p := filepath.Join(dir, e.Name())
+		b, err := os.ReadFile(p)
+		if err != nil || len(b) > 256<<10 {
+			continue
+		}
+		a, ok := parseDesktop(string(b))
+		if !ok {
+			delete(byID, e.Name())
+			continue
+		}
+		a.ID, a.file = strings.TrimSuffix(e.Name(), ".desktop"), p
+		if strings.Contains(p, "flatpak/exports") {
+			markFlatpak(&a, p)
+		}
+		byID[e.Name()] = a
+	}
+}
+
+func markFlatpak(a *App, path string) {
+	a.Kind, a.Source, a.Package = KindFlatpak, "flatpak", a.ID
+	a.Scope = "system"
+	if strings.Contains(path, "/.local/") {
+		a.Scope = "user"
+	}
 }
 
 // ---- icons ----
@@ -268,29 +285,38 @@ func iconMime(path string) string {
 	return ""
 }
 
+// iconPath maps a .desktop Icon value to a file path ("" = not in any theme).
+func iconPath(name string, size int) (string, error) {
+	if !strings.HasPrefix(name, "/") {
+		if !iconNameRe.MatchString(name) {
+			return "", rpc.Errorf(rpc.Invalid, "Invalid icon name.")
+		}
+		return findIcon(name, size), nil
+	}
+	clean := filepath.Clean(name)
+	if !hasAllowedIconRoot(clean) || iconMime(clean) == "" {
+		return "", rpc.Errorf(rpc.NotFound, "Icon not found.")
+	}
+	return clean, nil
+}
+
+func hasAllowedIconRoot(path string) bool {
+	for _, r := range allowedIconRoots() {
+		if strings.HasPrefix(path, r) {
+			return true
+		}
+	}
+	return false
+}
+
 // loadIcon resolves a .desktop Icon value (theme name or absolute path).
 func loadIcon(name string, size int) (*Icon, error) {
 	if size <= 0 || size > 1024 {
 		size = 64
 	}
-	var path string
-	if strings.HasPrefix(name, "/") {
-		clean := filepath.Clean(name)
-		ok := false
-		for _, r := range allowedIconRoots() {
-			if strings.HasPrefix(clean, r) {
-				ok = true
-			}
-		}
-		if !ok || iconMime(clean) == "" {
-			return nil, rpc.Errorf(rpc.NotFound, "Icon not found.")
-		}
-		path = clean
-	} else {
-		if !iconNameRe.MatchString(name) {
-			return nil, rpc.Errorf(rpc.Invalid, "Invalid icon name.")
-		}
-		path = findIcon(name, size)
+	path, err := iconPath(name, size)
+	if err != nil {
+		return nil, err
 	}
 	if path == "" {
 		return nil, rpc.Errorf(rpc.NotFound, "Icon %q is not in any icon theme.", name)
@@ -308,6 +334,19 @@ func loadIcon(name string, size int) (*Icon, error) {
 
 // resolveApps adds package and version information to apps.
 func (m *manager) resolveApps(ctx context.Context, apps []App) {
+	m.fillOwners(ctx, apps)
+	inst, _ := m.installed(ctx, false)
+	byName := map[string]Package{}
+	for _, p := range inst {
+		byName[p.Name+"|"+p.Kind] = p
+	}
+	for i := range apps {
+		fillVersion(&apps[i], byName)
+	}
+}
+
+// fillOwners sets the owning package of non-flatpak apps from the primary manager.
+func (m *manager) fillOwners(ctx context.Context, apps []App) {
 	var files []string
 	idx := map[string]int{}
 	for i := range apps {
@@ -316,35 +355,33 @@ func (m *manager) resolveApps(ctx context.Context, apps []App) {
 			idx[apps[i].file] = i
 		}
 	}
-	if m.primary != nil && len(files) > 0 {
-		if of, ok := m.primary.(ownerFinder); ok {
-			for f, pkg := range of.Owners(ctx, files) {
-				if i, ok := idx[f]; ok {
-					apps[i].Package = pkg
-				}
-			}
+	if m.primary == nil || len(files) == 0 {
+		return
+	}
+	of, ok := m.primary.(ownerFinder)
+	if !ok {
+		return
+	}
+	for f, pkg := range of.Owners(ctx, files) {
+		if i, ok := idx[f]; ok {
+			apps[i].Package = pkg
 		}
 	}
-	inst, _ := m.installed(ctx, false)
-	byName := map[string]Package{}
-	for _, p := range inst {
-		byName[p.Name+"|"+p.Kind] = p
+}
+
+func fillVersion(a *App, byName map[string]Package) {
+	if a.Kind == KindFlatpak {
+		if p, ok := byName[a.Package+"|"+KindFlatpak]; ok {
+			a.Version, a.Explicit = p.Version, true
+		}
+		return
 	}
-	for i := range apps {
-		a := &apps[i]
-		if a.Kind == KindFlatpak {
-			if p, ok := byName[a.Package+"|"+KindFlatpak]; ok {
-				a.Version, a.Explicit = p.Version, true
-			}
-			continue
-		}
-		if a.Package == "" {
-			continue
-		}
-		if p, ok := byName[a.Package+"|"+KindRepo]; ok {
-			a.Version, a.Source, a.Kind, a.Explicit = p.Version, p.Source, p.Kind, p.Reason == "explicit"
-		} else if p, ok := byName[a.Package+"|"+KindAUR]; ok {
-			a.Version, a.Source, a.Kind, a.Explicit = p.Version, p.Source, p.Kind, p.Reason == "explicit"
-		}
+	if a.Package == "" {
+		return
+	}
+	if p, ok := byName[a.Package+"|"+KindRepo]; ok {
+		a.Version, a.Source, a.Kind, a.Explicit = p.Version, p.Source, p.Kind, p.Reason == "explicit"
+	} else if p, ok := byName[a.Package+"|"+KindAUR]; ok {
+		a.Version, a.Source, a.Kind, a.Explicit = p.Version, p.Source, p.Kind, p.Reason == "explicit"
 	}
 }
