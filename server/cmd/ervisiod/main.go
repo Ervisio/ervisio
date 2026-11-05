@@ -435,18 +435,32 @@ func pluginCommand(id string, skip bool) int {
 		return 1
 	}
 	if skip {
-		for _, mp := range plugins.Moved {
-			if plugins.ReadMoved()[mp.ID] == "" {
-				if err := plugins.SetMoved(mp.ID, plugins.MovedSkipped); err != nil {
-					fmt.Fprintln(os.Stderr, err)
-					return 1
-				}
-			}
+		if err := skipMovedPlugins(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
 		}
 		if id == "" {
 			return 0
 		}
 	}
+	return installPlugin(id)
+}
+
+// skipMovedPlugins marks every moved plugin without a decision as skipped.
+func skipMovedPlugins() error {
+	for _, mp := range plugins.Moved {
+		if plugins.ReadMoved()[mp.ID] != "" {
+			continue
+		}
+		if err := plugins.SetMoved(mp.ID, plugins.MovedSkipped); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// installPlugin installs a catalog plugin and reports the result.
+func installPlugin(id string) int {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	in, err := plugins.InstallFromCatalog(ctx, id)

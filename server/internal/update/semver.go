@@ -72,26 +72,27 @@ func (v Version) Compare(o Version) int {
 		return -1
 	}
 	for i := 0; i < len(v.Pre) && i < len(o.Pre); i++ {
-		a, b := v.Pre[i], o.Pre[i]
-		an, bn := isNum(a), isNum(b)
-		switch {
-		case an && bn:
-			ai, _ := strconv.Atoi(a)
-			bi, _ := strconv.Atoi(b)
-			if ai != bi {
-				return cmpInt(ai, bi)
-			}
-		case an:
-			return -1 // numeric identifiers rank lower than alphanumeric
-		case bn:
-			return 1
-		default:
-			if c := strings.Compare(a, b); c != 0 {
-				return c
-			}
+		if c := comparePreID(v.Pre[i], o.Pre[i]); c != 0 {
+			return c
 		}
 	}
 	return cmpInt(len(v.Pre), len(o.Pre))
+}
+
+// comparePreID orders two pre-release identifiers.
+func comparePreID(a, b string) int {
+	an, bn := isNum(a), isNum(b)
+	switch {
+	case an && bn:
+		ai, _ := strconv.Atoi(a)
+		bi, _ := strconv.Atoi(b)
+		return cmpInt(ai, bi)
+	case an:
+		return -1 // numeric identifiers rank lower than alphanumeric
+	case bn:
+		return 1
+	}
+	return strings.Compare(a, b)
 }
 
 // Newer reports whether candidate is a higher version than current. A

@@ -389,27 +389,9 @@ func (u *Updater) installPartial(partial, v string) error {
 // Rollback starts the switch helper towards the previous version. The
 // helper is the running version's binary (an old build may not have it).
 func (u *Updater) Rollback(ctx context.Context, want string) (string, string, error) {
-	if by := u.Layout.ManagedBy(); by != "" {
-		return "", "", managedErr(by)
-	}
-	if runtime.GOOS == "windows" {
-		return "", "", ErrWindows
-	}
-	if u.Layout.Kind() != KindVersioned {
-		return "", "", ErrNoPrevious
-	}
-	prev := u.Layout.Previous()
-	if prev == "" {
-		return "", "", ErrNoPrevious
-	}
-	if want != "" && want != prev {
-		return "", "", ErrChanged
-	}
-	if u.State.Running() {
-		return "", "", ErrBusy
-	}
-	if u.State.PackageTransactionRunning() {
-		return "", "", ErrPackages
+	prev, err := u.rollbackTarget(want)
+	if err != nil {
+		return "", "", err
 	}
 	cur, err := u.Layout.Current()
 	if err != nil {
@@ -424,6 +406,33 @@ func (u *Updater) Rollback(ctx context.Context, want string) (string, string, er
 		return "", "", err
 	}
 	return prev, unit, nil
+}
+
+// rollbackTarget returns the previous version after checking a rollback may run.
+func (u *Updater) rollbackTarget(want string) (string, error) {
+	if by := u.Layout.ManagedBy(); by != "" {
+		return "", managedErr(by)
+	}
+	if runtime.GOOS == "windows" {
+		return "", ErrWindows
+	}
+	if u.Layout.Kind() != KindVersioned {
+		return "", ErrNoPrevious
+	}
+	prev := u.Layout.Previous()
+	if prev == "" {
+		return "", ErrNoPrevious
+	}
+	if want != "" && want != prev {
+		return "", ErrChanged
+	}
+	if u.State.Running() {
+		return "", ErrBusy
+	}
+	if u.State.PackageTransactionRunning() {
+		return "", ErrPackages
+	}
+	return prev, nil
 }
 
 // UnitName is the transient unit of a switch to v.
