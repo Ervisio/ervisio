@@ -82,6 +82,55 @@ const hueNav: Record<HueId, string> = { ov: 'overview', term: 'terminal', file: 
 
 const WIN_DESC = new Set(['service', 'log']);
 
+type Built = { settings?: Record<string, any>; error?: string };
+
+const isAbsPath = (p: string, win: boolean) => (win ? /^([a-zA-Z]:[\\/]|\\\\)/.test(p) : p.startsWith('/'));
+
+function serviceSettings(units: string, t: T): Built {
+  const list = units.split(/[\s,]+/).map((u) => u.trim()).filter(Boolean);
+  if (list.length > 30) return { error: t('settings.errUnits') };
+  return { settings: { units: [...new Set(list)] } };
+}
+
+interface LogDraft {
+  source: 'journal' | 'unit' | 'file' | 'evt';
+  channel: string;
+  unit: string;
+  file: string;
+  lines: string;
+}
+
+function logSettings({ source, channel, unit, file, lines }: LogDraft, win: boolean, t: T): Built {
+  if (source === 'unit' && !unit.trim()) return { error: t('settings.errUnit') };
+  if (source === 'evt' && !channel.trim()) return { error: t('settings.errChannel') };
+  if (source === 'file' && !isAbsPath(file.trim(), win)) return { error: t(win ? 'win.settings.errFile' : 'settings.errFile') };
+  const settings: Record<string, any> = { source: source === 'evt' ? `evt:${channel.trim()}` : source, lines: parseInt(lines, 10) || 12 };
+  if (source === 'unit') settings.unit = unit.trim();
+  if (source === 'file') settings.file = file.trim();
+  return { settings };
+}
+
+function outputSettings(cmd: string, every: string, admin: boolean, t: T): Built {
+  const p = parseCmd(cmd, t);
+  if (!p.argv) return { error: p.error };
+  return { settings: { argv: p.argv, every: Math.max(2, parseInt(every, 10) || 10), admin: admin || undefined } };
+}
+
+function folderSettings(path: string, label: string, win: boolean, t: T): Built {
+  if (!isAbsPath(path.trim(), win)) return { error: t(win ? 'win.settings.errPath' : 'settings.errPath') };
+  return { settings: { path: path.trim(), label: label.trim() } };
+}
+
+function actionsSettings(drafts: ActionDraft[], t: T): Built {
+  const actions: DashAction[] = [];
+  for (const d of drafts) {
+    const r = draftToAction(d, t);
+    if (!r.action) return { error: `${d.label.trim() || t('settings.untitled')}: ${r.error}` };
+    actions.push(r.action);
+  }
+  return { settings: { actions } };
+}
+
 export function SettingsDialog({ widget, onClose, onSave, pluginTitle }: { widget: Widget | null; onClose(): void; onSave(settings: Record<string, any>): void; pluginTitle?: string }) {
   if (!widget) return null;
   return <Inner key={widget.id} widget={widget} onClose={onClose} onSave={onSave} pluginTitle={pluginTitle} />;
@@ -118,75 +167,51 @@ function Inner({ widget, onClose, onSave, pluginTitle }: { widget: Widget; onClo
   const mounts = useMemo(() => (metrics?.disks ?? []).map((d) => ({ value: d.mount, label: d.mount })), [metrics]);
   const ifaces = useMemo(() => (metrics?.net ?? []).map((n) => ({ value: n.iface, label: n.iface })), [metrics]);
 
+  const settingsFor = (tt: string): Built => {
+    switch (type) {
+      case 'stat': {
+        const settings: Record<string, any> = { metric };
+        if (metric === 'disk' && mount) settings.mount = mount;
+        if (metric === 'network' && iface !== 'auto') settings.iface = iface;
+        return { settings };
+      }
+      case 'activity':
+        return { settings: { range } };
+      case 'chart': {
+        const settings: Record<string, any> = { metric, range };
+        if (metric === 'disk' && mount) settings.mount = mount;
+        return { settings };
+      }
+      case 'alerts':
+        return { settings: { showOk, max: Math.max(3, Math.min(12, parseInt(max, 10) || 6)) } };
+      case 'service':
+        return serviceSettings(units, t);
+      case 'log':
+        return logSettings({ source, channel, unit, file, lines }, win, t);
+      case 'output':
+        return outputSettings(cmd, every, admin, t);
+      case 'folder':
+        return folderSettings(path, label, win, t);
+      case 'actions':
+        return actionsSettings(many, t);
+      case 'plugin':
+        return { settings: { plugin: s.plugin, widget: s.widget } };
+      default:
+        return { settings: { ...s, ...(tt ? { title: tt } : {}) } };
+    }
+  };
+
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
-    const base: Record<string, any> = {};
-    const tt = title.trim();
-    if (tt && type !== 'action' && type !== 'folder') base.title = tt;
-    switch (type) {
-      case 'stat':
-        Object.assign(base, { metric });
-        if (metric === 'disk' && mount) base.mount = mount;
-        if (metric === 'network' && iface !== 'auto') base.iface = iface;
-        break;
-      case 'activity':
-        Object.assign(base, { range });
-        break;
-      case 'chart':
-        Object.assign(base, { metric, range });
-        if (metric === 'disk' && mount) base.mount = mount;
-        break;
-      case 'alerts': {
-        const n = Math.max(3, Math.min(12, parseInt(max, 10) || 6));
-        Object.assign(base, { showOk, max: n });
-        break;
-      }
-      case 'service': {
-        const list = units.split(/[\s,]+/).map((u) => u.trim()).filter(Boolean);
-        if (list.length > 30) return setError(t('settings.errUnits'));
-        Object.assign(base, { units: [...new Set(list)] });
-        break;
-      }
-      case 'log':
-        if (source === 'unit' && !unit.trim()) return setError(t('settings.errUnit'));
-        if (source === 'evt' && !channel.trim()) return setError(t('settings.errChannel'));
-        if (source === 'file' && !(win ? /^([a-zA-Z]:[\\/]|\\\\)/.test(file.trim()) : file.trim().startsWith('/'))) return setError(t(win ? 'win.settings.errFile' : 'settings.errFile'));
-        Object.assign(base, { source: source === 'evt' ? `evt:${channel.trim()}` : source, lines: parseInt(lines, 10) || 12 });
-        if (source === 'unit') base.unit = unit.trim();
-        if (source === 'file') base.file = file.trim();
-        break;
-      case 'output': {
-        const p = parseCmd(cmd, t);
-        if (!p.argv) return setError(p.error!);
-        Object.assign(base, { argv: p.argv, every: Math.max(2, parseInt(every, 10) || 10), admin: admin || undefined });
-        break;
-      }
-      case 'folder':
-        if (!(win ? /^([a-zA-Z]:[\\/]|\\\\)/.test(path.trim()) : path.trim().startsWith('/'))) return setError(t(win ? 'win.settings.errPath' : 'settings.errPath'));
-        Object.assign(base, { path: path.trim(), label: label.trim() });
-        break;
-      case 'action': {
-        const r = draftToAction(one, t);
-        if (!r.action) return setError(r.error!);
-        return onSave(r.action as unknown as Record<string, any>);
-      }
-      case 'actions': {
-        const out: DashAction[] = [];
-        for (const d of many) {
-          const r = draftToAction(d, t);
-          if (!r.action) return setError(`${d.label.trim() || t('settings.untitled')}: ${r.error}`);
-          out.push(r.action);
-        }
-        Object.assign(base, { actions: out });
-        break;
-      }
-      case 'plugin':
-        Object.assign(base, { plugin: s.plugin, widget: s.widget });
-        break;
-      default:
-        Object.assign(base, s, tt ? { title: tt } : {});
+    if (type === 'action') {
+      const r = draftToAction(one, t);
+      if (!r.action) return setError(r.error!);
+      return onSave(r.action as unknown as Record<string, any>);
     }
-    onSave(base);
+    const tt = title.trim();
+    const built = settingsFor(tt);
+    if (!built.settings) return setError(built.error!);
+    onSave({ ...(tt && type !== 'folder' ? { title: tt } : {}), ...built.settings });
   };
 
   const hasTitle = type !== 'action' && type !== 'folder';

@@ -94,13 +94,46 @@ func AuthenticateS4U(user string) error {
 	if _, have := lookupToken(user); have {
 		return nil
 	}
+	pkg, upn, realm := s4uTarget(name, domain)
+
+	s4uMu.Lock()
+	defer s4uMu.Unlock()
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	if err := enableTCB(); err != nil {
+		return fmt.Errorf("pam: S4U logon: %w", err)
+	}
+	h, err := lsaRegister()
+	if err != nil {
+		return err
+	}
+	defer procLsaDeregister.Call(uintptr(h))
+
+	pkgID, err := lsaLookupPackage(h, pkg)
+	if err != nil {
+		return err
+	}
+	words, authLen, err := s4uLogonBuffer(upn, realm)
+	if err != nil {
+		return err
+	}
+	tok, err := lsaLogonS4U(h, pkgID, words, authLen)
+	if err != nil {
+		return err
+	}
+	return keepToken(user, tok)
+}
+
+// s4uTarget picks the authentication package and the UPN/realm pair: MSV1_0
+// for local accounts, Kerberos for domain accounts and UPNs.
+func s4uTarget(name, domain string) (pkg, upn, realm string) {
 	local := domain == "." || domain == ""
 	if !local {
 		if cn, err := windows.ComputerName(); err == nil && strings.EqualFold(cn, domain) {
 			local = true
 		}
 	}
-	pkg, upn, realm := "MICROSOFT_AUTHENTICATION_PACKAGE_V1_0", name, domain
+	pkg, upn, realm = "MICROSOFT_AUTHENTICATION_PACKAGE_V1_0", name, domain
 	if local {
 		if strings.Contains(name, "@") { // a UPN is a domain account
 			local = false
@@ -114,46 +147,48 @@ func AuthenticateS4U(user string) error {
 			realm = ""
 		}
 	}
+	return pkg, upn, realm
+}
 
-	s4uMu.Lock()
-	defer s4uMu.Unlock()
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	if err := enableTCB(); err != nil {
-		return fmt.Errorf("pam: S4U logon: %w", err)
-	}
+func lsaRegister() (windows.Handle, error) {
 	logonName, nb := newLsaString("ervisio")
 	var h windows.Handle
 	var mode uint32
 	r, _, _ := procLsaRegisterLogonProc.Call(uintptr(unsafe.Pointer(&logonName)), uintptr(unsafe.Pointer(&h)), uintptr(unsafe.Pointer(&mode)))
 	runtime.KeepAlive(nb)
 	if err := ntErr("LsaRegisterLogonProcess", r); err != nil {
-		return err
+		return 0, err
 	}
-	defer procLsaDeregister.Call(uintptr(h))
+	return h, nil
+}
 
+func lsaLookupPackage(h windows.Handle, pkg string) (uint32, error) {
 	pkgName, pb := newLsaString(pkg)
 	var pkgID uint32
-	r, _, _ = procLsaLookupAuthPackage.Call(uintptr(h), uintptr(unsafe.Pointer(&pkgName)), uintptr(unsafe.Pointer(&pkgID)))
+	r, _, _ := procLsaLookupAuthPackage.Call(uintptr(h), uintptr(unsafe.Pointer(&pkgName)), uintptr(unsafe.Pointer(&pkgID)))
 	runtime.KeepAlive(pb)
 	if err := ntErr("LsaLookupAuthenticationPackage", r); err != nil {
-		return err
+		return 0, err
 	}
+	return pkgID, nil
+}
 
-	// MSV1_0_S4U_LOGON / KERB_S4U_LOGON: MessageType, Flags, two
-	// UNICODE_STRINGs, then their characters in the same buffer.
+// s4uLogonBuffer builds MSV1_0_S4U_LOGON / KERB_S4U_LOGON: MessageType,
+// Flags, two UNICODE_STRINGs, then their characters in the same buffer.
+// The returned words back the whole structure; authLen is its size in bytes.
+func s4uLogonBuffer(upn, realm string) (words []uint64, authLen uint32, err error) {
 	upn16, err := windows.UTF16FromString(upn)
 	if err != nil {
-		return &Error{Kind: ErrAuth, Msg: "invalid user name"}
+		return nil, 0, &Error{Kind: ErrAuth, Msg: "invalid user name"}
 	}
 	realm16, err := windows.UTF16FromString(realm)
 	if err != nil {
-		return &Error{Kind: ErrAuth, Msg: "invalid user name"}
+		return nil, 0, &Error{Kind: ErrAuth, Msg: "invalid user name"}
 	}
 	upn16, realm16 = upn16[:len(upn16)-1], realm16[:len(realm16)-1] // without NUL
 	hdr := 8 + 2*int(unsafe.Sizeof(windows.NTUnicodeString{}))
 	hdr = (hdr + 7) &^ 7
-	words := make([]uint64, (hdr+2*(len(upn16)+len(realm16))+7)/8+1)
+	words = make([]uint64, (hdr+2*(len(upn16)+len(realm16))+7)/8+1)
 	base := unsafe.Pointer(&words[0])
 	*(*uint32)(base) = s4uMessageType
 	*(*uint32)(unsafe.Add(base, 4)) = 0
@@ -163,12 +198,14 @@ func AuthenticateS4U(user string) error {
 	copy(chars[len(upn16):], realm16)
 	us[0] = windows.NTUnicodeString{Length: uint16(2 * len(upn16)), MaximumLength: uint16(2 * len(upn16)), Buffer: &chars[0]}
 	us[1] = windows.NTUnicodeString{Length: uint16(2 * len(realm16)), MaximumLength: uint16(2 * len(realm16)), Buffer: &chars[len(upn16)]}
-	authLen := uint32(hdr + 2*(len(upn16)+len(realm16)))
+	return words, uint32(hdr + 2*(len(upn16)+len(realm16))), nil
+}
 
+func lsaLogonS4U(h windows.Handle, pkgID uint32, words []uint64, authLen uint32) (windows.Token, error) {
 	var src tokenSource
 	copy(src.Name[:], "ervisio")
 	if r, _, e := procAllocLUID.Call(uintptr(unsafe.Pointer(&src.ID))); r == 0 {
-		return fmt.Errorf("pam: AllocateLocallyUniqueId: %w", e)
+		return 0, fmt.Errorf("pam: AllocateLocallyUniqueId: %w", e)
 	}
 	origin, ob := newLsaString("ervisio")
 	var (
@@ -179,8 +216,8 @@ func AuthenticateS4U(user string) error {
 		quotas     [8]uint64 // QUOTA_LIMITS
 		sub        int32
 	)
-	r, _, _ = procLsaLogonUser.Call(uintptr(h), uintptr(unsafe.Pointer(&origin)), logonNetwork, uintptr(pkgID),
-		uintptr(base), uintptr(authLen), 0, uintptr(unsafe.Pointer(&src)),
+	r, _, _ := procLsaLogonUser.Call(uintptr(h), uintptr(unsafe.Pointer(&origin)), logonNetwork, uintptr(pkgID),
+		uintptr(unsafe.Pointer(&words[0])), uintptr(authLen), 0, uintptr(unsafe.Pointer(&src)),
 		uintptr(unsafe.Pointer(&profile)), uintptr(unsafe.Pointer(&profileLen)),
 		uintptr(unsafe.Pointer(&logonID)), uintptr(unsafe.Pointer(&tok)),
 		uintptr(unsafe.Pointer(&quotas)), uintptr(unsafe.Pointer(&sub)))
@@ -190,7 +227,7 @@ func AuthenticateS4U(user string) error {
 		procLsaFreeReturnBuffer.Call(profile)
 	}
 	if r != 0 {
-		return mapLogonError(windows.NTStatus(r).Errno())
+		return 0, mapLogonError(windows.NTStatus(r).Errno())
 	}
-	return keepToken(user, tok)
+	return tok, nil
 }
