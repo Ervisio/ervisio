@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [7.0.1] - 2026-11-05
 
 ### Added
 - Notepad and a lazy-loaded CodeMirror code editor in both interfaces, with document tabs, syntax highlighting, search, encoding/line-ending preservation and conflict-aware saves.
