@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ApiError, downloadUrl } from '../../api';
 import { useI18n, useT } from '../../i18n';
 import { formatBytes } from '../../lib/format';
-import { Button, Checkbox, Icon, Panel, Skeleton, Tabs, toast } from '../../ui';
+import { Button, Checkbox, Dialog, Icon, IconButton, Panel, Skeleton, Tabs, toast } from '../../ui';
 import { emitChanged, fcall } from './fapi';
 import { KIND_ICON, canInlineImage, kindOf, looksTextual } from './kinds';
 import { Thumb } from './Thumb';
@@ -32,6 +32,7 @@ type Tab = 'details' | 'preview';
 
 export function SidePanel(p: SidePanelProps) {
   const t = useT('files');
+  const ui = useT('ui');
   const [tab, setTab] = useState<Tab>('details');
   const e = p.entries.length === 1 ? p.entries[0] : null;
   const k = e ? kindOf(e) : 'other';
@@ -41,36 +42,58 @@ export function SidePanel(p: SidePanelProps) {
 
   const many = p.entries.length > 1;
   const title = e ? e.name : t('selectedCount', { count: p.entries.length });
+  const subtitle = e
+    ? typeLabel(e, t)
+    : formatBytes(p.entries.reduce((s, x) => s + (isDirLike(x) ? 0 : x.size), 0));
+  const tabs =
+    e && !isDirLike(e) ? (
+      <Tabs<Tab>
+        variant="pill"
+        value={tab}
+        onChange={setTab}
+        items={[
+          { id: 'details', label: t('tab.details') },
+          { id: 'preview', label: t('tab.preview') },
+        ]}
+      />
+    ) : undefined;
+  const content = (
+    <>
+      {many && <Summary entries={p.entries} p={p} t={t} />}
+      {e && tab === 'details' && <Details e={e} p={p} t={t} />}
+      {e && tab === 'preview' && <Preview e={e} p={p} t={t} />}
+    </>
+  );
+  if (p.native)
+    return (
+      <Dialog
+        open
+        onClose={p.onClose}
+        title={t('propertiesFor', { name: title })}
+        description={subtitle}
+        icon={e ? KIND_ICON[k] : 'files'}
+        className="files-properties-dialog hue-file"
+        footer={<Button onClick={p.onClose}>{ui('close')}</Button>}
+      >
+        <div className="files-properties-close">
+          <IconButton icon="close" label={ui('close')} onClick={p.onClose} />
+        </div>
+        {tabs && <div className="files-properties-tabs">{tabs}</div>}
+        <div className="files-properties-content">{content}</div>
+      </Dialog>
+    );
   return (
     <Panel
       inline={p.inline}
       open
       onClose={p.onClose}
-      title={p.native ? t('propertiesFor', { name: title }) : title}
-      subtitle={
-        e
-          ? typeLabel(e, t)
-          : formatBytes(p.entries.reduce((s, x) => s + (isDirLike(x) ? 0 : x.size), 0))
-      }
+      title={title}
+      subtitle={subtitle}
       icon={e ? KIND_ICON[k] : 'files'}
       hue="file"
-      tabs={
-        e && !isDirLike(e) ? (
-          <Tabs<Tab>
-            variant="pill"
-            value={tab}
-            onChange={setTab}
-            items={[
-              { id: 'details', label: t('tab.details') },
-              { id: 'preview', label: t('tab.preview') },
-            ]}
-          />
-        ) : undefined
-      }
+      tabs={tabs}
     >
-      {many && <Summary entries={p.entries} p={p} t={t} />}
-      {e && tab === 'details' && <Details e={e} p={p} t={t} />}
-      {e && tab === 'preview' && <Preview e={e} p={p} t={t} />}
+      {content}
     </Panel>
   );
 }

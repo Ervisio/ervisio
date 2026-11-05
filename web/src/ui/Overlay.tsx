@@ -19,6 +19,7 @@ export interface DialogProps {
   children?: ReactNode;
   footer?: ReactNode;
   size?: 'md' | 'lg';
+  className?: string;
   /** Esc / click outside close the dialog. Default true. */
   dismissable?: boolean;
   role?: 'dialog' | 'alertdialog';
@@ -36,6 +37,7 @@ export function Dialog({
   children,
   footer,
   size = 'md',
+  className = '',
   dismissable = true,
   role = 'dialog',
   onSubmit,
@@ -72,7 +74,7 @@ export function Dialog({
     >
       <div
         ref={ref}
-        className={`ui-dlg${size === 'lg' ? ' ui-dlg--lg' : ''}`}
+        className={`ui-dlg${size === 'lg' ? ' ui-dlg--lg' : ''}${className ? ` ${className}` : ''}`}
         role={role}
         aria-modal="true"
         aria-labelledby={tid}

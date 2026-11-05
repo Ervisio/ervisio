@@ -39,7 +39,7 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test('native selection is independent from Properties and navigation closes explicit inspection', async ({
+test('native Properties is a compact centered popup and selection never opens a side panel', async ({
   page,
 }) => {
   await page.goto('/files');
@@ -52,21 +52,37 @@ test('native selection is independent from Properties and navigation closes expl
   await readme.click({ button: 'right' });
   await expect(page.getByRole('menuitem', { name: 'Rename', exact: false })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: 'Copy', exact: false }).first()).toBeVisible();
+  const workspaceBefore = await files.locator('.files-native-workspace').boundingBox();
   await page.getByRole('menuitem', { name: 'Properties', exact: true }).click();
-  await expect(
-    page.getByRole('complementary', { name: 'Properties: README.txt', exact: true }),
-  ).toBeVisible();
-  // A different selection does not silently inspect that file.
+  const properties = page.getByRole('dialog', { name: 'Properties: README.txt', exact: true });
+  await expect(properties).toBeVisible();
+  await expect(page.locator('.ui-panel')).toHaveCount(0);
+  const popup = await properties.boundingBox();
+  const viewport = page.viewportSize()!;
+  expect(popup).not.toBeNull();
+  expect(popup!.width).toBeLessThanOrEqual(520);
+  expect(Math.abs(popup!.x + popup!.width / 2 - viewport.width / 2)).toBeLessThanOrEqual(3);
+  expect(Math.abs(popup!.y + popup!.height / 2 - viewport.height / 2)).toBeLessThanOrEqual(3);
+  const workspaceDuring = await files.locator('.files-native-workspace').boundingBox();
+  expect(workspaceBefore).not.toBeNull();
+  expect(workspaceDuring).not.toBeNull();
+  expect(Math.abs(workspaceDuring!.width - workspaceBefore!.width)).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: 'test-results/files-properties-popup.png' });
+  await page.keyboard.press('Escape');
+  await expect(properties).toHaveCount(0);
   await files.locator('[data-path="/home/alice/report.pdf"]').click();
-  await expect(
-    page.getByRole('complementary', { name: 'Properties: README.txt', exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('complementary', { name: 'Properties: report.pdf', exact: true }),
-  ).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await readme.click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Properties', exact: true }).click();
+  await properties
+    .locator('.ui-dlg-ft')
+    .getByRole('button', { name: 'Close', exact: true })
+    .click();
+  await expect(properties).toHaveCount(0);
   await files.locator('[data-path="/home/alice/Documents"]').dblclick();
   await expect(files.locator('[data-path="/home/alice/Documents/inside.txt"]')).toBeVisible();
   await expect(page.locator('.ui-panel')).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
 test('native list shares folder and extension icons, selects without preview and opens folders on double-click', async ({
@@ -89,6 +105,7 @@ test('native list shares folder and extension icons, selects without preview and
   await pdf.click();
   await expect(pdf).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.ui-panel')).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await folder.dblclick();
   await expect(files.locator('tr[data-path="/home/alice/Documents/inside.txt"]')).toBeVisible();
   await expect(page.locator('.ui-panel')).toHaveCount(0);
@@ -124,6 +141,40 @@ test('Properties inspects the inactive split pane target after right-click activ
   await right.locator('[data-path="/home/alice/Documents/inside.txt"]').click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Properties', exact: true }).click();
   await expect(
-    page.getByRole('complementary', { name: 'Properties: inside.txt', exact: true }),
+    page.getByRole('dialog', { name: 'Properties: inside.txt', exact: true }),
   ).toBeVisible();
+  await expect(page.locator('.ui-panel')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+test('native Properties popup fits a phone viewport and closes from its footer', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/files');
+  const files = page.locator('.files-native');
+  const readme = files.locator('[data-path="/home/alice/README.txt"]');
+  await readme.click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  const workspaceBefore = await files.locator('.files-native-workspace').boundingBox();
+  await readme.click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Properties', exact: true }).click();
+  const properties = page.getByRole('dialog', { name: 'Properties: README.txt', exact: true });
+  await expect(properties).toBeVisible();
+  const popup = await properties.boundingBox();
+  expect(popup).not.toBeNull();
+  expect(popup!.width).toBeLessThanOrEqual(390 - 24);
+  expect(popup!.height).toBeLessThanOrEqual(844 - 24);
+  expect(popup!.x).toBeGreaterThanOrEqual(12);
+  expect(popup!.y).toBeGreaterThanOrEqual(12);
+  const workspaceDuring = await files.locator('.files-native-workspace').boundingBox();
+  expect(Math.abs(workspaceDuring!.width - workspaceBefore!.width)).toBeLessThanOrEqual(1);
+  await expect(page.locator('.ui-panel')).toHaveCount(0);
+  await page.screenshot({ path: 'test-results/files-properties-mobile.png' });
+  await properties
+    .locator('.ui-dlg-ft')
+    .getByRole('button', { name: 'Close', exact: true })
+    .click();
+  await expect(properties).toHaveCount(0);
 });

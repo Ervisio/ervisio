@@ -694,3 +694,63 @@
     grid-template-columns: repeat(auto-fill, minmax(95px, 1fr));
   }
 }
+.files-properties-dialog {
+  --files-folder: #efbd4b;
+  --files-folder-back: #d9a039;
+  --files-folder-light: #ffe2a2;
+  position: relative;
+  max-width: 480px;
+  max-height: min(700px, calc(100dvh - 32px));
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.files-properties-dialog > .ui-dlg-hd {
+  padding: 16px 52px 14px 18px;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.files-properties-dialog .ui-dlg-ic {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+}
+.files-properties-dialog .ui-dlg-hd h3 {
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.files-properties-dialog .ui-dlg-hd p {
+  font-size: 11px;
+}
+.files-properties-close {
+  position: absolute;
+  right: 8px;
+  top: 10px;
+}
+.files-properties-tabs {
+  padding: 0 18px 12px;
+  flex-shrink: 0;
+}
+.files-properties-content {
+  padding: 0 18px 16px;
+  min-height: 0;
+  overflow: auto;
+}
+.files-properties-content .files-pv {
+  height: 80px;
+  border-radius: 7px;
+}
+.files-properties-content .files-pv--img {
+  height: auto;
+}
+.files-properties-content .files-kv {
+  font-size: 12px;
+}
+.files-properties-dialog > .ui-dlg-ft {
+  padding: 12px 18px;
+  border-top: 1px solid var(--line);
+  flex-shrink: 0;
+}
