@@ -210,6 +210,7 @@ export function DesktopShell() {
   const [clock, setClock] = useState(() => new Date());
   const [panel, setPanel] = useState<'start' | 'quick' | 'notices' | null>(null);
   const [query, setQuery] = useState('');
+  const [selectedResult, setSelectedResult] = useState(0);
   const [draggingApp, setDraggingApp] = useState(false);
   const [windows, setWindows] = useState<DesktopWindow[]>([]);
   const [context, setContext] = useState<Context | null>(null);
@@ -404,7 +405,11 @@ export function DesktopShell() {
     return () => window.clearTimeout(timer);
   }, []);
   useEffect(() => {
-    if (panel === 'start') searchRef.current?.focus();
+    if (panel === 'start') {
+      setQuery('');
+      setSelectedResult(0);
+      searchRef.current?.focus();
+    }
   }, [panel]);
   useEffect(() => {
     const action = (event: Event) => {
@@ -619,6 +624,8 @@ export function DesktopShell() {
   const filtered = apps.filter((a) =>
     `${a.label} ${a.plugin ?? ''}`.toLocaleLowerCase(lang).includes(query.toLocaleLowerCase(lang)),
   );
+  const resultIndex = Math.min(selectedResult, Math.max(0, filtered.length - 1));
+  const resultId = (index: number) => `eos-app-result-${index}`;
   const ai = apps.find((a) => a.plugin === 'ai');
   const folderItem = context?.item ? data.folders.find((f) => f.id === context.item) : undefined;
   const shortcutItem = context?.item
@@ -797,12 +804,41 @@ export function DesktopShell() {
                 <input
                   ref={searchRef}
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    setSelectedResult(0);
+                  }}
                   placeholder={t('desktop.search')}
                   aria-label={t('desktop.search')}
+                  role="combobox"
+                  aria-autocomplete="list"
+                  aria-expanded="true"
+                  aria-controls="eos-app-results"
+                  aria-activedescendant={filtered.length ? resultId(resultIndex) : undefined}
+                  onKeyDown={(e) => {
+                    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (filtered[resultIndex]) open(filtered[resultIndex]);
+                    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      if (!filtered.length) return;
+                      const next =
+                        (resultIndex + (e.key === 'ArrowDown' ? 1 : -1) + filtered.length) %
+                        filtered.length;
+                      setSelectedResult(next);
+                      document.getElementById(resultId(next))?.scrollIntoView({ block: 'nearest' });
+                    }
+                  }}
                 />
                 {query && (
-                  <button onClick={() => setQuery('')} aria-label={t('desktop.clearSearch')}>
+                  <button
+                    onClick={() => {
+                      setQuery('');
+                      setSelectedResult(0);
+                    }}
+                    aria-label={t('desktop.clearSearch')}
+                  >
                     <Icon name="close" />
                   </button>
                 )}
@@ -811,9 +847,22 @@ export function DesktopShell() {
                 <h2>{query ? t('desktop.searchResults') : t('desktop.allApps')}</h2>
                 <span>{filtered.length}</span>
               </div>
-              <div className="eos-apps">
-                {filtered.map((app) => (
-                  <div key={app.key} className="eos-start-app-row">
+              <div
+                className="eos-apps"
+                id="eos-app-results"
+                role="listbox"
+                aria-label={t('desktop.searchResults')}
+              >
+                {filtered.map((app, index) => (
+                  <div
+                    key={app.key}
+                    id={resultId(index)}
+                    role="option"
+                    aria-label={app.label}
+                    aria-selected={index === resultIndex}
+                    className={`eos-start-app-row${index === resultIndex ? ' is-selected' : ''}`}
+                    onMouseEnter={() => setSelectedResult(index)}
+                  >
                     <button
                       className={`eos-start-app ${app.hueClass}`}
                       onClick={() => open(app)}

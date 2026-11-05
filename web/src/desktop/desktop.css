@@ -248,10 +248,11 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 41px;
+  height: 37px;
   padding-left: 15px;
   flex-shrink: 0;
-  background: color-mix(in srgb, var(--sunk) 65%, var(--surface));
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--ink) 7%, transparent);
   user-select: none;
   touch-action: none;
 }
@@ -596,6 +597,10 @@
 }
 .eos-start-app-row:hover {
   background: var(--eos-highlight);
+}
+.eos-start-app-row.is-selected {
+  background: color-mix(in srgb, var(--acc) 15%, var(--eos-highlight));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--acc) 40%, transparent);
 }
 .eos-start-app {
   background: transparent;
