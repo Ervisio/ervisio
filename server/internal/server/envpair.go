@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/ervisio/ervisio/server/internal/account"
 	"github.com/ervisio/ervisio/server/internal/brand"
 	"github.com/ervisio/ervisio/server/internal/bridge"
 	"github.com/ervisio/ervisio/server/internal/envs"
@@ -137,9 +139,33 @@ func (s *Server) handlePairBridge(w http.ResponseWriter, r *http.Request) {
 		writeError(w, e)
 		return
 	}
-	// The server and user names come from the other server: they are what
-	// it claims. What is known is the pairing (its id, made when a token of
-	// this server was redeemed), so the text names the pairing too.
+	ip := clientIP(r)
+	via := pairVia(r, p)
+	if open := s.pairConnCount(p.ID); open >= maxPairConns {
+		writeErrorStatus(w, http.StatusTooManyRequests, rpc.Errorf(rpc.Unavailable, "This pairing already has %d connections open.", open))
+		return
+	}
+	conn, in, raw, ok := s.upgradePairBridge(w, acc, ip)
+	if !ok {
+		return
+	}
+	defer conn.Close()
+	s.env.m.NotePairUse(p.ID, via, ip)
+	s.log.Printf("pairing: %s connected via pairing %s, running as %s", via, p.ID, acc.Name)
+
+	relay := &pairRelay{s: s, conn: conn, raw: raw, user: acc.Name, ip: ip, via: via, done: make(chan struct{}), recs: map[uint64]*auditRec{}}
+	defer relay.stop()
+	defer s.trackPairConn(p.ID, relay.stop)()
+	defer relay.closeRecords()
+	go relay.bridgeToPeer()
+	relay.peerToBridge(in)
+}
+
+// pairVia is the origin text of a pairing's calls. The server and user names
+// come from the other server: they are what it claims. What is known is the
+// pairing (its id, made when a token of this server was redeemed), so the
+// text names the pairing too.
+func pairVia(r *http.Request, p *envs.Pairing) string {
 	viaSrv, viaUser := r.Header.Get(envs.HeaderViaSrv), r.Header.Get(envs.HeaderViaUsr)
 	claimed := p.Name
 	if viaSrv != "" {
@@ -149,104 +175,120 @@ func (s *Server) handlePairBridge(w http.ResponseWriter, r *http.Request) {
 	if viaUser != "" {
 		via += " by " + clipText(viaUser, 64)
 	}
+	return via
+}
+
+func (s *Server) pairConnCount(id string) int {
 	s.env.mu.Lock()
-	open := len(s.env.pairConns[p.ID])
-	s.env.mu.Unlock()
-	if open >= maxPairConns {
-		writeErrorStatus(w, http.StatusTooManyRequests, rpc.Errorf(rpc.Unavailable, "This pairing already has %d connections open.", open))
-		return
-	}
+	defer s.env.mu.Unlock()
+	return len(s.env.pairConns[id])
+}
+
+// upgradePairBridge starts the user bridge and switches the connection to
+// the bridge protocol. On failure it has answered or dropped the request.
+func (s *Server) upgradePairBridge(w http.ResponseWriter, acc *account.Account, ip string) (net.Conn, *bufio.Reader, *bridge.Raw, bool) {
 	hj, ok := w.(http.Hijacker)
 	if !ok {
 		writeError(w, rpc.Errorf(rpc.Unavailable, "this connection cannot be upgraded"))
-		return
+		return nil, nil, nil, false
 	}
-	raw, err := bridge.StartRaw(s.spec(acc, clientIP(r)))
+	raw, err := bridge.StartRaw(s.spec(acc, ip))
 	if err != nil {
 		s.log.Printf("pairing: start bridge for %s: %v", acc.Name, err)
 		writeError(w, rpc.Errorf(rpc.Unavailable, "the bridge could not be started"))
-		return
+		return nil, nil, nil, false
 	}
 	conn, brw, err := hj.Hijack()
 	if err != nil {
 		raw.Stop()
-		return
+		return nil, nil, nil, false
 	}
-	defer conn.Close()
 	_ = conn.SetDeadline(time.Time{})
 	if _, err := io.WriteString(conn, "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: "+envs.UpgradeProto+"\r\n\r\n"); err != nil {
 		raw.Stop()
+		conn.Close()
+		return nil, nil, nil, false
+	}
+	return conn, brw.Reader, raw, true
+}
+
+// pairRelay is one live bridge connection of a pairing. The calls this
+// server runs for the other one go to the activity log as the local user,
+// with origin "via <server> by <user>".
+type pairRelay struct {
+	s             *Server
+	conn          net.Conn
+	raw           *bridge.Raw
+	user, ip, via string
+	wmu           sync.Mutex
+	done          chan struct{}
+	once          sync.Once
+	rmu           sync.Mutex
+	recs          map[uint64]*auditRec
+}
+
+func (pr *pairRelay) writeLine(b []byte) error {
+	pr.wmu.Lock()
+	defer pr.wmu.Unlock()
+	_, err := pr.conn.Write(append(bytes.TrimRight(b, "\n"), '\n'))
+	return err
+}
+
+func (pr *pairRelay) stop() {
+	pr.once.Do(func() { close(pr.done); pr.conn.Close(); pr.raw.Stop() })
+}
+
+func (pr *pairRelay) closeRecords() {
+	pr.rmu.Lock()
+	defer pr.rmu.Unlock()
+	for _, rec := range pr.recs {
+		rec.streamDone(errors.New("the connection to the other server closed"))
+	}
+}
+
+// observe finishes the activity log entry of a call when the bridge answers it.
+func (pr *pairRelay) observe(line []byte) {
+	var m rpc.Message
+	if json.Unmarshal(line, &m) != nil || m.ID == 0 || m.Method != "" {
 		return
 	}
-	s.env.m.NotePairUse(p.ID, via, clientIP(r))
-	s.log.Printf("pairing: %s connected via pairing %s, running as %s", via, p.ID, acc.Name)
-
-	var wmu sync.Mutex
-	writeLine := func(b []byte) error {
-		wmu.Lock()
-		defer wmu.Unlock()
-		_, err := conn.Write(append(bytes.TrimRight(b, "\n"), '\n'))
-		return err
+	pr.rmu.Lock()
+	defer pr.rmu.Unlock()
+	rec := pr.recs[m.ID]
+	if rec == nil {
+		return
 	}
-	done := make(chan struct{})
-	var once sync.Once
-	stop := func() { once.Do(func() { close(done); conn.Close(); raw.Stop() }) }
-	defer stop()
-	defer s.trackPairConn(p.ID, stop)()
+	switch {
+	case m.Error != nil:
+		rec.callDone(nil, m.Error)
+		delete(pr.recs, m.ID)
+	case m.Event == rpc.EventEnd:
+		rec.streamDone(nil)
+		delete(pr.recs, m.ID)
+	case m.Event == rpc.EventData:
+		rec.observe(rpc.Event{Data: m.Data, B64: m.B64})
+	case m.Event == "" && !m.Stream:
+		rec.callDone(m.Result, nil)
+		delete(pr.recs, m.ID)
+	}
+}
 
-	// The calls this server runs for the other one go to the activity log
-	// as the local user, with origin "via <server> by <user>".
-	var rmu sync.Mutex
-	recs := map[uint64]*auditRec{}
-	defer func() {
-		rmu.Lock()
-		defer rmu.Unlock()
-		for _, rec := range recs {
-			rec.streamDone(errors.New("the connection to the other server closed"))
-		}
-	}()
-	observe := func(line []byte) {
-		var m rpc.Message
-		if json.Unmarshal(line, &m) != nil || m.ID == 0 || m.Method != "" {
+func (pr *pairRelay) bridgeToPeer() {
+	defer pr.stop()
+	br := bufio.NewReaderSize(pr.raw.Stdout, 64<<10)
+	for {
+		line, err := readLongLine(br)
+		if err != nil {
 			return
 		}
-		rmu.Lock()
-		defer rmu.Unlock()
-		rec := recs[m.ID]
-		if rec == nil {
+		pr.observe(line)
+		if pr.writeLine(line) != nil {
 			return
 		}
-		switch {
-		case m.Error != nil:
-			rec.callDone(nil, m.Error)
-			delete(recs, m.ID)
-		case m.Event == rpc.EventEnd:
-			rec.streamDone(nil)
-			delete(recs, m.ID)
-		case m.Event == rpc.EventData:
-			rec.observe(rpc.Event{Data: m.Data, B64: m.B64})
-		case m.Event == "" && !m.Stream:
-			rec.callDone(m.Result, nil)
-			delete(recs, m.ID)
-		}
 	}
-	// bridge -> other server
-	go func() {
-		defer stop()
-		br := bufio.NewReaderSize(raw.Stdout, 64<<10)
-		for {
-			line, err := readLongLine(br)
-			if err != nil {
-				return
-			}
-			observe(line)
-			if writeLine(line) != nil {
-				return
-			}
-		}
-	}()
-	// other server -> bridge, filtered
-	in := brw.Reader
+}
+
+func (pr *pairRelay) peerToBridge(in *bufio.Reader) {
 	for {
 		line, err := readLongLine(in)
 		if err != nil {
@@ -258,26 +300,37 @@ func (s *Server) handlePairBridge(w http.ResponseWriter, r *http.Request) {
 		}
 		if m.Method != "" {
 			if !pairAllowed[m.Method] {
-				s.log.Printf("pairing: %s asked for %s, refused", via, m.Method)
-				b, _ := json.Marshal(rpc.Message{ID: m.ID, Error: rpc.Errorf(rpc.Forbidden, "%s may not be called through a pairing.", m.Method)})
-				if writeLine(b) != nil {
+				if pr.refuse(m) != nil {
 					return
 				}
 				continue
 			}
-			m.Params = addVia(m.Params, via)
-			if rec := s.pairAudit(acc.Name, clientIP(r), m, via); rec != nil && m.ID != 0 {
-				rmu.Lock()
-				recs[m.ID] = rec
-				rmu.Unlock()
-			}
-			s.log.Printf("pairing: via %s -> %s %s", via, acc.Name, describeCall(m))
-			line, _ = json.Marshal(m)
+			line = pr.forwardCall(m)
 		}
-		if _, err := raw.Stdin.Write(append(bytes.TrimRight(line, "\n"), '\n')); err != nil {
+		if _, err := pr.raw.Stdin.Write(append(bytes.TrimRight(line, "\n"), '\n')); err != nil {
 			return
 		}
 	}
+}
+
+func (pr *pairRelay) refuse(m rpc.Message) error {
+	pr.s.log.Printf("pairing: %s asked for %s, refused", pr.via, m.Method)
+	b, _ := json.Marshal(rpc.Message{ID: m.ID, Error: rpc.Errorf(rpc.Forbidden, "%s may not be called through a pairing.", m.Method)})
+	return pr.writeLine(b)
+}
+
+// forwardCall tags an allowed call with its origin, opens its activity log
+// entry and returns the line to send to the bridge.
+func (pr *pairRelay) forwardCall(m rpc.Message) []byte {
+	m.Params = addVia(m.Params, pr.via)
+	if rec := pr.s.pairAudit(pr.user, pr.ip, m, pr.via); rec != nil && m.ID != 0 {
+		pr.rmu.Lock()
+		pr.recs[m.ID] = rec
+		pr.rmu.Unlock()
+	}
+	pr.s.log.Printf("pairing: via %s -> %s %s", pr.via, pr.user, describeCall(m))
+	line, _ := json.Marshal(m)
+	return line
 }
 
 // clipText keeps a claimed name printable and short for the logs.

@@ -9,9 +9,42 @@ import { SourceBadge, displayName, updateKey } from './helpers';
 import type { Pkg, SearchResult, Update } from './types';
 import type { TxParams } from './types';
 
+type Scoped = { name: string; kind: string; scope?: 'system' | 'user' };
+
+const MAX_CHIPS = 12;
+
+/** One step per Flatpak scope that has packages in the list. */
+function flatpakSteps(op: TxParams['op'], list: Scoped[]): TxParams[] {
+  const steps: TxParams[] = [];
+  for (const scope of ['system', 'user'] as const) {
+    const fl = list.filter((u) => u.kind === 'flatpak' && (u.scope ?? 'system') === scope).map((u) => u.name);
+    if (fl.length) steps.push({ op, packages: fl, source: 'flatpak', scope });
+  }
+  return steps;
+}
+
+function updateSteps(list: Update[]): TxParams[] {
+  const steps: TxParams[] = [];
+  const repo = list.filter((u) => u.kind === 'repo').map((u) => u.name);
+  if (repo.length) steps.push({ op: 'upgrade', packages: repo, source: 'repo' });
+  return [...steps, ...flatpakSteps('upgrade', list)];
+}
+
+function removeSteps(list: Pkg[]): TxParams[] {
+  const steps: TxParams[] = [];
+  const sys = list.filter((p) => p.kind !== 'flatpak').map((p) => p.name);
+  if (sys.length) steps.push({ op: 'remove', packages: sys, source: 'repo' });
+  return [...steps, ...flatpakSteps('remove', list)];
+}
+
+function installStep(r: SearchResult): TxParams {
+  const isFlatpak = r.kind === 'flatpak';
+  const ref = isFlatpak && r.remote ? `${r.remote}/${r.name}` : r.name;
+  return { op: 'install', packages: [ref], source: isFlatpak ? 'flatpak' : 'repo', scope: isFlatpak ? 'system' : undefined };
+}
+
 /** Everything that changes the system goes through here, with its confirmation dialogs. */
 export function useActions() {
-  const t = useT('software');
   const nav = useNavigate();
   const { summary, updates } = useSoftware();
   const tx = useTx();
@@ -32,13 +65,7 @@ export function useActions() {
   }, [updates]);
 
   const runUpdates = useCallback((list: Update[]) => {
-    const steps: TxParams[] = [];
-    const repo = list.filter((u) => u.kind === 'repo').map((u) => u.name);
-    if (repo.length) steps.push({ op: 'upgrade', packages: repo, source: 'repo' });
-    for (const scope of ['system', 'user'] as const) {
-      const fl = list.filter((u) => u.kind === 'flatpak' && (u.scope ?? 'system') === scope).map((u) => u.name);
-      if (fl.length) steps.push({ op: 'upgrade', packages: fl, source: 'flatpak', scope });
-    }
+    const steps = updateSteps(list);
     if (!steps.length) return;
     startJob({ title: list.length === 1 ? { key: 'update', vars: { name: displayName(list[0]) } } : { key: 'updateSelected', vars: { count: list.length } }, steps });
   }, []);
@@ -61,108 +88,116 @@ export function useActions() {
     const r = install;
     setInstall(null);
     if (!r) return;
-    const ref = r.kind === 'flatpak' && r.remote ? `${r.remote}/${r.name}` : r.name;
-    startJob({
-      title: { key: 'install', vars: { name: displayName(r) } },
-      steps: [{ op: 'install', packages: [ref], source: r.kind === 'flatpak' ? 'flatpak' : 'repo', scope: r.kind === 'flatpak' ? 'system' : undefined }],
-    });
+    startJob({ title: { key: 'install', vars: { name: displayName(r) } }, steps: [installStep(r)] });
   }, [install]);
 
   const confirmRemove = useCallback(() => {
     const list = remove;
     setRemove(null);
     if (!list?.length) return;
-    const steps: TxParams[] = [];
-    const sys = list.filter((p) => p.kind !== 'flatpak').map((p) => p.name);
-    if (sys.length) steps.push({ op: 'remove', packages: sys, source: 'repo' });
-    for (const scope of ['system', 'user'] as const) {
-      const fl = list.filter((p) => p.kind === 'flatpak' && (p.scope ?? 'system') === scope).map((p) => p.name);
-      if (fl.length) steps.push({ op: 'remove', packages: fl, source: 'flatpak', scope });
-    }
-    startJob({ title: list.length === 1 ? { key: 'remove', vars: { name: displayName(list[0]) } } : { key: 'removeMany', vars: { count: list.length } }, steps });
+    startJob({ title: list.length === 1 ? { key: 'remove', vars: { name: displayName(list[0]) } } : { key: 'removeMany', vars: { count: list.length } }, steps: removeSteps(list) });
   }, [remove]);
+
+  const confirmUpdateAll = () => {
+    setPartial(null);
+    updateAll();
+  };
 
   const busy = tx.phase === 'running';
 
   const ui: ReactNode = (
     <>
-      <Dialog
-        open={!!install}
-        onClose={() => setInstall(null)}
-        title={t('install.title', { name: install ? displayName(install) : '' })}
-        description={t('install.text')}
-        icon="download"
-        footer={
-          <>
-            <Button onClick={() => setInstall(null)}>{t('cancel')}</Button>
-            <Button variant="primary" icon="download" onClick={confirmInstall}>{t('install.confirm')}</Button>
-          </>
-        }
-      >
-        {install && (
-          <dl className="sw-kv">
-            <dt>{t('install.source')}</dt>
-            <dd><SourceBadge kind={install.kind} source={install.source} />{install.kind === 'flatpak' && install.remote ? <span className="sw-muted"> {install.remote}</span> : null}</dd>
-            <dt>{t('install.version')}</dt>
-            <dd className="sw-mono">{install.version || '-'}</dd>
-            <dt>{t('install.package')}</dt>
-            <dd className="sw-mono">{install.name}</dd>
-            <dt>{t('install.runsAs')}</dt>
-            <dd>{t('install.admin')}</dd>
-          </dl>
-        )}
-        {install?.kind === 'repo' && <p className="sw-hint">{t('install.deps')}</p>}
-      </Dialog>
-
-      <ConfirmDialog
-        open={!!remove}
-        onClose={() => setRemove(null)}
-        onConfirm={confirmRemove}
-        title={remove && remove.length === 1 ? t('remove.title', { name: displayName(remove[0]) }) : t('remove.titleMany', { count: remove?.length ?? 0 })}
-        description={t('remove.text')}
-        confirmLabel={t('remove.confirm')}
-        confirmText={remove && remove.length === 1 ? remove[0].name : t('remove.word')}
-        icon="trash"
-      >
-        {remove && remove.length > 1 && (
-          <div className="sw-chiplist">
-            {remove.slice(0, 12).map((p) => (
-              <Badge key={p.name} tone="neutral" dot={false}>{displayName(p)}</Badge>
-            ))}
-            {remove.length > 12 && <Badge tone="neutral" dot={false}>+{remove.length - 12}</Badge>}
-          </div>
-        )}
-      </ConfirmDialog>
-
-      <Dialog
-        open={!!partial}
-        onClose={() => setPartial(null)}
-        title={t('partial.title')}
-        description={t('partial.text')}
-        icon="alert"
-        tone="warn"
-        footer={
-          <>
-            <Button onClick={() => setPartial(null)}>{t('cancel')}</Button>
-            <Button
-              variant="primary"
-              icon="download"
-              onClick={() => {
-                setPartial(null);
-                updateAll();
-              }}
-            >
-              {t('partial.all', { count: (updates ?? []).filter((u) => u.kind === 'repo').length })}
-            </Button>
-          </>
-        }
-      >
-        <p className="sw-hint">
-          {t('partial.size', { size: formatBytes((updates ?? []).filter((u) => u.kind === 'repo').reduce((a, u) => a + u.size, 0)) })}
-        </p>
-      </Dialog>
+      <InstallDialog install={install} onClose={() => setInstall(null)} onConfirm={confirmInstall} />
+      <RemoveDialog remove={remove} onClose={() => setRemove(null)} onConfirm={confirmRemove} />
+      <PartialDialog open={!!partial} updates={updates ?? []} onClose={() => setPartial(null)} onUpdateAll={confirmUpdateAll} />
     </>
   );
 
   return { ui, busy, openTerminal, aurHelper, updateAll, updateSome, runUpdates, askInstall: setInstall, askRemove: setRemove, updateKey };
+}
+
+function InstallDialog({ install, onClose, onConfirm }: { install: SearchResult | null; onClose(): void; onConfirm(): void }) {
+  const t = useT('software');
+  return (
+    <Dialog
+      open={!!install}
+      onClose={onClose}
+      title={t('install.title', { name: install ? displayName(install) : '' })}
+      description={t('install.text')}
+      icon="download"
+      footer={
+        <>
+          <Button onClick={onClose}>{t('cancel')}</Button>
+          <Button variant="primary" icon="download" onClick={onConfirm}>{t('install.confirm')}</Button>
+        </>
+      }
+    >
+      {install && (
+        <dl className="sw-kv">
+          <dt>{t('install.source')}</dt>
+          <dd><SourceBadge kind={install.kind} source={install.source} />{install.kind === 'flatpak' && install.remote ? <span className="sw-muted"> {install.remote}</span> : null}</dd>
+          <dt>{t('install.version')}</dt>
+          <dd className="sw-mono">{install.version || '-'}</dd>
+          <dt>{t('install.package')}</dt>
+          <dd className="sw-mono">{install.name}</dd>
+          <dt>{t('install.runsAs')}</dt>
+          <dd>{t('install.admin')}</dd>
+        </dl>
+      )}
+      {install?.kind === 'repo' && <p className="sw-hint">{t('install.deps')}</p>}
+    </Dialog>
+  );
+}
+
+function RemoveDialog({ remove, onClose, onConfirm }: { remove: Pkg[] | null; onClose(): void; onConfirm(): void }) {
+  const t = useT('software');
+  const single = remove && remove.length === 1 ? remove[0] : null;
+  return (
+    <ConfirmDialog
+      open={!!remove}
+      onClose={onClose}
+      onConfirm={onConfirm}
+      title={single ? t('remove.title', { name: displayName(single) }) : t('remove.titleMany', { count: remove?.length ?? 0 })}
+      description={t('remove.text')}
+      confirmLabel={t('remove.confirm')}
+      confirmText={single ? single.name : t('remove.word')}
+      icon="trash"
+    >
+      {remove && remove.length > 1 && (
+        <div className="sw-chiplist">
+          {remove.slice(0, MAX_CHIPS).map((p) => (
+            <Badge key={p.name} tone="neutral" dot={false}>{displayName(p)}</Badge>
+          ))}
+          {remove.length > MAX_CHIPS && <Badge tone="neutral" dot={false}>+{remove.length - MAX_CHIPS}</Badge>}
+        </div>
+      )}
+    </ConfirmDialog>
+  );
+}
+
+function PartialDialog({ open, updates, onClose, onUpdateAll }: { open: boolean; updates: Update[]; onClose(): void; onUpdateAll(): void }) {
+  const t = useT('software');
+  const repoUpdates = updates.filter((u) => u.kind === 'repo');
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={t('partial.title')}
+      description={t('partial.text')}
+      icon="alert"
+      tone="warn"
+      footer={
+        <>
+          <Button onClick={onClose}>{t('cancel')}</Button>
+          <Button variant="primary" icon="download" onClick={onUpdateAll}>
+            {t('partial.all', { count: repoUpdates.length })}
+          </Button>
+        </>
+      }
+    >
+      <p className="sw-hint">
+        {t('partial.size', { size: formatBytes(repoUpdates.reduce((a, u) => a + u.size, 0)) })}
+      </p>
+    </Dialog>
+  );
 }
