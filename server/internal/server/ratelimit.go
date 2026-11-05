@@ -99,7 +99,6 @@ func (l *limiter) begin(key string, max int) (*attempt, *rejection) {
 	return &attempt{l: l, key: key, at: now}, nil
 }
 
-// done ends the attempt.
 func (a *attempt) done(o outcome) {
 	a.once.Do(func() {
 		l := a.l
