@@ -96,57 +96,17 @@ func (t *Transition) Run(ctx context.Context) update.Result {
 		t.logf("write %s/last.json: %v", lst.Dir, err)
 	}
 	finish := func(state string, err error) update.Result {
-		r.State, r.FinishedAt, r.PID = state, time.Now().UnixMilli(), 0
-		if err != nil {
-			r.Error = err.Error()
-			t.logf("move to %s %s: %s: %v", brand.Name, v, state, err)
-		}
-		for _, st := range []*update.State{lst, t.newState()} {
-			if state != update.StateOK && st != lst {
-				continue // the Ervisio state folder was taken back
-			}
-			if werr := st.WriteLast(r); werr != nil {
-				t.logf("write %s/last.json: %v", st.Dir, werr)
-			}
-		}
-		if state != update.StateOK {
-			writeFailure(t.Paths, v, r.Error)
-		} else {
-			os.Remove(failurePath(t.Paths))
-		}
-		return r
+		return t.finish(&r, state, err)
 	}
 
 	src := t.Paths.At(brand.LegacyLibDir + "/versions/" + v)
-	if !update.ValidDirName(v) || !isDir(src) {
-		return finish(update.StateFailed, fmt.Errorf("%s is not installed in %s", v, t.Paths.At(brand.LegacyLibDir+"/versions")))
-	}
-	nl := t.newLayout()
-	if by := nl.ManagedBy(); by != "" {
-		return finish(update.StateFailed, fmt.Errorf("%s is installed here by %s already; remove %s with its package manager or %s --remove-legacy", brand.Name, by, brand.LegacyName, brand.DaemonBinary))
-	}
-	if t.Systemd.IsActive(ctx, brand.ServiceUnit) {
-		return finish(update.StateFailed, fmt.Errorf("%s is already running here; remove %s with %s --remove-legacy", brand.ServiceUnit, brand.LegacyName, brand.DaemonBinary))
+	if err := t.precheck(ctx, src); err != nil {
+		return finish(update.StateFailed, err)
 	}
 
 	u := &undo{}
 	t.logf("moving %s %s to %s %s", brand.LegacyName, from, brand.Name, v)
-	if err := t.installLayout(src, u); err != nil {
-		t.rollback(ctx, u, false)
-		return finish(update.StateFailed, err)
-	}
-	im := &Import{Paths: t.Paths, Mark: true, Logf: t.Logf}
-	res, err := im.Run()
-	u.imported = res
-	if err != nil {
-		t.rollback(ctx, u, false)
-		return finish(update.StateFailed, fmt.Errorf("copy the data: %w", err))
-	}
-	if u.unitNew, err = InstallUnit(t.Paths, src); err != nil {
-		t.rollback(ctx, u, false)
-		return finish(update.StateFailed, err)
-	}
-	if err := t.Systemd.Systemctl(ctx, "daemon-reload"); err != nil {
+	if err := t.prepare(ctx, src, u); err != nil {
 		t.rollback(ctx, u, false)
 		return finish(update.StateFailed, err)
 	}
@@ -156,7 +116,7 @@ func (t *Transition) Run(ctx context.Context) update.Result {
 	if err := t.Systemd.Systemctl(ctx, "stop", brand.LegacyServiceUnit); err != nil {
 		t.logf("%v", err) // ervisio.service conflicts with it anyway
 	}
-	err = t.Systemd.Systemctl(ctx, "start", brand.ServiceUnit)
+	err := t.Systemd.Systemctl(ctx, "start", brand.ServiceUnit)
 	if err == nil {
 		err = t.Health(ctx, v)
 	}
@@ -171,6 +131,71 @@ func (t *Transition) Run(ctx context.Context) update.Result {
 	}
 
 	// Ervisio answers: make it permanent.
+	t.makePermanent(ctx, enabled)
+	t.logf("%s %s runs as %s; %s's files are kept for a rollback (see %s/%s)", brand.Name, v, brand.ServiceUnit, brand.LegacyName, brand.LegacyConfigDir, NoteFile)
+	return finish(update.StateOK, nil)
+}
+
+// finish stamps r with the outcome and writes it to the state folders.
+func (t *Transition) finish(r *update.Result, state string, err error) update.Result {
+	v := t.Version
+	lst := t.legacyState()
+	r.State, r.FinishedAt, r.PID = state, time.Now().UnixMilli(), 0
+	if err != nil {
+		r.Error = err.Error()
+		t.logf("move to %s %s: %s: %v", brand.Name, v, state, err)
+	}
+	for _, st := range []*update.State{lst, t.newState()} {
+		if state != update.StateOK && st != lst {
+			continue // the Ervisio state folder was taken back
+		}
+		if werr := st.WriteLast(*r); werr != nil {
+			t.logf("write %s/last.json: %v", st.Dir, werr)
+		}
+	}
+	if state != update.StateOK {
+		writeFailure(t.Paths, v, r.Error)
+	} else {
+		os.Remove(failurePath(t.Paths))
+	}
+	return *r
+}
+
+// precheck refuses a transition that cannot start.
+func (t *Transition) precheck(ctx context.Context, src string) error {
+	v := t.Version
+	if !update.ValidDirName(v) || !isDir(src) {
+		return fmt.Errorf("%s is not installed in %s", v, t.Paths.At(brand.LegacyLibDir+"/versions"))
+	}
+	if by := t.newLayout().ManagedBy(); by != "" {
+		return fmt.Errorf("%s is installed here by %s already; remove %s with its package manager or %s --remove-legacy", brand.Name, by, brand.LegacyName, brand.DaemonBinary)
+	}
+	if t.Systemd.IsActive(ctx, brand.ServiceUnit) {
+		return fmt.Errorf("%s is already running here; remove %s with %s --remove-legacy", brand.ServiceUnit, brand.LegacyName, brand.DaemonBinary)
+	}
+	return nil
+}
+
+// prepare installs the layout, imports the data and writes the unit.
+func (t *Transition) prepare(ctx context.Context, src string, u *undo) error {
+	if err := t.installLayout(src, u); err != nil {
+		return err
+	}
+	im := &Import{Paths: t.Paths, Mark: true, Logf: t.Logf}
+	res, err := im.Run()
+	u.imported = res
+	if err != nil {
+		return fmt.Errorf("copy the data: %w", err)
+	}
+	if u.unitNew, err = InstallUnit(t.Paths, src); err != nil {
+		return err
+	}
+	return t.Systemd.Systemctl(ctx, "daemon-reload")
+}
+
+// makePermanent switches the enabled unit to Ervisio and finishes the
+// import and the scheduled update; failures are only logged.
+func (t *Transition) makePermanent(ctx context.Context, enabled bool) {
 	if enabled {
 		if err := t.Systemd.Systemctl(ctx, "enable", brand.ServiceUnit); err != nil {
 			t.logf("%v", err)
@@ -185,8 +210,6 @@ func (t *Transition) Run(ctx context.Context) update.Result {
 	if err := MigrateSchedule(ctx, t.Paths, t.Systemd, t.Logf); err != nil {
 		t.logf("scheduled update: %v", err)
 	}
-	t.logf("%s %s runs as %s; %s's files are kept for a rollback (see %s/%s)", brand.Name, v, brand.ServiceUnit, brand.LegacyName, brand.LegacyConfigDir, NoteFile)
-	return finish(update.StateOK, nil)
 }
 
 // installLayout copies the release folder to the Ervisio versioned layout.
@@ -198,44 +221,61 @@ func (t *Transition) installLayout(src string, u *undo) error {
 	u.binLinkNew = !exists(nl.BinLink)
 	u.bridgeLink = !exists(filepath.Join(nl.LibDir, brand.BridgeBinary))
 	if u.prevCurrent != v || !isRegular(nl.DaemonPath(v)) {
-		partial, err := nl.NewPartialDir(v)
-		if err != nil {
+		if err := t.installVersion(src, u); err != nil {
 			return err
-		}
-		if err := copyTree(src, partial, nil); err != nil {
-			os.RemoveAll(partial)
-			return fmt.Errorf("copy %s: %w", src, err)
-		}
-		for old, nw := range map[string]string{brand.LegacyDaemonBinary: brand.DaemonBinary, brand.LegacyBridgeBinary: brand.BridgeBinary} {
-			o, n := filepath.Join(partial, "bin", old), filepath.Join(partial, "bin", nw)
-			if isRegular(o) && !exists(n) {
-				if err := os.Rename(o, n); err != nil {
-					os.RemoveAll(partial)
-					return err
-				}
-			}
-		}
-		for _, b := range []string{brand.DaemonBinary, brand.BridgeBinary} {
-			if !isRegular(filepath.Join(partial, "bin", b)) {
-				os.RemoveAll(partial)
-				return fmt.Errorf("%s has no bin/%s", src, b)
-			}
-		}
-		u.versionNew = !exists(nl.VersionDir(v))
-		if u.prevCurrent == v {
-			// A damaged copy of the active version: replace it in place.
-			os.RemoveAll(nl.VersionDir(v))
-		}
-		if err := nl.InstallFrom(partial, v); err != nil {
-			os.RemoveAll(partial)
-			return fmt.Errorf("install %s: %w", v, err)
 		}
 	}
 	if err := nl.SetCurrent(v); err != nil {
 		return err
 	}
-	if _, err := nl.Migrate(""); err != nil { // entry links
+	_, err := nl.Migrate("") // entry links
+	return err
+}
+
+// installVersion copies src to a partial folder, renames the LinuxAdmin
+// binaries and installs it as versions/<Version>.
+func (t *Transition) installVersion(src string, u *undo) error {
+	v := t.Version
+	nl := t.newLayout()
+	partial, err := nl.NewPartialDir(v)
+	if err != nil {
 		return err
+	}
+	if err := copyTree(src, partial, nil); err != nil {
+		os.RemoveAll(partial)
+		return fmt.Errorf("copy %s: %w", src, err)
+	}
+	if err := renameBinaries(src, partial); err != nil {
+		os.RemoveAll(partial)
+		return err
+	}
+	u.versionNew = !exists(nl.VersionDir(v))
+	if u.prevCurrent == v {
+		// A damaged copy of the active version: replace it in place.
+		os.RemoveAll(nl.VersionDir(v))
+	}
+	if err := nl.InstallFrom(partial, v); err != nil {
+		os.RemoveAll(partial)
+		return fmt.Errorf("install %s: %w", v, err)
+	}
+	return nil
+}
+
+// renameBinaries gives the LinuxAdmin binaries in partial their Ervisio
+// names and checks both are there.
+func renameBinaries(src, partial string) error {
+	for old, nw := range map[string]string{brand.LegacyDaemonBinary: brand.DaemonBinary, brand.LegacyBridgeBinary: brand.BridgeBinary} {
+		o, n := filepath.Join(partial, "bin", old), filepath.Join(partial, "bin", nw)
+		if isRegular(o) && !exists(n) {
+			if err := os.Rename(o, n); err != nil {
+				return err
+			}
+		}
+	}
+	for _, b := range []string{brand.DaemonBinary, brand.BridgeBinary} {
+		if !isRegular(filepath.Join(partial, "bin", b)) {
+			return fmt.Errorf("%s has no bin/%s", src, b)
+		}
 	}
 	return nil
 }
@@ -244,14 +284,7 @@ func (t *Transition) installLayout(src string, u *undo) error {
 // and removes what this transition created.
 func (t *Transition) rollback(ctx context.Context, u *undo, started bool) {
 	if started {
-		_ = t.Systemd.Systemctl(ctx, "stop", brand.ServiceUnit)
-		if err := t.Systemd.Systemctl(ctx, "start", brand.LegacyServiceUnit); err != nil {
-			t.logf("start %s again: %v", brand.LegacyServiceUnit, err)
-		} else if t.LegacyHealth != nil {
-			if err := t.LegacyHealth(ctx); err != nil {
-				t.logf("%s does not answer after the rollback: %v", brand.LegacyName, err)
-			}
-		}
+		t.restartLegacy(ctx)
 	}
 	Undo(t.Paths, u.imported)
 	nl := t.newLayout()
@@ -261,22 +294,39 @@ func (t *Transition) rollback(ctx context.Context, u *undo, started bool) {
 	if u.libCreated {
 		os.RemoveAll(nl.LibDir)
 	} else {
-		if u.prevCurrent != "" {
-			_ = nl.SetCurrent(u.prevCurrent)
-		} else {
-			os.Remove(filepath.Join(nl.LibDir, "current"))
-		}
-		if u.versionNew && u.prevCurrent != t.Version {
-			os.RemoveAll(nl.VersionDir(t.Version))
-		}
-		if u.bridgeLink {
-			os.Remove(filepath.Join(nl.LibDir, brand.BridgeBinary))
-		}
+		t.undoLayout(nl, u)
 	}
 	if u.binLinkNew {
 		os.Remove(nl.BinLink)
 	}
 	_ = t.Systemd.Systemctl(ctx, "daemon-reload")
+}
+
+// restartLegacy stops Ervisio and starts LinuxAdmin again.
+func (t *Transition) restartLegacy(ctx context.Context) {
+	_ = t.Systemd.Systemctl(ctx, "stop", brand.ServiceUnit)
+	if err := t.Systemd.Systemctl(ctx, "start", brand.LegacyServiceUnit); err != nil {
+		t.logf("start %s again: %v", brand.LegacyServiceUnit, err)
+	} else if t.LegacyHealth != nil {
+		if err := t.LegacyHealth(ctx); err != nil {
+			t.logf("%s does not answer after the rollback: %v", brand.LegacyName, err)
+		}
+	}
+}
+
+// undoLayout takes back the changes made inside an existing LibDir.
+func (t *Transition) undoLayout(nl *update.Layout, u *undo) {
+	if u.prevCurrent != "" {
+		_ = nl.SetCurrent(u.prevCurrent)
+	} else {
+		os.Remove(filepath.Join(nl.LibDir, "current"))
+	}
+	if u.versionNew && u.prevCurrent != t.Version {
+		os.RemoveAll(nl.VersionDir(t.Version))
+	}
+	if u.bridgeLink {
+		os.Remove(filepath.Join(nl.LibDir, brand.BridgeBinary))
+	}
 }
 
 // failure records a transition that failed, so a daemon started from the
@@ -346,39 +396,17 @@ func RunHelper(args []string) int {
 		logf("must run as root")
 		return 2
 	}
-	target, auto := "", false
-	for i := 0; i < len(args); i++ {
-		switch a := args[i]; {
-		case a == "--kind" && i+1 < len(args):
-			if args[i+1] != update.KindUpdate {
-				// A rollback is LinuxAdmin's business: its own binary does it.
-				logf("refusing --kind %s: run by %s", args[i+1], brand.LegacyName)
-				return 2
-			}
-			i++
-		case a == "--auto":
-			auto = true
-		case target == "" && !strings.HasPrefix(a, "-"):
-			target = a
-		default:
-			logf("unexpected argument %q", a)
-			return 2
-		}
+	target, auto, ok := parseHelperArgs(args, logf)
+	if !ok {
+		return 2
 	}
 	if !update.ValidDirName(target) {
 		logf("usage: %s %s <version>", brand.DaemonBinary, TransitionFlag)
 		return 2
 	}
 	p := Paths{}
-	st := &update.State{Dir: p.At(brand.LegacyStateDir + "/updates")}
-	var unlock func()
-	var err error
-	for i := 0; i < 30; i++ { // the updater releases its lock just before starting us
-		if unlock, err = st.Lock(); err == nil {
-			break
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
+	// the updater releases its lock just before starting us
+	unlock, err := update.LockRetry(&update.State{Dir: p.At(brand.LegacyStateDir + "/updates")})
 	if err != nil {
 		logf("%v", err)
 		return 1
@@ -401,6 +429,25 @@ func RunHelper(args []string) int {
 		return 1
 	}
 	return 0
+}
+
+func parseHelperArgs(args []string, logf func(string, ...any)) (target string, auto, ok bool) {
+	for i := 0; i < len(args); i++ {
+		switch a := args[i]; {
+		case a == "--kind" && i+1 < len(args):
+			if args[i+1] != update.KindUpdate {
+				// A rollback is LinuxAdmin's business: its own binary does it.
+				logf("refusing --kind %s: run by %s", args[i+1], brand.LegacyName)
+				return "", false, false
+			}
+			i++
+		case update.HelperArg(a, &target, &auto):
+		default:
+			logf("unexpected argument %q", a)
+			return "", false, false
+		}
+	}
+	return target, auto, true
 }
 
 // StartTransition is called by a daemon that finds itself started from

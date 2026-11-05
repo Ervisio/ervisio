@@ -98,12 +98,7 @@ func (s *Switcher) Switch(ctx context.Context, target, kind string, auto bool) R
 		err = s.Health.Wait(ctx, want, timeout)
 	}
 	if err == nil {
-		if perr := s.Layout.SetPrevious(old); perr != nil {
-			s.logf("record previous version: %v", perr)
-		}
-		if removed := s.Layout.Prune(); len(removed) > 0 {
-			s.logf("removed old versions: %s", strings.Join(removed, ", "))
-		}
+		s.keepNew(old)
 		r.State, r.FinishedAt, r.PID = StateOK, nowMs(), 0
 		if werr := s.State.WriteLast(r); werr != nil {
 			s.logf("write last.json: %v", werr)
@@ -114,12 +109,28 @@ func (s *Switcher) Switch(ctx context.Context, target, kind string, auto bool) R
 
 	// The new version is not healthy: go back.
 	s.logf("%s to %s failed (%v), rolling back to %s", kind, target, err, old)
-	cause := err
+	state, cause := s.goBack(ctx, old, wantOld, kind, timeout, err)
+	return fail(state, cause)
+}
+
+// keepNew records the version that was replaced and prunes old ones.
+func (s *Switcher) keepNew(old string) {
+	if perr := s.Layout.SetPrevious(old); perr != nil {
+		s.logf("record previous version: %v", perr)
+	}
+	if removed := s.Layout.Prune(); len(removed) > 0 {
+		s.logf("removed old versions: %s", strings.Join(removed, ", "))
+	}
+}
+
+// goBack makes old current again and restarts it; it returns the final
+// state and the error to report.
+func (s *Switcher) goBack(ctx context.Context, old, wantOld, kind string, timeout time.Duration, cause error) (string, error) {
 	if rerr := s.Layout.SetCurrent(old); rerr != nil {
-		return fail(StateFailed, fmt.Errorf("%v; rollback to %s failed: %v", cause, old, rerr))
+		return StateFailed, fmt.Errorf("%v; rollback to %s failed: %v", cause, old, rerr)
 	}
 	if rerr := s.Service.Restart(ctx); rerr != nil {
-		return fail(StateRolledBack, fmt.Errorf("%v; restart of %s after rollback failed: %v", cause, old, rerr))
+		return StateRolledBack, fmt.Errorf("%v; restart of %s after rollback failed: %v", cause, old, rerr)
 	}
 	if herr := s.Health.Wait(ctx, wantOld, timeout); herr != nil {
 		s.logf("after rollback, %s is not answering either: %v", old, herr)
@@ -128,7 +139,7 @@ func (s *Switcher) Switch(ctx context.Context, target, kind string, auto bool) R
 	if kind == KindUpdate {
 		s.Layout.Prune() // drops the broken version
 	}
-	return fail(StateRolledBack, cause)
+	return StateRolledBack, cause
 }
 
 func (s *Switcher) probe(ctx context.Context, bin string) string {
@@ -299,25 +310,9 @@ func RunHelper(args []string) int {
 		logf("must run as root")
 		return 2
 	}
-	var target, kind string = "", KindUpdate
-	auto := false
-	configPath := brand.ConfigPath
-	for i := 0; i < len(args); i++ {
-		switch a := args[i]; {
-		case a == "--kind" && i+1 < len(args):
-			kind = args[i+1]
-			i++
-		case a == "--config" && i+1 < len(args):
-			configPath = args[i+1]
-			i++
-		case a == "--auto":
-			auto = true
-		case target == "" && !strings.HasPrefix(a, "-"):
-			target = a
-		default:
-			logf("unexpected argument %q", a)
-			return 2
-		}
+	target, kind, configPath, auto, ok := parseHelperArgs(args, logf)
+	if !ok {
+		return 2
 	}
 	if !ValidDirName(target) || (kind != KindUpdate && kind != KindRollback) {
 		logf("usage: %s %s <version> [--kind update|rollback]", brand.DaemonBinary, HelperFlag)
@@ -325,14 +320,7 @@ func RunHelper(args []string) int {
 	}
 	st := DefaultState(brand.UpdatesDir)
 	// updates.apply releases its lock just before starting us.
-	var unlock func()
-	var err error
-	for i := 0; i < 30; i++ {
-		if unlock, err = st.Lock(); err == nil {
-			break
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
+	unlock, err := LockRetry(st)
 	if err != nil {
 		logf("%v", err)
 		return 1
@@ -351,4 +339,51 @@ func RunHelper(args []string) int {
 		return 1
 	}
 	return 0
+}
+
+func parseHelperArgs(args []string, logf func(string, ...any)) (target, kind, configPath string, auto, ok bool) {
+	kind, configPath = KindUpdate, brand.ConfigPath
+	for i := 0; i < len(args); i++ {
+		switch a := args[i]; {
+		case a == "--kind" && i+1 < len(args):
+			kind = args[i+1]
+			i++
+		case a == "--config" && i+1 < len(args):
+			configPath = args[i+1]
+			i++
+		case HelperArg(a, &target, &auto):
+		default:
+			logf("unexpected argument %q", a)
+			return "", "", "", false, false
+		}
+	}
+	return target, kind, configPath, auto, true
+}
+
+// HelperArg takes the flag and positional argument both helpers share:
+// --auto, and the version (the first argument not starting with "-").
+func HelperArg(a string, target *string, auto *bool) bool {
+	switch {
+	case a == "--auto":
+		*auto = true
+	case *target == "" && !strings.HasPrefix(a, "-"):
+		*target = a
+	default:
+		return false
+	}
+	return true
+}
+
+// LockRetry takes the state lock, retrying for 15 s: the process that
+// started the helper releases its lock just before.
+func LockRetry(st *State) (func(), error) {
+	var unlock func()
+	var err error
+	for i := 0; i < 30; i++ {
+		if unlock, err = st.Lock(); err == nil {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return unlock, err
 }
