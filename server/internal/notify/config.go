@@ -301,6 +301,26 @@ func httpURL(raw string) (*url.URL, error) {
 
 // Validate checks a normalised spec (secrets already merged).
 func (s *Spec) Validate() error {
+	if err := s.validateCommon(); err != nil {
+		return err
+	}
+	switch s.Type {
+	case TypeEmail:
+		return s.validateEmail()
+	case TypeTelegram:
+		return s.validateTelegram()
+	case TypeWebhook:
+		return s.validateWebhook()
+	case TypeNtfy:
+		return s.validateNtfy()
+	case TypeGotify:
+		return s.validateGotify()
+	default:
+		return fmt.Errorf("%q is not a channel type.", s.Type)
+	}
+}
+
+func (s *Spec) validateCommon() error {
 	if n := s.Name; n == "" || len(n) > 60 {
 		return errors.New("Give the channel a name of up to 60 characters.")
 	}
@@ -308,92 +328,114 @@ func (s *Spec) Validate() error {
 		return errors.New("The minimum level must be info, warn or error.")
 	}
 	for _, e := range s.Events {
-		ok := false
-		for _, k := range Events {
-			ok = ok || k == e
-		}
-		if !ok {
+		if !isKnownEvent(e) {
 			return fmt.Errorf("%q is not an event a channel can send.", e)
 		}
 	}
-	switch s.Type {
-	case TypeEmail:
-		if !hostRe.MatchString(s.Host) {
-			return errors.New("Give the SMTP server's host name.")
+	return nil
+}
+
+func isKnownEvent(e string) bool {
+	for _, k := range Events {
+		if k == e {
+			return true
 		}
-		if s.Port < 1 || s.Port > 65535 {
-			return errors.New("The SMTP port must be between 1 and 65535.")
+	}
+	return false
+}
+
+func (s *Spec) validateEmail() error {
+	if !hostRe.MatchString(s.Host) {
+		return errors.New("Give the SMTP server's host name.")
+	}
+	if s.Port < 1 || s.Port > 65535 {
+		return errors.New("The SMTP port must be between 1 and 65535.")
+	}
+	if s.Security != "none" && s.Security != "starttls" && s.Security != "tls" {
+		return errors.New("Security must be none, starttls or tls.")
+	}
+	if strings.ContainsAny(s.Username, "\r\n\x00") || strings.ContainsAny(s.Password, "\r\n\x00") || len(s.Username) > 256 || len(s.Password) > 512 {
+		return errors.New("The user name or password is not valid.")
+	}
+	if (s.Username == "") != (s.Password == "") {
+		return errors.New("Give both the user name and the password, or neither.")
+	}
+	if _, err := mail.ParseAddress(s.From); err != nil || strings.ContainsAny(s.From, "\r\n") {
+		return errors.New("The From address is not valid.")
+	}
+	if len(s.To) < 1 || len(s.To) > 10 {
+		return errors.New("Give between 1 and 10 recipient addresses.")
+	}
+	for _, a := range s.To {
+		if _, err := mail.ParseAddress(a); err != nil || strings.ContainsAny(a, "\r\n") {
+			return fmt.Errorf("%q is not a valid email address.", a)
 		}
-		if s.Security != "none" && s.Security != "starttls" && s.Security != "tls" {
-			return errors.New("Security must be none, starttls or tls.")
-		}
-		if strings.ContainsAny(s.Username, "\r\n\x00") || strings.ContainsAny(s.Password, "\r\n\x00") || len(s.Username) > 256 || len(s.Password) > 512 {
-			return errors.New("The user name or password is not valid.")
-		}
-		if (s.Username == "") != (s.Password == "") {
-			return errors.New("Give both the user name and the password, or neither.")
-		}
-		if _, err := mail.ParseAddress(s.From); err != nil || strings.ContainsAny(s.From, "\r\n") {
-			return errors.New("The From address is not valid.")
-		}
-		if len(s.To) < 1 || len(s.To) > 10 {
-			return errors.New("Give between 1 and 10 recipient addresses.")
-		}
-		for _, a := range s.To {
-			if _, err := mail.ParseAddress(a); err != nil || strings.ContainsAny(a, "\r\n") {
-				return fmt.Errorf("%q is not a valid email address.", a)
-			}
-		}
-	case TypeTelegram:
-		if !tgTokenRe.MatchString(s.BotToken) {
-			return errors.New("The bot token looks like 123456789:AA... (from @BotFather).")
-		}
-		if !tgChatRe.MatchString(s.ChatID) {
-			return errors.New("The chat id is a number (negative for groups) or @channelname.")
-		}
-	case TypeWebhook:
-		if _, err := httpURL(s.URL); err != nil {
-			return fmt.Errorf("The webhook URL %v.", err)
-		}
-		if s.Method != "POST" && s.Method != "PUT" && s.Method != "PATCH" {
-			return errors.New("The method must be POST, PUT or PATCH.")
-		}
-		if len(s.Template) > maxTemplate {
-			return errors.New("The template is too long.")
-		}
-		body, err := renderWebhook(s.Template, sampleVars())
-		if err != nil || !json.Valid([]byte(body)) {
-			return errors.New("The template must be JSON once {title}, {body}, {level}, {link}, {source} and {time} are replaced.")
-		}
-		if s.HeaderName != "" {
-			if !headerNameRe.MatchString(s.HeaderName) || forbiddenHdr[strings.ToLower(s.HeaderName)] {
-				return errors.New("That header name cannot be used.")
-			}
-			if s.HeaderValue == "" || len(s.HeaderValue) > 2048 || strings.ContainsAny(s.HeaderValue, "\r\n\x00") {
-				return errors.New("Give the header's value (up to 2048 characters, one line).")
-			}
-		} else if s.HeaderValue != "" {
+	}
+	return nil
+}
+
+func (s *Spec) validateTelegram() error {
+	if !tgTokenRe.MatchString(s.BotToken) {
+		return errors.New("The bot token looks like 123456789:AA... (from @BotFather).")
+	}
+	if !tgChatRe.MatchString(s.ChatID) {
+		return errors.New("The chat id is a number (negative for groups) or @channelname.")
+	}
+	return nil
+}
+
+func (s *Spec) validateWebhook() error {
+	if _, err := httpURL(s.URL); err != nil {
+		return fmt.Errorf("The webhook URL %v.", err)
+	}
+	if s.Method != "POST" && s.Method != "PUT" && s.Method != "PATCH" {
+		return errors.New("The method must be POST, PUT or PATCH.")
+	}
+	if len(s.Template) > maxTemplate {
+		return errors.New("The template is too long.")
+	}
+	body, err := renderWebhook(s.Template, sampleVars())
+	if err != nil || !json.Valid([]byte(body)) {
+		return errors.New("The template must be JSON once {title}, {body}, {level}, {link}, {source} and {time} are replaced.")
+	}
+	return s.validateWebhookHeader()
+}
+
+func (s *Spec) validateWebhookHeader() error {
+	if s.HeaderName == "" {
+		if s.HeaderValue != "" {
 			return errors.New("Give the header's name.")
 		}
-	case TypeNtfy:
-		if _, err := httpURL(s.Server); err != nil {
-			return fmt.Errorf("The ntfy server %v.", err)
-		}
-		if !topicRe.MatchString(s.Topic) {
-			return errors.New("The topic is letters, digits, - or _ (up to 64).")
-		}
-		if strings.ContainsAny(s.Token, "\r\n\x00 ") {
-			return errors.New("The access token is not valid.")
-		}
-	case TypeGotify:
-		if _, err := httpURL(s.Server); err != nil {
-			return fmt.Errorf("The Gotify server %v.", err)
-		}
-		if s.Token == "" || strings.ContainsAny(s.Token, "\r\n\x00 ") {
-			return errors.New("Give the Gotify application token.")
-		}
-	default:
-		return fmt.Errorf("%q is not a channel type.", s.Type)
+		return nil
+	}
+	if !headerNameRe.MatchString(s.HeaderName) || forbiddenHdr[strings.ToLower(s.HeaderName)] {
+		return errors.New("That header name cannot be used.")
+	}
+	if s.HeaderValue == "" || len(s.HeaderValue) > 2048 || strings.ContainsAny(s.HeaderValue, "\r\n\x00") {
+		return errors.New("Give the header's value (up to 2048 characters, one line).")
+	}
+	return nil
+}
+
+func (s *Spec) validateNtfy() error {
+	if _, err := httpURL(s.Server); err != nil {
+		return fmt.Errorf("The ntfy server %v.", err)
+	}
+	if !topicRe.MatchString(s.Topic) {
+		return errors.New("The topic is letters, digits, - or _ (up to 64).")
+	}
+	if strings.ContainsAny(s.Token, "\r\n\x00 ") {
+		return errors.New("The access token is not valid.")
+	}
+	return nil
+}
+
+func (s *Spec) validateGotify() error {
+	if _, err := httpURL(s.Server); err != nil {
+		return fmt.Errorf("The Gotify server %v.", err)
+	}
+	if s.Token == "" || strings.ContainsAny(s.Token, "\r\n\x00 ") {
+		return errors.New("Give the Gotify application token.")
 	}
 	return nil
 }

@@ -414,46 +414,75 @@ func (m *Manifest) validateJob(j *JobDef) error {
 	if j.TimeoutSec < 0 || j.TimeoutSec > maxJobTimeout {
 		return fmt.Errorf("timeoutSec must be between 0 and %d", maxJobTimeout)
 	}
+	pnames, err := validateJobParams(j)
+	if err != nil {
+		return err
+	}
+	if err := validateWebhookParams(j.Webhook, pnames); err != nil {
+		return err
+	}
+	return m.validateJobSteps(j, pnames)
+}
+
+// validateJobParams checks the params and compiles their patterns; it
+// returns the set of param names.
+func validateJobParams(j *JobDef) (map[string]bool, error) {
 	if len(j.Params) > maxJobParams {
-		return fmt.Errorf("at most %d params", maxJobParams)
+		return nil, fmt.Errorf("at most %d params", maxJobParams)
 	}
 	pnames := map[string]bool{}
 	for i := range j.Params {
 		p := &j.Params[i]
 		if !jobIDRe.MatchString(p.Name) {
-			return fmt.Errorf("param name %q must be lowercase letters, digits or _ (max 24), starting with a letter", p.Name)
+			return nil, fmt.Errorf("param name %q must be lowercase letters, digits or _ (max 24), starting with a letter", p.Name)
 		}
 		if pnames[p.Name] {
-			return fmt.Errorf("param %q is declared twice", p.Name)
+			return nil, fmt.Errorf("param %q is declared twice", p.Name)
 		}
 		pnames[p.Name] = true
-		if p.Pattern == "" || len(p.Pattern) > 256 {
-			return fmt.Errorf("param %q needs a pattern (a regular expression the whole value must match)", p.Name)
-		}
-		re, err := compileSpec(p.Pattern)
-		if err != nil {
-			return fmt.Errorf("param %q pattern: %v", p.Name, err)
-		}
-		p.re = re
-		if p.MaxLen < 0 || p.MaxLen > maxParamLen {
-			return fmt.Errorf("param %q: maxLen is out of range", p.Name)
-		}
-		if p.Default != nil {
-			if err := p.CheckValue(*p.Default); err != nil {
-				return fmt.Errorf("param %q default: %v", p.Name, err)
-			}
+		if err := validateJobParam(p); err != nil {
+			return nil, err
 		}
 	}
-	if j.Webhook != nil {
-		if len(j.Webhook.Params) > maxJobParams {
-			return fmt.Errorf("webhook.params has too many entries")
-		}
-		for _, n := range j.Webhook.Params {
-			if !pnames[n] {
-				return fmt.Errorf("webhook.params names %q, which is not a param of the job", n)
-			}
+	return pnames, nil
+}
+
+func validateJobParam(p *JobParam) error {
+	if p.Pattern == "" || len(p.Pattern) > 256 {
+		return fmt.Errorf("param %q needs a pattern (a regular expression the whole value must match)", p.Name)
+	}
+	re, err := compileSpec(p.Pattern)
+	if err != nil {
+		return fmt.Errorf("param %q pattern: %v", p.Name, err)
+	}
+	p.re = re
+	if p.MaxLen < 0 || p.MaxLen > maxParamLen {
+		return fmt.Errorf("param %q: maxLen is out of range", p.Name)
+	}
+	if p.Default != nil {
+		if err := p.CheckValue(*p.Default); err != nil {
+			return fmt.Errorf("param %q default: %v", p.Name, err)
 		}
 	}
+	return nil
+}
+
+func validateWebhookParams(w *JobWebhook, pnames map[string]bool) error {
+	if w == nil {
+		return nil
+	}
+	if len(w.Params) > maxJobParams {
+		return fmt.Errorf("webhook.params has too many entries")
+	}
+	for _, n := range w.Params {
+		if !pnames[n] {
+			return fmt.Errorf("webhook.params names %q, which is not a param of the job", n)
+		}
+	}
+	return nil
+}
+
+func (m *Manifest) validateJobSteps(j *JobDef, pnames map[string]bool) error {
 	if len(j.Steps) == 0 || len(j.Steps) > maxJobSteps {
 		return fmt.Errorf("a job needs between 1 and %d steps", maxJobSteps)
 	}
@@ -466,189 +495,273 @@ func (m *Manifest) validateJob(j *JobDef) error {
 		if earlier[s.ID] != nil {
 			return fmt.Errorf("step id %q is used twice", s.ID)
 		}
-		n := 0
-		if s.Command != "" {
-			n++
-		}
-		if s.HTTP != nil {
-			n++
-		}
-		if s.Notify != nil {
-			n++
-		}
-		if n != 1 {
+		if stepActionCount(s) != 1 {
 			return fmt.Errorf("step %q must have exactly one of command, http and notify", s.ID)
 		}
 		if err := m.validateStep(s, pnames, earlier); err != nil {
 			return fmt.Errorf("step %q: %v", s.ID, err)
 		}
-		if s.TimeoutSec != 0 {
-			switch {
-			case s.Kind() != "command":
-				return fmt.Errorf("step %q: timeoutSec is only for command steps", s.ID)
-			case s.TimeoutSec < 0 || s.TimeoutSec > maxStepTimeout:
-				return fmt.Errorf("step %q: timeoutSec must be between 0 and %d", s.ID, maxStepTimeout)
-			case s.TimeoutSec > j.Timeout():
-				return fmt.Errorf("step %q: timeoutSec %d is longer than the job's timeoutSec (%d); raise the job's too", s.ID, s.TimeoutSec, j.Timeout())
-			}
+		if err := validateStepTimeout(s, j.Timeout()); err != nil {
+			return err
 		}
-		if cnd := s.If; cnd != nil {
-			ref := earlier[cnd.Step]
-			if ref == nil {
-				return fmt.Errorf("step %q: if.step %q is not an earlier step", s.ID, cnd.Step)
-			}
-			if !jobWhens[cnd.When] {
-				return fmt.Errorf("step %q: if.when must be one of ok, failed, changed, unchanged, differs, same", s.ID)
-			}
-			needsOutput := cnd.When == "changed" || cnd.When == "unchanged" || cnd.When == "differs" || cnd.When == "same"
-			if needsOutput && ref.Kind() == "notify" {
-				return fmt.Errorf("step %q: a notify step has no output to compare", s.ID)
-			}
-			if cnd.When == "differs" || cnd.When == "same" {
-				o := earlier[cnd.Other]
-				if o == nil || o.Kind() == "notify" {
-					return fmt.Errorf("step %q: if.other must name an earlier command or http step", s.ID)
-				}
-			} else if cnd.Other != "" {
-				return fmt.Errorf("step %q: if.other is only for differs and same", s.ID)
-			}
+		if err := validateStepCond(s, earlier); err != nil {
+			return err
 		}
 		earlier[s.ID] = s
 	}
 	return nil
 }
 
-func (m *Manifest) validateStep(s *JobStep, params map[string]bool, earlier map[string]*JobStep) error {
-	// checkRefs: every placeholder names a param or an earlier step with
-	// that field; allowStep says whether step outputs may be used here.
-	checkRefs := func(where, text string, allowStep bool) error {
-		refs, err := TemplateRefs(text)
-		if err != nil {
-			return fmt.Errorf("%s: %v", where, err)
-		}
-		for _, r := range refs {
-			switch r.Kind {
-			case "param":
-				if !params[r.Name] {
-					return fmt.Errorf("%s: {param.%s} is not a param of the job", where, r.Name)
-				}
-			case "step":
-				if !allowStep {
-					return fmt.Errorf("%s: step outputs cannot be used here", where)
-				}
-				st := earlier[r.Name]
-				if st == nil {
-					return fmt.Errorf("%s: {step.%s.%s} is not an earlier step", where, r.Name, r.Field)
-				}
-				ok := false
-				switch st.Kind() {
-				case "command":
-					ok = r.Field == "stdout" || r.Field == "stderr" || r.Field == "exitCode"
-				case "http":
-					ok = r.Field == "status" || r.Field == "body"
-				}
-				if !ok {
-					return fmt.Errorf("%s: step %s has no %s", where, r.Name, r.Field)
-				}
-			}
+// stepActionCount is how many of command, http and notify the step sets.
+func stepActionCount(s *JobStep) int {
+	n := 0
+	if s.Command != "" {
+		n++
+	}
+	if s.HTTP != nil {
+		n++
+	}
+	if s.Notify != nil {
+		n++
+	}
+	return n
+}
+
+func validateStepTimeout(s *JobStep, jobTimeout int) error {
+	if s.TimeoutSec == 0 {
+		return nil
+	}
+	switch {
+	case s.Kind() != "command":
+		return fmt.Errorf("step %q: timeoutSec is only for command steps", s.ID)
+	case s.TimeoutSec < 0 || s.TimeoutSec > maxStepTimeout:
+		return fmt.Errorf("step %q: timeoutSec must be between 0 and %d", s.ID, maxStepTimeout)
+	case s.TimeoutSec > jobTimeout:
+		return fmt.Errorf("step %q: timeoutSec %d is longer than the job's timeoutSec (%d); raise the job's too", s.ID, s.TimeoutSec, jobTimeout)
+	}
+	return nil
+}
+
+func validateStepCond(s *JobStep, earlier map[string]*JobStep) error {
+	cnd := s.If
+	if cnd == nil {
+		return nil
+	}
+	ref := earlier[cnd.Step]
+	if ref == nil {
+		return fmt.Errorf("step %q: if.step %q is not an earlier step", s.ID, cnd.Step)
+	}
+	if !jobWhens[cnd.When] {
+		return fmt.Errorf("step %q: if.when must be one of ok, failed, changed, unchanged, differs, same", s.ID)
+	}
+	comparesTwoSteps := cnd.When == "differs" || cnd.When == "same"
+	needsOutput := cnd.When == "changed" || cnd.When == "unchanged" || comparesTwoSteps
+	if needsOutput && ref.Kind() == "notify" {
+		return fmt.Errorf("step %q: a notify step has no output to compare", s.ID)
+	}
+	if !comparesTwoSteps {
+		if cnd.Other != "" {
+			return fmt.Errorf("step %q: if.other is only for differs and same", s.ID)
 		}
 		return nil
 	}
+	if o := earlier[cnd.Other]; o == nil || o.Kind() == "notify" {
+		return fmt.Errorf("step %q: if.other must name an earlier command or http step", s.ID)
+	}
+	return nil
+}
+
+func (m *Manifest) validateStep(s *JobStep, params map[string]bool, earlier map[string]*JobStep) error {
+	refs := stepRefChecker{params: params, earlier: earlier}
 	switch s.Kind() {
 	case "command":
-		cmd := m.Command(s.Command)
-		if cmd == nil {
-			return fmt.Errorf("command %q is not declared in capabilities.commands", s.Command)
-		}
-		if cmd.PTY {
-			return fmt.Errorf("command %q is a terminal command", s.Command)
-		}
-		if len(s.Args) != len(cmd.Args) {
-			return fmt.Errorf("command %q takes %d argument(s), the step gives %d", s.Command, len(cmd.Args), len(s.Args))
-		}
-		for i, a := range s.Args {
-			if len(a) > 1024 || strings.ContainsRune(a, 0) {
-				return fmt.Errorf("args[%d] is not valid", i)
-			}
-			if err := checkRefs(fmt.Sprintf("args[%d]", i), a, true); err != nil {
-				return err
-			}
-			if !HasRefs(a) {
-				// Fixed: check it against the command's pattern now.
-				one := Command{Name: cmd.Name, Argv: []string{"x", "{0}"}, Args: []ArgSpec{cmd.Args[i]}}
-				if _, err := Substitute(&one, []string{a}); err != nil {
-					return fmt.Errorf("args[%d]: %v", i, err)
-				}
-			}
-		}
+		return m.validateCommandStep(s, refs)
 	case "http":
-		h := s.HTTP
-		api := m.API(h.API)
-		if api == nil {
-			return fmt.Errorf("http api %q is not declared in capabilities.http", h.API)
-		}
-		if !httpMethods[h.Method] {
-			return fmt.Errorf("http.method %q must be one of GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS", h.Method)
-		}
-		if h.Path == "" || h.Path[0] != '/' || len(h.Path) > 1024 {
-			return fmt.Errorf("http.path must start with /")
-		}
-		if err := checkRefs("http.path", h.Path, false); err != nil {
-			return err
-		}
-		if err := checkRefs("http.query", h.Query, false); err != nil {
-			return err
-		}
-		if err := checkRefs("http.body", h.Body, true); err != nil {
-			return err
-		}
-		if len(h.Body) > 64<<10 {
-			return fmt.Errorf("http.body is larger than 64 KiB")
-		}
-		if len(h.Headers) > maxHTTPHeaders {
-			return fmt.Errorf("http.headers has too many entries")
-		}
-		for k, v := range h.Headers {
-			allowed := false
-			for _, ah := range api.Headers {
-				if strings.EqualFold(ah, k) {
-					allowed = true
-				}
-			}
-			if !allowed {
-				return fmt.Errorf("http.headers: %q is not in the api's headers", k)
-			}
-			if err := checkRefs("http.headers", v, false); err != nil {
-				return err
-			}
-		}
-		if !HasRefs(h.Path) {
-			dec, ok := cleanHTTPPath(h.Path)
-			if !ok {
-				return fmt.Errorf("http.path %q is not a valid request path", h.Path)
-			}
-			if !api.match(h.Method, dec) {
-				return fmt.Errorf("http: %s %s is not allowed by the rules of %q", h.Method, dec, h.API)
-			}
-		}
-		if !HasRefs(h.Query) && !validQuery(h.Query) {
-			return fmt.Errorf("http.query holds characters that are not allowed")
-		}
+		return m.validateHTTPStep(s.HTTP, refs)
 	case "notify":
-		if !m.Capabilities.Notify {
-			return fmt.Errorf("a notify step needs capabilities.notify: true")
-		}
-		n := s.Notify
-		if strings.TrimSpace(n.Title) == "" || len(n.Title) > 300 || len(n.Body) > 4000 || len(n.Link) > 500 {
-			return fmt.Errorf("notify needs a title (max 300 characters) and a body of at most 4000")
-		}
-		if n.Level != "" && !jobLevels[n.Level] {
-			return fmt.Errorf("notify.level must be info, success, warn or error")
-		}
-		for _, f := range []struct{ w, t string }{{"title", n.Title}, {"body", n.Body}, {"link", n.Link}} {
-			if err := checkRefs("notify."+f.w, f.t, true); err != nil {
+		return m.validateNotifyStep(s.Notify, refs)
+	}
+	return nil
+}
+
+// stepRefChecker checks that every placeholder in a step's text names a
+// param of the job or an earlier step that has that field.
+type stepRefChecker struct {
+	params  map[string]bool
+	earlier map[string]*JobStep
+}
+
+// check validates the placeholders of text; allowStep says whether step
+// outputs may be used there.
+func (rc stepRefChecker) check(where, text string, allowStep bool) error {
+	refs, err := TemplateRefs(text)
+	if err != nil {
+		return fmt.Errorf("%s: %v", where, err)
+	}
+	for _, r := range refs {
+		switch r.Kind {
+		case "param":
+			if !rc.params[r.Name] {
+				return fmt.Errorf("%s: {param.%s} is not a param of the job", where, r.Name)
+			}
+		case "step":
+			if err := rc.checkStepRef(where, r, allowStep); err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+func (rc stepRefChecker) checkStepRef(where string, r Ref, allowStep bool) error {
+	if !allowStep {
+		return fmt.Errorf("%s: step outputs cannot be used here", where)
+	}
+	st := rc.earlier[r.Name]
+	if st == nil {
+		return fmt.Errorf("%s: {step.%s.%s} is not an earlier step", where, r.Name, r.Field)
+	}
+	if !stepHasField(st, r.Field) {
+		return fmt.Errorf("%s: step %s has no %s", where, r.Name, r.Field)
+	}
+	return nil
+}
+
+func stepHasField(st *JobStep, field string) bool {
+	switch st.Kind() {
+	case "command":
+		return field == "stdout" || field == "stderr" || field == "exitCode"
+	case "http":
+		return field == "status" || field == "body"
+	}
+	return false
+}
+
+func (m *Manifest) validateCommandStep(s *JobStep, refs stepRefChecker) error {
+	cmd := m.Command(s.Command)
+	if cmd == nil {
+		return fmt.Errorf("command %q is not declared in capabilities.commands", s.Command)
+	}
+	if cmd.PTY {
+		return fmt.Errorf("command %q is a terminal command", s.Command)
+	}
+	if len(s.Args) != len(cmd.Args) {
+		return fmt.Errorf("command %q takes %d argument(s), the step gives %d", s.Command, len(cmd.Args), len(s.Args))
+	}
+	for i, a := range s.Args {
+		if err := validateStepArg(cmd, i, a, refs); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateStepArg(cmd *Command, i int, a string, refs stepRefChecker) error {
+	if len(a) > 1024 || strings.ContainsRune(a, 0) {
+		return fmt.Errorf("args[%d] is not valid", i)
+	}
+	if err := refs.check(fmt.Sprintf("args[%d]", i), a, true); err != nil {
+		return err
+	}
+	if HasRefs(a) {
+		return nil
+	}
+	// Fixed: check it against the command's pattern now.
+	one := Command{Name: cmd.Name, Argv: []string{"x", "{0}"}, Args: []ArgSpec{cmd.Args[i]}}
+	if _, err := Substitute(&one, []string{a}); err != nil {
+		return fmt.Errorf("args[%d]: %v", i, err)
+	}
+	return nil
+}
+
+func (m *Manifest) validateHTTPStep(h *JobHTTP, refs stepRefChecker) error {
+	api := m.API(h.API)
+	if api == nil {
+		return fmt.Errorf("http api %q is not declared in capabilities.http", h.API)
+	}
+	if !httpMethods[h.Method] {
+		return fmt.Errorf("http.method %q must be one of GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS", h.Method)
+	}
+	if h.Path == "" || h.Path[0] != '/' || len(h.Path) > 1024 {
+		return fmt.Errorf("http.path must start with /")
+	}
+	if err := refs.check("http.path", h.Path, false); err != nil {
+		return err
+	}
+	if err := refs.check("http.query", h.Query, false); err != nil {
+		return err
+	}
+	if err := refs.check("http.body", h.Body, true); err != nil {
+		return err
+	}
+	if len(h.Body) > 64<<10 {
+		return fmt.Errorf("http.body is larger than 64 KiB")
+	}
+	if err := validateStepHeaders(h.Headers, api, refs); err != nil {
+		return err
+	}
+	if err := validateFixedPath(h, api); err != nil {
+		return err
+	}
+	if !HasRefs(h.Query) && !validQuery(h.Query) {
+		return fmt.Errorf("http.query holds characters that are not allowed")
+	}
+	return nil
+}
+
+func validateStepHeaders(headers map[string]string, api *HTTPAPI, refs stepRefChecker) error {
+	if len(headers) > maxHTTPHeaders {
+		return fmt.Errorf("http.headers has too many entries")
+	}
+	for k, v := range headers {
+		if !apiAllowsHeader(api, k) {
+			return fmt.Errorf("http.headers: %q is not in the api's headers", k)
+		}
+		if err := refs.check("http.headers", v, false); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func apiAllowsHeader(api *HTTPAPI, name string) bool {
+	for _, ah := range api.Headers {
+		if strings.EqualFold(ah, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// validateFixedPath checks a path without placeholders against the api's
+// rules now, since it cannot change at run time.
+func validateFixedPath(h *JobHTTP, api *HTTPAPI) error {
+	if HasRefs(h.Path) {
+		return nil
+	}
+	dec, ok := cleanHTTPPath(h.Path)
+	if !ok {
+		return fmt.Errorf("http.path %q is not a valid request path", h.Path)
+	}
+	if !api.match(h.Method, dec) {
+		return fmt.Errorf("http: %s %s is not allowed by the rules of %q", h.Method, dec, h.API)
+	}
+	return nil
+}
+
+func (m *Manifest) validateNotifyStep(n *JobNotify, refs stepRefChecker) error {
+	if !m.Capabilities.Notify {
+		return fmt.Errorf("a notify step needs capabilities.notify: true")
+	}
+	if strings.TrimSpace(n.Title) == "" || len(n.Title) > 300 || len(n.Body) > 4000 || len(n.Link) > 500 {
+		return fmt.Errorf("notify needs a title (max 300 characters) and a body of at most 4000")
+	}
+	if n.Level != "" && !jobLevels[n.Level] {
+		return fmt.Errorf("notify.level must be info, success, warn or error")
+	}
+	for _, f := range []struct{ w, t string }{{"title", n.Title}, {"body", n.Body}, {"link", n.Link}} {
+		if err := refs.check("notify."+f.w, f.t, true); err != nil {
+			return err
 		}
 	}
 	return nil

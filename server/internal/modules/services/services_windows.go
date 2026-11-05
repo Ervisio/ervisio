@@ -326,19 +326,7 @@ func handleWatch(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
 	if err != nil {
 		return err
 	}
-	snap := func() (map[string]Unit, map[string]*Unit, error) {
-		l, err := listUnits(typ)
-		if err != nil {
-			return nil, nil, err
-		}
-		v := make(map[string]Unit, len(l))
-		ptr := make(map[string]*Unit, len(l))
-		for _, u := range l {
-			v[u.Name], ptr[u.Name] = *u, u
-		}
-		return v, ptr, nil
-	}
-	prev, _, err := snap()
+	prev, _, err := watchSnapshot(typ)
 	if err != nil {
 		return err
 	}
@@ -351,33 +339,59 @@ func handleWatch(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
 		case <-s.Input():
 		case <-tick.C:
 		}
-		cur, ptrs, err := snap()
+		cur, ptrs, err := watchSnapshot(typ)
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil
 			}
 			continue
 		}
-		units := []*Unit{}
-		removed := []string{}
-		for n, u := range cur {
-			if o, ok := prev[n]; !ok || o.Active != u.Active || o.Sub != u.Sub || o.Enabled != u.Enabled || o.PID != u.PID || o.Description != u.Description {
-				units = append(units, ptrs[n])
-			}
-		}
-		for n := range prev {
-			if _, ok := cur[n]; !ok {
-				removed = append(removed, n)
-			}
-		}
+		units, removed := diffUnits(prev, cur, ptrs)
 		prev = cur
 		if len(units) == 0 && len(removed) == 0 {
 			continue
 		}
-		sort.Slice(units, func(i, j int) bool { return units[i].Name < units[j].Name })
-		sort.Strings(removed)
 		if err := s.Send(map[string]any{"units": units, "removed": removed}); err != nil {
 			return nil
 		}
 	}
+}
+
+// watchSnapshot lists the units of typ by name, as values to compare later
+// and as pointers to send.
+func watchSnapshot(typ string) (map[string]Unit, map[string]*Unit, error) {
+	l, err := listUnits(typ)
+	if err != nil {
+		return nil, nil, err
+	}
+	v := make(map[string]Unit, len(l))
+	ptr := make(map[string]*Unit, len(l))
+	for _, u := range l {
+		v[u.Name], ptr[u.Name] = *u, u
+	}
+	return v, ptr, nil
+}
+
+// diffUnits returns the new or changed units of cur and the names gone since
+// prev, both sorted by name and never nil.
+func diffUnits(prev, cur map[string]Unit, ptrs map[string]*Unit) ([]*Unit, []string) {
+	units := []*Unit{}
+	removed := []string{}
+	for n, u := range cur {
+		if o, ok := prev[n]; !ok || unitChanged(o, u) {
+			units = append(units, ptrs[n])
+		}
+	}
+	for n := range prev {
+		if _, ok := cur[n]; !ok {
+			removed = append(removed, n)
+		}
+	}
+	sort.Slice(units, func(i, j int) bool { return units[i].Name < units[j].Name })
+	sort.Strings(removed)
+	return units, removed
+}
+
+func unitChanged(o, u Unit) bool {
+	return o.Active != u.Active || o.Sub != u.Sub || o.Enabled != u.Enabled || o.PID != u.PID || o.Description != u.Description
 }
