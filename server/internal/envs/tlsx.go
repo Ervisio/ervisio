@@ -104,7 +104,6 @@ func ProbeTLS(ctx context.Context, addr string) (string, error) {
 	return seen, nil
 }
 
-// dialTLS opens a TLS connection with cfg.
 func dialTLS(ctx context.Context, addr string, cfg *tls.Config) (net.Conn, error) {
 	d := tls.Dialer{NetDialer: &net.Dialer{Timeout: dialTimeout, KeepAlive: 30 * time.Second}, Config: cfg}
 	return d.DialContext(ctx, "tcp", addr)

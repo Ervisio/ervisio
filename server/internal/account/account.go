@@ -56,8 +56,7 @@ func SameUser(a, b *Account) bool {
 }
 
 // LostGroup reports the first group of old that cur no longer has: by SID when
-// (by SID when both carry GroupSIDs, else by gid), printable;
-// "" when none is lost.
+// both carry GroupSIDs, else by gid, printable; "" when none is lost.
 func LostGroup(old, cur *Account) string {
 	if len(old.GroupSIDs) > 0 && len(cur.GroupSIDs) > 0 {
 		for _, g := range old.GroupSIDs {

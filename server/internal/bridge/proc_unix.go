@@ -35,7 +35,6 @@ func setSessionAttr(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Pdeathsig: syscall.SIGTERM}
 }
 
-// setUserAttr makes cmd run as account a.
 func setUserAttr(cmd *exec.Cmd, a *account.Account) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Credential: &syscall.Credential{Uid: a.UID, Gid: a.GID, Groups: a.Groups},
