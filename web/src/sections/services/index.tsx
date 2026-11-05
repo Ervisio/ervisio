@@ -50,17 +50,54 @@ function mergeWatchEvent(cur: Unit[], ev: WatchEvent): Unit[] {
   return [...map.values()].sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
 }
 
+function matchesTab(u: Unit, tab: Tab): boolean {
+  if (tab === 'running') return isRunning(u);
+  if (tab === 'failed') return u.state === 'failed';
+  if (tab === 'stopped') return u.state === 'stopped';
+  return true;
+}
+
 function filterUnits(all: Unit[], kind: UnitKind, tab: Tab, purpose: Purpose, q: string): Unit[] {
   const needle = q.trim().toLowerCase();
   return all.filter((u) => {
-    if (kind === 'service') {
-      if (tab === 'running' && u.state !== 'running' && u.state !== 'finished') return false;
-      if (tab === 'failed' && u.state !== 'failed') return false;
-      if (tab === 'stopped' && u.state !== 'stopped') return false;
-    }
+    if (kind === 'service' && !matchesTab(u, tab)) return false;
     if (purpose !== 'all' && u.purpose !== purpose) return false;
     return !needle || u.name.toLowerCase().includes(needle) || u.description.toLowerCase().includes(needle);
   });
+}
+
+/** Live state changes pushed by the daemon, merged into the list of the given kind. */
+function useUnitWatch(
+  kind: UnitKind,
+  setLists: React.Dispatch<React.SetStateAction<Partial<Record<UnitKind, Unit[]>>>>,
+  loadSummary: () => Promise<void>,
+  setPanelRev: React.Dispatch<React.SetStateAction<number>>,
+) {
+  useEffect(() => {
+    let timer: number | undefined;
+    const s = stream<WatchEvent>('services.watch', { type: kind }, {
+      reopen: true,
+      onData: (ev) => {
+        setLists((l) => {
+          const cur = l[kind];
+          if (!cur) return l;
+          const next = mergeWatchEvent(cur, ev);
+          if (kind === 'service') publishRunning(next);
+          return { ...l, [kind]: next };
+        });
+        window.clearTimeout(timer);
+        timer = window.setTimeout(() => {
+          void loadSummary();
+          setPanelRev((n) => n + 1);
+        }, 300);
+      },
+      onError: () => undefined,
+    });
+    return () => {
+      window.clearTimeout(timer);
+      s.close();
+    };
+  }, [kind, loadSummary, setLists, setPanelRev]);
 }
 
 function useUnitData(kind: UnitKind) {
@@ -106,32 +143,7 @@ function useUnitData(kind: UnitKind) {
     void loadSummary();
   }, refresh);
 
-  // Live state changes pushed by the daemon.
-  useEffect(() => {
-    let timer: number | undefined;
-    const s = stream<WatchEvent>('services.watch', { type: kind }, {
-      reopen: true,
-      onData: (ev) => {
-        setLists((l) => {
-          const cur = l[kind];
-          if (!cur) return l;
-          const next = mergeWatchEvent(cur, ev);
-          if (kind === 'service') publishRunning(next);
-          return { ...l, [kind]: next };
-        });
-        window.clearTimeout(timer);
-        timer = window.setTimeout(() => {
-          void loadSummary();
-          setPanelRev((n) => n + 1);
-        }, 300);
-      },
-      onError: () => undefined,
-    });
-    return () => {
-      window.clearTimeout(timer);
-      s.close();
-    };
-  }, [kind, loadSummary]);
+  useUnitWatch(kind, setLists, loadSummary, setPanelRev);
 
   return { lists, summary, error, setError, cpu, panelRev, setPanelRev, loadList, loadSummary };
 }
@@ -164,22 +176,26 @@ function unitMenu(u: Unit, { win, t, run, openUnit, openLogs }: MenuDeps): MenuI
   ];
 }
 
+const serviceColumns = (cpu: Record<string, number>, t: T, dash: React.ReactNode): Column<Unit>[] => [
+  { key: 'mem', header: t('col.memory'), sortable: true, mono: true, value: (u) => u.memory ?? -1, render: (u) => (u.memory != null ? formatBytes(u.memory) : dash) },
+  { key: 'cpu', header: t('col.cpu'), sortable: true, mono: true, value: (u) => cpu[u.name] ?? -1, render: (u) => (cpu[u.name] != null && u.state === 'running' ? `${cpu[u.name].toFixed(1)}%` : dash) },
+];
+
+function timerColumns(compact: boolean, lang: string, t: T, dash: React.ReactNode): Column<Unit>[] {
+  const next: Column<Unit> = { key: 'next', header: t('col.next'), sortable: true, value: (u) => u.next ?? 0, render: (u) => (u.next ? relativeTime(u.next * 1000, lang) : dash) };
+  if (compact) return [next];
+  return [next, { key: 'last', header: t('col.last'), sortable: true, value: (u) => u.last ?? 0, render: (u) => (u.last ? relativeTime(u.last * 1000, lang) : dash) }];
+}
+
+const socketColumns = (t: T, dash: React.ReactNode): Column<Unit>[] => [
+  { key: 'listen', header: t('col.listen'), mono: true, render: (u) => (u.listen?.length ? u.listen.map((l) => l.replace(SOCKET_TYPE_SUFFIX, '')).join(', ') : dash) },
+];
+
 /** Columns between "boot" and the row actions; they depend on the unit kind and the room left. */
 function kindColumns(kind: UnitKind, compact: boolean, cpu: Record<string, number>, lang: string, t: T, dash: React.ReactNode): Column<Unit>[] {
-  if (kind === 'service') {
-    if (compact) return [];
-    return [
-      { key: 'mem', header: t('col.memory'), sortable: true, mono: true, value: (u) => u.memory ?? -1, render: (u) => (u.memory != null ? formatBytes(u.memory) : dash) },
-      { key: 'cpu', header: t('col.cpu'), sortable: true, mono: true, value: (u) => cpu[u.name] ?? -1, render: (u) => (cpu[u.name] != null && u.state === 'running' ? `${cpu[u.name].toFixed(1)}%` : dash) },
-    ];
-  }
-  if (kind === 'timer') {
-    const next: Column<Unit> = { key: 'next', header: t('col.next'), sortable: true, value: (u) => u.next ?? 0, render: (u) => (u.next ? relativeTime(u.next * 1000, lang) : dash) };
-    if (compact) return [next];
-    return [next, { key: 'last', header: t('col.last'), sortable: true, value: (u) => u.last ?? 0, render: (u) => (u.last ? relativeTime(u.last * 1000, lang) : dash) }];
-  }
+  if (kind === 'timer') return timerColumns(compact, lang, t, dash);
   if (compact) return [];
-  return [{ key: 'listen', header: t('col.listen'), mono: true, render: (u) => (u.listen?.length ? u.listen.map((l) => l.replace(SOCKET_TYPE_SUFFIX, '')).join(', ') : dash) }];
+  return kind === 'service' ? serviceColumns(cpu, t, dash) : socketColumns(t, dash);
 }
 
 export default function ServicesPage() {

@@ -233,6 +233,18 @@ func (m *manager) search(ctx context.Context, q string) ([]Result, error) {
 		}()
 	}
 	wg.Wait()
+	all, err := collectResults(bs, results, errs)
+	if err != nil {
+		return nil, err
+	}
+	rankResults(all, q)
+	return all, nil
+}
+
+var searchLimits = map[string]int{KindRepo: 40, KindAUR: 20, KindFlatpak: 24}
+
+// collectResults joins the per-backend results, capped per kind. It fails only when every backend did.
+func collectResults(bs []Backend, results [][]Result, errs []error) ([]Result, error) {
 	all := []Result{}
 	failed := 0
 	for i := range bs {
@@ -241,7 +253,7 @@ func (m *manager) search(ctx context.Context, q string) ([]Result, error) {
 			continue
 		}
 		r := results[i]
-		if limit := map[string]int{KindRepo: 40, KindAUR: 20, KindFlatpak: 24}[bs[i].Kind()]; len(r) > limit {
+		if limit := searchLimits[bs[i].Kind()]; len(r) > limit {
 			r = r[:limit]
 		}
 		all = append(all, r...)
@@ -249,35 +261,41 @@ func (m *manager) search(ctx context.Context, q string) ([]Result, error) {
 	if failed == len(bs) && failed > 0 {
 		return nil, errs[0]
 	}
-	low := strings.ToLower(q)
-	noise := regexp.MustCompile(`-(i18n|l10n|help|lang|langpack|locale|docs?|debug|dbg)(-|$)`)
-	rank := func(r Result) int {
-		n := strings.ToLower(r.Name)
-		t := strings.ToLower(r.Title)
-		if r.Kind == KindFlatpak { // org.gimp.GIMP matches "gimp"
-			n = n[strings.LastIndex(n, ".")+1:]
-		}
-		if noise.MatchString(n) {
-			return 4
-		}
-		switch {
-		case n == low || t == low:
-			return 0
-		case strings.HasPrefix(n, low) || strings.HasPrefix(t, low):
-			return 1
-		case strings.Contains(n, low) || strings.Contains(t, low):
-			return 2
-		}
-		return 3
+	return all, nil
+}
+
+var noisePackage = regexp.MustCompile(`-(i18n|l10n|help|lang|langpack|locale|docs?|debug|dbg)(-|$)`)
+
+// matchRank orders a result for the query low (lowercase): 0 exact, 1 prefix, 2 substring, 3 other, 4 noise packages.
+func matchRank(r Result, low string) int {
+	n := strings.ToLower(r.Name)
+	t := strings.ToLower(r.Title)
+	if r.Kind == KindFlatpak { // org.gimp.GIMP matches "gimp"
+		n = n[strings.LastIndex(n, ".")+1:]
 	}
+	if noisePackage.MatchString(n) {
+		return 4
+	}
+	switch {
+	case n == low || t == low:
+		return 0
+	case strings.HasPrefix(n, low) || strings.HasPrefix(t, low):
+		return 1
+	case strings.Contains(n, low) || strings.Contains(t, low):
+		return 2
+	}
+	return 3
+}
+
+func rankResults(all []Result, q string) {
+	low := strings.ToLower(q)
 	sort.SliceStable(all, func(i, j int) bool {
-		ri, rj := rank(all[i]), rank(all[j])
+		ri, rj := matchRank(all[i], low), matchRank(all[j], low)
 		if ri != rj {
 			return ri < rj
 		}
 		return kindOrder[all[i].Kind] < kindOrder[all[j].Kind]
 	})
-	return all, nil
 }
 
 // catalog is a short curated list of well-known software for the store's
