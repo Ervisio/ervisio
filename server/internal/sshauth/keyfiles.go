@@ -231,3 +231,15 @@ func asUser(u User, fn func() error) error {
 	}()
 	return <-done
 }
+
+// readLimited reads r whole, refusing more than maxKeysFile bytes.
+func readLimited(r io.Reader) ([]byte, error) {
+	b, err := io.ReadAll(io.LimitReader(r, maxKeysFile+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(b) > maxKeysFile {
+		return nil, errors.New("larger than 1 MiB")
+	}
+	return b, nil
+}

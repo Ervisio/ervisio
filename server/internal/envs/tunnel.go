@@ -270,3 +270,40 @@ type smallBuffers struct{}
 
 func (smallBuffers) Get() []byte { return make([]byte, 1024) }
 func (smallBuffers) Put([]byte)  {}
+
+// stagedSocket is a unix socket bound inside a private folder, before it is
+// moved to its final path.
+type stagedSocket struct {
+	ln   net.Listener
+	path string
+}
+
+// listenStaged binds a unix socket in tmp. The socket file moves;
+// tunnel.close removes it at its final path.
+func listenStaged(tmp string) (*stagedSocket, error) {
+	path := filepath.Join(tmp, "s")
+	ln, err := net.Listen("unix", path)
+	if err != nil {
+		return nil, err
+	}
+	ln.(*net.UnixListener).SetUnlinkOnClose(false)
+	return &stagedSocket{ln: ln, path: path}, nil
+}
+
+// fail closes the listener and passes err on.
+func (s *stagedSocket) fail(err error) (net.Listener, error) {
+	s.ln.Close()
+	return nil, err
+}
+
+// publish moves the socket to path and returns what is there after.
+func (s *stagedSocket) publish(path string) (os.FileInfo, error) {
+	// A socket left by an earlier run (the daemon's folder: no one else's).
+	if fi, err := os.Lstat(path); err == nil && !fi.IsDir() {
+		_ = os.Remove(path)
+	}
+	if err := os.Rename(s.path, path); err != nil {
+		return nil, err
+	}
+	return os.Lstat(path)
+}
