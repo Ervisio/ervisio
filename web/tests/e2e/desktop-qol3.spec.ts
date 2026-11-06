@@ -215,6 +215,15 @@ test('real local and saved-network folder shortcuts persist without creating or 
   await expect(local).toBeVisible();
   await local.dblclick();
   await expect(page.locator('[data-path="/srv/projects/one.txt"]').first()).toBeVisible();
+  await page.locator('[data-path="/srv/projects/target"]').first().dblclick();
+  await expect(page.locator('[data-path="/srv/projects/one.txt"]')).toHaveCount(0);
+  await page
+    .getByRole('region', { name: 'File Explorer', exact: true })
+    .getByRole('button', { name: 'Minimize', exact: true })
+    .click();
+  await local.dblclick();
+  await expect(page.locator('[data-path="/srv/projects/one.txt"]').first()).toBeVisible();
+  await expect(page.getByRole('region', { name: 'File Explorer', exact: true })).toHaveCount(1);
   await page
     .getByRole('region', { name: 'File Explorer', exact: true })
     .getByRole('button', { name: 'Minimize', exact: true })
@@ -231,6 +240,36 @@ test('real local and saved-network folder shortcuts persist without creating or 
   await page.getByRole('menuitem', { name: 'Remove from desktop', exact: true }).click();
   await expect(local).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem('ervisio.mock.files'))).toBe(original);
+});
+
+test('folder tabs have fixed close placement and bulk close menus', async ({ page }) => {
+  await fixture(page, 'classic');
+  await page.goto('/files?path=/srv/projects');
+  await expect(page.locator('[data-path="/srv/projects/one.txt"]').first()).toBeVisible();
+  await page.getByRole('button', { name: 'New tab', exact: true }).click();
+  await page.getByRole('button', { name: 'New tab', exact: true }).click();
+  const tabs = page.locator('.files-tab');
+  const count = await tabs.count();
+  expect(count).toBeGreaterThanOrEqual(3);
+  const offsets = await tabs.evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const tab = node.getBoundingClientRect(),
+        close = node.querySelector('.files-tab-x')!.getBoundingClientRect();
+      return { width: tab.width, right: tab.right - close.right };
+    }),
+  );
+  expect(new Set(offsets.map((item) => item.width)).size).toBe(1);
+  expect(new Set(offsets.map((item) => Math.round(item.right))).size).toBe(1);
+  await tabs.nth(1).click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Close tabs to the right', exact: true }).click();
+  await expect(tabs).toHaveCount(2);
+  await tabs.first().click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Close other tabs', exact: true }).click();
+  await expect(tabs).toHaveCount(1);
+  await tabs.first().click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Close all tabs', exact: true }).click();
+  await expect(tabs).toHaveCount(1);
+  await expect(tabs.first()).toContainText('This PC');
 });
 
 for (const viewport of [

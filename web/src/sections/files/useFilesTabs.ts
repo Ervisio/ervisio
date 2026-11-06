@@ -248,6 +248,19 @@ export function useFilesTabs({ home, mobile, ready, savedTabs, set }: TabsArgs) 
     clearSel();
     setQuery({ L: '', R: '' });
   };
+  const closeTabs = (ids: string[]) => {
+    setTabs((current) => {
+      const remaining = current.filter((item) => !ids.includes(item.id));
+      if (!remaining.length) remaining.push(newTab(home));
+      setActiveId((active) =>
+        remaining.some((item) => item.id === active) ? active : remaining[0].id,
+      );
+      return remaining;
+    });
+    setAct('L');
+    clearSel();
+    setQuery({ L: '', R: '' });
+  };
 
   return {
     tabs,
@@ -271,6 +284,7 @@ export function useFilesTabs({ home, mobile, ready, savedTabs, set }: TabsArgs) 
     navigate,
     openTab,
     closeTab,
+    closeTabs,
     switchTab,
   };
 }

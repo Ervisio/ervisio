@@ -100,7 +100,7 @@ function AppIcon({ app, size = 24 }: { app: AppEntry; size?: number }) {
   );
 }
 
-function AppContent({ app, url }: { app: AppEntry; url: string }) {
+function AppContent({ app, url, launch = 0 }: { app: AppEntry; url: string; launch?: number }) {
   // Each desktop window owns navigation history; the browser router remains the desktop's '/'.
   return (
     <UNSAFE_LocationContext.Provider value={null!}>
@@ -110,7 +110,7 @@ function AppContent({ app, url }: { app: AppEntry; url: string }) {
           future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
         >
           <WindowNavigation app={app}>
-            <WindowAppContent app={app} url={url} />
+            <WindowAppContent app={app} url={url} launch={launch} />
           </WindowNavigation>
         </MemoryRouter>
       </UNSAFE_RouteContext.Provider>
@@ -153,18 +153,18 @@ function WindowNavigation({ app, children }: { app: AppEntry; children: ReactNod
   );
 }
 
-function WindowAppContent({ app, url }: { app: AppEntry; url: string }) {
+function WindowAppContent({ app, url, launch }: { app: AppEntry; url: string; launch: number }) {
   const { plugins } = usePlugins();
   const active = useWindowActivity();
   const t = useT('shell');
   const navigate = useNavigate();
-  const previousURL = useRef(url);
+  const previousURL = useRef({ url, launch });
   useEffect(() => {
-    if (url !== previousURL.current) {
-      previousURL.current = url;
+    if (url !== previousURL.current.url || launch !== previousURL.current.launch) {
+      previousURL.current = { url, launch };
       navigate(url);
     }
-  }, [url, navigate]);
+  }, [url, launch, navigate]);
   if (app.plugin) {
     const plugin = plugins.find((p) => p.id === app.plugin);
     if (!plugin)
@@ -530,7 +530,15 @@ export function DesktopShell() {
       if (existing)
         return [
           ...list.filter((w) => w.id !== existing.id),
-          { ...existing, url, minimized: false },
+          {
+            ...existing,
+            url,
+            launch:
+              app.key === 'files' && new URLSearchParams(url.split('?')[1] ?? '').has('path')
+                ? (existing.launch ?? 0) + 1
+                : existing.launch,
+            minimized: false,
+          },
         ];
       const bounds = clampBounds(
         dataRef.current.bounds[app.key] ?? {
@@ -1190,7 +1198,7 @@ export function DesktopShell() {
                     ) : app!.key === 'this-pc' ? (
                       <AppContent app={app!} url="/files?view=computer" />
                     ) : (
-                      <AppContent app={app!} url={win.url} />
+                      <AppContent app={app!} url={win.url} launch={win.launch} />
                     )}
                   </Suspense>
                 </WindowBoundary>

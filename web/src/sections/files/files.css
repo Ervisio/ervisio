@@ -255,6 +255,9 @@
   overflow-x: auto;
 }
 .files-tab {
+  flex: 0 0 200px;
+  width: 200px;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -281,6 +284,8 @@
   flex: none;
 }
 .files-tab-n {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -293,6 +298,8 @@
   text-overflow: ellipsis;
 }
 .files-tab-x {
+  flex: 0 0 20px;
+  margin-left: auto;
   display: grid;
   place-items: center;
   width: 20px;
