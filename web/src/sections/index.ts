@@ -96,7 +96,7 @@ export const SECTIONS: SectionDef[] = [
     colorVar: 'var(--h-file)',
     hue: 'file',
     titleKey: 'nav.media',
-    rail: true,
+    rail: false,
     page: lazy(() => import('./media')),
   },
   {

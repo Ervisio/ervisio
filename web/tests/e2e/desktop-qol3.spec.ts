@@ -346,6 +346,19 @@ for (const shell of ['classic', 'ervisios']) {
     } else {
       await expect(page).toHaveURL(/\/taskmanager$/);
       await expect(page.getByRole('link', { name: 'Task Manager', exact: true })).toBeVisible();
+      await expect(page.getByRole('link', { name: /Photos/ })).toHaveCount(0);
+      await expect(page.getByRole('heading', { name: 'Task Manager', exact: true })).toBeVisible();
+      const summary = await page.locator('.tm-summary').boundingBox();
+      const table = await page.locator('.tm-table-scroll').boundingBox();
+      expect(summary).not.toBeNull();
+      expect(table).not.toBeNull();
+      expect(summary!.height).toBeLessThan(180);
+      expect(table!.y).toBeGreaterThanOrEqual(summary!.y + summary!.height);
+      expect(table!.width).toBeGreaterThan(900);
+      await page.getByRole('tab', { name: 'Performance', exact: true }).click();
+      await expect(page.locator('.tm-performance')).toBeVisible();
+      await page.getByRole('tab', { name: 'Processes', exact: true }).click();
+      await expect(page.locator('.tm-table-scroll')).toBeVisible();
     }
   });
 }

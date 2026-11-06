@@ -6,6 +6,23 @@
   min-height: 0;
   height: 100%;
   font-size: 12px;
+  overflow: hidden;
+}
+.tm-layout {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  container-type: inline-size;
+}
+.tm-classic-header {
+  flex-shrink: 0;
+  padding: 22px 23px 16px;
+}
+.tm-classic-header h1 {
+  margin: 0 0 18px;
 }
 .tm-root .eos-native-content {
   overflow: hidden;
@@ -354,10 +371,8 @@
   margin-top: 17px;
   position: relative;
   border: 1px solid color-mix(in srgb, var(--h) 35%, transparent);
-  background-image: linear-gradient(
-      color-mix(in srgb, var(--h) 9%, transparent) 1px,
-      transparent 1px
-    ),
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--h) 9%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in srgb, var(--h) 9%, transparent) 1px, transparent 1px);
   background-size: 25% 25%;
 }
