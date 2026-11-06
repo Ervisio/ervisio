@@ -65,9 +65,10 @@ interface FileTabProps {
   showSplit: boolean;
   onSwitch(): void;
   onClose(): void;
+  onMenu(x: number, y: number): void;
 }
 
-function FileTab({ tab, home, isOn, showSplit, onSwitch, onClose }: FileTabProps) {
+function FileTab({ tab, home, isOn, showSplit, onSwitch, onClose, onMenu }: FileTabProps) {
   const t = useT('files');
   const label = tabLabel(tab.left.loc, home, t);
   const right = tab.right.loc;
@@ -79,6 +80,11 @@ function FileTab({ tab, home, isOn, showSplit, onSwitch, onClose }: FileTabProps
       className={`files-tab${isOn ? ' is-on' : ''}`}
       onClick={onSwitch}
       onAuxClick={(e) => e.button === 1 && onClose()}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onMenu(e.clientX, e.clientY);
+      }}
       onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onSwitch()}
     >
       <Icon name={tabIcon(tab, home)} />
@@ -108,6 +114,7 @@ interface TabBarProps {
   showHidden: boolean;
   onSwitch(id: string): void;
   onClose(id: string): void;
+  onCloseTabs(ids: string[]): void;
   onNewTab(): void;
   onPlaces(): void;
   onToggleHidden(): void;
@@ -124,12 +131,15 @@ function TabBar({
   showHidden,
   onSwitch,
   onClose,
+  onCloseTabs,
   onNewTab,
   onPlaces,
   onToggleHidden,
   onToggleSplit,
 }: TabBarProps) {
   const t = useT('files');
+  const [context, setContext] = useState<{ id: string; x: number; y: number } | null>(null);
+  const contextIndex = context ? tabs.findIndex((item) => item.id === context.id) : -1;
   return (
     <div className="files-tabs" role="tablist" aria-label={t('tabs')}>
       {(mobile || native) && <IconButton icon="menu" label={t('places')} onClick={onPlaces} />}
@@ -142,10 +152,43 @@ function TabBar({
           showSplit={x.split && !mobile}
           onSwitch={() => onSwitch(x.id)}
           onClose={() => onClose(x.id)}
+          onMenu={(left, top) => setContext({ id: x.id, x: left, y: top })}
         />
       ))}
       <IconButton icon="plus" label={t('newTab')} onClick={onNewTab} />
       <div className="files-sp" />
+      {context && contextIndex >= 0 && (
+        <Menu
+          aria-label={t('tabMenu')}
+          anchor={{ x: context.x, y: context.y }}
+          onClose={() => setContext(null)}
+          items={[
+            {
+              id: 'close',
+              label: t('closeTab', { name: tabLabel(tabs[contextIndex].left.loc, home, t) }),
+              onSelect: () => onClose(context.id),
+            },
+            {
+              id: 'others',
+              label: t('closeOtherTabs'),
+              disabled: tabs.length < 2,
+              onSelect: () =>
+                onCloseTabs(tabs.filter((item) => item.id !== context.id).map((item) => item.id)),
+            },
+            {
+              id: 'right',
+              label: t('closeTabsRight'),
+              disabled: contextIndex === tabs.length - 1,
+              onSelect: () => onCloseTabs(tabs.slice(contextIndex + 1).map((item) => item.id)),
+            },
+            {
+              id: 'all',
+              label: t('closeAllTabs'),
+              onSelect: () => onCloseTabs(tabs.map((item) => item.id)),
+            },
+          ]}
+        />
+      )}
       <IconButton
         icon={showHidden ? 'eye' : 'eyeoff'}
         label={showHidden ? t('hideHidden') : t('showHidden')}
@@ -580,6 +623,7 @@ export default function FilesPage() {
             tabs.switchTab(id);
           }}
           onClose={tabs.closeTab}
+          onCloseTabs={tabs.closeTabs}
           onNewTab={() => {
             tabs.openTab();
           }}

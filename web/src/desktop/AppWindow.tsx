@@ -20,6 +20,7 @@ export interface DesktopWindow {
   id: string;
   app: string;
   url: string;
+  launch?: number;
   bounds: WindowBounds;
   minimized: boolean;
   maximized: boolean;

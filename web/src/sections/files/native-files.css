@@ -686,6 +686,7 @@
   .files-native .files-tab {
     min-width: 90px;
     max-width: 130px;
+    flex-basis: 130px;
   }
   .files-native .files-tabs {
     gap: 1px;
