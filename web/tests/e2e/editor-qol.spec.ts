@@ -102,7 +102,9 @@ for (const shell of ['classic', 'ervisios']) {
       await text.fill('new file\n');
       await text.press('Control+s');
       const dialog = page.getByRole('dialog', { name: 'Save to the server' });
-      await dialog.getByLabel('File path on the server').fill('/srv/demo/new.txt');
+      await dialog.getByRole('textbox', { name: 'Folder path', exact: true }).fill('/srv/demo');
+      await dialog.getByRole('button', { name: 'Go', exact: true }).click();
+      await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('new.txt');
       await dialog.getByRole('button', { name: 'Save', exact: true }).click();
       await expect
         .poll(() =>
