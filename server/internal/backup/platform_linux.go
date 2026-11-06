@@ -5,11 +5,28 @@ package backup
 import (
 	"errors"
 	"os"
+	"path"
 	"strings"
 	"syscall"
 
 	"golang.org/x/sys/unix"
 )
+
+// Go 1.24 has no Root.Link. Anchor both parent descriptors and refuse symlink
+// traversal before the atomic, non-replacing linkat operation.
+func linkWithinRoot(root *os.Root, from, to string) error {
+	source, err := openArchiveRead(root, path.Dir(from), true)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+	target, err := openArchiveRead(root, path.Dir(to), true)
+	if err != nil {
+		return err
+	}
+	defer target.Close()
+	return unix.Linkat(int(source.Fd()), path.Base(from), int(target.Fd()), path.Base(to), 0)
+}
 
 func privateOwner(fi os.FileInfo) bool {
 	s, ok := fi.Sys().(*syscall.Stat_t)

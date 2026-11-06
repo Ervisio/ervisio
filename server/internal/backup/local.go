@@ -206,7 +206,7 @@ func (f *localBackupFS) Rename(ctx context.Context, from, to string) error {
 	}
 	// Link publishes atomically without replacing an existing name. Do not
 	// weaken this to an overwriting rename on filesystems without hard links.
-	if err := f.root.Link(source, target); err != nil {
+	if err := linkWithinRoot(f.root, source, target); err != nil {
 		return errors.New("The local filesystem could not commit a backup without overwriting an existing file. Check hard-link support and available space.")
 	}
 	return f.root.Remove(source)
