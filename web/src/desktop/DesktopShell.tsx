@@ -41,7 +41,9 @@ import {
   moveItem,
   placeDesktopItems,
   readDesktop,
-  removeFolder,
+  deleteDesktopItems,
+  restoreDesktopItems,
+  type DesktopDeletion,
   type DesktopData,
   type WindowBounds,
 } from './model';
@@ -56,6 +58,7 @@ import {
   type Dropped,
 } from '../sections/files/dropfiles';
 import { DirectoryShortcutDialog } from './DirectoryShortcutDialog';
+import { InlineName } from '../sections/files/InlineName';
 import { menuPosition } from '../ui/menuPosition';
 import { rememberDesktopRecovery, takeDesktopRecovery } from './recovery';
 import './desktop.css';
@@ -216,6 +219,7 @@ export function DesktopShell() {
   const [windows, setWindows] = useState<DesktopWindow[]>([]);
   const [context, setContext] = useState<Context | null>(null);
   const [editing, setEditing] = useState<Edit | null>(null);
+  const [inlineRename, setInlineRename] = useState<string | null>(null);
   const [directoryEdit, setDirectoryEdit] = useState<{ folder: string | null; id?: string } | null>(
     null,
   );
@@ -375,6 +379,48 @@ export function DesktopShell() {
     [set],
   );
   const changeData = (fn: (d: DesktopData) => DesktopData) => save(fn(dataRef.current));
+  const deletedItems = useRef<DesktopDeletion[]>([]);
+  const deletionTimers = useRef<number[]>([]);
+  useEffect(
+    () => () => {
+      deletedItems.current = [];
+      deletionTimers.current.forEach(window.clearTimeout);
+      deletionTimers.current = [];
+    },
+    [session?.user],
+  );
+  const undoDesktopDelete = (receipt?: DesktopDeletion) => {
+    deletedItems.current = deletedItems.current.filter((item) => item.expires > Date.now());
+    const deletion = receipt ?? deletedItems.current.at(-1);
+    if (!deletion || !deletedItems.current.includes(deletion)) return;
+    changeData((current) => restoreDesktopItems(current, deletion));
+    deletedItems.current = deletedItems.current.filter((item) => item !== deletion);
+  };
+  const deleteFromDesktop = (ids: string[]) => {
+    const result = deleteDesktopItems(dataRef.current, ids);
+    if (
+      !result.deletion.folders.length &&
+      !result.deletion.shortcuts.length &&
+      !result.deletion.directoryShortcuts.length
+    )
+      return;
+    deletedItems.current.push(result.deletion);
+    deletionTimers.current.push(
+      window.setTimeout(() => {
+        deletedItems.current = deletedItems.current.filter((item) => item !== result.deletion);
+      }, 180_000),
+    );
+    save(result.data);
+    window.requestAnimationFrame(() => desktopGrid.current?.focus({ preventScroll: true }));
+    setSelectedItems([]);
+    setInlineRename(null);
+    setContext(null);
+    const removedFolders = new Set(result.deletion.folders.map((item) => `folder:${item.id}`));
+    setWindows((current) => current.filter((win) => !removedFolders.has(win.app)));
+    toast.undo(t('desktop.deletedItems'), t('desktop.undoDelete'), () =>
+      undoDesktopDelete(result.deletion),
+    );
+  };
   const findApp = (id: string) => apps.find((a) => a.key === id);
   useEffect(() => {
     const area = surface.current;
@@ -469,6 +515,28 @@ export function DesktopShell() {
       event.currentTarget.releasePointerCapture(event.pointerId);
   };
   const desktopKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if ((event.target as HTMLElement).closest('input,textarea,[contenteditable="true"]')) return;
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+      event.preventDefault();
+      undoDesktopDelete();
+      return;
+    }
+    if (event.key === 'Delete' && selectedItems.length) {
+      event.preventDefault();
+      deleteFromDesktop(selectedItems);
+      return;
+    }
+    if (event.key === 'F2' && selectedItems.length === 1) {
+      const id = selectedItems[0];
+      if (
+        data.folders.some((item) => item.id === id) ||
+        data.directoryShortcuts.some((item) => item.id === id)
+      ) {
+        event.preventDefault();
+        setInlineRename(id);
+      }
+      return;
+    }
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
       event.preventDefault();
       setSelectedItems(desktopIds);
@@ -712,8 +780,7 @@ export function DesktopShell() {
     setPanel(null);
   };
   const renameFolder = (id: string) => {
-    setName(data.folders.find((f) => f.id === id)?.name ?? '');
-    setEditing({ kind: 'rename', id });
+    setInlineRename(id);
     setContext(null);
   };
   const completeEdit = () => {
@@ -884,8 +951,12 @@ export function DesktopShell() {
       {data.folders
         .filter((f) => f.parent === folder)
         .map((f) => (
-          <button
+          <div
             key={f.id}
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && e.target === e.currentTarget) openFolder(f.id);
+            }}
             className={`eos-shortcut eos-folder${folder === null && selectedItems.includes(f.id) ? ' is-selected' : ''}`}
             data-desktop-item={folder === null ? f.id : undefined}
             role={folder === null ? 'option' : undefined}
@@ -922,8 +993,27 @@ export function DesktopShell() {
                   })}
               </span>
             </span>
-            <span>{f.name}</span>
-          </button>
+            <span>
+              {inlineRename === f.id ? (
+                <InlineName
+                  name={f.name}
+                  folder
+                  onCancel={() => setInlineRename(null)}
+                  onSubmit={async (name) => {
+                    changeData((d) => ({
+                      ...d,
+                      folders: d.folders.map((item) =>
+                        item.id === f.id ? { ...item, name } : item,
+                      ),
+                    }));
+                    setInlineRename(null);
+                  }}
+                />
+              ) : (
+                f.name
+              )}
+            </span>
+          </div>
         ))}
       {data.shortcuts
         .filter((s) => s.folder === folder)
@@ -964,8 +1054,12 @@ export function DesktopShell() {
       {data.directoryShortcuts
         .filter((item) => item.folder === folder)
         .map((item) => (
-          <button
+          <div
             key={item.id}
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && e.target === e.currentTarget) openDirectory(item.path);
+            }}
             className={`eos-shortcut eos-directory-shortcut hue-file${folder === null && selectedItems.includes(item.id) ? ' is-selected' : ''}`}
             data-desktop-item={folder === null ? item.id : undefined}
             role={folder === null ? 'option' : undefined}
@@ -995,8 +1089,27 @@ export function DesktopShell() {
                 ↗
               </span>
             </span>
-            <span>{item.name}</span>
-          </button>
+            <span>
+              {inlineRename === item.id ? (
+                <InlineName
+                  name={item.name}
+                  folder
+                  onCancel={() => setInlineRename(null)}
+                  onSubmit={async (name) => {
+                    changeData((d) => ({
+                      ...d,
+                      directoryShortcuts: d.directoryShortcuts.map((current) =>
+                        current.id === item.id ? { ...current, name } : current,
+                      ),
+                    }));
+                    setInlineRename(null);
+                  }}
+                />
+              ) : (
+                item.name
+              )}
+            </span>
+          </div>
         ))}
       {folder === null && selectionRect && (
         <div
@@ -1537,21 +1650,7 @@ export function DesktopShell() {
               <button
                 role="menuitem"
                 onClick={() => {
-                  changeData((d) =>
-                    folderItem
-                      ? removeFolder(d, folderItem.id)
-                      : directoryItem
-                        ? {
-                            ...d,
-                            directoryShortcuts: d.directoryShortcuts.filter(
-                              (s) => s.id !== context.item,
-                            ),
-                          }
-                        : { ...d, shortcuts: d.shortcuts.filter((s) => s.id !== context.item) },
-                  );
-                  if (folderItem)
-                    setWindows((list) => list.filter((w) => w.app !== `folder:${folderItem.id}`));
-                  setContext(null);
+                  if (context.item) deleteFromDesktop([context.item]);
                 }}
               >
                 <Icon name="trash" />

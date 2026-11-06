@@ -7,6 +7,8 @@ import {
   moveItem,
   readDesktop,
   removeFolder,
+  deleteDesktopItems,
+  restoreDesktopItems,
 } from '../src/desktop/model.ts';
 
 const apps = [
@@ -20,6 +22,17 @@ const apps = [
   'p:ai/ai',
   'p:docker/containers',
 ];
+
+test('desktop deletion removes organizer contents and supports isolated undo for three minutes', () => {
+  const original = tree();
+  const { data, deletion } = deleteDesktopItems(original, ['work'], 1000);
+  assert.equal(data.folders.length, 0);
+  const modified = { ...data, wallpaper: 'aurora' };
+  const restored = restoreDesktopItems(modified, deletion, 180_999);
+  assert.deepEqual(restored.folders, original.folders);
+  assert.equal(restored.wallpaper, 'aurora');
+  assert.equal(restoreDesktopItems(modified, deletion, 181_000), modified);
+});
 
 function tree() {
   const data = defaultDesktop(apps);

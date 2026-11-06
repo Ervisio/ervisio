@@ -325,6 +325,95 @@ export function removeFolder(data: DesktopData, id: string): DesktopData {
   };
 }
 
+export interface DesktopDeletion {
+  expires: number;
+  folders: DesktopData['folders'];
+  shortcuts: DesktopData['shortcuts'];
+  directoryShortcuts: DesktopData['directoryShortcuts'];
+  positions: DesktopData['positions'];
+}
+
+/** Desktop objects only; never operates on the host filesystem or installed apps. */
+export function deleteDesktopItems(data: DesktopData, ids: string[], now = Date.now()) {
+  const removed = new Set(ids);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const folder of data.folders)
+      if (folder.parent && removed.has(folder.parent) && !removed.has(folder.id)) {
+        removed.add(folder.id);
+        changed = true;
+      }
+  }
+  const deletion: DesktopDeletion = {
+    expires: now + 180_000,
+    folders: data.folders.filter((item) => removed.has(item.id)),
+    shortcuts: data.shortcuts.filter(
+      (item) => removed.has(item.id) || (!!item.folder && removed.has(item.folder)),
+    ),
+    directoryShortcuts: data.directoryShortcuts.filter(
+      (item) => removed.has(item.id) || (!!item.folder && removed.has(item.folder)),
+    ),
+    positions: Object.fromEntries(Object.entries(data.positions).filter(([id]) => removed.has(id))),
+  };
+  const all = new Set(
+    [...deletion.folders, ...deletion.shortcuts, ...deletion.directoryShortcuts].map(
+      (item) => item.id,
+    ),
+  );
+  deletion.positions = Object.fromEntries(
+    Object.entries(data.positions).filter(([id]) => all.has(id)),
+  );
+  return {
+    deletion,
+    data: {
+      ...data,
+      folders: data.folders.filter((item) => !all.has(item.id)),
+      shortcuts: data.shortcuts.filter((item) => !all.has(item.id)),
+      directoryShortcuts: data.directoryShortcuts.filter((item) => !all.has(item.id)),
+      positions: Object.fromEntries(Object.entries(data.positions).filter(([id]) => !all.has(id))),
+    },
+  };
+}
+
+export function restoreDesktopItems(
+  data: DesktopData,
+  deletion: DesktopDeletion,
+  now = Date.now(),
+): DesktopData {
+  if (deletion.expires <= now) return data;
+  const present = new Set(
+    [...data.folders, ...data.shortcuts, ...data.directoryShortcuts].map((item) => item.id),
+  );
+  const folders = [...data.folders, ...deletion.folders.filter((item) => !present.has(item.id))];
+  const folderIds = new Set(folders.map((item) => item.id));
+  return {
+    ...data,
+    folders: folders.map((item) =>
+      item.parent && !folderIds.has(item.parent) ? { ...item, parent: null } : item,
+    ),
+    shortcuts: [
+      ...data.shortcuts,
+      ...deletion.shortcuts
+        .filter((item) => !present.has(item.id))
+        .map((item) => ({
+          ...item,
+          folder: item.folder && folderIds.has(item.folder) ? item.folder : null,
+        })),
+    ],
+    directoryShortcuts: [
+      ...data.directoryShortcuts,
+      ...deletion.directoryShortcuts
+        .filter((item) => !present.has(item.id))
+        .map((item) => ({
+          ...item,
+          folder: item.folder && folderIds.has(item.folder) ? item.folder : null,
+        })),
+    ],
+    positions: { ...deletion.positions, ...data.positions },
+  };
+}
+
 export function clampBounds(b: WindowBounds, width: number, height: number): WindowBounds {
   const viewportWidth = Number.isFinite(width) ? Math.max(1, width) : 1024;
   const viewportHeight = Number.isFinite(height) ? Math.max(1, height) : 768;
