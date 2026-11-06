@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { useSession } from '../../api';
+import { usePrefs, useSession } from '../../api';
 import { useT } from '../../i18n';
 import { formatBytes, formatTime } from '../../lib/format';
 import { RefreshSelect } from '../../lib/RefreshSelect';
 import { refreshNow, useSetRefreshInterval } from '../../lib/refresh';
 import { WindowActivityProvider, useWindowActivity } from '../../lib/windowActivity';
 import { useAccountScope } from '../../lib/accountScope';
-import { Button, Dialog, EmptyState, Icon, Input, registerIcon, Skeleton } from '../../ui';
+import { Button, Dialog, EmptyState, Icon, Input, registerIcon, Skeleton, Tabs } from '../../ui';
 import { NativeAppFrame } from '../../ui/NativeAppFrame';
 import { useHost, useMetrics } from '../overview/data';
 import { useTaskSnapshot } from './data';
@@ -36,6 +36,8 @@ export default function TaskManagerPage() {
 function TaskManager({ paused, onPause }: { paused: boolean; onPause(): void }) {
   const t = useT('taskmanager');
   const { host: publicHost } = useSession();
+  const { prefs } = usePrefs();
+  const desktop = (prefs['shell.mode'] ?? publicHost?.defaultShell) === 'ervisios';
   const [tab, setTab] = useState<Tab>('processes');
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<TaskProcess | null>(null);
@@ -60,97 +62,118 @@ function TaskManager({ paused, onPause }: { paused: boolean; onPause(): void }) 
         active={tab}
         onSelect={setTab}
       >
-        <div className="tm-toolbar">
-          <div className="tm-search">
-            <Input
-              icon="search"
-              aria-label={t('search')}
-              placeholder={t('search')}
-              value={query}
-              onChange={(event) => {
-                setQuery(event.target.value);
-                if (tab !== 'processes') setTab('processes');
-              }}
-            />
-          </div>
-          <Button
-            size="sm"
-            icon={paused ? 'play' : 'pause'}
-            aria-pressed={paused}
-            onClick={onPause}
-          >
-            {t(paused ? 'resume' : 'pause')}
-          </Button>
-          <Button
-            size="sm"
-            icon="refresh"
-            disabled={!active}
-            onClick={() => {
-              data.refresh();
-              refreshNow();
-            }}
-          >
-            {t('refresh')}
-          </Button>
-          <div className="tm-refresh-rate">
-            <RefreshSelect label={t('refreshRate')} onPick={(value) => void setInterval(value)} />
-          </div>
-        </div>
-        <SummaryTiles metrics={metrics} snapshot={data.snapshot} />
-        <div className="tm-host-caption">
-          <Icon name="server" />
-          <span>
-            {publicHost?.hostname ?? host?.hostname} · {t('hostTelemetry')}
-          </span>
-        </div>
-        {data.error && (
-          <div className="tm-error" role="status">
-            <Icon name="alert" />
-            <span>
-              {t('loadFailed')} {data.error}
-            </span>
-            <Button size="sm" disabled={!active} onClick={data.refresh}>
-              {t('retry')}
-            </Button>
-          </div>
-        )}
-        {metricsError && (
-          <div className="tm-error" role="status">
-            <Icon name="alert" />
-            <span>
-              {t('metricsFailed')} {metricsError}
-            </span>
-          </div>
-        )}
-        <div className="tm-content">
-          {tab === 'performance' ? (
-            <Performance metrics={metrics} history={history} host={host} snapshot={data.snapshot} />
-          ) : data.loading && !data.snapshot ? (
-            <div className="tm-loading">
-              <Skeleton lines={10} height={30} />
-            </div>
-          ) : data.snapshot ? (
-            <Processes snapshot={data.snapshot} query={query} onInspect={setSelected} />
-          ) : (
-            <EmptyState icon="overview" title={t('loadFailed')} text={data.error} />
+        <div className="tm-layout">
+          {!desktop && (
+            <header className="tm-classic-header">
+              <h1 className="title">{t('title')}</h1>
+              <Tabs<Tab>
+                aria-label={t('title')}
+                items={[
+                  { id: 'processes', label: t('processes'), icon: 'list' },
+                  { id: 'performance', label: t('performance'), icon: 'tm-performance' },
+                ]}
+                value={tab}
+                onChange={setTab}
+              />
+            </header>
           )}
+          <div className="tm-toolbar">
+            <div className="tm-search">
+              <Input
+                icon="search"
+                aria-label={t('search')}
+                placeholder={t('search')}
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  if (tab !== 'processes') setTab('processes');
+                }}
+              />
+            </div>
+            <Button
+              size="sm"
+              icon={paused ? 'play' : 'pause'}
+              aria-pressed={paused}
+              onClick={onPause}
+            >
+              {t(paused ? 'resume' : 'pause')}
+            </Button>
+            <Button
+              size="sm"
+              icon="refresh"
+              disabled={!active}
+              onClick={() => {
+                data.refresh();
+                refreshNow();
+              }}
+            >
+              {t('refresh')}
+            </Button>
+            <div className="tm-refresh-rate">
+              <RefreshSelect label={t('refreshRate')} onPick={(value) => void setInterval(value)} />
+            </div>
+          </div>
+          <SummaryTiles metrics={metrics} snapshot={data.snapshot} />
+          <div className="tm-host-caption">
+            <Icon name="server" />
+            <span>
+              {publicHost?.hostname ?? host?.hostname} · {t('hostTelemetry')}
+            </span>
+          </div>
+          {data.error && (
+            <div className="tm-error" role="status">
+              <Icon name="alert" />
+              <span>
+                {t('loadFailed')} {data.error}
+              </span>
+              <Button size="sm" disabled={!active} onClick={data.refresh}>
+                {t('retry')}
+              </Button>
+            </div>
+          )}
+          {metricsError && (
+            <div className="tm-error" role="status">
+              <Icon name="alert" />
+              <span>
+                {t('metricsFailed')} {metricsError}
+              </span>
+            </div>
+          )}
+          <div className="tm-content">
+            {tab === 'performance' ? (
+              <Performance
+                metrics={metrics}
+                history={history}
+                host={host}
+                snapshot={data.snapshot}
+              />
+            ) : data.loading && !data.snapshot ? (
+              <div className="tm-loading">
+                <Skeleton lines={10} height={30} />
+              </div>
+            ) : data.snapshot ? (
+              <Processes snapshot={data.snapshot} query={query} onInspect={setSelected} />
+            ) : (
+              <EmptyState icon="overview" title={t('loadFailed')} text={data.error} />
+            )}
+          </div>
+          <footer className="tm-footer">
+            <span>
+              <i className={active && !data.error ? 'is-live' : ''} />
+              {t(paused ? 'paused' : data.error ? 'stale' : 'live')}
+            </span>
+            <span>
+              {data.snapshot
+                ? t('processCount', { count: data.snapshot.processes.length })
+                : t('waiting')}
+            </span>
+            <span>
+              {data.snapshot
+                ? t('updated', { time: formatTime(data.snapshot.time, { seconds: true }) })
+                : ''}
+            </span>
+          </footer>
         </div>
-        <footer className="tm-footer">
-          <span>
-            <i className={active && !data.error ? 'is-live' : ''} />
-            {t(paused ? 'paused' : data.error ? 'stale' : 'live')}
-          </span>
-          <span>
-            {data.snapshot
-              ? t('processCount', { count: data.snapshot.processes.length })
-              : t('waiting')}
-          </span>
-          <span>
-            {data.snapshot
-              ? t('updated', { time: formatTime(data.snapshot.time, { seconds: true }) })
-              : ''}
-          </span>
-        </footer>
         <Dialog
           open={!!selectedProcess}
           onClose={() => setSelected(null)}

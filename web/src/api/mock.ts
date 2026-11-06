@@ -178,6 +178,25 @@ const mockState = () => ({
 });
 
 export async function mockCall(method: string, params: any, _admin?: boolean): Promise<any> {
+  if (method === 'overview.taskManager')
+    return delay(
+      rd('taskSnapshot', {
+        source: 'host',
+        platform: 'linux',
+        time: Date.now(),
+        interval: 2000,
+        cpuCores: 4,
+        scope: 'visible',
+        privileged: false,
+        processes: [],
+        gpus: [],
+        capabilities: {
+          gpu: { supported: false },
+          perProcessGPU: { supported: false },
+          perProcessNetwork: { supported: false },
+        },
+      }),
+    );
   if (method === 'software.cli') return mockSoftwareCLI();
   if (method.startsWith('maintenance.reset.'))
     return mockResetCall(
