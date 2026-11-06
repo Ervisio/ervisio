@@ -54,7 +54,7 @@ function TaskManager({ paused, onPause }: { paused: boolean; onPause(): void }) 
     <div className="tm-root hue-ov">
       <NativeAppFrame<Tab>
         title={t('title')}
-        icon="overview"
+        icon="task-manager"
         items={[
           { id: 'processes' as const, label: t('processes'), icon: 'list' },
           { id: 'performance' as const, label: t('performance'), icon: 'tm-performance' },
@@ -154,7 +154,7 @@ function TaskManager({ paused, onPause }: { paused: boolean; onPause(): void }) 
             ) : data.snapshot ? (
               <Processes snapshot={data.snapshot} query={query} onInspect={setSelected} />
             ) : (
-              <EmptyState icon="overview" title={t('loadFailed')} text={data.error} />
+              <EmptyState icon="task-manager" title={t('loadFailed')} text={data.error} />
             )}
           </div>
           <footer className="tm-footer">

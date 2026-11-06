@@ -34,7 +34,7 @@ export function useNav() {
     const entry = (s: (typeof SECTIONS)[number]): NavEntry => ({
       key: s.id,
       to: s.path,
-      icon: s.icon,
+      icon: desktop && s.id === 'overview' ? 'task-manager' : s.icon,
       label: t(desktop && s.desktopTitleKey ? s.desktopTitleKey : s.titleKey),
       hueClass: `hue-${s.hue}`,
       badge: registered[s.id] ?? fromHooks[s.id],

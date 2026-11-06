@@ -1,6 +1,8 @@
 // Icon set ported from docs/design/screens/kit.js (24px grid, 1.7 stroke) plus a few additions.
 // Inner SVG markup is static and trusted.
 export const ICON_PATHS: Record<string, string> = {
+  'task-manager':
+    '<rect x="2.5" y="3.5" width="19" height="14" rx="2.5"/><path d="M6 12h3l2-5 3 8 2-4h2M9 21h6M12 17.5V21"/>',
   overview:
     '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
   terminal: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M12.5 15H17"/>',
