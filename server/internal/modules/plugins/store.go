@@ -104,6 +104,16 @@ func scanRoots(p policy) []scanRoot {
 
 // foundAt reads the plugin folder dir; nil when it is not one.
 func foundAt(dir, loc string) *Found {
+	f := foundMetadataAt(dir, loc)
+	if f != nil && f.M != nil {
+		f.Sig = CheckSignature(dir, pluginSigningKeys())
+	}
+	return f
+}
+
+// foundMetadataAt identifies a candidate without hashing its executable files.
+// Signature verification is still mandatory before returning a usable plugin.
+func foundMetadataAt(dir, loc string) *Found {
 	name := filepath.Base(dir)
 	fi, err := os.Stat(dir) // follows symlinks: dev folders may be symlinked
 	if err != nil || !fi.IsDir() {
@@ -121,7 +131,6 @@ func foundAt(dir, loc string) *Found {
 		f.Err = fmt.Sprintf("the folder is named %q but the manifest id is %q", name, m.ID)
 	default:
 		f.M = m
-		f.Sig = CheckSignature(dir, pluginSigningKeys())
 	}
 	return f
 }
@@ -166,9 +175,51 @@ func scan(p policy) []*Found {
 }
 
 func find(p policy, id string) *Found {
-	for _, f := range scan(p) {
-		if f.M != nil && f.M.ID == id {
-			return f
+	if !idRe.MatchString(id) {
+		return nil
+	}
+	// A scoped RPC must not rehash every installed plugin. Preserve scan's
+	// first-ID-wins precedence, including invalid folders shadowing lower roots.
+	choose := func(dir, loc string) (*Found, bool) {
+		f := foundMetadataAt(dir, loc)
+		if f == nil {
+			return nil, false
+		}
+		key := f.Name
+		if f.M != nil {
+			key = f.M.ID
+		}
+		if key != id {
+			return nil, false
+		}
+		if f.M == nil {
+			return nil, true
+		}
+		f.Sig = CheckSignature(f.Dir, pluginSigningKeys())
+		return f, true
+	}
+	for _, r := range scanRoots(p) {
+		if r.single {
+			if f, matched := choose(r.dir, r.loc); matched {
+				return f
+			}
+		} else if r.loc != LocDev {
+			// Packaged and installed manifests must match their directory name.
+			if f, matched := choose(filepath.Join(r.dir, id), r.loc); matched {
+				return f
+			}
+		} else {
+			// Developer folders may have arbitrary names. Read only metadata for
+			// unrelated candidates, in the same lexical order as scan.
+			entries, _ := os.ReadDir(r.dir)
+			for _, entry := range entries {
+				if strings.HasPrefix(entry.Name(), ".") {
+					continue
+				}
+				if f, matched := choose(filepath.Join(r.dir, entry.Name()), r.loc); matched {
+					return f
+				}
+			}
 		}
 	}
 	return nil
