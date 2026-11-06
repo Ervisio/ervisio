@@ -131,8 +131,14 @@ jobs:
       - run: npm run lint
       - run: npm run i18n:check
       - run: npm test
-      - name: Install Chromium for desktop interaction tests
-        run: npx playwright install --with-deps chromium
+      - name: Select browser for desktop interaction tests
+        run: |
+          if command -v google-chrome >/dev/null 2>&1; then
+            google-chrome --version
+            echo 'PLAYWRIGHT_CHANNEL=chrome' >> "$GITHUB_ENV"
+          else
+            timeout 360s npx playwright install --with-deps chromium
+          fi
       - run: npm run test:e2e
       - run: npm run build
 
