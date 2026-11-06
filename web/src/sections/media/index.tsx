@@ -109,6 +109,7 @@ export default function MediaPage() {
     setPan({ x: 0, y: 0 });
     setDuration(0);
     setAdmin(requestedAdmin);
+    setLoading(false);
     if (!path) return;
     if (!validMediaPath(path)) {
       setError(t('invalidPath'));

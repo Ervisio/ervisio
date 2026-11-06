@@ -15,6 +15,7 @@
 - Drive menus omit folder-only code-editor actions. Internal Explorer drags no longer trigger desktop uploads, and same-parent drops are ignored.
 - Taskbar context menus anchor above their app button and stay within the viewport.
 - ErvisiOS keeps the browser URL at the base path and its title at Ervisio; window routes and initial direct links continue to work independently.
+- Windows installs and atomic configuration saves retain read access for user bridges, without sharing TLS keys or private configuration backups.
 
 ## [7.0.2] - 2026-11-06
 

@@ -115,6 +115,7 @@ jobs:
 
           # Each call is reported; the step fails at the end if any failed.
           $calls = @(
+          @{ m = 'config.get'; p = @{} },
             @{ m = 'system.host'; p = @{} },
             @{ m = 'system.metrics'; p = @{} },
             @{ m = 'services.list'; p = @{ type = 'service' } },

@@ -108,3 +108,36 @@ test('Classic navigation hides editing utilities and exposes Task Manager withou
   await expect(page.locator('.tm-root')).toBeVisible();
   expect(new URL(page.url()).pathname).toBe('/taskmanager');
 });
+
+test('Photos exits a cancelled loading state when its window reopens without a file', async ({
+  page,
+}) => {
+  await fixture(page, 'ervisios');
+  await page.route('**/src/api/mock.ts', async (route) => {
+    const response = await route.fetch();
+    const source = await response.text();
+    const injection = `
+      if (method === 'files.stat' && params.path === '/home/alice/one.png') {
+        globalThis.__mediaReadStarted = true;
+        await new Promise(resolve => { globalThis.__finishMediaRead = resolve; });
+      }
+    `;
+    const body = source.replace(/(async function mockCall\([^)]*\)\s*\{)/, `$1${injection}`);
+    expect(body).not.toBe(source);
+    await route.fulfill({ response, body });
+  });
+  await page.goto('/media?path=/home/alice/one.png');
+  await page.waitForFunction(() => (window as any).__mediaReadStarted);
+  await page.evaluate(() =>
+    window.dispatchEvent(
+      new CustomEvent('ervisio:shell-action', {
+        cancelable: true,
+        detail: { action: 'open-app', to: '/media' },
+      }),
+    ),
+  );
+  await expect(page.locator('.media-empty h1')).toHaveText('Photos & videos');
+  await page.evaluate(() => (window as any).__finishMediaRead());
+  await expect(page.locator('.media-empty h1')).toHaveText('Photos & videos');
+  await expect(page.locator('.media-photo')).toHaveCount(0);
+});

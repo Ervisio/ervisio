@@ -71,6 +71,13 @@ go run ./tools/devclient -n 3 stream system.metricsStream '{"interval":500}'
 
 The bridge accepts `--admin` (root bridge; refuses unless euid 0) and `--config`.
 
+The official optional Backup plugin uses `ervisiod --backup <method> [id]` as a
+standalone Linux worker under the job owner's account. It reuses saved SFTP/SMB
+connections and the existing persistent plugin job scheduler, with private
+encrypted database settings and provenance-checked retention. It does not start
+another daemon. See [the backup contract](../docs/api/backup.md) for methods,
+limits, source consistency and isolated database integration tests.
+
 ## Writing a module
 
 ```go

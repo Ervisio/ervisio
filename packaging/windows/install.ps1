@@ -129,6 +129,10 @@ if (-not (Test-Path $conf)) {
 } elseif ($UI) {
     Set-ErvisioDefaultShell -Path $conf -Shell $UI
 }
+# User bridges read the non-secret configuration (including public plugin trust).
+# Grant only this file, without inheriting access into TLS keys or other data.
+& icacls.exe $conf /grant:r '*S-1-5-11:R' | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "icacls config read failed ($LASTEXITCODE)" }
 
 # Service.
 $exe = Join-Path $InstallDir 'ervisiod.exe'

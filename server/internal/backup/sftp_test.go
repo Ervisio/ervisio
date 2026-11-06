@@ -237,7 +237,7 @@ func TestEndToEndFolderWorkerUsesRealSFTPAndRecordsUndoSafeHistory(t *testing.T)
 		t.Skip("Linux account worker")
 	}
 	id, _ := savedSFTPFixture(t)
-	e := &engine{store: store{dir: t.TempDir()}}
+	e := &engine{store: store{dir: privateTempDir(t)}}
 	if err := e.init(); err != nil {
 		t.Fatal(err)
 	}

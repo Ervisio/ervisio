@@ -15,6 +15,15 @@ import (
 	"time"
 )
 
+func privateTempDir(t *testing.T) string {
+	t.Helper()
+	p := t.TempDir()
+	if err := os.Chmod(p, 0700); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
 func TestCalendarMonthAnchorAndBounds(t *testing.T) {
 	jan := time.Date(2027, 1, 31, 10, 30, 0, 0, time.UTC)
 	p := Period{1, "months"}
@@ -224,7 +233,7 @@ func TestStoreSealsPasswordsAndBlankPreservesSecret(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("private POSIX store and cross-process flock run on Linux")
 	}
-	s := store{dir: t.TempDir()}
+	s := store{dir: privateTempDir(t)}
 	if err := s.init(); err != nil {
 		t.Fatal(err)
 	}
@@ -283,7 +292,7 @@ func TestInboxRefusesLinksWithoutDeletingTheirTarget(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("Linux nofollow boundary")
 	}
-	s := store{dir: t.TempDir()}
+	s := store{dir: privateTempDir(t)}
 	if err := s.init(); err != nil {
 		t.Fatal(err)
 	}

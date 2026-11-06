@@ -326,6 +326,10 @@ func WriteAtomic(path string, data []byte, mode os.FileMode) error {
 		_ = tmp.Close()
 		return err
 	}
+	if err := readableFileACL(name, mode); err != nil {
+		_ = tmp.Close()
+		return err
+	}
 	if err := tmp.Sync(); err != nil {
 		_ = tmp.Close()
 		return err

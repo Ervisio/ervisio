@@ -240,9 +240,18 @@ for (const shell of ['classic', 'ervisios']) {
         await page
           .getByRole('button', { name: 'Switch to classic interface', exact: true })
           .click();
+        await expect(page.locator('.eos')).toHaveCount(0);
+        await expect(
+          page.locator('.app').getByText('Ryzen 7 5800X', { exact: true }),
+        ).toBeVisible();
       }
-      await page.getByRole('link', { name: 'Files', exact: true }).click();
-      await page.locator('.files-places').first().getByRole('link', { name: 'Home', exact: true }).click();
+      await expect(page.locator('.app')).toBeVisible();
+      await page.locator('.app .rail').getByRole('link', { name: 'Files', exact: true }).click();
+      await page
+        .locator('.files-places')
+        .first()
+        .getByRole('link', { name: 'Home', exact: true })
+        .click();
       await page.locator('[data-path="/srv/demo/notes.txt"]').first().dblclick();
       await expect(text).toHaveValue('my unsaved draft');
     });

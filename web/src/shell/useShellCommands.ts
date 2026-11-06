@@ -56,23 +56,25 @@ export function useShellCommands() {
             },
           ]
         : []),
-      ...SECTIONS.filter((s) => !s.platforms || s.platforms.includes(session?.os ?? 'linux')).map(
-        (s) => ({
-          id: s.id,
-          title: desktop && s.id === 'overview' ? t('desktop.taskManager') : t(s.titleKey),
-          to: s.path,
-          aliases:
-            desktop && s.id === 'overview'
-              ? [
-                  ...(aliases[s.id] ?? []),
-                  'task manager',
-                  'gestione attività',
-                  'gestione attivita',
-                  'processi',
-                ]
-              : aliases[s.id],
-        }),
-      ),
+      ...SECTIONS.filter(
+        (s) =>
+          (!desktop || !s.desktopHidden) &&
+          (!s.platforms || s.platforms.includes(session?.os ?? 'linux')),
+      ).map((s) => ({
+        id: s.id,
+        title: desktop && s.id === 'overview' ? t('desktop.taskManager') : t(s.titleKey),
+        to: s.path,
+        aliases:
+          desktop && s.id === 'overview'
+            ? [
+                ...(aliases[s.id] ?? []),
+                'task manager',
+                'gestione attività',
+                'gestione attivita',
+                'processi',
+              ]
+            : aliases[s.id],
+      })),
       ...pages.map((p) => ({
         id: `${p.plugin}/${p.id}`,
         title: p.title,

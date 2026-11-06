@@ -380,10 +380,12 @@ export async function mockCall(method: string, params: any, _admin?: boolean): P
       return delay({
         hostname: 'arch',
         kernel: '6.9.7-arch1-1',
+        arch: 'x86_64',
         uptime: 86400 * 3 + 4000,
-        os: { id: 'arch', name: 'Arch Linux', logo: 'archlinux', color: '#1793D1' },
-        cpu: { model: 'Ryzen 7 5800X', cores: 16 },
-        memTotal: 32 * 2 ** 30,
+        bootTime: Math.floor(Date.now() / 1000) - (86400 * 3 + 4000),
+        distro: { id: 'arch', name: 'Arch Linux', prettyName: 'Arch Linux', color: '#1793D1' },
+        cpu: { model: 'Ryzen 7 5800X', cores: 8, threads: 16 },
+        memoryTotal: 32 * 2 ** 30,
         ip: '192.168.1.137',
       });
     case 'system.metrics':

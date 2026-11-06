@@ -321,3 +321,31 @@ test('Classic retains normal URLs and section titles', async ({ page }) => {
   await expect(page).toHaveURL(/\/editor/);
   await expect(page).toHaveTitle('Code editor · Ervisio');
 });
+
+for (const shell of ['classic', 'ervisios']) {
+  test(`Task Manager has one working command palette destination in ${shell}`, async ({ page }) => {
+    await fixture(page, shell);
+    await page.goto('/files');
+    await expect(page.locator('.files-root')).toBeVisible();
+    await page.keyboard.press('Control+k');
+    const palette = page.getByRole('dialog', { name: 'Command palette', exact: true });
+    await palette.getByRole('combobox').fill('Task Manager');
+    await expect(palette.getByRole('option')).toHaveCount(1);
+    await palette.getByRole('combobox').press('Enter');
+    await expect(page.locator('.tm-root')).toBeVisible();
+    if (shell === 'ervisios') {
+      await expect(page).toHaveURL(/\/$/);
+      await page.getByRole('button', { name: 'Show desktop', exact: true }).click();
+      await expect(page.locator('.tm-root')).toBeHidden();
+      await page.evaluate(async () => {
+        const module = '/src/shell/commands.ts';
+        await (await import(module)).runShellCommand('Open task manager');
+      });
+      await expect(page.locator('.tm-root')).toBeVisible();
+      await expect(page).toHaveTitle('Ervisio');
+    } else {
+      await expect(page).toHaveURL(/\/taskmanager$/);
+      await expect(page.getByRole('link', { name: 'Task Manager', exact: true })).toBeVisible();
+    }
+  });
+}
