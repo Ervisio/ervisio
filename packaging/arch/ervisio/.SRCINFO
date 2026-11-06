@@ -1,6 +1,6 @@
 pkgbase = ervisio
 	pkgdesc = Web console for managing a Linux server from the browser (formerly LinuxAdmin)
-	pkgver = 7.0.2
+	pkgver = 7.0.3
 	pkgrel = 1
 	url = https://github.com/ervisio/ervisio
 	install = ervisio.install
@@ -18,10 +18,10 @@ pkgbase = ervisio
 	conflicts = linuxadmin-bin
 	replaces = linuxadmin
 	backup = etc/pam.d/ervisio
-	source = ervisio-7.0.2.tar.gz::https://github.com/ervisio/ervisio/archive/refs/tags/v7.0.2.tar.gz
+	source = ervisio-7.0.3.tar.gz::https://github.com/ervisio/ervisio/archive/refs/tags/v7.0.3.tar.gz
 	source = ervisio.pam
 	source = package-service.sh
-	sha256sums = c57d59e18bc074587ebaff84549f7db5a2a5bed83ebd045055e8f15af755edf5
+	sha256sums = a5eca945d89809336dbe847f5be08f4b05d3ac2a30f630f559f9e190c9c06751
 	sha256sums = 698517efd8015f508f626e67830e46700dc675fd1208414f29f73d92671df6dd
 	sha256sums = 1f0fc6193955474569e821518ac8334e06a93fe16173851cb69e4327edda0bb3
 

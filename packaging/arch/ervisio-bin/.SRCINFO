@@ -1,6 +1,6 @@
 pkgbase = ervisio-bin
 	pkgdesc = Web console for managing a Linux server from the browser (prebuilt; formerly LinuxAdmin)
-	pkgver = 7.0.2
+	pkgver = 7.0.3
 	pkgrel = 1
 	url = https://github.com/ervisio/ervisio
 	install = ervisio.install
@@ -11,7 +11,7 @@ pkgbase = ervisio-bin
 	depends = pam
 	depends = sudo
 	depends = systemd
-	provides = ervisio=7.0.2
+	provides = ervisio=7.0.3
 	conflicts = ervisio
 	conflicts = linuxadmin
 	conflicts = linuxadmin-bin
@@ -23,9 +23,9 @@ pkgbase = ervisio-bin
 	source = package-service.sh
 	sha256sums = 698517efd8015f508f626e67830e46700dc675fd1208414f29f73d92671df6dd
 	sha256sums = 1f0fc6193955474569e821518ac8334e06a93fe16173851cb69e4327edda0bb3
-	source_x86_64 = https://github.com/ervisio/ervisio/releases/download/v7.0.2/ervisio-7.0.2-linux-amd64.tar.gz
-	sha256sums_x86_64 = 7f89ea57015028425743aed59ef0f828208d365dddaa6db7e3121a490453720a
-	source_aarch64 = https://github.com/ervisio/ervisio/releases/download/v7.0.2/ervisio-7.0.2-linux-arm64.tar.gz
-	sha256sums_aarch64 = 392a2419de637cb9a6f96bd90ac1716dc8edd6ac6d67fc555c88f2ae805c82ab
+	source_x86_64 = https://github.com/ervisio/ervisio/releases/download/v7.0.3/ervisio-7.0.3-linux-amd64.tar.gz
+	sha256sums_x86_64 = 390ec54db07f3a16d3cd4a6914660a13d668224e17fcdeca47769be7050513b3
+	source_aarch64 = https://github.com/ervisio/ervisio/releases/download/v7.0.3/ervisio-7.0.3-linux-arm64.tar.gz
+	sha256sums_aarch64 = 81f219d04a3cab01162e216eec30af5026ce8cda2657bd2fcbb0f744bdadc031
 
 pkgname = ervisio-bin
