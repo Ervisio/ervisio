@@ -161,6 +161,12 @@ func (s *Server) handleRPC(w http.ResponseWriter, r *http.Request, sess *Session
 		return
 	}
 	// The activity log is read by the daemon itself (it is root's).
+	if s.handlePersonalPreferences(w, r, sess, req) {
+		return
+	}
+	if s.handlePluginData(w, r, sess, req) {
+		return
+	}
 	if req.Method == "audit.list" || req.Method == "plugins.audit.list" {
 		s.handleAuditList(w, sess, req.Method, req.Params)
 		return

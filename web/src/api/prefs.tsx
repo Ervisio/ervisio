@@ -87,7 +87,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
     setLoadedOwner('');
     setLoadError(null);
     if (status !== 'authed') return;
-    call<Prefs>('prefs.get', {})
+    call<Prefs>('prefs.get', {}, { noUnlock: true })
       .then((p) => {
         if (!live || current.current.owner !== owner) return;
         if (p && typeof p === 'object' && !Array.isArray(p)) {
@@ -129,7 +129,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
       .catch(() => undefined)
       .then(async () => {
         if (current.current.owner !== identity.owner || current.current.status !== 'authed') return;
-        await call('prefs.set', { key, value: value ?? null });
+        await call('prefs.set', { key, value: value ?? null }, { noUnlock: true });
       });
     writes.current = pending;
     try {
@@ -158,7 +158,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
       .then(async () => {
         if (current.current.owner !== identity.owner || current.current.status !== 'authed')
           throw new Error('The signed-in account changed. Open Settings again.');
-        await call('prefs.setAll', { values: {}, replace: true });
+        await call('prefs.setAll', { values: {}, replace: true }, { noUnlock: true });
         if (current.current.owner === identity.owner) {
           const cleared = { owner: identity.owner, values: {} };
           ref.current = cleared;

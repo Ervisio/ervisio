@@ -54,8 +54,7 @@ import { installFrameVisibility } from './visibility';
 const visibility = installFrameVisibility(window, document);
 
 type ViewDef<S> =
-  | ComponentType<{ sdk: S }>
-  | { render(container: HTMLElement, sdk: S): void | (() => void) };
+  ComponentType<{ sdk: S }> | { render(container: HTMLElement, sdk: S): void | (() => void) };
 
 const style = document.createElement('style');
 style.textContent = `${tokensCss}\n${uiCss}\n${frameCss}\n:root[data-frame-hidden="true"] *, :root[data-frame-hidden="true"] *::before, :root[data-frame-hidden="true"] *::after { animation-play-state: paused !important; }`;
@@ -166,7 +165,7 @@ function makeSdk(
   const strings: Record<string, Record<string, string>> = {};
   const assets = new Map<string, Promise<string>>();
   const sdk = {
-    version: 4 as const,
+    version: 5 as const,
     /** The console's origin as the user reaches it, for building URLs such as webhooks (location.origin is opaque in a frame). */
     appOrigin,
     /** The server's operating system: 'linux' or 'windows'. */
@@ -311,7 +310,39 @@ function makeSdk(
       ) =>
         request<{ entries: AuditEntry[]; next: string; enabled: boolean }>('auditList', { ...q }),
     },
+    data: {
+      read: (key: string) =>
+        request<{ text: string; revision: string }>('data', { action: 'read', key }),
+      write: (key: string, text: string, revision = '', owner?: string) =>
+        request<{ revision: string }>('data', {
+          action: 'write',
+          key,
+          text,
+          revision,
+          ...(owner ? { owner } : {}),
+        }),
+      claim: (key: string, owner: string) =>
+        request<{ expires: number }>('data', { action: 'claim', key, owner }),
+      release: async (key: string, owner: string) => {
+        await request('data', { action: 'release', key, owner });
+      },
+      list: async () =>
+        (
+          await request<{ entries: { path: string; type: string; size: number }[] }>('data', {
+            action: 'list',
+          })
+        ).entries,
+      remove: async (key: string, revision: string) => {
+        await request('data', { action: 'remove', key, revision });
+      },
+    },
     files: {
+      pick: (options: {
+        mode: 'file' | 'folder' | 'save';
+        title?: string;
+        initialDirectory?: string;
+        initialName?: string;
+      }) => request<{ path: string } | null>('pickFile', { ...options }),
       async read(path: string, o?: { env?: string }): Promise<string> {
         const r = await request<{ data: string; b64?: boolean }>('readFile', {
           path,
@@ -452,15 +483,14 @@ async function start(m: Extract<HostToFrame, { t: 'init' }>) {
   applyTheme(m.theme);
   document.documentElement.dataset.view = m.view.kind;
   document.documentElement.dataset.shell = m.view.shell ?? 'classic';
+  document.documentElement.dataset.surface = m.view.surface ?? 'page';
   document.documentElement.lang = getLang();
   const { sdk, pages, widgets } = makeSdk(m.plugin, m.view, m.appOrigin, m.platform ?? 'linux');
   const url = URL.createObjectURL(new Blob([m.code], { type: 'text/javascript' }));
   const mod = (await import(/* @vite-ignore */ url)) as { default?: unknown; activate?: unknown };
   URL.revokeObjectURL(url);
   const fn = (mod.default ?? mod.activate) as
-    | ((s: Sdk) => unknown)
-    | { activate?(s: Sdk): unknown }
-    | undefined;
+    ((s: Sdk) => unknown) | { activate?(s: Sdk): unknown } | undefined;
   if (typeof fn === 'function') await fn(sdk);
   else if (fn && typeof fn.activate === 'function') await fn.activate(sdk);
   else throw new Error('The plugin module exports no activate function.');

@@ -7,6 +7,8 @@
 
 export type ViewKind = 'page' | 'widget';
 export interface FrameView {
+  /** Contract v5: a persistent, compact assistant surface supplied by the shell. */
+  surface?: 'assistant';
   kind: ViewKind;
   id: string;
   /** Contract v4: rendering surface; omitted by older consoles. */
@@ -23,6 +25,8 @@ export interface FrameTheme {
 
 /** Operations a plugin may ask for. Everything else is refused by the broker. */
 export type FrameOp =
+  | 'data'
+  | 'pickFile'
   | 'exec'
   | 'http'
   | 'readFile'

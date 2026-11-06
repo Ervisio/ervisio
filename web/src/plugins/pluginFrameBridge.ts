@@ -1,6 +1,7 @@
 import type { MutableRefObject, RefObject } from 'react';
 import type { NavigateFunction } from 'react-router-dom';
 import { runShellCommand } from '../shell/commands';
+import { requestFilePicker } from '../sections/files/pickerService';
 import {
   ApiError,
   call,
@@ -128,6 +129,7 @@ const fetchAsset = (pluginId: string, path: string) =>
   });
 
 interface PlanContext {
+  signal: AbortSignal;
   plugin: PluginManifest;
   args: Record<string, unknown>;
   go: NavigateFunction;
@@ -168,6 +170,8 @@ function runSave(plan: Extract<Plan, { kind: 'save' }>, ctx: PlanContext): Promi
 function runPlan(plan: Plan, ctx: PlanContext): Promise<unknown> {
   const p = ctx.plugin;
   switch (plan.kind) {
+    case 'pick':
+      return requestFilePicker(ctx.plugin.name, plan.options, ctx.signal);
     case 'deny':
       return Promise.reject(new ApiError(plan.code, plan.message));
     case 'call':
@@ -337,11 +341,20 @@ function onRequest(b: Bridge, m: Extract<FrameToHost, { t: 'req' }>) {
     return;
   }
   const { user, plugin: p, nav: go } = b.live.current;
+  if (m.op === 'pickFile' && !b.live.current.active) {
+    reply(
+      b,
+      m.id,
+      Promise.reject(new ApiError('forbidden', 'Open this application before choosing files.')),
+    );
+    return;
+  }
   const plan = authorize(p, m.op, m.args, user);
   reply(
     b,
     m.id,
     runPlan(plan, {
+      signal: b.watchers.signal,
       plugin: p,
       args: m.args,
       go,

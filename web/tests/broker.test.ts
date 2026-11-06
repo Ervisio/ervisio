@@ -33,10 +33,62 @@ const docker: BrokerManifest = {
 const user = { groups: ['users'], isRoot: false, home: '/home/ann' };
 const inDocker = { ...user, groups: ['docker'] };
 
+test('private documents are account/plugin-scoped and never grant filesystem or admin access', () => {
+  assert.deepEqual(
+    authorize(
+      docker,
+      'data',
+      { action: 'write', plugin: 'ai', key: 'chats/one.json', text: 'private', revision: '' },
+      user,
+    ),
+    {
+      kind: 'call',
+      method: 'plugins.data.write',
+      params: { plugin: 'docker', key: 'chats/one.json', text: 'private', revision: '' },
+      admin: false,
+    },
+  );
+  for (const key of ['../secret', '/etc/passwd', 'a/../b', 'a//b'])
+    assert.equal(authorize(docker, 'data', { action: 'read', key }, user).kind, 'deny');
+  assert.equal(
+    authorize(docker, 'data', { action: 'write', key: 'one', text: 'ok', revision: 'fake' }, user)
+      .kind,
+    'deny',
+  );
+  assert.equal(authorize(docker, 'data', { action: 'exec', key: 'one' }, user).kind, 'deny');
+});
+
+test('file pickers return an explicit UI plan, without expanding a plugin filesystem grant', () => {
+  assert.deepEqual(
+    authorize(docker, 'pickFile', { mode: 'folder', initialDirectory: '/srv', plugin: 'ai' }, user),
+    { kind: 'pick', options: { mode: 'folder', initialDirectory: '/srv' } },
+  );
+  assert.equal(authorize(docker, 'pickFile', { mode: 'shell' }, user).kind, 'deny');
+  assert.equal(
+    authorize(docker, 'pickFile', { mode: 'file', initialDirectory: '../secret' }, user).kind,
+    'deny',
+  );
+  assert.equal(
+    authorize(docker, 'pickFile', { mode: 'save', initialName: '../secret' }, user).kind,
+    'deny',
+  );
+  assert.equal(authorize(docker, 'pickFile', { mode: 'file', title: 123 }, user).kind, 'deny');
+  assert.equal(authorize(docker, 'readFile', { path: '/etc/shadow' }, user).kind, 'deny');
+});
+
 test('AI local UI intents have no RPC plan and cannot be requested by other plugins', () => {
-  assert.deepEqual(authorize({ id: 'ai' }, 'shell.command', { text: 'Apri file' }, user), { kind: 'shell.command', text: 'Apri file' });
-  assert.equal(authorize(docker, 'shell.command', { text: 'Apri file', plugin: 'ai' }, user).kind, 'deny');
-  assert.equal(authorize({ id: 'ai' }, 'shell.command', { text: 'a'.repeat(501) }, user).kind, 'deny');
+  assert.deepEqual(authorize({ id: 'ai' }, 'shell.command', { text: 'Apri file' }, user), {
+    kind: 'shell.command',
+    text: 'Apri file',
+  });
+  assert.equal(
+    authorize(docker, 'shell.command', { text: 'Apri file', plugin: 'ai' }, user).kind,
+    'deny',
+  );
+  assert.equal(
+    authorize({ id: 'ai' }, 'shell.command', { text: 'a'.repeat(501) }, user).kind,
+    'deny',
+  );
   assert.equal(authorize({ id: 'ai' }, 'shell.command', { text: '' }, user).kind, 'deny');
 });
 
