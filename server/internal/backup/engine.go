@@ -104,11 +104,23 @@ func (e *engine) run(ctx context.Context, id string, dueOnly bool) (receipt Rece
 	if err = e.store.receipt(receipt); err != nil {
 		return receipt, err
 	}
+	logger := &backupLogger{store: &e.store, config: c}
+	ctx = context.WithValue(ctx, backupLoggerKey{}, logger)
+	logger.emit("backup.started", "INFO", "Backup started", map[string]any{"run_id": receipt.ID})
 	defer func() {
 		receipt.Ended = time.Now().UTC().Format(time.RFC3339)
 		if err != nil {
 			receipt.Status = "failed"
 			receipt.Error = safeRunError(err)
+		}
+		event, level, message := "backup.completed", "INFO", "Backup completed"
+		if receipt.Status == "failed" {
+			event, level, message = "backup.failed", "ERROR", "Backup failed; inspect its local history for details"
+		}
+		logger.emit(event, level, message, map[string]any{"run_id": receipt.ID, "duration_ms": time.Since(now).Milliseconds(), "bytes": receipt.Bytes, "files": receipt.Files, "databases": receipt.Databases, "status": receipt.Status})
+		logger.flush()
+		if logger.warning {
+			receipt.Warnings = append(receipt.Warnings, "ErvisioLogs delivery is pending or its bounded queue is full. The backup result is unchanged; queued events retry on the next run.")
 		}
 		if persistErr := e.store.receipt(receipt); err == nil && persistErr != nil {
 			err = errors.New("The backup finished, but its local history could not be saved.")

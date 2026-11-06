@@ -83,6 +83,7 @@ func buildSummary(ctx context.Context, m *manager, force bool) (map[string]any, 
 		warns = []string{}
 	}
 	return map[string]any{
+		"serverProfile": detectedServerProfile(),
 		"manager":       manager,
 		"sources":       m.sourceNames(),
 		"aurHelper":     aurName(m),
@@ -202,7 +203,8 @@ func search(ctx context.Context, c *rpc.Call) (any, error) {
 		Query string `json:"query"`
 	}
 	return withManager(c, &p, func(m *manager) (any, error) {
-		return m.search(ctx, p.Query)
+		items, err := m.search(ctx, p.Query)
+		return classifyCLI(items), err
 	})
 }
 
@@ -211,7 +213,8 @@ func suggest(ctx context.Context, c *rpc.Call) (any, error) {
 		Category string `json:"category"`
 	}
 	return withManager(c, &p, func(m *manager) (any, error) {
-		return m.suggest(ctx, p.Category)
+		items, err := m.suggest(ctx, p.Category)
+		return classifyCLI(items), err
 	})
 }
 

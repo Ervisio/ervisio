@@ -1,3 +1,4 @@
+import { sectionShown } from '../shell/appVisibility';
 import {
   Component,
   Suspense,
@@ -328,18 +329,20 @@ export function DesktopShell() {
     [nav.main, nav.settings, nav.plugins, pages, plugins, t, session?.os],
   );
   const appIds = useMemo(() => apps.map((a) => a.key), [apps]);
+  const shownApps = useMemo(() => apps.filter(app => { const section = SECTIONS.find(section => section.id === app.key); return !section || sectionShown(section, prefs, 'ervisios'); }), [apps, prefs]);
+  const shownIds = useMemo(() => shownApps.map(app => app.key), [shownApps]);
   const data = useMemo(() => readDesktop(prefs['shell.desktop'], appIds), [prefs, appIds]);
   const desktopIds = useMemo(
     () => [
       ...data.folders.filter((folder) => folder.parent === null).map((folder) => folder.id),
       ...data.shortcuts
-        .filter((shortcut) => shortcut.folder === null && appIds.includes(shortcut.app))
+        .filter((shortcut) => shortcut.folder === null && shownIds.includes(shortcut.app))
         .map((shortcut) => shortcut.id),
       ...data.directoryShortcuts
         .filter((shortcut) => shortcut.folder === null)
         .map((shortcut) => shortcut.id),
     ],
-    [data.folders, data.shortcuts, data.directoryShortcuts, appIds],
+    [data.folders, data.shortcuts, data.directoryShortcuts, shownIds],
   );
   const gridRows = Math.max(gridSize.rows, Math.ceil(desktopIds.length / gridSize.columns));
   const gridPositions = useMemo(
@@ -985,7 +988,7 @@ export function DesktopShell() {
               <Icon name="files" size={34} />
               <span className="eos-folder-mini">
                 {data.shortcuts
-                  .filter((s) => s.folder === f.id)
+                  .filter((s) => s.folder === f.id && shownIds.includes(s.app))
                   .slice(0, 4)
                   .map((s) => {
                     const app = findApp(s.app);
@@ -1016,7 +1019,7 @@ export function DesktopShell() {
           </div>
         ))}
       {data.shortcuts
-        .filter((s) => s.folder === folder)
+        .filter((s) => s.folder === folder && shownIds.includes(s.app))
         .map((s) => {
           const app = findApp(s.app);
           if (!app) return null;
@@ -1131,15 +1134,15 @@ export function DesktopShell() {
     </div>
   );
   const active = [...windows].reverse().find((w) => !w.minimized)?.id;
-  const pinnedApps = data.pinned.map(findApp).filter((a): a is AppEntry => !!a);
+  const pinnedApps = data.pinned.filter(id => shownIds.includes(id)).map(findApp).filter((a): a is AppEntry => !!a);
   const taskApps = [
     ...pinnedApps,
     ...windows
-      .filter((w) => !w.app.startsWith('folder:') && !data.pinned.includes(w.app))
+      .filter((w) => !w.app.startsWith('folder:') && !pinnedApps.some(app => app.key === w.app))
       .map((w) => findApp(w.app))
       .filter((a): a is AppEntry => !!a),
   ];
-  const filtered = apps.filter((a) =>
+  const filtered = shownApps.filter((a) =>
     `${a.label} ${a.plugin ?? ''}`.toLocaleLowerCase(lang).includes(query.toLocaleLowerCase(lang)),
   );
   const resultIndex = Math.min(selectedResult, Math.max(0, filtered.length - 1));

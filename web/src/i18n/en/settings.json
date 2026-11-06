@@ -686,5 +686,11 @@
         "timeout": "The server did not answer within 3 minutes. Reload the page in a moment; if it still does not answer, check %ProgramData%\\Ervisio\\logs\\ervisiod.log on the server."
       }
     }
+  },
+  "apps": {
+    "title": "Visible apps",
+    "classicHint": "Choose the apps shown in Classic navigation. Hidden tools still open when needed for a file. These choices are saved only for your account.",
+    "desktopHint": "Hide apps from the desktop, pinned launchers and app list. Existing shortcuts are kept and contextual opening still works. These choices are saved only for your account.",
+    "floatingAI": "Floating AI chat"
   }
 }

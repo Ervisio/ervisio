@@ -151,7 +151,11 @@
     "installedCount_other": "{count} pacchetti installati",
     "installedText_one": "1 installato da te, gli altri sono dipendenze. Le app qui sopra sono quelle con una voce nel menu.",
     "installedText_other": "{count} installati da te, gli altri sono dipendenze. Le app qui sopra sono quelle con una voce nel menu.",
-    "allPackages": "Tutti i pacchetti"
+    "allPackages": "Tutti i pacchetti",
+    "cliOnly": "Solo compatibili con CLI",
+    "cliHint": "Strumenti verificati per terminale e server. I pacchetti senza informazioni di compatibilità sono nascosti. Attivo per default sulle edizioni server rilevate.",
+    "allKindsHint": "Include applicazioni grafiche e pacchetti con compatibilità CLI sconosciuta.",
+    "serverTools": "Strumenti per server e terminale"
   },
   "install": {
     "button": "Installa",

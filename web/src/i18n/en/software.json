@@ -151,7 +151,11 @@
     "installedCount_other": "{count} packages installed",
     "installedText_one": "1 installed by you, the rest are dependencies. Apps above are the ones with a desktop entry.",
     "installedText_other": "{count} installed by you, the rest are dependencies. Apps above are the ones with a desktop entry.",
-    "allPackages": "All packages"
+    "allPackages": "All packages",
+    "cliOnly": "CLI compatible only",
+    "cliHint": "Verified command-line and server tools. Packages without compatibility information are hidden. Enabled by default on detected server editions.",
+    "allKindsHint": "Includes graphical applications and packages with unknown CLI compatibility.",
+    "serverTools": "Server and command-line tools"
   },
   "install": {
     "button": "Install",

@@ -90,7 +90,7 @@ func dispatch(ctx context.Context, args []string, e *engine) (any, error) {
 		if current, err := user.Current(); err == nil {
 			account = current.Username
 		}
-		return map[string]any{"supported": true, "platform": "linux", "account": account, "clients": clients, "spoolFree": free, "spoolReserve": reserveBytes, "maxPlans": maxJobs, "maxFolders": 32, "maxDatabases": 16}, nil
+		return map[string]any{"supported": true, "platform": "linux", "account": account, "clients": clients, "spoolFree": free, "spoolReserve": reserveBytes, "maxPlans": maxJobs, "maxFolders": 32, "maxDatabases": 16, "features": []string{"logs"}}, nil
 	case "list":
 		items, err := s.list()
 		return map[string]any{"plans": items}, err
@@ -133,6 +133,7 @@ func dispatch(ctx context.Context, args []string, e *engine) (any, error) {
 			return nil, err
 		}
 		_ = os.Remove(filepath.Join(s.dir, "state", args[1]+".history"))
+		_ = os.Remove(filepath.Join(s.dir, "state", args[1]+".logs-outbox"))
 		return map[string]any{"deleted": true, "remoteBackupsPreserved": true}, nil
 	case "test":
 		c, err := s.load(args[1])

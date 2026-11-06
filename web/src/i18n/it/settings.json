@@ -686,5 +686,11 @@
         "timeout": "Il server non ha risposto entro 3 minuti. Ricarica la pagina tra poco; se ancora non risponde, controlla %ProgramData%\\Ervisio\\logs\\ervisiod.log sul server."
       }
     }
+  },
+  "apps": {
+    "title": "App visibili",
+    "classicHint": "Scegli le app mostrate nella navigazione classica. Gli strumenti nascosti si aprono comunque quando servono per un file. Le scelte valgono solo per il tuo account.",
+    "desktopHint": "Nascondi le app dal desktop, dalle icone fissate e dalla lista applicazioni. I collegamenti restano salvati e le app si aprono comunque per i file. Le scelte valgono solo per il tuo account.",
+    "floatingAI": "Chat AI compatta"
   }
 }

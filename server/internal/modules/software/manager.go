@@ -298,6 +298,9 @@ func rankResults(all []Result, q string) {
 // catalog is a short curated list of well-known software for the store's
 // categories; names that a distribution does not have are simply skipped.
 var catalog = map[string]struct{ pkgs, flatpaks []string }{
+	"server-cli": {
+		[]string{"git", "curl", "wget", "rsync", "htop", "btop", "ncdu", "tmux", "jq", "ripgrep", "nginx", "caddy", "docker.io", "docker", "podman", "postgresql-client", "mariadb-client", "sqlite3", "restic", "rclone"}, nil,
+	},
 	"popular": {
 		[]string{"firefox", "chromium", "thunderbird", "gimp", "vlc", "obs-studio", "libreoffice-fresh", "libreoffice", "inkscape", "blender", "krita", "audacity"},
 		[]string{"org.mozilla.firefox", "org.mozilla.Thunderbird", "org.gimp.GIMP", "org.videolan.VLC", "com.obsproject.Studio", "org.blender.Blender", "com.spotify.Client", "com.discordapp.Discord"},

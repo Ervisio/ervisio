@@ -1,6 +1,7 @@
 export type Kind = 'repo' | 'aur' | 'flatpak';
 
 export interface Summary {
+  serverProfile?: boolean;
   manager: string;
   sources: Kind[];
   aurHelper: string;
@@ -46,6 +47,7 @@ export interface Pkg {
 }
 
 export interface SearchResult {
+  cli?: boolean;
   name: string;
   title?: string;
   version: string;

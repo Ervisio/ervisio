@@ -60,6 +60,7 @@ type Config struct {
 	Excludes    []string    `json:"excludes,omitempty"`
 	Databases   []Database  `json:"databases"`
 	Destination Destination `json:"destination"`
+	Logs        *LogConfig  `json:"logs,omitempty"`
 	Frequency   Period      `json:"frequency"`
 	KeepLast    int         `json:"keepLast"`
 	MaxAge      *Period     `json:"maxAge,omitempty"`
@@ -142,6 +143,9 @@ func cleanDestination(s string) (string, error) {
 }
 
 func validate(c *Config) error {
+	if err := validateLogs(c.Logs, false); err != nil {
+		return err
+	}
 	if c.ID != "" && !idPattern.MatchString(c.ID) {
 		return errors.New("Invalid backup ID.")
 	}

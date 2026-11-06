@@ -1348,3 +1348,7 @@
     max-height: 160px;
   }
 }
+
+.st-app-visibility { display: grid; gap: 12px; width: min(100%, 680px); }
+.st-app-visibility > p { color: var(--ink2); font-size: 13px; margin: 0 0 6px; }
+.st-app-visibility > label { display: flex; align-items: center; justify-content: space-between; gap: 16px; }

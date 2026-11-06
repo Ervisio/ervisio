@@ -193,5 +193,12 @@
     "classic": "Classic interface enabled.",
     "ervisios": "ErvisiOS enabled.",
     "done": "Done."
+  },
+  "assistant": {
+    "title": "Ervisio AI",
+    "toggle": "Open or minimize AI chat",
+    "minimize": "Minimize AI chat",
+    "expand": "Expand AI chat",
+    "restore": "Restore compact chat"
   }
 }

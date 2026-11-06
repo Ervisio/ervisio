@@ -205,6 +205,15 @@ func (s *store) load(id string) (*Config, error) {
 	if err != nil || len(c.ownerKey) != 32 {
 		return nil, errors.New("The backup ownership key cannot be read.")
 	}
+	if c.Logs != nil && record.Secrets["logs.token"] != "" {
+		plain, e := unseal(g, record.Secrets["logs.token"], id+":logs.token")
+		if e != nil {
+			return nil, e
+		}
+		token := string(plain)
+		c.Logs.Token = &token
+		c.Logs.HasToken = token != ""
+	}
 	for i := range c.Databases {
 		db := &c.Databases[i]
 		db.sealed = record.Secrets[db.ID]
@@ -224,6 +233,13 @@ func (s *store) load(id string) (*Config, error) {
 func view(c *Config) Config {
 	v := *c
 	v.ownerKey = nil
+	if c.Logs != nil {
+		settings := *c.Logs
+		settings.HasToken = settings.Token != nil && *settings.Token != ""
+		settings.Token = nil
+		settings.ClearToken = false
+		v.Logs = &settings
+	}
 	v.Databases = append([]Database{}, c.Databases...)
 	for i := range v.Databases {
 		v.Databases[i].HasPassword = v.Databases[i].Password != nil && *v.Databases[i].Password != ""
@@ -240,6 +256,12 @@ func (s *store) write(c *Config) error {
 		return err
 	}
 	r := storedConfig{Config: view(c), Secrets: map[string]string{}}
+	if c.Logs != nil && c.Logs.Token != nil && *c.Logs.Token != "" {
+		r.Secrets["logs.token"], err = seal(g, []byte(*c.Logs.Token), c.ID+":logs.token")
+		if err != nil {
+			return err
+		}
+	}
 	r.Ownership, err = seal(g, c.ownerKey, c.ID+":ownership")
 	if err != nil {
 		return err
@@ -307,6 +329,9 @@ func (s *store) save(c *Config) error {
 		c.ID = newID()
 	}
 	if old != nil {
+		if c.Logs != nil && !c.Logs.ClearToken && (c.Logs.Token == nil || *c.Logs.Token == "") && old.Logs != nil {
+			c.Logs.Token = old.Logs.Token
+		}
 		c.ownerKey = old.ownerKey
 		c.Created = old.Created
 		c.AnchorDay = old.AnchorDay
@@ -341,6 +366,14 @@ func (s *store) save(c *Config) error {
 	for i := range c.Databases {
 		if c.Databases[i].ClearPassword {
 			c.Databases[i].Password = nil
+		}
+	}
+	if c.Logs != nil {
+		if c.Logs.ClearToken {
+			c.Logs.Token = nil
+		}
+		if err := validateLogs(c.Logs, true); err != nil {
+			return err
 		}
 	}
 	return s.write(c)

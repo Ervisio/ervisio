@@ -17,6 +17,7 @@ const DesktopShell = lazy(() =>
   import('../desktop/DesktopShell').then((m) => ({ default: m.DesktopShell })),
 );
 const ClassicShell = lazy(() => import('./ClassicShell'));
+const FloatingAssistant = lazy(() => import('./FloatingAssistant'));
 
 function usePaletteShortcut(toggle: () => void) {
   useEffect(() => {
@@ -56,7 +57,10 @@ export function AppShell() {
   const { prefs, ready, error, retry } = usePrefs();
   const t = useT('shell');
   const { host, session } = useSession();
+  const { plugins } = usePlugins();
   const mode = prefs['shell.mode'] ?? host?.defaultShell ?? 'classic';
+  const ai = plugins.find(plugin => plugin.id === 'ai');
+  const floatingAI = prefs[`assistant.floating.${mode}`] ?? mode === 'classic';
   useShellCommands();
   useSectionBackgroundHooks();
   usePaletteShortcut(useCallback(() => setPalette((o) => !o), []));
@@ -93,6 +97,7 @@ export function AppShell() {
       <CommandPalette open={palette} onClose={() => setPalette(false)} />
       <UpdateNotifier />
       <FilePickerHost />
+      {ai && floatingAI && <Suspense fallback={null}><FloatingAssistant plugin={ai} mode={mode} /></Suspense>}
     </EditorDraftsProvider>
   );
 }

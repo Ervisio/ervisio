@@ -1,0 +1,10 @@
+.floating-assistant { position: fixed; z-index: 1350; right: 20px; bottom: 20px; display: flex; align-items: flex-end; flex-direction: column; gap: 10px; }
+.floating-assistant--desktop { bottom: 72px; }
+.floating-assistant-toggle { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 24px; background: var(--acc); color: var(--on-acc); font: inherit; font-weight: 700; box-shadow: 0 4px 24px #0003; cursor: pointer; }
+.floating-assistant-toggle:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.floating-assistant-panel { width: min(390px, calc(100vw - 24px)); height: min(560px, calc(100dvh - 150px)); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--ink); box-shadow: 0 12px 48px #0005; }
+.floating-assistant-panel[hidden] { display: none; }
+.floating-assistant-panel.is-expanded { width: min(820px, calc(100vw - 24px)); height: min(760px, calc(100dvh - 150px)); }
+.floating-assistant-panel > header { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; background: var(--sunk); border-bottom: 1px solid var(--line); flex: none; }
+.floating-assistant-panel > header > strong { flex: 1; font-size: 13px; }
+@media (max-width: 600px) { .floating-assistant { right: 12px; bottom: 82px; } }

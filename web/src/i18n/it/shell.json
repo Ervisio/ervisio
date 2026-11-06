@@ -193,5 +193,12 @@
     "classic": "Interfaccia classica attivata.",
     "ervisios": "ErvisiOS attivato.",
     "done": "Fatto."
+  },
+  "assistant": {
+    "title": "Ervisio AI",
+    "toggle": "Apri o riduci la chat AI",
+    "minimize": "Riduci la chat AI",
+    "expand": "Espandi la chat AI",
+    "restore": "Ripristina chat compatta"
   }
 }
