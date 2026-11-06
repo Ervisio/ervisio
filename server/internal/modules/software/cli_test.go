@@ -3,12 +3,54 @@ package software
 import (
 	"archive/zip"
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 )
+
+type nodeZeroReader struct{}
+
+func (nodeZeroReader) Read(data []byte) (int, error) { clear(data); return len(data), nil }
+
+func TestOfficialNodeExecutableAbove64MiBHasItsOwnBoundedAllowance(t *testing.T) {
+	for _, name := range []string{"node/bin/node", "node/lib/node_modules/npm/oversized.js"} {
+		archive := filepath.Join(t.TempDir(), "node.zip")
+		file, err := os.Create(archive)
+		if err != nil {
+			t.Fatal(err)
+		}
+		writer := zip.NewWriter(file)
+		header := &zip.FileHeader{Name: name, Method: zip.Deflate}
+		header.SetMode(0700)
+		entry, err := writer.CreateHeader(header)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := io.CopyN(entry, nodeZeroReader{}, 65<<20); err != nil {
+			t.Fatal(err)
+		}
+		if err := writer.Close(); err != nil {
+			t.Fatal(err)
+		}
+		_ = file.Close()
+		dest := t.TempDir()
+		err = unpackNode(archive, dest, "node")
+		if strings.HasSuffix(name, "bin/node") {
+			if err != nil {
+				t.Fatal("official-sized executable refused", err)
+			}
+			fi, err := os.Stat(filepath.Join(dest, "bin", "node"))
+			if err != nil || fi.Size() != 65<<20 {
+				t.Fatal("executable was truncated", err)
+			}
+		} else if err == nil {
+			t.Fatal("increased the limit for arbitrary npm files")
+		}
+	}
+}
 
 func TestNodeReleaseAndChecksums(t *testing.T) {
 	index := []byte(`[{"version":"v99.0.0","lts":false,"files":["linux-x64"]},{"version":"../../escape","lts":"Bad","files":["linux-x64"]},{"version":"v26.13.0","lts":"Lithium","files":["linux-x64","win-arm64-zip"]}]`)

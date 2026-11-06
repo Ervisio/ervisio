@@ -1,5 +1,7 @@
 import { useStore } from '../lib/useStore';
 import type { IconName } from '../ui';
+import { useMemo } from 'react';
+import { useAccountScope } from '../lib/accountScope';
 
 /*
  * Notification center: the bell in the top bar lists recent notices (in memory, this tab, newest first, 50 max)
@@ -7,6 +9,8 @@ import type { IconName } from '../ui';
  * call toast.* yourself when the user should see it right away.
  */
 export interface Notice {
+  /** Optional account/host ownership for private operation notices. */
+  owner?: string;
   id: number;
   /** Already translated. */
   title: string;
@@ -52,5 +56,7 @@ export const clearNotices = () => {
   emit();
 };
 export function useNotices(): Notice[] {
-  return useStore(subs, () => list);
+  const notices = useStore(subs, () => list);
+  const scope = useAccountScope();
+  return useMemo(() => notices.filter(notice => !notice.owner || notice.owner === scope), [notices, scope]);
 }

@@ -44,7 +44,8 @@
     "updates": "Updates",
     "store": "Find software",
     "installed": "Installed",
-    "history": "History"
+    "history": "History",
+    "activity": "Activity"
   },
   "checkNow": "Check now",
   "retry": "Retry",
@@ -289,5 +290,13 @@
     "schedule": {
       "text": "The server installs all updates every day at this time, like Update all. It uses a Task Scheduler task called \\Ervisio\\SoftwareUpdate."
     }
+  },
+  "activity": {
+    "empty": "No recent installation",
+    "hint": "Install or update software to see its progress and log here.",
+    "background": "Work continues when you close this panel or navigate elsewhere. Reopen Software → Activity to follow it.",
+    "running": "In progress",
+    "done": "Completed",
+    "failed": "Failed"
   }
 }

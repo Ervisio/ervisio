@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { call, errorMessage } from '../../api';
 import { pluginLogoUrl } from '../../plugins';
 import { useT } from '../../i18n';
-import { Button, Icon, Input, toast } from '../../ui';
+import { Button, Icon, toast } from '../../ui';
+import { PathInput } from '../files/PathInput';
 import { Tile } from './Parts';
 import type { PluginInfo } from './types';
 
@@ -68,12 +69,13 @@ export function Developer({
           if (path.trim()) void load();
         }}
       >
-        <Input
+        <PathInput
+          mode="folder"
           label={t('dev.path')}
           mono
           placeholder="~/projects/my-plugin"
           value={path}
-          onChange={(e) => setPath(e.target.value)}
+          onPathChange={setPath}
           error={error || undefined}
           hint={error ? undefined : t('dev.pathHint')}
         />

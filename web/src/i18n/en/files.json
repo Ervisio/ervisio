@@ -19,7 +19,9 @@
     "go": "Go",
     "filter": "Filter files and folders",
     "entries": "Files and folders",
-    "noEntries": "No matching files or folders"
+    "noEntries": "No matching files or folders",
+    "browse": "Browse",
+    "localOnly": "Choose a file or folder on this server."
   },
   "save": "Save",
   "loading": "Loading…",

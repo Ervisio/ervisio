@@ -3,6 +3,9 @@ import { ApiError, call, stream } from '../../api';
 import { toast } from '../../ui';
 import { reloadAll } from './store';
 import type { ServerTx, TxEvent, TxParams } from './types';
+import { useAccountScope } from '../../lib/accountScope';
+import { openApp } from '../../lib/openApp';
+import { dismissNotice, notify } from '../../shell/notifications';
 
 /** One software job (one or more sequential transactions). Lives at module level so it survives navigation. */
 export interface Job {
@@ -51,13 +54,19 @@ const idle: TxState = {
   panelOpen: false,
 };
 let state: TxState = idle;
+let currentScope: string | null = null;
+let generation = 0;
+let noticeId = 0;
 const subs = new Set<() => void>();
 const set = (p: Partial<TxState>) => {
   state = { ...state, ...p };
   subs.forEach((s) => s());
 };
 const subscribe = (cb: () => void) => (subs.add(cb), () => void subs.delete(cb));
-export const useTx = () => useSyncExternalStore(subscribe, () => state);
+export function useTx() {
+  const scope = useAccountScope();
+  return useSyncExternalStore(subscribe, () => scope === currentScope ? state : idle);
+}
 export const getTx = () => state;
 export const openPanel = () => set({ panelOpen: true });
 export const closePanel = () => set({ panelOpen: false });
@@ -71,13 +80,29 @@ export const dismissTx = () => {
 type T = (key: string, vars?: Record<string, string | number>) => string;
 let translate: T = (k) => k;
 let goto: (path: string) => void = (p) => window.location.assign(p);
-export function registerRuntime(t: T, navigate: (path: string) => void) {
+export function registerRuntime(t: T, navigate: (path: string) => void, scope: string | null) {
   translate = t;
   goto = navigate;
+  if (scope !== currentScope) {
+    generation++;
+    currentScope = scope;
+    cancelStep?.(); cancelStep = null;
+    handle?.close(); handle = null;
+    window.clearInterval(attachTimer); attachTimer = 0;
+    if (toastId) toast.dismiss(toastId);
+    if (noticeId) dismissNotice(noticeId);
+    state = { ...idle }; subs.forEach(notify => notify());
+  }
+}
+
+function notice(tone: 'info' | 'ok' | 'err', title: string, detail?: string) {
+  if (!currentScope) return;
+  noticeId = notify({key:'software.transaction',owner:currentScope,icon:'software',tone,title,detail,to:'/software?tab=activity'});
 }
 
 let toastId = 0;
 let handle: { close(): void } | null = null;
+let cancelStep: (() => void) | null = null;
 
 const MAX_LOG = 1500;
 const pct = (step: number, steps: number, done: number, total: number): number | undefined => {
@@ -112,12 +137,13 @@ export function startJob(job: Job): void {
     duration: 0,
     action: { label: translate('tx.show'), onClick: showPanel },
   });
-  void runSteps(job);
+  notice('info',translate(`tx.title.${job.title.key}`,job.title.vars),translate('activity.background'));
+  void runSteps(job, generation);
 }
 
 function showPanel() {
-  set({ panelOpen: true });
-  goto('/software?tab=installed');
+  set({ panelOpen: false });
+  openApp('/software?tab=activity', goto);
 }
 
 type StepResult = { ok: boolean; message: string; hint: string; reboot: boolean };
@@ -130,15 +156,16 @@ function pushLog(line: string) {
 
 const TOAST_INTERVAL_MS = 400;
 
-function runStep(p: TxParams, onToast: () => boolean): Promise<StepResult> {
+function runStep(p: TxParams, onToast: () => boolean, owner: number): Promise<StepResult> {
   return new Promise<StepResult>((resolve) => {
     let finished = false;
     const end = (r: StepResult) => {
       if (finished) return;
       finished = true;
-      handle = null;
+      if (owner === generation) { handle = null; cancelStep = null; }
       resolve(r);
     };
+    cancelStep = () => end({ok:false,message:'',hint:'',reboot:false});
     const onProgress = (e: { done: number; total: number; current: string }) => {
       const percent = pct(state.step, state.steps, e.done, e.total);
       set({ done: e.done, total: e.total, current: e.current, percent });
@@ -148,6 +175,7 @@ function runStep(p: TxParams, onToast: () => boolean): Promise<StepResult> {
     handle = stream<TxEvent>(user ? 'software.transactionUser' : 'software.transaction', p, {
       admin: !user,
       onData: (e) => {
+        if (owner !== generation) return;
         if (e.type === 'log') pushLog(e.line);
         else if (e.type === 'progress') onProgress(e);
         else if (e.type === 'done')
@@ -175,6 +203,7 @@ function failJob(result: StepResult) {
     duration: 9000,
     action: { label: translate('tx.show'), onClick: showPanel },
   });
+  notice('err',translate('tx.failed'),result.message);
   void reloadAll();
 }
 
@@ -188,10 +217,11 @@ function finishJob(job: Job) {
     duration: state.rebootNeeded ? 10000 : 5000,
     action: undefined,
   });
+  notice('ok',translate(`tx.done.${job.title.key}`,job.title.vars));
   void reloadAll();
 }
 
-async function runSteps(job: Job) {
+async function runSteps(job: Job, owner: number) {
   let lastToast = 0;
   const toastDue = () => {
     if (Date.now() - lastToast <= TOAST_INTERVAL_MS) return false;
@@ -199,9 +229,11 @@ async function runSteps(job: Job) {
     return true;
   };
   for (let i = 0; i < job.steps.length; i++) {
+    if (owner !== generation) return;
     const p = job.steps[i];
     set({ step: i + 1, done: 0, total: 0, current: '', op: p.op });
-    const result = await runStep(p, toastDue);
+    const result = await runStep(p, toastDue, owner);
+    if (owner !== generation) return;
     if (!result.ok) return failJob(result);
     if (result.reboot) set({ rebootNeeded: true });
   }
@@ -211,14 +243,17 @@ async function runSteps(job: Job) {
 /* ---- attach: a transaction is already running (page reloaded, other session) ---- */
 let attachTimer = 0;
 export async function attachIfBusy(): Promise<void> {
-  if (state.phase === 'running' || attachTimer) return;
+  if (!currentScope || state.phase === 'running' || attachTimer) return;
+  const owner = generation;
   try {
     const s = await call<{ busy: boolean; transaction: ServerTx | null }>('software.status');
-    if (!s.busy || !s.transaction) return;
+    if (owner !== generation || isRunning() || attachTimer || !s.transaction) return;
+    if (!s.busy) { if (state.phase === 'idle') mirror(s.transaction); return; }
     mirror(s.transaction);
     attachTimer = window.setInterval(async () => {
       try {
         const r = await call<{ busy: boolean; transaction: ServerTx | null }>('software.status');
+        if (owner !== generation) return;
         if (r.transaction) mirror(r.transaction);
         if (!r.busy) {
           window.clearInterval(attachTimer);
@@ -235,6 +270,7 @@ export async function attachIfBusy(): Promise<void> {
 }
 
 function mirror(t: ServerTx) {
+  const wasRunning = state.phase === 'running';
   if (t.running) {
     set({
       phase: 'running',
@@ -255,6 +291,7 @@ function mirror(t: ServerTx) {
       },
       panelOpen: state.panelOpen || state.phase !== 'running',
     });
+    if (!wasRunning) notice('info',translate('activity.running'),translate('activity.background'));
   } else {
     set({
       phase: t.ok ? 'done' : 'failed',
@@ -265,8 +302,11 @@ function mirror(t: ServerTx) {
       percent: t.ok ? 100 : undefined,
       rebootNeeded: t.rebootNeeded,
       op: t.op,
+      startedAt: t.startedAt,
+      step: t.step, steps: t.steps, done: t.done, total: t.total,
       title: state.title ?? { key: t.op, vars: { name: t.packages.join(', ') } },
     });
+    if (wasRunning) notice(t.ok?'ok':'err',translate(t.ok?'activity.done':'tx.failed'),t.message);
   }
 }
 

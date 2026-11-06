@@ -214,6 +214,16 @@ func (s *store) load(id string) (*Config, error) {
 		c.Logs.Token = &token
 		c.Logs.HasToken = token != ""
 	}
+	for name, target := range c.Destination.secrets() {
+		if encrypted := record.Secrets["destination."+name]; encrypted != "" {
+			plain, e := unseal(g, encrypted, id+":destination."+name)
+			if e != nil {
+				return nil, e
+			}
+			secret := string(plain)
+			*target = &secret
+		}
+	}
 	for i := range c.Databases {
 		db := &c.Databases[i]
 		db.sealed = record.Secrets[db.ID]
@@ -233,6 +243,15 @@ func (s *store) load(id string) (*Config, error) {
 func view(c *Config) Config {
 	v := *c
 	v.ownerKey = nil
+	v.Destination.HasAPIKey = c.Destination.APIKey != nil && *c.Destination.APIKey != ""
+	v.Destination.HasCredentials = c.Destination.AccessKey != nil && *c.Destination.AccessKey != "" && c.Destination.SecretKey != nil && *c.Destination.SecretKey != ""
+	v.Destination.ClearAPIKey = false
+	v.Destination.ClearCredentials = false
+	v.Destination.HasSessionToken = c.Destination.SessionToken != nil && *c.Destination.SessionToken != ""
+	v.Destination.ClearSessionToken = false
+	for _, target := range v.Destination.secrets() {
+		*target = nil
+	}
 	if c.Logs != nil {
 		settings := *c.Logs
 		settings.HasToken = settings.Token != nil && *settings.Token != ""
@@ -256,6 +275,14 @@ func (s *store) write(c *Config) error {
 		return err
 	}
 	r := storedConfig{Config: view(c), Secrets: map[string]string{}}
+	for name, secret := range c.Destination.secrets() {
+		if *secret != nil && **secret != "" {
+			r.Secrets["destination."+name], err = seal(g, []byte(**secret), c.ID+":destination."+name)
+			if err != nil {
+				return err
+			}
+		}
+	}
 	if c.Logs != nil && c.Logs.Token != nil && *c.Logs.Token != "" {
 		r.Secrets["logs.token"], err = seal(g, []byte(*c.Logs.Token), c.ID+":logs.token")
 		if err != nil {
@@ -329,8 +356,23 @@ func (s *store) save(c *Config) error {
 		c.ID = newID()
 	}
 	if old != nil {
-		if c.Logs != nil && !c.Logs.ClearToken && (c.Logs.Token == nil || *c.Logs.Token == "") && old.Logs != nil {
+		if c.Logs != nil && !c.Logs.ClearToken && (c.Logs.Token == nil || *c.Logs.Token == "") && old.Logs != nil && c.Logs.URL == old.Logs.URL {
 			c.Logs.Token = old.Logs.Token
+		}
+		if sameCredentialTarget(c.Destination, old.Destination) {
+			previous := old.Destination.secrets()
+			for name, target := range c.Destination.secrets() {
+				clear := c.Destination.ClearCredentials
+				if name == "apiKey" {
+					clear = c.Destination.ClearAPIKey
+				}
+				if name == "sessionToken" {
+					clear = clear || c.Destination.ClearSessionToken
+				}
+				if !clear && (*target == nil || **target == "") {
+					*target = *previous[name]
+				}
+			}
 		}
 		c.ownerKey = old.ownerKey
 		c.Created = old.Created
@@ -375,6 +417,20 @@ func (s *store) save(c *Config) error {
 		if err := validateLogs(c.Logs, true); err != nil {
 			return err
 		}
+	}
+	if c.Destination.ClearAPIKey {
+		c.Destination.APIKey = nil
+	}
+	if c.Destination.ClearCredentials {
+		c.Destination.AccessKey = nil
+		c.Destination.SecretKey = nil
+		c.Destination.SessionToken = nil
+	}
+	if c.Destination.ClearSessionToken {
+		c.Destination.SessionToken = nil
+	}
+	if err := validateDestination(&c.Destination, true); err != nil {
+		return err
 	}
 	return s.write(c)
 }

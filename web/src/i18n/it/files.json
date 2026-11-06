@@ -19,7 +19,9 @@
     "go": "Vai",
     "filter": "Filtra file e cartelle",
     "entries": "File e cartelle",
-    "noEntries": "Nessun file o cartella corrispondente"
+    "noEntries": "Nessun file o cartella corrispondente",
+    "browse": "Sfoglia",
+    "localOnly": "Scegli un file o una cartella su questo server."
   },
   "save": "Salva",
   "loading": "Caricamento…",

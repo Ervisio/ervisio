@@ -92,6 +92,9 @@ func (e *engine) run(ctx context.Context, id string, dueOnly bool) (receipt Rece
 	if err = validate(c); err != nil {
 		return receipt, err
 	}
+	if err = validateDestination(&c.Destination, true); err != nil {
+		return receipt, err
+	}
 	if err = cleanOwnedSpools(&e.store, c); err != nil {
 		return receipt, err
 	}
@@ -126,6 +129,13 @@ func (e *engine) run(ctx context.Context, id string, dueOnly bool) (receipt Rece
 			err = errors.New("The backup finished, but its local history could not be saved.")
 		}
 	}()
+	if c.Destination.kind() == "local" {
+		resolved, resolveErr := filepath.EvalSymlinks(c.Destination.Path)
+		if resolveErr != nil {
+			return receipt, errors.New("The local backup destination cannot be resolved by this account.")
+		}
+		c.Destination.Path = resolved
+	}
 	if err = ctx.Err(); err != nil {
 		return receipt, err
 	}
@@ -154,16 +164,7 @@ func (e *engine) run(ctx context.Context, id string, dueOnly bool) (receipt Rece
 		return receipt, err
 	}
 	var warnings []string
-	err = e.withRemote(ctx, c.Destination.Connection, func(ctx context.Context, f remote.FS) error {
-		journal := &uploadJournal{store: &e.store, config: c}
-		if err := journal.recover(ctx, f); err != nil {
-			return err
-		}
-		ctx = context.WithValue(ctx, journalKey{}, journal)
-		var err error
-		receipt.Archive, warnings, err = publish(ctx, f, c, local, hash, info)
-		return err
-	})
+	receipt.Archive, warnings, err = e.publishDestination(ctx, c, local, hash, info)
 	if err != nil {
 		return receipt, err
 	}

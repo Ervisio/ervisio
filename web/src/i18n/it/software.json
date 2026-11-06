@@ -44,7 +44,8 @@
     "updates": "Aggiornamenti",
     "store": "Trova software",
     "installed": "Installati",
-    "history": "Cronologia"
+    "history": "Cronologia",
+    "activity": "Attività"
   },
   "checkNow": "Controlla ora",
   "retry": "Riprova",
@@ -289,5 +290,13 @@
     "schedule": {
       "text": "Il server installa tutti gli aggiornamenti ogni giorno a quest'ora, come Aggiorna tutto. Usa un'attività di Utilità di pianificazione chiamata \\Ervisio\\SoftwareUpdate."
     }
+  },
+  "activity": {
+    "empty": "Nessuna installazione recente",
+    "hint": "Installa o aggiorna un programma per vedere qui avanzamento e log.",
+    "background": "Il lavoro continua se chiudi il pannello o cambi schermata. Riapri Software → Attività per seguirlo.",
+    "running": "In corso",
+    "done": "Completato",
+    "failed": "Non riuscito"
   }
 }

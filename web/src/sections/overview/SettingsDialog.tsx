@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useSession } from '../../api';
+import { PathInput } from '../files/PathInput';
 import { useT } from '../../i18n';
 import {
   Button,
@@ -527,11 +528,11 @@ function Inner({
               />
             )}
             {source === 'file' && (
-              <Input
+              <PathInput
                 label={t('settings.file')}
                 mono
                 value={file}
-                onChange={(e) => setFile(e.target.value)}
+                onPathChange={setFile}
                 placeholder={win ? 'C:\\Windows\\Logs\\CBS\\CBS.log' : '/var/log/pacman.log'}
                 hint={t('settings.fileHint')}
                 spellCheck={false}
@@ -572,11 +573,12 @@ function Inner({
 
         {type === 'folder' && (
           <>
-            <Input
+            <PathInput
+              mode="folder"
               label={t('settings.path')}
               mono
               value={path}
-              onChange={(e) => setPath(e.target.value)}
+              onPathChange={setPath}
               placeholder="/home/you/Documents"
               spellCheck={false}
             />

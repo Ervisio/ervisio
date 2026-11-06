@@ -930,3 +930,9 @@ td .sw-nm b {
 
 .sw-cli-filter { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .sw-cli-filter small { color: var(--ink2); font-size: 12px; flex: 1; min-width: 160px; }
+
+.sw-task-activity { display:flex; flex-direction:column; gap:14px; padding:22px; flex:1; min-height:0; overflow:hidden; }
+.sw-task-activity > header { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.sw-task-activity h3 { margin:0; font-size:16px; }
+.sw-task-activity header p { margin:6px 0 0; color:var(--ink2); font-size:12px; }
+.sw-task-activity > .sw-log { flex:1; min-height:120px; max-height:none; overflow:auto; }

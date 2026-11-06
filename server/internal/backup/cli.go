@@ -90,7 +90,7 @@ func dispatch(ctx context.Context, args []string, e *engine) (any, error) {
 		if current, err := user.Current(); err == nil {
 			account = current.Username
 		}
-		return map[string]any{"supported": true, "platform": "linux", "account": account, "clients": clients, "spoolFree": free, "spoolReserve": reserveBytes, "maxPlans": maxJobs, "maxFolders": 32, "maxDatabases": 16, "features": []string{"logs"}}, nil
+		return map[string]any{"supported": true, "platform": "linux", "account": account, "clients": clients, "spoolFree": free, "spoolReserve": reserveBytes, "maxPlans": maxJobs, "maxFolders": 32, "maxDatabases": 16, "features": []string{"logs", "destinations", "delivery"}}, nil
 	case "list":
 		items, err := s.list()
 		return map[string]any{"plans": items}, err
@@ -142,17 +142,7 @@ func dispatch(ctx context.Context, args []string, e *engine) (any, error) {
 		}
 		ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 		defer cancel()
-		err = e.withRemote(ctx, c.Destination.Connection, func(ctx context.Context, f remote.FS) error {
-			entry, err := f.Stat(ctx, c.Destination.Path)
-			if err != nil {
-				return err
-			}
-			if entry.Type != "dir" {
-				return errors.New("The destination is not a real directory.")
-			}
-			return nil
-		})
-		return map[string]any{"reachable": err == nil, "path": c.Destination.Path, "writeTested": false}, err
+		return e.probeDestination(ctx, c)
 	case "browse":
 		return e.browse(ctx, args[1])
 	}
