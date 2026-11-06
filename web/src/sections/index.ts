@@ -41,7 +41,7 @@ export const SECTIONS: SectionDef[] = [
   {
     id: 'taskmanager',
     path: '/taskmanager',
-    icon: 'overview',
+    icon: 'task-manager',
     colorVar: 'var(--h-ov)',
     hue: 'ov',
     titleKey: 'nav.taskManager',

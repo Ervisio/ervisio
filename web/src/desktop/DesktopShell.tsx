@@ -293,6 +293,7 @@ export function DesktopShell() {
         };
         return {
           ...a,
+          icon: section.id === 'overview' ? 'task-manager' : a.icon,
           label:
             a.key === 'files'
               ? t('desktop.explorer')
