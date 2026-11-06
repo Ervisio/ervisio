@@ -1,5 +1,9 @@
 # Changelog
 
+## [7.0.5] - 2026-11-06
+
+- Reduce plugin request CPU and filesystem I/O: scoped authorization locates and verifies only the requested plugin, instead of rehashing every installed plugin for each request. Preserve location precedence and recheck signatures and file integrity on every use.
+
 ## [7.0.4] - 2026-11-06
 
 - Keep personal preferences and plugin documents in protected account namespaces; preserve readable legacy data and detect concurrent chat changes.
