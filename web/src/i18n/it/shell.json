@@ -7,6 +7,8 @@
     "files": "File",
     "notepad": "Blocco note",
     "editor": "Editor di codice",
+    "media": "Foto e video",
+    "taskManager": "Gestione attività",
     "logs": "Log",
     "services": "Servizi",
     "software": "Software",
@@ -171,7 +173,16 @@
       "ssid": "SSID: {name}",
       "connection": "Connessione: {name}"
     },
-    "taskManager": "Gestione attività"
+    "taskManager": "Gestione attività",
+    "newDirectoryShortcut": "Nuovo collegamento a cartella",
+    "editDirectoryShortcut": "Modifica collegamento a cartella",
+    "directoryShortcutHint": "Collega una cartella esistente sul server o su una connessione di rete salvata. Viene creato solo un collegamento sul desktop; nessun file o cartella viene creato o eliminato.",
+    "shortcutConnection": "Posizione",
+    "shortcutLocal": "Questo server",
+    "shortcutUnavailable": "Connessione salvata non disponibile",
+    "shortcutPath": "Percorso della cartella esistente",
+    "shortcutName": "Nome del collegamento (facoltativo)",
+    "invalidDirectoryShortcut": "Scegli il percorso assoluto di una cartella esistente a cui puoi accedere."
   },
   "commands": {
     "opening": "Apro {name}.",

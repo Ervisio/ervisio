@@ -28,13 +28,29 @@ After sign-in, **Settings → Appearance → Interface** changes your own interf
 - Every authorized core section and installed plugin page appears in Start automatically. Native plugin layouts are used when declared; other plugins retain their current page inside a window.
 - Open several applications, minimize, maximize, resize, or snap a window to either side. Dragging to the top maximizes; dragging a maximized or snapped titlebar restores its previous normal size under the pointer. Start search selects its first result; arrows change selection and Enter opens it. The taskbar restores running windows. Alt+Tab cycles apps, Alt+F4 closes the active window, Ctrl+Alt+D shows the desktop and Ctrl+K opens the existing command palette.
 - Use an app's menu to add a desktop shortcut or pin it to the taskbar. Drag shortcuts into virtual folders, including nested folders. The keyboard-accessible Move to folder action offers the same organization.
-- Desktop folders only store app shortcuts. Removing a folder promotes its contents; it never deletes server files or uninstalls applications.
+- Desktop folders organize app and directory shortcuts. Removing an organizer promotes its contents; it never deletes server files or uninstalls applications.
+- Right-click the desktop and choose **New folder shortcut** to link an existing directory on this server or a saved network connection. Choose the location, enter its absolute path and optionally give it a name. Ervisio checks access before saving. Opening the shortcut shows that exact directory in File Explorer; removing it only removes the link. These links are separate from virtual desktop organizers.
 - Wallpaper, folders, shortcuts, taskbar pins and window bounds persist through the existing per-user preferences API. They follow the account between browsers. Failed preference loads block editing and offer Retry, preventing defaults from replacing an unreadable saved desktop.
 - This PC opens real home/system locations through File Explorer. File Explorer retains tabs, split views, uploads, downloads, permissions, SFTP configuration and transfer progress. Dropping files or folders from the computer onto the desktop asks for a real server destination and uses the same transfer queue; dropping directly into Explorer uses its current folder.
+- Moving an Explorer item within its existing directory does nothing, including Ctrl-drag. Cross-folder dragging still copies or moves normally. Shift+Delete opens the permanent-delete confirmation with its confirm button selected for Enter; administrator operations retain their typed-name check.
+- ErvisiOS keeps the browser at the server's base URL with **Ervisio** as the tab title. App navigation belongs to each window. Existing direct links still open their intended app once; reloading the base URL returns to the desktop. Classic retains its normal section URLs and titles.
 
 ## Terminal
 
 The native Terminal layout uses real terminal sessions with tabs, local/root/SSH profiles, splits, snippets, command palette and existing session controls. Its appearance dialog saves opacity, backdrop blur, font family/size, palette, cursor, line height and scrollback per user. Appearance changes update xterm without restarting the PTY. The classic terminal remains available in the classic interface.
+
+## Files and media
+
+Photos & Videos opens images, videos and audio from File Explorer, including saved
+SFTP and SMB folders. Images have zoom, fit, rotation, fullscreen, file details and
+folder navigation. Video and audio use native browser controls with real seeking;
+unsupported codecs offer a download. Playback and slideshows pause when their window
+is inactive. Files stream without server transcoding or loading a whole video into
+memory.
+
+In Classic, Notepad and Code editor open from file and folder actions without
+occupying the navigation rail. Task Manager is available in the rail alongside
+Overview. ErvisiOS retains the editors as applications in Start.
 
 ## Connectivity
 

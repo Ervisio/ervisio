@@ -84,5 +84,5 @@ func termEnv(u *user.User, home, shell string) []string {
 	if os.Getenv("USERNAME") == "" && u != nil {
 		env = append(env, "USERNAME="+u.Username)
 	}
-	return env
+	return withManagedCLIPath(env, home)
 }

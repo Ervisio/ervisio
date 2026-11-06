@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useT } from '../../i18n';
 import { Badge, Button, ConfirmDialog, Dialog } from '../../ui';
 import { formatBytes } from '../../lib/format';
+import { openApp } from '../../lib/openApp';
 import { useSoftware } from './store';
 import { startJob, useTx } from './tx';
 import { SourceBadge, displayName, updateKey } from './helpers';
@@ -62,7 +63,7 @@ export function useActions() {
 
   /** Open the Terminal; with cmd, a new session gets it typed at the prompt (not run). */
   const openTerminal = useCallback(
-    (cmd?: string) => nav(cmd ? `/terminal?cmd=${encodeURIComponent(cmd)}` : '/terminal'),
+    (cmd?: string) => openApp(cmd ? `/terminal?cmd=${encodeURIComponent(cmd)}` : '/terminal', nav),
     [nav],
   );
   const aurHelper = summary?.aurHelper || 'yay';

@@ -1,5 +1,5 @@
 import type { IconName } from '../../ui';
-import { DRAG_TYPE } from './dropfiles';
+import { DRAG_TYPE, hasExternalFiles } from './dropfiles';
 import type { FEntry, SortKey, SortState } from './types';
 
 export const VIRTUAL_ICON: Record<string, IconName> = {
@@ -9,7 +9,7 @@ export const VIRTUAL_ICON: Record<string, IconName> = {
 };
 
 export const isHidden = (e: FEntry) => e.name.startsWith('.');
-export const hasFiles = (dt: DataTransfer) => Array.from(dt.types).includes('Files');
+export const hasFiles = hasExternalFiles;
 export const hasInternal = (dt: DataTransfer) => Array.from(dt.types).includes(DRAG_TYPE);
 export const nextSort = (sort: SortState, key: SortKey): SortState => ({
   key,

@@ -60,6 +60,10 @@ for (const shell of ['classic', 'ervisios']) {
     });
     expect(JSON.stringify(saved)).not.toContain('fixture-smb-password');
     await page.reload();
+    if (shell === 'ervisios') {
+      await expect(page).toHaveURL(/\/$/);
+      await page.getByRole('option', { name: 'File Explorer', exact: true }).dblclick();
+    }
     await page
       .getByRole('link', { name: /Storage Box SMB/ })
       .first()

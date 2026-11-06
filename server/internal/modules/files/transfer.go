@@ -14,7 +14,10 @@ import (
 // hReadStream implements files.readStream (docs/api/files-transfer.md).
 func hReadStream(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
 	var p struct {
-		Path string `json:"path"`
+		Path         string `json:"path"`
+		Offset       int64  `json:"offset"`
+		Length       *int64 `json:"length"`
+		MetadataOnly bool   `json:"metadataOnly"`
 	}
 	if err := c.Bind(&p); err != nil {
 		return err
@@ -23,7 +26,7 @@ func hReadStream(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
 	if err != nil {
 		return err
 	}
-	f, err := os.Open(path)
+	f, err := openReadFile(path)
 	if err != nil {
 		return err
 	}
@@ -40,14 +43,24 @@ func hReadStream(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
 		return err
 	}
 	size := fi.Size()
-	if err := s.Send(map[string]any{"name": fi.Name(), "size": size, "mime": mt}); err != nil {
-		return err
-	}
-	sent, err := streamFile(ctx, f, s, size)
+	length, err := ReadWindow(size, p.Offset, p.Length)
 	if err != nil {
 		return err
 	}
-	if sent != size {
+	if _, err = f.Seek(p.Offset, io.SeekStart); err != nil {
+		return err
+	}
+	if err := s.Send(map[string]any{"name": fi.Name(), "size": length, "totalSize": size, "offset": p.Offset, "mtime": fi.ModTime().UnixMilli(), "mime": mt}); err != nil {
+		return err
+	}
+	if p.MetadataOnly {
+		return s.Send(map[string]bool{"done": true})
+	}
+	sent, err := streamFile(ctx, f, s, length)
+	if err != nil {
+		return err
+	}
+	if sent != length {
 		return rpc.Errorf(rpc.Internal, "The file changed while it was being read.")
 	}
 	return s.Send(map[string]bool{"done": true})
@@ -91,6 +104,12 @@ func streamFile(ctx context.Context, r io.Reader, s rpc.Stream, size int64) (int
 		}
 	}
 	return sent, nil
+}
+
+// StreamFile sends a bounded window with normal RPC flow control. Remote files
+// share it so video seeking never buffers a whole file in either bridge.
+func StreamFile(ctx context.Context, r io.Reader, s rpc.Stream, size int64) (int64, error) {
+	return streamFile(ctx, r, s, size)
 }
 
 // uploadReq is the files.writeStream parameter set.

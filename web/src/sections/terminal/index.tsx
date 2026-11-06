@@ -201,11 +201,15 @@ function useCommandLink(
         n.delete('cwd');
         n.delete('admin');
         n.delete('launch');
+        n.delete('shell');
         return n;
       },
       { replace: true },
     );
-    void create({ ...(link.cwd ? { cwd: link.cwd } : {}) }, link.admin).then((id) => {
+    void create(
+      { ...(link.cwd ? { cwd: link.cwd } : {}), ...(link.shell ? { shell: link.shell } : {}) },
+      link.admin,
+    ).then((id) => {
       if (id && link.command) setPendingInput({ id, text: link.command });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -68,6 +68,51 @@ jobs:
       - name: Build Windows binaries (amd64, arm64)
         run: make build-windows VERSION=ci-${GITHUB_SHA::7}
 
+  backup-databases:
+    name: Backup (real PostgreSQL and MariaDB fixtures)
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: backup
+          POSTGRES_PASSWORD: backup-fixture-only
+          POSTGRES_DB: ervisio_backup_fixture
+        ports:
+          - 15432:5432
+        options: >-
+          --health-cmd "pg_isready -U backup -d ervisio_backup_fixture"
+          --health-interval 5s --health-timeout 5s --health-retries 24
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: fixture-root-only
+          MARIADB_USER: backup
+          MARIADB_PASSWORD: backup-fixture-only
+          MARIADB_DATABASE: ervisio_backup_fixture
+        ports:
+          - 13306:3306
+        options: >-
+          --health-cmd "mariadb-admin ping --host=127.0.0.1 --user=root --password=fixture-root-only"
+          --health-interval 5s --health-timeout 5s --health-retries 24
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - name: Install database clients
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client mariadb-client
+      - name: Grant fixture-only routine metadata access
+        run: mariadb --host=127.0.0.1 --port=13306 --user=root --password=fixture-root-only -e "GRANT SELECT ON mysql.proc TO 'backup'@'%';"
+      - name: Dump and verify disposable databases
+        working-directory: server
+        env:
+          ERVISIO_BACKUP_TEST_DATABASES: '1'
+          ERVISIO_BACKUP_TEST_POSTGRES_PORT: '15432'
+          ERVISIO_BACKUP_TEST_MYSQL_PORT: '13306'
+        run: go test -race ./internal/backup -count=1
+
   web:
     name: Web (typecheck, lint, i18n, test, build)
     runs-on: ubuntu-24.04

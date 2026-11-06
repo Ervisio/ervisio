@@ -106,6 +106,8 @@ export interface ConfirmDialogProps {
   danger?: boolean;
   /** The user must type this text to enable the confirm button. */
   confirmText?: string;
+  /** Opt in to Enter confirming when no typed phrase is required. Other dialogs keep Cancel first. */
+  defaultAction?: 'cancel' | 'confirm';
   icon?: IconName;
   children?: ReactNode;
 }
@@ -120,6 +122,7 @@ export function ConfirmDialog({
   cancelLabel,
   danger = true,
   confirmText,
+  defaultAction = 'cancel',
   icon,
   children,
 }: ConfirmDialogProps) {
@@ -166,6 +169,7 @@ export function ConfirmDialog({
           </Button>
           <Button
             type="submit"
+            data-autofocus={defaultAction === 'confirm' && !confirmText ? true : undefined}
             variant={danger ? 'danger-solid' : 'primary'}
             disabled={!ok}
             loading={busy}

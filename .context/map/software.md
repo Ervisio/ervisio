@@ -4,8 +4,9 @@ Purpose: list, search, install, remove and update system packages and Flatpak ap
 ## Entry points and public contracts
 - Backend `server/internal/modules/software/software.go:Register`. User level: `software.summary`, `check`, `updates`, `installed`, `info`, `search`, `suggest`, `apps`, `icon`, `history`, `status`.
 - Admin level: `software.schedule`; stream `software.transaction`.
-- User-level stream `software.transactionUser` is only accepted for Flatpak scope `user` (`buildPlans`, else `needs_admin`).
-- `TxParams{op upgrade|install|remove, packages, source repo|flatpak|aur|all, scope system|user}`; events `start`, `step`, `progress`, `log`, `done{ok,message,hint,rebootNeeded}`.
+- User-level stream `software.transactionUser` accepts Flatpak scope `user`, or `source:"cli"` for one managed account-scoped CLI. Root/admin CLI-prefix transactions are rejected.
+- `software.cli` lists managed Node.js LTS, Claude Code and Codex plus curated distro-backed tools. `cli*.go` owns bounded official Node archive/checksum downloads, staged npm-prefix installs, per-account locks/history, safe launchers and rollback. Existing unmanaged executables are detected without taking ownership.
+- `TxParams{op upgrade|install|remove, packages, source repo|flatpak|aur|all|cli, scope system|user}`; events `start`, `step`, `progress`, `log`, `done{ok,message,hint,rebootNeeded}`.
 - `backend.go:Backend` interface (Name, Kind, Available, ListInstalled/Updates, Search, Info, Install/Remove/Upgrade returning `Plan` of argv `Step`s, Refresh); `scoped` adds `WithScope` (Flatpak).
 - Backends: `pacman.go` (+AUR helper yay/paru), `apt.go`, `rpm.go` (dnf, zypper), `winget.go` (+`winget_parse.go`), `flatpak.go`.
 - Frontend `web/src/sections/software/`: `index.tsx` tabs (Store, Installed, Updates, History); `store.ts` shared cache + 5-min background summary; `tx.ts` job runner and attach; `badge.ts` rail count; `palette.ts`; `ScheduleDialog.tsx`; `SidePanel.tsx` details.
@@ -15,7 +16,8 @@ Purpose: list, search, install, remove and update system packages and Flatpak ap
 - Reads fan out to all backends in parallel and are cached 10 minutes (`cacheTTL`, `force` bypasses); `invalidate` after a change.
 - Transaction: `buildPlans` -> `txMu` single-run guard -> `lockedByOther` (pacman `db.lck`) -> run each Step as argv, parse lines into progress -> state file mirrored for `software.status`.
 - The command keeps running if the client disconnects; UI `attachIfBusy` polls `software.status` every 1.5 s and mirrors the state (page reload, other session).
-- UI `tx.ts` runs a `Job` as sequential transactions; flatpak user scope goes to the User stream with `admin:false`, everything else to the root bridge (unlock dialog).
+- UI `tx.ts` runs a `Job` as sequential transactions; Flatpak user scope and managed CLI tools go to the User stream with `admin:false`, distro packages use the root bridge (unlock dialog).
+- Managed CLIs live under `~/.local/share/ervisio/cli` without changing the system runtime or shell profiles. Only account-owned launchers are created in `~/.local/bin`; collisions remain visible and untouched. Terminal receives existing managed directories only for that bridge account; Open terminal prefills an absolute command for review and, on Windows, selects PowerShell through shell metadata.
 - History parses `/var/log/pacman.log`, `apt/history.log`, `zypp/history`, `dnf.rpm.log` (last 12 MiB, newest first).
 - Schedule: Linux systemd timer pair in `/etc/systemd/system` (`schedule.go`); Windows Task Scheduler task `\Ervisio\SoftwareUpdate`, SYSTEM, daily (`schedule_task.go`, `schedule_windows.go`).
 

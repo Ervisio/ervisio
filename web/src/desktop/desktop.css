@@ -32,10 +32,26 @@
   border: 0;
 }
 .eos button:focus-visible,
-.eos input:focus-visible,
-.eos [tabindex]:focus-visible {
+.eos input:focus-visible:not(.ui-in input),
+.eos [tabindex]:focus-visible:not(.ui-in input, .ui-in select, .ui-in textarea) {
   outline: 2px solid var(--acc);
   outline-offset: 3px;
+}
+.eos-shortcut-fields {
+  display: grid;
+  gap: 16px;
+}
+.eos-shortcut-link {
+  position: absolute;
+  bottom: 2px;
+  left: 1px;
+  width: 17px;
+  height: 17px;
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 17px;
 }
 .eos button:disabled {
   cursor: default;
@@ -867,6 +883,9 @@
   z-index: 1500;
   padding: 5px;
   width: 246px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  overflow: auto;
   border-radius: 9px;
   background: var(--eos-glass-strong);
   border: 1px solid var(--eos-edge);

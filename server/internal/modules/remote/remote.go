@@ -50,6 +50,7 @@ func register(r *rpc.Registry, m *module) {
 	r.Handle("remote.readText", rpc.User, m.hReadText)
 	r.Handle("remote.writeText", rpc.User, m.hWriteText)
 	r.Stream("remote.readStream", rpc.User, m.hReadStream)
+	r.Stream("remote.mediaStream", rpc.User, m.hMediaStream)
 	r.Stream("remote.writeStream", rpc.User, m.hWriteStream)
 	r.Stream("remote.copy", rpc.User, m.hCopy)
 	r.Stream("remote.searchText", rpc.User, m.hSearchText)
@@ -606,20 +607,29 @@ func writeTextFile(ctx context.Context, h *handle, pth string, data []byte, expe
 }
 
 func (m *module) hReadStream(ctx context.Context, c *rpc.Call, s rpc.Stream) error {
-	var p pathParams
+	var p struct {
+		pathParams
+		Offset       int64  `json:"offset"`
+		Length       *int64 `json:"length"`
+		MetadataOnly bool   `json:"metadataOnly"`
+	}
 	if err := c.Bind(&p); err != nil {
 		return err
 	}
-	h, pth, err := m.checkoutPath(ctx, p)
+	h, pth, err := m.checkoutPath(ctx, p.pathParams)
 	if err != nil {
 		return err
 	}
-	err = readStream(ctx, h, pth, s)
+	err = readStreamWindow(ctx, h, pth, s, p.Offset, p.Length, p.MetadataOnly)
 	h.release(err)
 	return remoteErr(err)
 }
 
 func readStream(ctx context.Context, h *handle, pth string, s rpc.Stream) error {
+	return readStreamWindow(ctx, h, pth, s, 0, nil, false)
+}
+
+func readStreamWindow(ctx context.Context, h *handle, pth string, s rpc.Stream, offset int64, requested *int64, metadataOnly bool) error {
 	e, err := h.Stat(ctx, pth)
 	if err != nil {
 		return err
@@ -630,6 +640,7 @@ func readStream(ctx context.Context, h *handle, pth string, s rpc.Stream) error 
 	if e.Type == "symlink" {
 		if ti, err := statFollow(ctx, h, pth); err == nil {
 			e.Size = ti.Size
+			e.MTime = ti.MTime
 		}
 	}
 	r, err := h.Open(ctx, pth)
@@ -637,24 +648,43 @@ func readStream(ctx context.Context, h *handle, pth string, s rpc.Stream) error 
 		return err
 	}
 	defer func() { _ = r.Close() }()
-	buf := make([]byte, 64<<10)
-	n, rerr := readChunk(r, buf)
-	if rerr != nil && rerr != io.EOF {
-		return rerr
-	}
-	mt := mimeOf(e.Name)
-	if mt == "" {
-		mt = http.DetectContentType(buf[:n])
-	}
-	if err := s.Send(map[string]any{"name": e.Name, "size": e.Size, "mime": mt}); err != nil {
-		return err
-	}
-	sent, err := sendChunks(ctx, r, s, buf, n, rerr)
+	length, err := files.ReadWindow(e.Size, offset, requested)
 	if err != nil {
 		return err
 	}
-	if sent != e.Size {
-		return rpc.Errorf(rpc.Internal, "The file changed while it was being read (%d of %d bytes).", sent, e.Size)
+	var reader io.Reader = r
+	mt := mimeOf(e.Name)
+	if mt == "" {
+		buf := make([]byte, 512)
+		n, readErr := io.ReadFull(r, buf)
+		if readErr != nil && readErr != io.EOF && readErr != io.ErrUnexpectedEOF {
+			return readErr
+		}
+		mt = http.DetectContentType(buf[:n])
+		reader = io.MultiReader(strings.NewReader(string(buf[:n])), r)
+	}
+	if offset > 0 {
+		seeker, ok := r.(io.Seeker)
+		if !ok {
+			return rpc.Errorf(rpc.Unavailable, "This connection does not support seeking. Download the file to play it locally.")
+		}
+		if _, err = seeker.Seek(offset, io.SeekStart); err != nil {
+			return err
+		}
+		reader = r
+	}
+	if err := s.Send(map[string]any{"name": e.Name, "size": length, "totalSize": e.Size, "offset": offset, "mtime": e.MTime, "mime": mt}); err != nil {
+		return err
+	}
+	if metadataOnly {
+		return s.Send(map[string]bool{"done": true})
+	}
+	sent, err := files.StreamFile(ctx, reader, s, length)
+	if err != nil {
+		return err
+	}
+	if sent != length {
+		return rpc.Errorf(rpc.Internal, "The file changed while it was being read (%d of %d bytes).", sent, length)
 	}
 	return s.Send(map[string]bool{"done": true})
 }

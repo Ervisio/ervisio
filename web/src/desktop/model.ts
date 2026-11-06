@@ -9,6 +9,13 @@ export interface DesktopShortcut {
   app: string;
   folder: string | null;
 }
+/** A link to an existing host/network directory, never a request to create one. */
+export interface DesktopDirectoryShortcut {
+  id: string;
+  name: string;
+  path: string;
+  folder: string | null;
+}
 export interface WindowBounds {
   x: number;
   y: number;
@@ -23,6 +30,7 @@ export interface DesktopData {
   version: 1;
   folders: DesktopFolder[];
   shortcuts: DesktopShortcut[];
+  directoryShortcuts: DesktopDirectoryShortcut[];
   pinned: string[];
   wallpaper: 'bloom' | 'mint' | 'sunset' | 'plain';
   bounds: Record<string, WindowBounds>;
@@ -35,6 +43,20 @@ const text = (x: unknown, max = 160): x is string =>
 const record = (x: unknown): x is Record<string, unknown> =>
   !!x && typeof x === 'object' && !Array.isArray(x);
 
+export function validDirectoryPath(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length <= 4096 &&
+    ![...value].some(
+      (character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127,
+    ) &&
+    (/^\//.test(value) ||
+      /^[a-z]:[\\/]/i.test(value) ||
+      /^\\\\[^\\]+\\[^\\]+/.test(value) ||
+      /^remote:[a-f0-9]{16}:\//i.test(value))
+  );
+}
+
 export function defaultDesktop(apps: string[]): DesktopData {
   const initial = DEFAULT_APPS.concat(apps.find((a) => a.startsWith('p:ai/')) ?? []).filter((a) =>
     apps.includes(a),
@@ -43,6 +65,7 @@ export function defaultDesktop(apps: string[]): DesktopData {
     version: 1,
     folders: [],
     shortcuts: initial.map((app) => ({ id: `shortcut:${app}`, app, folder: null })),
+    directoryShortcuts: [],
     pinned: ['files', 'terminal', 'plugins', 'settings'].filter((a) => apps.includes(a)),
     wallpaper: 'bloom',
     bounds: {},
@@ -92,6 +115,29 @@ export function readDesktop(value: unknown, apps: string[]): DesktopData {
       });
   }
   const bounds: Record<string, WindowBounds> = Object.create(null);
+  const directoryShortcuts: DesktopDirectoryShortcut[] = [];
+  const allIds = new Set([...ids, ...shortcuts.map((s) => s.id)]);
+  for (const s of (Array.isArray(value.directoryShortcuts) ? value.directoryShortcuts : []).slice(
+    0,
+    256,
+  )) {
+    if (
+      !record(s) ||
+      !text(s.id) ||
+      !text(s.name, 80) ||
+      !s.name.trim() ||
+      !validDirectoryPath(s.path) ||
+      allIds.has(s.id)
+    )
+      continue;
+    allIds.add(s.id);
+    directoryShortcuts.push({
+      id: s.id,
+      name: s.name.trim(),
+      path: s.path,
+      folder: text(s.folder) && ids.has(s.folder) ? s.folder : null,
+    });
+  }
   if (record(value.bounds))
     for (const [id, b] of Object.entries(value.bounds).slice(0, 256)) {
       if (!record(b)) continue;
@@ -105,9 +151,9 @@ export function readDesktop(value: unknown, apps: string[]): DesktopData {
         };
     }
   const positions: Record<string, DesktopPosition> = Object.create(null);
-  const itemIds = new Set([...folders.map((f) => f.id), ...shortcuts.map((s) => s.id)]);
+  const itemIds = allIds;
   if (record(value.positions))
-    for (const [id, cell] of Object.entries(value.positions).slice(0, 1280)) {
+    for (const [id, cell] of Object.entries(value.positions).slice(0, 1536)) {
       if (!itemIds.has(id) || !record(cell)) continue;
       if (
         Number.isInteger(cell.column) &&
@@ -123,6 +169,7 @@ export function readDesktop(value: unknown, apps: string[]): DesktopData {
     version: 1,
     folders,
     shortcuts,
+    directoryShortcuts,
     pinned: Array.isArray(value.pinned)
       ? [...new Set(value.pinned.filter((x): x is string => text(x)))].slice(0, 32)
       : [],
@@ -239,6 +286,16 @@ export function moveItem(data: DesktopData, id: string, target: string | null): 
       folders: data.folders.map((f) => (f.id === id ? { ...f, parent: target } : f)),
     };
   }
+  const directory = data.directoryShortcuts.find((s) => s.id === id);
+  if (directory)
+    return directory.folder === target
+      ? data
+      : {
+          ...data,
+          directoryShortcuts: data.directoryShortcuts.map((s) =>
+            s.id === id ? { ...s, folder: target } : s,
+          ),
+        };
   const shortcut = data.shortcuts.find((s) => s.id === id);
   if (
     !shortcut ||
@@ -262,6 +319,9 @@ export function removeFolder(data: DesktopData, id: string): DesktopData {
       .filter((f) => f.id !== id)
       .map((f) => (f.parent === id ? { ...f, parent: folder.parent } : f)),
     shortcuts: data.shortcuts.map((s) => (s.folder === id ? { ...s, folder: folder.parent } : s)),
+    directoryShortcuts: data.directoryShortcuts.map((s) =>
+      s.folder === id ? { ...s, folder: folder.parent } : s,
+    ),
   };
 }
 

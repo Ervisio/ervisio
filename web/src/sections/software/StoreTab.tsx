@@ -4,6 +4,7 @@ import { useSession } from '../../api';
 import { useT } from '../../i18n';
 import { Badge, Button, Chip, EmptyState, Icon, Input, Skeleton, type IconName } from '../../ui';
 import { AppIcon } from './AppIcon';
+import { CLITools } from './CLITools';
 import { SourceBadge, displayName } from './helpers';
 import { loadSuggestions, peekSuggestions, suggestionsRevision, useSoftware } from './store';
 import { useAccountScope } from '../../lib/accountScope';
@@ -284,6 +285,7 @@ export function StoreTab({ actions, onOpen, goInstalled }: Props) {
         />
       </div>
 
+      <CLITools query={q} busy={actions.busy} askInstall={actions.askInstall} onOpen={onOpen} />
       <div className="sw-cats">
         {CATEGORIES.map((c) => (
           <button

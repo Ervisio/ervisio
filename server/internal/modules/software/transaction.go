@@ -305,6 +305,12 @@ func runTransaction(ctx context.Context, c *rpc.Call, s rpc.Stream, user bool) e
 	if err := c.Bind(&p); err != nil {
 		return err
 	}
+	if p.Source == "cli" {
+		if !user {
+			return rpc.Errorf(rpc.Invalid, "Managed CLI tools use the user transaction endpoint.")
+		}
+		return runCLITransaction(ctx, c, s, p)
+	}
 	m := getManager()
 	if err := m.requireAny(); err != nil {
 		return err
@@ -586,6 +592,9 @@ func statusSources() []stateSource {
 	srcs := []stateSource{{stateRootPublic, stateRootOwner}}
 	if p := userStatePath(); p != "" {
 		srcs = append(srcs, stateSource{p, os.Geteuid()})
+	}
+	if root, err := cliRoot(false); err == nil {
+		srcs = append(srcs, stateSource{filepath.Join(root, "transaction.json"), os.Geteuid()})
 	}
 	return srcs
 }

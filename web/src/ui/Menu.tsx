@@ -16,6 +16,7 @@ import {
 import { createPortal } from 'react-dom';
 import { Icon, type IconName } from './Icon';
 import { useOutsideClick } from './hooks';
+import { menuPosition } from './menuPosition';
 
 /* ---------- Tooltip ---------- */
 export function Tooltip({
@@ -136,7 +137,12 @@ export function Menu({
       if (left + w > window.innerWidth - 8) left = anchor.x - w;
       if (top + h > window.innerHeight - 8) top = anchor.y - h;
     }
-    setPos({ left: Math.max(8, left), top: Math.max(8, top) });
+    const position = menuPosition(
+      { x: left, y: top },
+      { width: w, height: h },
+      { width: window.innerWidth, height: window.innerHeight },
+    );
+    setPos({ left: position.x, top: position.y });
     el.focus();
   }, [anchor]);
   useEffect(() => {

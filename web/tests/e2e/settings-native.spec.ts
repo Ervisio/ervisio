@@ -32,7 +32,7 @@ test('native settings show the selected real category and search all authorized 
   await page.locator('.os-settings-nav [data-settings-category="appearance"]').click();
   await expect(page.locator('.os-settings-category')).toHaveCount(1);
   await expect(page.locator('.os-settings-category[data-gid="appearance"]')).toBeVisible();
-  await expect(page).toHaveURL(/#appearance$/);
+  await expect(page).toHaveURL(/\/$/);
   expect(
     await page.locator('.os-settings-nav').evaluate((element) => {
       const search = element.querySelector('.os-settings-search')!.getBoundingClientRect();

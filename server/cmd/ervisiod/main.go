@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/ervisio/ervisio/server/internal/backup"
 	"github.com/ervisio/ervisio/server/internal/brand"
 	"github.com/ervisio/ervisio/server/internal/bridge"
 	"github.com/ervisio/ervisio/server/internal/config"
@@ -143,6 +144,9 @@ func runInternalMode() {
 		return
 	}
 	mode := os.Args[1]
+	if mode == "--backup" {
+		os.Exit(backup.RunCLI(os.Args[2:]))
+	}
 	if mode == maintenance.HelperFlag {
 		os.Exit(maintenance.RunHelper(os.Args[2:]))
 	}

@@ -105,7 +105,12 @@ func newXferEnv(t *testing.T) *xferEnv {
 			time.Sleep(20 * time.Millisecond)
 		}
 	})
-	mux.HandleFunc("/act", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusConflict) })
+	mux.HandleFunc("/act", func(w http.ResponseWriter, r *http.Request) {
+		// Consume the upload before responding so a Unix socket close cannot
+		// race the client's body write and hide the status being tested.
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.WriteHeader(http.StatusConflict)
+	})
 	hs := &http.Server{Handler: mux}
 	go func() { _ = hs.Serve(ln) }()
 	t.Cleanup(func() { _ = hs.Close() })

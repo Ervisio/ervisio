@@ -2,7 +2,9 @@ import {
   Component,
   Suspense,
   useCallback,
+  useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -10,8 +12,17 @@ import {
   type ErrorInfo,
   type ReactNode,
 } from 'react';
-import { Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { call, errorMessage, usePrefs, useSession } from '../api';
+import {
+  MemoryRouter,
+  Route,
+  Routes,
+  UNSAFE_LocationContext,
+  UNSAFE_NavigationContext,
+  UNSAFE_RouteContext,
+  useLocation,
+  useNavigate,
+} from 'react-router-dom';
+import { API_BASE, call, errorMessage, usePrefs, useSession } from '../api';
 import { useI18n, useT } from '../i18n';
 import { formatDate, formatTime, relativeTime } from '../lib/format';
 import { PluginFrame } from '../plugins/PluginFrame';
@@ -38,11 +49,26 @@ import { Wallpaper } from './Wallpaper';
 import { Connectivity } from './Connectivity';
 import { WindowActivityProvider, useWindowActivity } from '../lib/windowActivity';
 import { requestWindowClose } from '../lib/windowClose';
-import { collectDropped, type Dropped } from '../sections/files/dropfiles';
+import {
+  collectDropped,
+  hasExternalFiles,
+  DRAG_TYPE as FILE_DRAG_TYPE,
+  type Dropped,
+} from '../sections/files/dropfiles';
+import { DirectoryShortcutDialog } from './DirectoryShortcutDialog';
+import { menuPosition } from '../ui/menuPosition';
+import { rememberDesktopRecovery, takeDesktopRecovery } from './recovery';
 import './desktop.css';
 
 type AppEntry = NavEntry & { native: boolean; plugin?: string; page?: string; nativeView?: string };
-type Context = { x: number; y: number; item?: string; folder?: string | null; app?: string };
+type Context = {
+  x: number;
+  y: number;
+  item?: string;
+  folder?: string | null;
+  app?: string;
+  anchor?: { left: number; top: number };
+};
 type Edit = { kind: 'create'; parent: string | null } | { kind: 'rename'; id: string };
 const DRAG_TYPE = 'application/x-ervisio-desktop';
 const importFailure = (error: Error) =>
@@ -75,9 +101,70 @@ function AppIcon({ app, size = 24 }: { app: AppEntry; size?: number }) {
 }
 
 function AppContent({ app, url }: { app: AppEntry; url: string }) {
+  // Each desktop window owns navigation history; the browser router remains the desktop's '/'.
+  return (
+    <UNSAFE_LocationContext.Provider value={null!}>
+      <UNSAFE_RouteContext.Provider value={{ outlet: null, matches: [], isDataRoute: false }}>
+        <MemoryRouter
+          initialEntries={[url]}
+          future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+        >
+          <WindowNavigation app={app}>
+            <WindowAppContent app={app} url={url} />
+          </WindowNavigation>
+        </MemoryRouter>
+      </UNSAFE_RouteContext.Provider>
+    </UNSAFE_LocationContext.Provider>
+  );
+}
+
+function WindowNavigation({ app, children }: { app: AppEntry; children: ReactNode }) {
+  const context = useContext(UNSAFE_NavigationContext);
+  const navigation = useMemo(() => {
+    const base = app.key === 'this-pc' ? '/files' : app.to.split(/[?#]/)[0];
+    const intercept = (to: Parameters<typeof context.navigator.push>[0]) => {
+      const target =
+        typeof to === 'string' ? to : `${to.pathname ?? '/'}${to.search ?? ''}${to.hash ?? ''}`;
+      const path = target.split(/[?#]/)[0];
+      if (path === base || (base !== '/' && path.startsWith(`${base}/`))) return false;
+      const event = new CustomEvent('ervisio:shell-action', {
+        cancelable: true,
+        detail: { action: 'open-app', to: target },
+      });
+      return !window.dispatchEvent(event);
+    };
+    return {
+      ...context,
+      navigator: {
+        ...context.navigator,
+        push: ((...args) => {
+          if (!intercept(args[0])) context.navigator.push(...args);
+        }) as typeof context.navigator.push,
+        replace: ((...args) => {
+          if (!intercept(args[0])) context.navigator.replace(...args);
+        }) as typeof context.navigator.replace,
+      },
+    };
+  }, [context, app]);
+  return (
+    <UNSAFE_NavigationContext.Provider value={navigation}>
+      {children}
+    </UNSAFE_NavigationContext.Provider>
+  );
+}
+
+function WindowAppContent({ app, url }: { app: AppEntry; url: string }) {
   const { plugins } = usePlugins();
   const active = useWindowActivity();
   const t = useT('shell');
+  const navigate = useNavigate();
+  const previousURL = useRef(url);
+  useEffect(() => {
+    if (url !== previousURL.current) {
+      previousURL.current = url;
+      navigate(url);
+    }
+  }, [url, navigate]);
   if (app.plugin) {
     const plugin = plugins.find((p) => p.id === app.plugin);
     if (!plugin)
@@ -97,7 +184,7 @@ function AppContent({ app, url }: { app: AppEntry; url: string }) {
     );
   }
   return (
-    <Routes location={url}>
+    <Routes>
       {SECTIONS.map((s) => (
         <Route
           key={s.id}
@@ -129,6 +216,9 @@ export function DesktopShell() {
   const [windows, setWindows] = useState<DesktopWindow[]>([]);
   const [context, setContext] = useState<Context | null>(null);
   const [editing, setEditing] = useState<Edit | null>(null);
+  const [directoryEdit, setDirectoryEdit] = useState<{ folder: string | null; id?: string } | null>(
+    null,
+  );
   const [name, setName] = useState('');
   const [moveId, setMoveId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -138,6 +228,10 @@ export function DesktopShell() {
   const [uploadError, setUploadError] = useState('');
   const [saveError, setSaveError] = useState('');
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const recoveryChecked = useRef(false);
+  const recoveryScope = session
+    ? JSON.stringify([API_BASE || window.location.origin, session.uid, session.user])
+    : '';
   const [gridSize, setGridSize] = useState({ columns: 1, rows: 1 });
   const [selectionRect, setSelectionRect] = useState<{
     x: number;
@@ -161,6 +255,17 @@ export function DesktopShell() {
     setPanel(null),
   );
   useFocusTrap(contextRef, context !== null, () => setContext(null));
+  useLayoutEffect(() => {
+    if (!context || !contextRef.current) return;
+    const box = contextRef.current.getBoundingClientRect();
+    const { x, y } = menuPosition(
+      { x: context.anchor?.left ?? context.x, y: context.anchor?.top ?? context.y },
+      box,
+      { width: window.innerWidth, height: window.innerHeight },
+      !!context.anchor,
+    );
+    if (context.x !== x || context.y !== y) setContext({ ...context, x, y });
+  }, [context]);
 
   const apps = useMemo<AppEntry[]>(
     () => [
@@ -173,16 +278,30 @@ export function DesktopShell() {
         kind: 'section',
         native: true,
       },
-      ...[...nav.main, nav.settings].map((a) => ({
-        ...a,
-        label:
-          a.key === 'files'
-            ? t('desktop.explorer')
-            : a.key === 'overview'
-              ? t('desktop.taskManager')
-              : a.label,
-        native: true,
-      })),
+      ...SECTIONS.filter(
+        (section) =>
+          !('desktopHidden' in section && section.desktopHidden) &&
+          (!section.platforms || section.platforms.includes(session?.os ?? 'linux')),
+      ).map((section) => {
+        const a = [...nav.main, nav.settings].find((entry) => entry.key === section.id) ?? {
+          key: section.id,
+          to: section.path,
+          icon: section.icon,
+          label: t(section.desktopTitleKey ?? section.titleKey),
+          hueClass: `hue-${section.hue}`,
+          kind: 'section' as const,
+        };
+        return {
+          ...a,
+          label:
+            a.key === 'files'
+              ? t('desktop.explorer')
+              : a.key === 'overview'
+                ? t('desktop.taskManager')
+                : a.label,
+          native: true,
+        };
+      }),
       ...pages.map((p) => {
         const m = plugins.find((x) => x.id === p.plugin);
         const entry = nav.plugins.find((a) => a.key === `p:${p.plugin}/${p.id}`);
@@ -201,7 +320,7 @@ export function DesktopShell() {
         };
       }),
     ],
-    [nav.main, nav.settings, nav.plugins, pages, plugins, t],
+    [nav.main, nav.settings, nav.plugins, pages, plugins, t, session?.os],
   );
   const appIds = useMemo(() => apps.map((a) => a.key), [apps]);
   const data = useMemo(() => readDesktop(prefs['shell.desktop'], appIds), [prefs, appIds]);
@@ -211,8 +330,11 @@ export function DesktopShell() {
       ...data.shortcuts
         .filter((shortcut) => shortcut.folder === null && appIds.includes(shortcut.app))
         .map((shortcut) => shortcut.id),
+      ...data.directoryShortcuts
+        .filter((shortcut) => shortcut.folder === null)
+        .map((shortcut) => shortcut.id),
     ],
-    [data.folders, data.shortcuts, appIds],
+    [data.folders, data.shortcuts, data.directoryShortcuts, appIds],
   );
   const gridRows = Math.max(gridSize.rows, Math.ceil(desktopIds.length / gridSize.columns));
   const gridPositions = useMemo(
@@ -399,46 +521,42 @@ export function DesktopShell() {
   const patch = (id: string, delta: Partial<DesktopWindow>) =>
     setWindows((list) => list.map((w) => (w.id === id ? { ...w, ...delta } : w)));
 
-  const open = useCallback(
-    (app: AppEntry, url = app.to, updateURL = true) => {
-      const area = surface.current;
-      const width = area?.clientWidth ?? window.innerWidth,
-        height = area?.clientHeight ?? window.innerHeight - 90;
-      setWindows((list) => {
-        const existing = list.find((w) => w.app === app.key);
-        if (existing)
-          return [
-            ...list.filter((w) => w.id !== existing.id),
-            { ...existing, url, minimized: false },
-          ];
-        const bounds = clampBounds(
-          dataRef.current.bounds[app.key] ?? {
-            x: 100 + (list.length % 5) * 32,
-            y: 26 + (list.length % 5) * 30,
-            width: app.plugin === 'ai' ? 850 : 1120,
-            height: 710,
-          },
-          width,
-          height,
-        );
+  const open = useCallback((app: AppEntry, url = app.to) => {
+    const area = surface.current;
+    const width = area?.clientWidth ?? window.innerWidth,
+      height = area?.clientHeight ?? window.innerHeight - 90;
+    setWindows((list) => {
+      const existing = list.find((w) => w.app === app.key);
+      if (existing)
         return [
-          ...list,
-          {
-            id: crypto.randomUUID(),
-            app: app.key,
-            url,
-            bounds,
-            minimized: false,
-            maximized: width < 860,
-          },
+          ...list.filter((w) => w.id !== existing.id),
+          { ...existing, url, minimized: false },
         ];
-      });
-      setPanel(null);
-      setContext(null);
-      if (updateURL) navigate(url);
-    },
-    [navigate],
-  );
+      const bounds = clampBounds(
+        dataRef.current.bounds[app.key] ?? {
+          x: 100 + (list.length % 5) * 32,
+          y: 26 + (list.length % 5) * 30,
+          width: app.plugin === 'ai' ? 850 : 1120,
+          height: 710,
+        },
+        width,
+        height,
+      );
+      return [
+        ...list,
+        {
+          id: crypto.randomUUID(),
+          app: app.key,
+          url,
+          bounds,
+          minimized: false,
+          maximized: width < 860,
+        },
+      ];
+    });
+    setPanel(null);
+    setContext(null);
+  }, []);
   const openFolder = (id: string) => {
     const folder = dataRef.current.folders.find((f) => f.id === id);
     if (!folder) return;
@@ -451,7 +569,11 @@ export function DesktopShell() {
       kind: 'section',
       native: true,
     };
-    open(app, '/', false);
+    open(app, '/');
+  };
+  const openDirectory = (path: string) => {
+    const app = findApp('files');
+    if (app) open(app, `/files?${new URLSearchParams({ path })}`);
   };
   const currentURL = `${location.pathname}${location.search}${location.hash}`;
   const lastURL = useRef('');
@@ -469,10 +591,25 @@ export function DesktopShell() {
     if (app) {
       lastURL.current = currentURL;
       // A fresh sign-in lands on the desktop; direct links still open their real app.
-      if (currentURL !== '/' || windowsRef.current.some((w) => w.app === app.key))
-        open(app, currentURL, false);
+      if (currentURL !== '/') open(app, currentURL);
     }
-  }, [currentURL, apps, location.pathname, open, pluginsLoading]);
+    if (currentURL !== '/') navigate('/', { replace: true });
+  }, [currentURL, apps, location.pathname, open, pluginsLoading, navigate]);
+
+  useEffect(() => {
+    if (recoveryChecked.current || pluginsLoading || !recoveryScope) return;
+    recoveryChecked.current = true;
+    try {
+      const intent = takeDesktopRecovery(sessionStorage, recoveryScope, apps);
+      // A newly supplied deep link takes precedence over an old recovery intent.
+      if (intent && currentURL === '/') {
+        const app = apps.find((entry) => entry.key === intent.app);
+        if (app) open(app, intent.url);
+      }
+    } catch {
+      /* Browser policy may disable sessionStorage itself. */
+    }
+  }, [apps, pluginsLoading, recoveryScope, currentURL, open]);
 
   useEffect(() => {
     let timer: number;
@@ -498,7 +635,10 @@ export function DesktopShell() {
         const app =
           appRef.current.find((a) => a.to === d.to) ??
           appRef.current.find((a) => a.key !== 'this-pc' && a.to === path);
-        if (app) open(app, d.to);
+        if (app) {
+          event.preventDefault();
+          open(app, d.to);
+        }
       } else if (d.action === 'show-desktop')
         setWindows((list) => list.map((w) => ({ ...w, minimized: true })));
       else if (d.action === 'close-window') {
@@ -596,7 +736,12 @@ export function DesktopShell() {
   };
   const drop = (e: DragEvent, folder: string | null) => {
     setDraggingApp(false);
-    if (e.dataTransfer.types.includes('Files')) {
+    if (e.dataTransfer.types.includes(FILE_DRAG_TYPE)) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    if (hasExternalFiles(e.dataTransfer)) {
       e.preventDefault();
       e.stopPropagation();
       setUploadError('');
@@ -636,7 +781,7 @@ export function DesktopShell() {
         : { column: 0, row: 0 };
       if (payload.item) {
         const items = Array.isArray(payload.items)
-          ? payload.items.filter((id): id is string => typeof id === 'string').slice(0, 1280)
+          ? payload.items.filter((id): id is string => typeof id === 'string').slice(0, 1536)
           : [payload.item];
         if (!items.includes(payload.item)) items.unshift(payload.item);
         changeData((d) => {
@@ -646,6 +791,9 @@ export function DesktopShell() {
             ...next.folders.filter((item) => item.parent === null).map((item) => item.id),
             ...next.shortcuts
               .filter((item) => item.folder === null && appIds.includes(item.app))
+              .map((item) => item.id),
+            ...next.directoryShortcuts
+              .filter((item) => item.folder === null)
               .map((item) => item.id),
           ];
           return placeDesktopItems(
@@ -683,7 +831,12 @@ export function DesktopShell() {
     }
   };
   const allowDrop = (e: DragEvent) => {
-    if (e.dataTransfer.types.includes(DRAG_TYPE) || e.dataTransfer.types.includes('Files'))
+    if (e.dataTransfer.types.includes(FILE_DRAG_TYPE)) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'none';
+      return;
+    }
+    if (e.dataTransfer.types.includes(DRAG_TYPE) || hasExternalFiles(e.dataTransfer))
       e.preventDefault();
   };
   const menu = (e: React.MouseEvent, value: Omit<Context, 'x' | 'y'>) => {
@@ -693,8 +846,11 @@ export function DesktopShell() {
     if (value.item && !selectedItems.includes(value.item)) setSelectedItems([value.item]);
     setContext({
       ...value,
-      x: Math.max(8, Math.min(e.clientX, window.innerWidth - 255)),
-      y: Math.max(8, Math.min(e.clientY, window.innerHeight - 370)),
+      ...(e.currentTarget.closest('.eos-taskbar')
+        ? { anchor: e.currentTarget.getBoundingClientRect() }
+        : {}),
+      x: e.clientX,
+      y: e.clientY,
     });
   };
 
@@ -796,6 +952,43 @@ export function DesktopShell() {
             </button>
           );
         })}
+      {data.directoryShortcuts
+        .filter((item) => item.folder === folder)
+        .map((item) => (
+          <button
+            key={item.id}
+            className={`eos-shortcut eos-directory-shortcut hue-file${folder === null && selectedItems.includes(item.id) ? ' is-selected' : ''}`}
+            data-desktop-item={folder === null ? item.id : undefined}
+            role={folder === null ? 'option' : undefined}
+            aria-selected={folder === null ? selectedItems.includes(item.id) : undefined}
+            title={item.path}
+            style={
+              folder === null
+                ? {
+                    left: gridPositions[item.id]?.column * DESKTOP_CELL.width,
+                    top: gridPositions[item.id]?.row * DESKTOP_CELL.height,
+                  }
+                : undefined
+            }
+            draggable
+            onDragStart={(event) => dragStart(event, { item: item.id })}
+            onDoubleClick={() => openDirectory(item.path)}
+            onClick={(event) => {
+              selectItem(event, item.id, folder);
+              if (event.detail === 0 || window.matchMedia('(pointer: coarse)').matches)
+                openDirectory(item.path);
+            }}
+            onContextMenu={(event) => menu(event, { item: item.id, folder })}
+          >
+            <span className="eos-shortcut-icon">
+              <Icon name="files" size={34} />
+              <span className="eos-shortcut-link" aria-hidden="true">
+                ↗
+              </span>
+            </span>
+            <span>{item.name}</span>
+          </button>
+        ))}
       {folder === null && selectionRect && (
         <div
           className="eos-selection-rectangle"
@@ -835,6 +1028,7 @@ export function DesktopShell() {
     ? data.shortcuts.find((s) => s.id === context.item)
     : undefined;
   const contextApp = context?.app ? findApp(context.app) : undefined;
+  const directoryItem = data.directoryShortcuts.find((item) => item.id === context?.item);
   const unread = notices.filter((n) => !n.read).length;
   const togglePanel = (next: typeof panel) => {
     setContext(null);
@@ -937,7 +1131,24 @@ export function DesktopShell() {
                         <pre>{error.message}</pre>
                       </details>
                       <Button
-                        onClick={importFailure(error) ? () => window.location.reload() : retry}
+                        onClick={
+                          importFailure(error)
+                            ? () => {
+                                try {
+                                  if (app)
+                                    rememberDesktopRecovery(
+                                      sessionStorage,
+                                      recoveryScope,
+                                      app,
+                                      win.url,
+                                    );
+                                } catch {
+                                  /* Reload remains available when browser storage is blocked. */
+                                }
+                                window.location.reload();
+                              }
+                            : retry
+                        }
                       >
                         {t(importFailure(error) ? 'desktop.reload' : 'desktop.retry')}
                       </Button>
@@ -968,7 +1179,8 @@ export function DesktopShell() {
                         <p>{t('desktop.virtualHint')}</p>
                         {renderItems(folder.id)}
                         {!data.folders.some((f) => f.parent === folder.id) &&
-                          !data.shortcuts.some((s) => s.folder === folder.id) && (
+                          !data.shortcuts.some((s) => s.folder === folder.id) &&
+                          !data.directoryShortcuts.some((s) => s.folder === folder.id) && (
                             <div className="eos-empty">
                               <Icon name="files" size={36} />
                               <p>{t('desktop.emptyFolder')}</p>
@@ -1100,8 +1312,9 @@ export function DesktopShell() {
                       onClick={(e) => {
                         const r = e.currentTarget.getBoundingClientRect();
                         setContext({
-                          x: Math.min(r.left, window.innerWidth - 255),
-                          y: Math.max(8, r.top - 220),
+                          x: r.left,
+                          y: r.top,
+                          anchor: r,
                           app: app.key,
                           folder: null,
                         });
@@ -1282,7 +1495,25 @@ export function DesktopShell() {
               </button>
             </>
           )}
-          {(folderItem || shortcutItem) && (
+          {directoryItem && (
+            <>
+              <button role="menuitem" onClick={() => openDirectory(directoryItem.path)}>
+                <Icon name="files" />
+                {t('desktop.open')}
+              </button>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setDirectoryEdit({ id: directoryItem.id, folder: directoryItem.folder });
+                  setContext(null);
+                }}
+              >
+                <Icon name="edit" />
+                {t('desktop.editDirectoryShortcut')}
+              </button>
+            </>
+          )}
+          {(folderItem || shortcutItem || directoryItem) && (
             <>
               <button
                 role="menuitem"
@@ -1300,7 +1531,14 @@ export function DesktopShell() {
                   changeData((d) =>
                     folderItem
                       ? removeFolder(d, folderItem.id)
-                      : { ...d, shortcuts: d.shortcuts.filter((s) => s.id !== context.item) },
+                      : directoryItem
+                        ? {
+                            ...d,
+                            directoryShortcuts: d.directoryShortcuts.filter(
+                              (s) => s.id !== context.item,
+                            ),
+                          }
+                        : { ...d, shortcuts: d.shortcuts.filter((s) => s.id !== context.item) },
                   );
                   if (folderItem)
                     setWindows((list) => list.filter((w) => w.app !== `folder:${folderItem.id}`));
@@ -1317,6 +1555,17 @@ export function DesktopShell() {
               <button role="menuitem" onClick={() => createFolder(context.folder ?? null)}>
                 <Icon name="folderplus" />
                 {t('desktop.newFolder')}
+              </button>
+              <button
+                role="menuitem"
+                disabled={data.directoryShortcuts.length >= 256}
+                onClick={() => {
+                  setDirectoryEdit({ folder: context.folder ?? null });
+                  setContext(null);
+                }}
+              >
+                <Icon name="files" />
+                {t('desktop.newDirectoryShortcut')}
               </button>
               <button
                 role="menuitem"
@@ -1446,6 +1695,29 @@ export function DesktopShell() {
           </button>
         </div>
       </footer>
+      {directoryEdit && (
+        <DirectoryShortcutDialog
+          initial={data.directoryShortcuts.find((item) => item.id === directoryEdit.id)}
+          home={session?.home ?? '/'}
+          onClose={() => setDirectoryEdit(null)}
+          onSave={(value) => {
+            changeData((current) => ({
+              ...current,
+              directoryShortcuts: directoryEdit.id
+                ? current.directoryShortcuts.map((item) =>
+                    item.id === directoryEdit.id ? { ...item, ...value } : item,
+                  )
+                : current.directoryShortcuts.length < 256
+                  ? [
+                      ...current.directoryShortcuts,
+                      { ...value, id: crypto.randomUUID(), folder: directoryEdit.folder },
+                    ]
+                  : current.directoryShortcuts,
+            }));
+            setDirectoryEdit(null);
+          }}
+        />
+      )}
       <Dialog
         open={!!editing}
         onClose={() => setEditing(null)}

@@ -38,3 +38,33 @@ async function walk(e: FileSystemEntry, prefix: string, out: Dropped[]): Promise
 }
 
 export const DRAG_TYPE = 'application/x-ervisio-files';
+
+/** Browsers may attach Files to an internal drag too: our payload always takes precedence. */
+export const hasExternalFiles = (dt: DataTransfer) =>
+  Array.from(dt.types).includes('Files') &&
+  !Array.from(dt.types).some((type) => type.startsWith('application/x-ervisio-'));
+
+/** Dragging within the current parent is a no-op, including Ctrl-drag. Paste can still duplicate. */
+export function dropSources(paths: unknown, destination: string): string[] {
+  if (!Array.isArray(paths)) return [];
+  const key = (path: string) => {
+    const windows = /^[a-z]:[\\/]/i.test(path) || path.startsWith('\\\\');
+    const normalized = windows ? path.replace(/\\/g, '/').toLowerCase() : path;
+    return normalized.replace(/\/+$/, '') || '/';
+  };
+  const dest = key(destination);
+  return [
+    ...new Set(
+      paths.filter(
+        (p): p is string =>
+          typeof p === 'string' && p.length > 0 && p.length <= 4096 && !p.includes('\0'),
+      ),
+    ),
+  ]
+    .slice(0, 10000)
+    .filter((path) => {
+      const source = key(path);
+      const index = source.lastIndexOf('/');
+      return source !== dest && (index <= 0 ? '/' : source.slice(0, index)) !== dest;
+    });
+}

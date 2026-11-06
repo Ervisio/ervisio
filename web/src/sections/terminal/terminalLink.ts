@@ -4,10 +4,12 @@ const COMMAND_MAX = 1000;
 export function terminalLink(params: URLSearchParams) {
   const cwd = params.get('cwd') || undefined;
   const command = params.get('cmd');
+  const shell = params.get('shell');
   if (!cwd && !command) return null;
   return {
     cwd,
     command: command ? command.replace(/[\r\n]+/g, ' ').slice(0, COMMAND_MAX) : undefined,
     admin: params.get('admin') === '1',
+    ...(shell && shell.length <= 4096 && !/[\r\n]/.test(shell) ? { shell } : {}),
   };
 }

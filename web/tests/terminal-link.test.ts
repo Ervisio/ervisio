@@ -40,3 +40,14 @@ test('an ordinary terminal URL has no launch request', () => {
   assert.equal(terminalLink(new URLSearchParams()), null);
   assert.equal(terminalLink(new URLSearchParams('cwd=&cmd=&other=1')), null);
 });
+
+test('an explicit Windows shell is passed as metadata alongside a reviewed command', () => {
+  const shell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
+  const link = terminalLink(new URLSearchParams({ cmd: "& 'C:\\Users\\A B\\node.exe'", shell }));
+  assert.equal(link?.shell, shell);
+  assert.equal(link?.admin, false);
+  assert.equal(
+    terminalLink(new URLSearchParams({ cmd: 'echo hi', shell: 'bad\r\nshell' }))?.shell,
+    undefined,
+  );
+});

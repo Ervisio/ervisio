@@ -180,7 +180,7 @@ export default function SoftwarePage() {
               </Button>
             </div>
           )}
-          {unsupported ? (
+          {unsupported && tab !== 'store' ? (
             <EmptyState
               icon="software"
               hue="sw"

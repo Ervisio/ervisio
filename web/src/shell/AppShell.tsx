@@ -35,17 +35,17 @@ function useDocumentTitle(mode: 'classic' | 'ervisios') {
   const { pathname } = useLocation();
   const { railPages } = usePlugins();
   useEffect(() => {
+    if (mode === 'ervisios') {
+      document.title = Name;
+      return;
+    }
     const sec = SECTIONS.find((s) =>
       s.path === '/' ? pathname === '/' : pathname.startsWith(s.path),
     );
     const pg = pathname.startsWith('/p/')
       ? railPages.find((p) => pathname === `/p/${p.plugin}/${p.page}`)
       : undefined;
-    const title =
-      pg?.title ??
-      (sec
-        ? t(mode === 'ervisios' && sec.desktopTitleKey ? sec.desktopTitleKey : sec.titleKey)
-        : '');
+    const title = pg?.title ?? (sec ? t(sec.titleKey) : '');
     document.title = title ? `${title} · ${Name}` : Name;
   }, [pathname, railPages, t, mode]);
 }

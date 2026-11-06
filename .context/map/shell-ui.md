@@ -5,6 +5,10 @@ ErvisiOS adds `web/src/desktop/`: virtual desktop preferences (`shell.desktop`),
 
 QoL: `shell.desktop.positions` adds per-item logical grid cells to the existing version-1 preference (old preferences default to an empty positions map). `model.ts` validates coordinates, resolves collisions and reflows narrow viewports without overwriting saved wide positions. `DesktopShell.tsx` provides desktop marquee/Ctrl/Shift selection, grid/group dragging and keyboard navigation. Virtual folders remain app organizers, never filesystem paths.
 
+`shell.desktop.directoryShortcuts` is an additive version-1 array of `{id,name,path,folder}` links to existing local directories or `remote:<saved-id>:/path` locations. Creation validates syntax and `files.stat` through the permission-aware adapter; metadata contains no remote credentials. Links participate in the same grid and virtual organizers; removing a link never deletes the target. The desktop catalog reads all authorized SECTIONS independently of Classic rail visibility and excludes `desktopHidden` entries.
+
+Each desktop app has a scoped MemoryRouter. Initial core/plugin/file/editor/terminal deep links are consumed before the outer browser URL is replaced with `/`; app navigation/history stays inside its window, cross-app navigation opens the matching window, and the browser title is `Ervisio`. Classic keeps section URLs/titles. Taskbar context menus measure their rendered height and anchor immediately above the clicked icon, clamped to the viewport.
+
 `sections/editor/` adds Notepad (`/notepad`, textarea) and Code editor (`/editor`, lazy CodeMirror/language parsers) in both shells through SECTIONS. File context menus launch these apps with encoded file paths or Terminal with `?cwd=`. `lib/windowClose.ts` dispatches cancelable `ervisio:before-window-close` requests; DesktopShell uses it for X/Alt+F4 and the editor can confirm dirty documents before invoking the supplied close callback. Browser unload protection is separate. User guide and future recommendations: `docs/ERVISIOS-QOL.md`.
 
 ## Entry points and public contracts
@@ -34,7 +38,7 @@ QoL: `shell.desktop.positions` adds per-item logical grid cells to the existing 
 - Every visible string uses `useT`; en and it files must have identical key sets per namespace (`npm run i18n:check`). Add new namespaces to `NAMESPACES` and both folders.
 - Colours come from tokens only (defaults in `web/src/styles/tokens.css`): `--bg --surface --sunk --line --ink/2/3`, `--h-<ov|term|file|log|svc|sw|usr|plg>` (+`-s`), `--acc --on-acc`, `--ok/warn/err/info` (+`-s`), `--distro`; no hardcoded hex in components.
 - Overlays use `useFocusTrap` (`data-autofocus` picks the first focus, Escape closes, focus restored) and `useScrollLock`.
-- `ConfirmDialog` takes `confirmText` for type-to-confirm (design requires it for dangerous actions); toasts: 4 s, errors 8 s, undo 7 s, max 5 visible.
+- `ConfirmDialog` takes `confirmText` for type-to-confirm (design requires it for dangerous actions). Optional `defaultAction="confirm"` focuses the confirm button only when no typed phrase is required; permanent Files deletion opts in, other dialogs retain Cancel as their first focus. Input wrappers own the focus ring; nested native controls have no second outline. Toasts: 4 s, errors 8 s, undo 7 s, max 5 visible.
 - `migrateStorage` runs before anything reads storage (`la.*` -> `ervisio.*`, once, never throws); wrap new storage access in try/catch.
 
 ## Gotchas

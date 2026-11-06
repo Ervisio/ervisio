@@ -19,7 +19,6 @@ interface Props {
   onEditRemote(remote: Remote): void;
   onForgetRemote(remote: Remote): void;
   onFormat(disk: Disk): void;
-  onFolderEditor(path: string): void;
   onRefresh(): void;
   onActivate(): void;
 }
@@ -64,12 +63,6 @@ export function ComputerView(p: Props) {
   ];
   const diskItems = (disk: Disk): MenuItem[] => [
     { id: 'open', label: t('act.open'), icon: 'files', onSelect: () => p.onGo(disk.mount) },
-    {
-      id: 'editor',
-      label: t('act.openFolderCode'),
-      icon: 'code',
-      onSelect: () => p.onFolderEditor(disk.mount),
-    },
     { id: 'format', label: t('computer.format'), icon: 'server', onSelect: () => p.onFormat(disk) },
     {
       id: 'properties',
