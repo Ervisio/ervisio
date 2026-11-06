@@ -12,6 +12,15 @@
   "left": "Left",
   "right": "Right",
   "cancel": "Cancel",
+  "picker": {
+    "choose": "Choose",
+    "up": "Parent folder",
+    "location": "Folder path",
+    "go": "Go",
+    "filter": "Filter files and folders",
+    "entries": "Files and folders",
+    "noEntries": "No matching files or folders"
+  },
   "save": "Save",
   "loading": "Loading…",
   "create": "Create",

@@ -1,4 +1,5 @@
-import type { DragEvent, MouseEvent, MutableRefObject } from 'react';
+import type { DragEvent, MouseEvent, MutableRefObject, ReactNode } from 'react';
+import { InlineName } from './InlineName';
 import type { TFn } from '../../i18n';
 import { formatBytes } from '../../lib/format';
 import { Icon } from '../../ui';
@@ -12,6 +13,7 @@ import { dirname, formatWhen } from './util';
 
 /** Per-item wiring shared by the grid and list views. */
 export interface ItemKit {
+  name(e: FEntry): ReactNode;
   native?: boolean;
   wire(e: FEntry): {
     'data-path': string;
@@ -36,6 +38,7 @@ export interface ItemKit {
 }
 
 interface ItemKitArgs {
+  rename?: { path: string; submit(name: string): Promise<void>; cancel(): void };
   native?: boolean;
   trash: boolean;
   lang: string;
@@ -92,6 +95,18 @@ export function buildItemKit(a: ItemKitArgs): ItemKit {
       ? t('deletedAt', { when: formatWhen(e.deletedAt, lang) })
       : `${isDirLike(e) ? '' : formatBytes(e.size) + ', '}${formatWhen(e.mtime, lang)}`;
   return {
+    name: (e) =>
+      a.rename?.path === e.path ? (
+        <InlineName
+          key={e.path}
+          name={e.name}
+          folder={isDirLike(e)}
+          onSubmit={a.rename.submit}
+          onCancel={a.rename.cancel}
+        />
+      ) : (
+        e.name
+      ),
     native: a.native,
     wire,
     folderDrop: a.folderDrop,
@@ -133,7 +148,7 @@ export function GridView({ rows, admin, kit }: { rows: FEntry[]; admin: boolean;
                   </span>
                 )}
                 <div className="files-fold-t">
-                  <b>{e.name}</b>
+                  <b>{kit.name(e)}</b>
                   <small>{kit.trash ? kit.subtitle(e) : formatWhen(e.mtime, lang)}</small>
                 </div>
                 {kit.moreButton(e)}
@@ -169,7 +184,7 @@ export function GridView({ rows, admin, kit }: { rows: FEntry[]; admin: boolean;
                         <Icon name={e.type === 'symlink' ? 'link' : KIND_ICON[k]} />
                       </span>
                     )}
-                    <b title={e.name}>{e.name}</b>
+                    <b title={e.name}>{kit.name(e)}</b>
                     {kit.moreButton(e)}
                   </div>
                   <div className="files-sub">{kit.subtitle(e)}</div>
@@ -273,7 +288,7 @@ export function ListView({
                       <Icon name={e.type === 'symlink' ? 'link' : KIND_ICON[k]} />
                     </span>
                   )}
-                  <span className="files-nm-t">{e.name}</span>
+                  <span className="files-nm-t">{kit.name(e)}</span>
                   {e.type === 'symlink' && e.target && (
                     <small className="files-link">→ {e.target}</small>
                   )}

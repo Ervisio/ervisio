@@ -26,6 +26,7 @@ export type Shortcut =
   | 'details';
 
 export interface PaneProps {
+  rename?: { path: string; submit(name: string): Promise<void>; cancel(): void };
   native?: boolean;
   navigationKey?: string;
   /** "Left" / "Right" chip, only in split view. */

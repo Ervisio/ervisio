@@ -12,6 +12,15 @@
   "left": "Sinistra",
   "right": "Destra",
   "cancel": "Annulla",
+  "picker": {
+    "choose": "Scegli",
+    "up": "Cartella superiore",
+    "location": "Percorso cartella",
+    "go": "Vai",
+    "filter": "Filtra file e cartelle",
+    "entries": "File e cartelle",
+    "noEntries": "Nessun file o cartella corrispondente"
+  },
   "save": "Salva",
   "loading": "Caricamento…",
   "create": "Crea",

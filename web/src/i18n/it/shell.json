@@ -182,7 +182,9 @@
     "shortcutUnavailable": "Connessione salvata non disponibile",
     "shortcutPath": "Percorso della cartella esistente",
     "shortcutName": "Nome del collegamento (facoltativo)",
-    "invalidDirectoryShortcut": "Scegli il percorso assoluto di una cartella esistente a cui puoi accedere."
+    "invalidDirectoryShortcut": "Scegli il percorso assoluto di una cartella esistente a cui puoi accedere.",
+    "deletedItems": "Elementi rimossi dal desktop. Puoi annullare entro 3 minuti.",
+    "undoDelete": "Annulla"
   },
   "commands": {
     "opening": "Apro {name}.",

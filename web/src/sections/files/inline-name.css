@@ -1,0 +1,24 @@
+.files-inline-name {
+  display: inline-flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
+  gap: 4px;
+}
+.files-inline-name input {
+  width: 100%;
+  min-width: 45px;
+  box-sizing: border-box;
+  padding: 3px 5px;
+  border: 1px solid var(--acc);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  user-select: text;
+}
+.files-inline-error {
+  color: var(--err);
+  font-size: 11px;
+  white-space: normal;
+}

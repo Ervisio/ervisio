@@ -23,6 +23,8 @@ import './editor.css';
 import { useEditorDrafts } from './DraftsProvider';
 import { ProjectTree } from './ProjectTree';
 import { ProjectSearch } from './ProjectSearch';
+import { FilePicker } from '../files/FilePicker';
+import { basename } from '../files/util';
 
 const CodeSurface = lazy(() => import('./CodeSurface'));
 const LanguagePicker = lazy(() => import('./LanguagePicker'));
@@ -257,9 +259,9 @@ export function TextWorkspace({ mode }: { mode: EditorMode }) {
     if (!active.path) showPathDialog('save');
     else void write(active.path, active.mtime).catch(() => {});
   };
-  const submitPath = async () => {
+  const submitPath = async (selectedPath?: string) => {
     if (!dialog) return;
-    const path = dialog.value.trim();
+    const path = (selectedPath ?? dialog.value).trim();
     if (!/^(?:\/|[A-Za-z]:[\\/]|\\\\)/.test(path) && !isRemoteLocation(path)) {
       setDialog({
         ...dialog,
@@ -700,9 +702,8 @@ export function TextWorkspace({ mode }: { mode: EditorMode }) {
         </button>
       </footer>
       {dialog && (
-        <Dialog
-          open
-          onClose={() => !dialog.busy && setDialog(null)}
+        <FilePicker
+          mode={dialog.kind === 'open' ? 'file' : dialog.kind === 'folder' ? 'folder' : 'save'}
           title={t(
             dialog.kind === 'folder'
               ? 'project.openFolder'
@@ -710,33 +711,14 @@ export function TextWorkspace({ mode }: { mode: EditorMode }) {
                 ? 'openTitle'
                 : 'saveTitle',
           )}
-          icon="files"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void submitPath();
-          }}
-          footer={
-            <>
-              <Button variant="ghost" disabled={dialog.busy} onClick={() => setDialog(null)}>
-                {t('cancel')}
-              </Button>
-              <Button type="submit" variant="primary" loading={dialog.busy}>
-                {t(dialog.kind === 'save' ? 'save' : 'open')}
-              </Button>
-            </>
-          }
-        >
-          <Input
-            label={t(dialog.kind === 'folder' ? 'project.folderPath' : 'serverPath')}
-            hint={t(dialog.kind === 'folder' ? 'project.folderHint' : 'serverPathHint')}
-            value={dialog.value}
-            onChange={(e) => setDialog({ ...dialog, value: e.target.value, error: '' })}
-            error={dialog.error || undefined}
-            autoFocus
-            mono
-            spellCheck={false}
-          />
-        </Dialog>
+          initialDirectory={dialog.kind === 'folder' ? dialog.value : dirname(dialog.value)}
+          initialName={dialog.kind === 'save' ? basename(dialog.value) : ''}
+          admin={active.admin}
+          busy={dialog.busy}
+          error={dialog.error}
+          onChoose={(path) => void submitPath(path)}
+          onCancel={() => !dialog.busy && setDialog(null)}
+        />
       )}
       {replace && (
         <Dialog

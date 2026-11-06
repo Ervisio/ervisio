@@ -182,7 +182,9 @@
     "shortcutUnavailable": "Saved connection unavailable",
     "shortcutPath": "Existing folder path",
     "shortcutName": "Shortcut name (optional)",
-    "invalidDirectoryShortcut": "Choose an existing absolute folder path you can access."
+    "invalidDirectoryShortcut": "Choose an existing absolute folder path you can access.",
+    "deletedItems": "Removed from desktop. Undo is available for 3 minutes.",
+    "undoDelete": "Undo"
   },
   "commands": {
     "opening": "Opening {name}.",

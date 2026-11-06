@@ -533,6 +533,24 @@ export default function FilesPage() {
     ) : (
       <Pane
         key={s}
+        rename={
+          actions.dialog?.kind === 'name' &&
+          actions.dialog.mode === 'rename' &&
+          actions.dialog.side === s &&
+          actions.dialog.entry
+            ? {
+                path: actions.dialog.entry.path,
+                submit: async (name) => {
+                  const entry = actions.dialog?.kind === 'name' ? actions.dialog.entry : undefined;
+                  if (!entry) return;
+                  await actions.submitName('rename', s, entry, name);
+                  actions.closeDialog();
+                  clearSel(s);
+                },
+                cancel: actions.closeDialog,
+              }
+            : undefined
+        }
         native={native}
         navigationKey={`${tab.id}:${s}`}
         label={split ? t(s === 'L' ? 'left' : 'right') : undefined}
@@ -729,7 +747,11 @@ export default function FilesPage() {
         />
       )}
       <FileDialog
-        dialog={actions.dialog}
+        dialog={
+          actions.dialog?.kind === 'name' && actions.dialog.mode === 'rename'
+            ? null
+            : actions.dialog
+        }
         onClose={actions.closeDialog}
         onSubmitName={actions.submitName}
       />
