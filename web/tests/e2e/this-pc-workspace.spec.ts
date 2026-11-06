@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('This PC shortcut reuses Explorer while preserving its window identity and legacy URL', async ({
+test('This PC keeps its window identity, accepts legacy links and leaves the browser at the desktop URL', async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -38,7 +38,7 @@ test('This PC shortcut reuses Explorer while preserving its window identity and 
   await expect(pc.locator('.files-computer')).toBeVisible();
   await expect(pc.locator('.eos-pc')).toHaveCount(0);
   await expect(page.locator('.eos-window')).toHaveCount(1);
-  expect(new URL(page.url()).searchParams.get('desktop')).toBe('pc');
+  await expect(page).toHaveURL(/\/$/);
   await pc
     .locator('.files-places')
     .first()
@@ -48,6 +48,8 @@ test('This PC shortcut reuses Explorer while preserving its window identity and 
   await expect(page.locator('.eos-window')).toHaveCount(1);
   await page.waitForTimeout(600); // Persist a non-Computer active tab before the legacy URL is reopened.
   await page.reload();
+  await expect(page.locator('.eos-window')).toHaveCount(0);
+  await page.goto('/?desktop=pc');
   await expect(pc.locator('.files-computer')).toBeVisible();
   await expect(page.locator('.eos-window')).toHaveCount(1);
   await pc.getByRole('button', { name: 'Minimize', exact: true }).click();

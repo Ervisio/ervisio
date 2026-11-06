@@ -41,9 +41,9 @@ export function useNav() {
       end: s.path === '/',
       kind: s.id === 'settings' ? 'settings' : 'section',
     });
-    const main = SECTIONS.filter((s) => s.rail && (!s.platforms || s.platforms.includes(os))).map(
-      entry,
-    );
+    const main = SECTIONS.filter(
+      (s) => s.rail && (!desktop || !s.desktopHidden) && (!s.platforms || s.platforms.includes(os)),
+    ).map(entry);
     const settings = entry(SECTIONS.find((s) => s.id === 'settings')!);
     const plugins: NavEntry[] = railPages.map((p) => ({
       key: `p:${p.plugin}/${p.page}`,

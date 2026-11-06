@@ -206,6 +206,14 @@ func TestSFTPTrustTransfersAndSavedCredentials(t *testing.T) {
 	if err != nil || capacity.(Capacity).Supported {
 		t.Fatalf("unsupported SFTP statvfs should be honestly unknown: %v %v", capacity, err)
 	}
+	part := &remoteTestStream{}
+	if err := m.hReadStream(ctx, remoteCall(map[string]any{"conn": view.ID, "path": "/app/config.yml", "offset": 6, "length": 4}), part); err != nil || part.bytes.String() != "8080" {
+		t.Fatalf("SFTP range read: %q %v", part.bytes.String(), err)
+	}
+	probe := &remoteTestStream{}
+	if err := m.hReadStream(ctx, remoteCall(map[string]any{"conn": view.ID, "path": "/app/config.yml", "metadataOnly": true}), probe); err != nil || probe.bytes.Len() != 0 {
+		t.Fatalf("SFTP metadata probe transferred bytes: %d %v", probe.bytes.Len(), err)
+	}
 	search := &remoteTestStream{}
 	if err := m.hSearchText(ctx, remoteCall(map[string]any{"conn": view.ID, "root": "/app", "query": "8080"}), search); err != nil {
 		t.Fatal(err)

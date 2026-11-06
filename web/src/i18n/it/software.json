@@ -1,4 +1,44 @@
 {
+  "cli": {
+    "shellUnavailable": "Manca una shell compatibile. Su Windows, installa PowerShell per aprire i comandi preparati.",
+    "nodeText": "Scarica l'archivio ufficiale Node.js LTS via HTTPS, verifica il checksum SHA-256 ufficiale e installa node/npm in una cartella privata del tuo account. Conserva Node di sistema e i profili della shell.",
+    "launcherCollision": "Il comando già esistente è stato conservato. Apri terminale avvia direttamente la copia gestita.",
+    "title": "Strumenti da terminale",
+    "subtitle": "AI, hosting e backup",
+    "retry": "Riprova",
+    "managed": "Gestito · tuo account",
+    "external": "Già installato",
+    "user": "Tuo account",
+    "system": "Pacchetto di sistema",
+    "docs": "Guida ufficiale",
+    "open": "Apri terminale",
+    "remove": "Disinstalla",
+    "managedCopy": "Installa copia gestita",
+    "details": "Dettagli",
+    "unsupported": "Installazione automatica non disponibile per questo host/account. Consulta la guida ufficiale.",
+    "confirm": {
+      "install": "Installare {name}?",
+      "upgrade": "Aggiornare {name}?",
+      "remove": "Disinstallare {name}?"
+    },
+    "removeText": "Rimuove solo i programmi gestiti da Ervisio. Conserva credenziali, impostazioni e progetti.",
+    "installText": "Installa dal pacchetto npm ufficiale in una cartella privata del tuo account, senza privilegi amministrativi. Accedi tu dal terminale; Ervisio non legge le chiavi API.",
+    "nodeDependency": "Installa anche Node.js LTS ufficiale per questo account, verificando il download con il manifesto SHA-256 ufficiale.",
+    "claudeMemory": "Claude Code richiede ufficialmente almeno 4 GB di RAM: su server più piccoli potrebbe non funzionare correttamente.",
+    "desc": {
+      "python3": "Interprete Python, con API standard di backup SQLite.",
+      "python-venv": "Supporto Python venv/ensurepip per i driver Database isolati su Debian e Ubuntu.",
+      "node-lts": "Runtime privato Node.js LTS e npm per le app CLI gestite.",
+      "claude-code": "Assistente Anthropic nel terminale del progetto. Richiede un account o accesso API separato.",
+      "codex": "Assistente OpenAI nel terminale del progetto. Accedi separatamente dopo l'installazione.",
+      "git": "Controllo versioni e distribuzione di repository.",
+      "rclone": "Trasferimento e sincronizzazione su cloud e archivi remoti.",
+      "restic": "Snapshot cifrati e backup incrementali.",
+      "postgres-client": "pg_dump e strumenti client PostgreSQL per i backup dei database.",
+      "mysql-client": "Client e strumenti dump MariaDB/MySQL per i backup dei database.",
+      "sqlite": "Esplora e gestisci database SQLite."
+    }
+  },
   "title": "Software",
   "tab": {
     "updates": "Aggiornamenti",

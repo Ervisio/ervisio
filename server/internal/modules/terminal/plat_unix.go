@@ -101,5 +101,5 @@ func termEnv(u *user.User, home, shell string) []string {
 	if fi, err := os.Stat(rt); err == nil && fi.IsDir() {
 		env = append(env, "XDG_RUNTIME_DIR="+rt)
 	}
-	return env
+	return withManagedCLIPath(env, home)
 }

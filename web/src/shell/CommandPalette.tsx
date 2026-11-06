@@ -6,6 +6,7 @@ import { Icon, useFocusTrap, type IconName } from '../ui';
 import { useAllPaletteActions } from '../sections';
 import { NavIcon } from './NavIcon';
 import { useNav } from './useNav';
+import { openApp } from '../lib/openApp';
 
 interface Row {
   id: string;
@@ -45,7 +46,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose(): vo
       logo: e.logo,
       hue: e.hueClass,
       hay: e.label.toLowerCase(),
-      run: () => nav(e.to),
+      run: () => openApp(e.to, nav),
     }));
     const act: Row[] = extra.map((a) => ({
       id: `act:${a.id}`,

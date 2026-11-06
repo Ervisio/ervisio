@@ -28,6 +28,7 @@ export const NAMESPACES = [
   'files',
   'editor',
   'storage',
+  'media',
   'logs',
   'services',
   'software',

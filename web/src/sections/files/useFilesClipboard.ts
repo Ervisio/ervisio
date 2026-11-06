@@ -4,7 +4,7 @@ import { toast } from '../../ui';
 import type { Clip, Side } from './filesPageTypes';
 import { enqueueCopy } from './transfers';
 import type { FEntry } from './types';
-import { dirname } from './util';
+import { dropSources } from './dropfiles';
 import type { FilesTabs } from './useFilesTabs';
 
 /** Copy/cut/paste, copy or move to the other pane, and drag-and-drop moves. */
@@ -44,9 +44,9 @@ export function useFilesClipboard(t: TFn, tabs: FilesTabs) {
     clearSel(from);
   };
   const dropMove = (paths: string[], dest: string, copy: boolean, s: Side) => {
-    const same = paths.every((p) => dirname(p) === dest);
-    if (same && !copy) return;
-    enqueueCopy({ from: paths, to: dest, move: !copy, admin: adminOf(s), onElevate: elevate(s) });
+    const from = dropSources(paths, dest);
+    if (!from.length) return;
+    enqueueCopy({ from, to: dest, move: !copy, admin: adminOf(s), onElevate: elevate(s) });
   };
   const clipSelection = (es: FEntry[], cut: boolean) => {
     setClip({ paths: es.map((e) => e.path), cut });

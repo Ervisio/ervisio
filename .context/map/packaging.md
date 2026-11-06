@@ -36,6 +36,7 @@ Purpose: build, install and migrate Ervisio on Linux (release archive, install.s
 - Debian/RPM post scripts duplicate the legacy logic in shell; keep them aligned with `legacy` and `install.sh` (`--remove-legacy` only when `/usr/lib/linuxadmin/managed` is absent and linuxadmin.service inactive).
 - AUR: stable releases only; `update-pkgbuild.sh` verifies the signature (needs go) and refreshes local copies of `ervisio.pam` and `package-service.sh` in each PKGBUILD dir; repo PKGBUILDs are committed by hand.
 - Windows has no self-update (`ErrWindows`): rerun `install.ps1`. MSI is not built in CI; binaries are not Authenticode-signed.
+- Windows data directories stay SYSTEM/Administrators-only. The installer grants Authenticated Users read access only to `ervisio.conf`, which filtered user bridges need for public trust/settings. `config.WriteAtomic` preserves world-readable-file intent with a file-only protected DACL after saves; 0600 backups and TLS keys stay private.
 - Makefile `LDFLAGS` sets `brand.Version`; without VERSION it is `git describe`, which `install-dev.sh` validates as a folder name.
 
 ## Commands and references

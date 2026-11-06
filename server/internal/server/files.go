@@ -98,9 +98,12 @@ func transferParams(r *http.Request) (fileTarget, *rpc.Error) {
 
 // fileMeta is the first event of files.readStream.
 type fileMeta struct {
-	Name string `json:"name"`
-	Size int64  `json:"size"`
-	Mime string `json:"mime"`
+	Name      string `json:"name"`
+	Size      int64  `json:"size"`
+	Mime      string `json:"mime"`
+	TotalSize int64  `json:"totalSize"`
+	Offset    int64  `json:"offset"`
+	MTime     int64  `json:"mtime"`
 }
 
 // readDownloadMeta waits for the first event of a read stream and decodes it.

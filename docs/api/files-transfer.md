@@ -11,12 +11,17 @@ handlers just loop.
 
 ## files.readStream
 
-Params: `{"path":"/abs/file"}`
+Params: `{"path":"/abs/file","offset":0,"length":1234,"metadataOnly":false}`.
+Only `path` is required. An omitted `length` reads to EOF; zero reads no bytes.
+The offset and length must fit a regular file. `metadataOnly` emits metadata and
+completion without reading its contents.
 
 Events, in order:
 1. metadata (JSON, not b64): `s.Send({"name":"file.txt","size":1234,"mime":"text/plain"})`
    — `size` is the exact byte count that will follow (`-1` if unknown, e.g. a pipe);
    `mime` may be `""`.
+   Regular files also report `totalSize`, the whole file's byte count, `offset`,
+   and `mtime` (Unix milliseconds). `size` describes only the requested window.
 2. zero or more chunks: `s.SendBytes(chunk)` → `{"event":"data","data":"<base64>","b64":true}`;
    use ≤ 64 KiB raw per chunk.
 3. completion: `s.Send({"done":true})`, then return nil (→ `end`).
@@ -30,6 +35,28 @@ HTTP side: `GET /api/files/download?path=/abs/file&admin=0|1[&inline=1]` →
 `Content-Disposition: attachment; filename*=UTF-8''<name>`, `Content-Length` from `size`.
 `inline=1` is honoured only for safe preview types (images, pdf, text/plain, audio/video); the
 response always carries `Content-Security-Policy: sandbox`.
+
+## Photos, video and audio
+
+`GET` or `HEAD /api/files/media?path=/abs/file&admin=0|1[&remote=<connection-id>]`
+serves browser-decodable image, video and audio types to an authenticated session.
+It retains the same account and administrator-unlock boundaries as downloads.
+Active documents such as HTML are rejected. Responses use `nosniff`, a restrictive
+sandbox CSP and `Cache-Control: private, no-store`.
+
+The endpoint supports single `Range: bytes=start-end` requests, suffix and
+open-ended ranges, and `If-Range` with its `Last-Modified` date. Successful ranges
+return 206 and `Content-Range`; invalid or unsatisfiable byte ranges return 416.
+HEAD returns whole-file metadata without opening the content stream. A file that
+changes between the metadata probe and the content open returns a conflict.
+
+Local files seek before streaming. Saved SFTP and SMB connections use the
+user-level `remote.mediaStream` method with the same window parameters, a
+dedicated cancellable transport and at most four concurrent media connections per
+bridge. Cancelling a seek does not close another file transfer's pooled connection.
+Other remote protocols retain normal downloads; they are not streamed through the
+media endpoint. No transcoding runs on the server. Unsupported browser codecs offer
+a download fallback in Photos & Videos.
 
 ## files.writeStream
 

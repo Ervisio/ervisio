@@ -21,4 +21,9 @@ test('a failed lazy app download offers a full reload and recovers once transpor
   await error.getByRole('button', { name: 'Ricarica interfaccia', exact: true }).click();
   await expect(page.locator('.eos-native-frame')).toBeVisible();
   await expect(page.locator('.eos-app-error')).toHaveCount(0);
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveTitle('Ervisio');
+  await page.reload();
+  await expect(page.locator('.eos-desktop-grid')).toBeVisible();
+  await expect(page.locator('.eos-window')).toHaveCount(0);
 });

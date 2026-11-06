@@ -144,7 +144,7 @@ function runStep(p: TxParams, onToast: () => boolean): Promise<StepResult> {
       set({ done: e.done, total: e.total, current: e.current, percent });
       if (onToast()) toast.update(toastId, { progress: percent, detail: e.current });
     };
-    const user = p.source === 'flatpak' && p.scope === 'user';
+    const user = p.source === 'cli' || (p.source === 'flatpak' && p.scope === 'user');
     handle = stream<TxEvent>(user ? 'software.transactionUser' : 'software.transaction', p, {
       admin: !user,
       onData: (e) => {

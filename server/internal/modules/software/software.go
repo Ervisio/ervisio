@@ -13,6 +13,7 @@ import (
 
 // Register adds the software.* methods to the registry.
 func Register(r *rpc.Registry) {
+	r.Handle("software.cli", rpc.User, cliList)
 	r.Handle("software.summary", rpc.User, summary)
 	r.Handle("software.check", rpc.User, check)
 	r.Handle("software.updates", rpc.User, updates)
@@ -264,7 +265,11 @@ func history(ctx context.Context, c *rpc.Call) (any, error) {
 	if p.Limit > 3000 {
 		p.Limit = 3000
 	}
-	return getManager().history(ctx, p.Limit)
+	entries, err := getManager().history(ctx, p.Limit)
+	if err != nil {
+		return nil, err
+	}
+	return mergeCLIHistory(entries, p.Limit), nil
 }
 
 func status(ctx context.Context, c *rpc.Call) (any, error) {

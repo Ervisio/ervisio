@@ -1,4 +1,44 @@
 {
+  "cli": {
+    "shellUnavailable": "A compatible shell is missing. On Windows, install PowerShell to open prepared commands.",
+    "nodeText": "Download the official Node.js LTS archive over HTTPS, verify its official SHA-256 checksum, and install node/npm into a private folder of your account. System Node and shell profiles are preserved.",
+    "launcherCollision": "An existing launcher was preserved. Open terminal launches the managed copy directly.",
+    "title": "Command-line tools",
+    "subtitle": "AI coding, hosting and backups",
+    "retry": "Retry",
+    "managed": "Managed · your account",
+    "external": "Already installed",
+    "user": "Your account",
+    "system": "System package",
+    "docs": "Official guide",
+    "open": "Open terminal",
+    "remove": "Uninstall",
+    "managedCopy": "Install managed copy",
+    "details": "Details",
+    "unsupported": "No supported automatic install for this host/account. See the official guide.",
+    "confirm": {
+      "install": "Install {name}?",
+      "upgrade": "Update {name}?",
+      "remove": "Uninstall {name}?"
+    },
+    "removeText": "Remove only program files managed by Ervisio. Keep credentials, settings and project files.",
+    "installText": "Install from the official npm package into a private folder of your account, without administrator rights. Login is completed by you in the terminal; Ervisio does not read API keys.",
+    "nodeDependency": "Also install the official Node.js LTS runtime for this account. Its download is checked against the official SHA-256 manifest.",
+    "claudeMemory": "Claude Code officially requires 4 GB or more RAM; a smaller server may not run it reliably.",
+    "desc": {
+      "python3": "Python interpreter, including the standard SQLite backup API.",
+      "python-venv": "Python venv/ensurepip support for isolated Database drivers on Debian and Ubuntu.",
+      "node-lts": "Private Node.js LTS and npm runtime for managed CLI apps.",
+      "claude-code": "Anthropic coding agent in your project terminal. Requires a separate account or API access.",
+      "codex": "OpenAI coding agent in your project terminal. Sign in separately after installation.",
+      "git": "Version control and repository deployment.",
+      "rclone": "Transfer and synchronize files across cloud and remote storage.",
+      "restic": "Encrypted snapshots and incremental backups.",
+      "postgres-client": "pg_dump and PostgreSQL client utilities for database backups.",
+      "mysql-client": "MariaDB/MySQL client and dump utilities for database backups.",
+      "sqlite": "Inspect and manage SQLite databases."
+    }
+  },
   "title": "Software",
   "tab": {
     "updates": "Updates",

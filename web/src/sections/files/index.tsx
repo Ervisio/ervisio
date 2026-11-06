@@ -355,6 +355,7 @@ function DeleteConfirm({ del, strict, onClose, onConfirm }: DeleteConfirmProps) 
           : ''
       }
       confirmLabel={t('act.deleteForever')}
+      defaultAction="confirm"
       confirmText={del && strict && !del.trash ? delNames || t('confirm.word') : undefined}
     >
       {del && del.entries.length > 1 && (
@@ -485,7 +486,6 @@ export default function FilesPage() {
         onGo={(loc) => tabs.navigate(s, loc)}
         onActivate={() => tabs.setAct(s)}
         onRemote={(remote) => void remotes.open(remote, (loc) => tabs.navigate(s, loc))}
-        onFolderEditor={(path) => actions.openFolderEditor(path, s)}
       />
     ) : (
       <Pane

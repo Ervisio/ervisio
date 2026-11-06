@@ -21,11 +21,13 @@ export function usePaneDrop(a: DropArgs) {
   const canDropHere = !a.virtual;
 
   const onDragOver = (ev: DragEvent) => {
+    if (hasInternal(ev.dataTransfer)) ev.stopPropagation();
     if (!canDropHere || !(hasFiles(ev.dataTransfer) || hasInternal(ev.dataTransfer))) return;
     ev.preventDefault();
+    ev.stopPropagation();
     ev.dataTransfer.dropEffect =
       hasInternal(ev.dataTransfer) && !(ev.ctrlKey || ev.altKey) ? 'move' : 'copy';
-    setDrop(true);
+    setDrop(!hasInternal(ev.dataTransfer));
   };
   const onDragLeave = (ev: DragEvent<HTMLDivElement>) => {
     if (!ev.currentTarget.contains(ev.relatedTarget as Node)) {
@@ -40,14 +42,21 @@ export function usePaneDrop(a: DropArgs) {
     setDropFolder(null);
     if (hasInternal(ev.dataTransfer)) {
       try {
-        const paths: string[] = JSON.parse(ev.dataTransfer.getData(DRAG_TYPE));
-        a.onDropMove(paths, dest, ev.ctrlKey || ev.altKey);
+        const paths: unknown = JSON.parse(ev.dataTransfer.getData(DRAG_TYPE));
+        if (Array.isArray(paths) && paths.every((path) => typeof path === 'string'))
+          a.onDropMove(paths.slice(0, 10000), dest, ev.ctrlKey || ev.altKey);
       } catch {
         /* ignore malformed drags */
       }
     } else if (hasFiles(ev.dataTransfer)) a.onDropFiles(ev.dataTransfer, dest);
   };
-  const onDrop = (ev: DragEvent) => canDropHere && doDrop(ev, a.loc);
+  const onDrop = (ev: DragEvent) => {
+    if (hasInternal(ev.dataTransfer)) {
+      ev.preventDefault();
+      ev.stopPropagation();
+    }
+    if (canDropHere) doDrop(ev, a.loc);
+  };
 
   const dragStart = (ev: DragEvent, e: FEntry) => {
     if (a.trash) return ev.preventDefault();

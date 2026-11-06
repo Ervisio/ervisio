@@ -7,6 +7,8 @@
     "files": "Files",
     "notepad": "Notepad",
     "editor": "Code editor",
+    "media": "Photos & videos",
+    "taskManager": "Task Manager",
     "logs": "Logs",
     "services": "Services",
     "software": "Software",
@@ -171,7 +173,16 @@
       "ssid": "SSID: {name}",
       "connection": "Connection: {name}"
     },
-    "taskManager": "Task Manager"
+    "taskManager": "Task Manager",
+    "newDirectoryShortcut": "New folder shortcut",
+    "editDirectoryShortcut": "Edit folder shortcut",
+    "directoryShortcutHint": "Link to an existing folder on this server or a saved network connection. This creates only a desktop shortcut; no files or folders are created or removed.",
+    "shortcutConnection": "Location",
+    "shortcutLocal": "This server",
+    "shortcutUnavailable": "Saved connection unavailable",
+    "shortcutPath": "Existing folder path",
+    "shortcutName": "Shortcut name (optional)",
+    "invalidDirectoryShortcut": "Choose an existing absolute folder path you can access."
   },
   "commands": {
     "opening": "Opening {name}.",

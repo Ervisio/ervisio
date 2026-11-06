@@ -144,6 +144,12 @@
 .ui-in:focus-within {
   box-shadow: inset 0 0 0 2px var(--acc);
 }
+.ui-in > input:focus-visible,
+.ui-in > select:focus-visible,
+.ui-in > textarea:focus-visible {
+  outline: 0;
+  box-shadow: none;
+}
 .ui-field--bad .ui-in {
   box-shadow: inset 0 0 0 2px var(--err);
 }

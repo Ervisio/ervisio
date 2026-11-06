@@ -85,7 +85,7 @@ test('each explicit directory launch opens one fresh tab and consumes its nonce'
   await page.goto('/terminal?' + new URLSearchParams({ cwd, launch: 'first' }));
   const win = page.getByRole('region', { name: 'Terminal', exact: true });
   await expect(win.locator('.eos-titlebar [role="tab"]')).toHaveCount(1);
-  await expect(page).toHaveURL(/\/terminal$/);
+  await expect(page).toHaveURL(/\/$/);
   await page.evaluate(
     (to) => {
       window.dispatchEvent(
@@ -95,7 +95,7 @@ test('each explicit directory launch opens one fresh tab and consumes its nonce'
     '/terminal?' + new URLSearchParams({ cwd, launch: 'second' }),
   );
   await expect(win.locator('.eos-titlebar [role="tab"]')).toHaveCount(2);
-  await expect(page).toHaveURL(/\/terminal$/);
+  await expect(page).toHaveURL(/\/$/);
   const sessions = await page.evaluate(() =>
     JSON.parse(localStorage.getItem('ervisio.mock.terminals') || '[]'),
   );

@@ -7,6 +7,7 @@ import { SECTIONS } from '../sections';
 import { useTheme } from '../theme';
 import { parseShellCommand, setShellCommandHandler, type ShellApp } from './commands';
 import { rememberLoginMode } from './loginMode';
+import { openApp } from '../lib/openApp';
 
 const aliases: Record<string, string[]> = {
   overview: ['panoramica', 'dashboard'],
@@ -55,23 +56,25 @@ export function useShellCommands() {
             },
           ]
         : []),
-      ...SECTIONS.filter((s) => !s.platforms || s.platforms.includes(session?.os ?? 'linux')).map(
-        (s) => ({
-          id: s.id,
-          title: desktop && s.id === 'overview' ? t('desktop.taskManager') : t(s.titleKey),
-          to: s.path,
-          aliases:
-            desktop && s.id === 'overview'
-              ? [
-                  ...(aliases[s.id] ?? []),
-                  'task manager',
-                  'gestione attività',
-                  'gestione attivita',
-                  'processi',
-                ]
-              : aliases[s.id],
-        }),
-      ),
+      ...SECTIONS.filter(
+        (s) =>
+          (!desktop || !s.desktopHidden) &&
+          (!s.platforms || s.platforms.includes(session?.os ?? 'linux')),
+      ).map((s) => ({
+        id: s.id,
+        title: desktop && s.id === 'overview' ? t('desktop.taskManager') : t(s.titleKey),
+        to: s.path,
+        aliases:
+          desktop && s.id === 'overview'
+            ? [
+                ...(aliases[s.id] ?? []),
+                'task manager',
+                'gestione attività',
+                'gestione attivita',
+                'processi',
+              ]
+            : aliases[s.id],
+      })),
       ...pages.map((p) => ({
         id: `${p.plugin}/${p.id}`,
         title: p.title,
@@ -84,13 +87,7 @@ export function useShellCommands() {
       if (!intent) return { handled: false };
       switch (intent.kind) {
         case 'open':
-          if (desktop)
-            window.dispatchEvent(
-              new CustomEvent('ervisio:shell-action', {
-                detail: { action: 'open-app', to: intent.app.to },
-              }),
-            );
-          navigate(intent.app.to);
+          openApp(intent.app.to, navigate);
           return { handled: true, message: t('commands.opening', { name: intent.app.title }) };
         case 'theme': {
           const dark = intent.value === 'toggle' ? !th.isDark : intent.value === 'dark';

@@ -922,3 +922,8 @@ td .sw-nm b {
     gap: 2px;
   }
 }
+.sw-cli-card{display:flex;flex-direction:column;align-items:stretch;gap:12px}
+.sw-cli-card .sw-ap-main{width:100%;padding:0;min-width:0}
+.sw-cli-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.sw-cli-actions>a{margin-right:auto;font-size:12px;color:var(--accent)}
+.sw-cli-icon{display:grid;place-items:center;flex:0 0 48px;height:48px;border-radius:12px;background:var(--surface-2);color:var(--accent)}

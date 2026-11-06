@@ -6,7 +6,8 @@ import { collectDropped } from './dropfiles';
 import { emitChanged } from './fapi';
 import type { DialogState, NameMode, Side } from './filesPageTypes';
 import { downloadEntries, fail, saveName, uploadInto } from './filesOps';
-import { canInlineImage, kindOf, looksTextual } from './kinds';
+import { looksTextual } from './kinds';
+import { isMediaEntry, mediaLink } from '../media/model';
 import type { Shortcut } from './Pane';
 import { isDirLike, type FEntry } from './types';
 import { dirname, isVirtual } from './util';
@@ -16,6 +17,7 @@ import type { FilesPanel } from './useFilesPanel';
 import type { FilesTabs } from './useFilesTabs';
 import { isRemoteLocation } from './remoteLocation';
 import { preferredEditor, type EditorMode } from '../editor/document';
+import { openApp } from '../../lib/openApp';
 
 const MAX_EDIT_SIZE = 2 << 20;
 
@@ -68,10 +70,7 @@ export function useFilesActions({ t, isRoot, tabs, selectedEntries, panel }: Act
   };
 
   const launch = (to: string) => {
-    window.dispatchEvent(
-      new CustomEvent('ervisio:shell-action', { detail: { action: 'open-app', to } }),
-    );
-    route(to);
+    openApp(to, route);
   };
   const openEditor = (e: FEntry, s: Side, mode: EditorMode = preferredEditor(e.name)) => {
     const path = mode === 'code' ? '/editor' : '/notepad';
@@ -95,8 +94,7 @@ export function useFilesActions({ t, isRoot, tabs, selectedEntries, panel }: Act
     if (pane(s).loc === 'trash:') return;
     if (isDirLike(e)) return navigate(s, e.path);
     const admin = adminOf(s);
-    if (kindOf(e) === 'img' && canInlineImage(e.name))
-      return setDialog({ kind: 'image', entry: e, admin });
+    if (isMediaEntry(e)) return launch(mediaLink(e.path, admin));
     if (looksTextual(e) && e.size <= MAX_EDIT_SIZE) return openEditor(e, s);
     download([e], s);
   };

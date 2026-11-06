@@ -18,6 +18,7 @@
 - map/terminal.md: PTY sessions, terminal streams. Read before terminal work.
 - map/users.md: users/groups section and module, admin groups. Read before users work.
 - map/software.md: package managers, transactions, history. Read before software work.
+- map/backup.md: account-owned backup worker, optional plugin, scheduling, database dumps and safe remote retention. Read before backup work.
 - ../README.md: product features, platform support, installation and development. Read for project orientation; support claims are documented, not revalidated by init.
 - ../CHANGELOG.md: shipped changes. Read when assessing compatibility or preparing release notes.
 - ../docs/ARCHITECTURE.md: process model, protocols and repository ownership. Read before cross-cutting changes; check platform details against current code.

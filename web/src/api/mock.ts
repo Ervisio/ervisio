@@ -3,6 +3,7 @@ import { ApiError, type PublicHost, type Session } from './types';
 import { mockRemoteCall } from '../sections/files/remoteMock';
 import { mockFilesOp } from '../sections/files/fileOpsMock';
 import { mockResetCall } from '../sections/settings/resetMock';
+import { mockSoftwareCLI } from '../sections/software/cliMock';
 
 const LS = 'ervisio.mock.';
 const rd = <T>(k: string, d: T): T => {
@@ -177,6 +178,7 @@ const mockState = () => ({
 });
 
 export async function mockCall(method: string, params: any, _admin?: boolean): Promise<any> {
+  if (method === 'software.cli') return mockSoftwareCLI();
   if (method.startsWith('maintenance.reset.'))
     return mockResetCall(
       method,
@@ -378,10 +380,12 @@ export async function mockCall(method: string, params: any, _admin?: boolean): P
       return delay({
         hostname: 'arch',
         kernel: '6.9.7-arch1-1',
+        arch: 'x86_64',
         uptime: 86400 * 3 + 4000,
-        os: { id: 'arch', name: 'Arch Linux', logo: 'archlinux', color: '#1793D1' },
-        cpu: { model: 'Ryzen 7 5800X', cores: 16 },
-        memTotal: 32 * 2 ** 30,
+        bootTime: Math.floor(Date.now() / 1000) - (86400 * 3 + 4000),
+        distro: { id: 'arch', name: 'Arch Linux', prettyName: 'Arch Linux', color: '#1793D1' },
+        cpu: { model: 'Ryzen 7 5800X', cores: 8, threads: 16 },
+        memoryTotal: 32 * 2 ** 30,
         ip: '192.168.1.137',
       });
     case 'system.metrics':
@@ -411,7 +415,7 @@ export async function mockCall(method: string, params: any, _admin?: boolean): P
       wr('config', cfg);
       return mockState();
     case 'plugins.list':
-      return delay([]);
+      return delay(rd('plugins', []));
     case 'audit.list':
       return delay({ entries: [], next: '', enabled: true });
     case 'updates.status': {

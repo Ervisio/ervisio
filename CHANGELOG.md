@@ -1,5 +1,22 @@
 # Changelog
 
+## [7.0.3] - 2026-11-06
+
+### Added
+- Photos & Videos in both interfaces: image zoom, rotation, fullscreen and folder navigation, plus browser-native video/audio playback with real byte-range seeking for local, SFTP and SMB files.
+- Real-directory desktop shortcuts alongside virtual app organizers, with per-user persistence and access validation.
+- Find Software includes account-scoped Node.js LTS, Claude Code and Codex CLI installation, plus curated backend tools and database clients. AI services retain their own login requirements.
+- Account-owned backup helper for the new optional Backup marketplace plugin: scheduled folders, PostgreSQL, MySQL/MariaDB or SQLite backups to saved SFTP/SMB folders, with bounded archives and authenticated retention records.
+- Task Manager in Classic navigation; Notepad and Code editor remain available from file/folder actions without standalone navigation icons.
+
+### Fixed
+- Shift+Delete confirmations select the confirm action for Enter, while preserving administrator typed-name checks.
+- Project search and Find Software inputs render one focus indicator.
+- Drive menus omit folder-only code-editor actions. Internal Explorer drags no longer trigger desktop uploads, and same-parent drops are ignored.
+- Taskbar context menus anchor above their app button and stay within the viewport.
+- ErvisiOS keeps the browser URL at the base path and its title at Ervisio; window routes and initial direct links continue to work independently.
+- Windows installs and atomic configuration saves retain read access for user bridges, without sharing TLS keys or private configuration backups.
+
 ## [7.0.2] - 2026-11-06
 
 ### Added

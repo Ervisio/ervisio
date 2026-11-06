@@ -1,4 +1,5 @@
 import { mockCall } from './mock';
+import { mockCLIChange } from '../sections/software/cliMock';
 import { ApiError, type StreamHandle, type StreamHandlers } from './types';
 
 /** Deterministic, cancellable project-search fixtures for the development daemon. */
@@ -7,6 +8,33 @@ export function mockStream<T>(
   input: unknown,
   handlers: StreamHandlers<T>,
 ): StreamHandle | null {
+  if (method === 'software.transactionUser' && (input as { source?: string }).source === 'cli') {
+    let closed = false;
+    const p = input as { op: string; packages: string[] };
+    queueMicrotask(() => {
+      if (closed) return;
+      if (handlers.admin) {
+        handlers.onError?.(new ApiError('invalid', 'CLI changes must use the user bridge'));
+        return;
+      }
+      mockCLIChange(p.op, p.packages[0]);
+      handlers.onData?.({ type: 'log', line: `${p.op} ${p.packages[0]} (user)` } as T);
+      handlers.onData?.({
+        type: 'done',
+        ok: true,
+        message: '',
+        hint: '',
+        rebootNeeded: false,
+      } as T);
+      handlers.onEnd?.();
+    });
+    return {
+      close() {
+        closed = true;
+      },
+      send() {},
+    };
+  }
   if (method === 'files.copy') {
     let closed = false;
     queueMicrotask(() => {

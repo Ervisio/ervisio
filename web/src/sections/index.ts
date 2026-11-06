@@ -19,6 +19,8 @@ export interface SectionDef {
   desktopTitleKey?: string;
   /** Shown in the rail / dock. Settings is placed separately by the shell. */
   rail: boolean;
+  /** Available as a separate page in Classic, without duplicating a desktop app. */
+  desktopHidden?: boolean;
   /** Operating systems the section works on; all when unset. */
   platforms?: Platform[];
 }
@@ -35,6 +37,17 @@ export const SECTIONS: SectionDef[] = [
     page: lazy(() => import('./overview')),
     desktopPage: lazy(() => import('./taskmanager')),
     desktopTitleKey: 'desktop.taskManager',
+  },
+  {
+    id: 'taskmanager',
+    path: '/taskmanager',
+    icon: 'overview',
+    colorVar: 'var(--h-ov)',
+    hue: 'ov',
+    titleKey: 'nav.taskManager',
+    rail: true,
+    desktopHidden: true,
+    page: lazy(() => import('./taskmanager')),
   },
   {
     id: 'terminal',
@@ -63,7 +76,7 @@ export const SECTIONS: SectionDef[] = [
     colorVar: 'var(--h-file)',
     hue: 'file',
     titleKey: 'nav.notepad',
-    rail: true,
+    rail: false,
     page: lazy(() => import('./editor/notepad')),
   },
   {
@@ -73,8 +86,18 @@ export const SECTIONS: SectionDef[] = [
     colorVar: 'var(--h-file)',
     hue: 'file',
     titleKey: 'nav.editor',
-    rail: true,
+    rail: false,
     page: lazy(() => import('./editor')),
+  },
+  {
+    id: 'media',
+    path: '/media',
+    icon: 'image',
+    colorVar: 'var(--h-file)',
+    hue: 'file',
+    titleKey: 'nav.media',
+    rail: true,
+    page: lazy(() => import('./media')),
   },
   {
     id: 'logs',
