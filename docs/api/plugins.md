@@ -672,3 +672,16 @@ Params `{"id","file"}`. When `/plugins/<id>/<file>` is not found in the packaged
 ervisiod opens this stream on the requesting session's user bridge. The bridge looks the id up among the folders that user loaded
 with `plugins.loadDev` (developer mode must be on), opens the file through `os.Root` (no `..`, absolute paths or symlinks out of the
 folder) with the user's own rights, and sends `{"name","size","mime"}` then base64 chunks (16 MiB max). Any failure is `not_found`.
+
+
+## Private documents and file chooser (SDK contract v5)
+
+The daemon serves `plugins.data.read/write/list/remove/claim/release` in authenticated account and plugin namespaces under `StateDir/users`. Every operation rechecks `plugins.access` through the caller's own bridge, including enabled, signature, compatibility and visibility policy. `admin:true` does not change the account. The sandbox broker supplies the plugin ID from its manifest, never from plugin arguments.
+
+A key is a relative identifier of at most 160 ASCII characters; traversal, absolute paths and empty segments are refused. Storage uses hashed filenames for portable, case-sensitive keys. Documents are limited to 4 MiB each, 64 MiB and 500 documents per account/plugin. Reads return `{text, revision}`; writes take `{key, text, revision, owner?}`. An empty revision creates a new document; replacements and removals require the exact SHA-256 revision. Conflicts preserve the newer document. Private files are written atomically with mode 0600.
+
+A client can claim an existing key using a random 32-character hexadecimal owner. Renew at least every 30 seconds and release in a finally block. The two-minute lease uses server time. During a lease, writes require its owner and removal is refused. Other views can still read the transcript. A crashed client loses its claim automatically.
+
+`sdk.files.pick({mode, title?, initialDirectory?, initialName?})` opens the shared host chooser for a file, folder or save destination. Confirmation resolves `{path}`, cancellation resolves `null`. Only active views can request it; closing a frame or changing account cancels the dialog. The result identifies a user-selected path, without granting new filesystem capabilities. The existing `sdk.files` and declared-command checks still apply. Chooser navigation never triggers an unsolicited administrator prompt.
+
+The optional `sdk.view.surface === 'assistant'` lets a plugin adapt the same registered page to a compact assistant panel. It does not change capabilities or account identity.

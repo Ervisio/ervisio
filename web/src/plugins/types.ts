@@ -311,11 +311,23 @@ export interface PluginJobsApi {
 }
 
 export type PluginViewDef<S = PluginSDK> =
-  | ComponentType<{ sdk: S }>
-  | { render(container: HTMLElement, sdk: S): void | (() => void) };
+  ComponentType<{ sdk: S }> | { render(container: HTMLElement, sdk: S): void | (() => void) };
 
 export interface PluginSDK {
-  version: 4;
+  version: 5;
+  data?: {
+    read(key: string): Promise<{ text: string; revision: string }>;
+    write(
+      key: string,
+      text: string,
+      revision?: string,
+      owner?: string,
+    ): Promise<{ revision: string }>;
+    claim(key: string, owner: string): Promise<{ expires: number }>;
+    release(key: string, owner: string): Promise<void>;
+    list(): Promise<{ path: string; type: string; size: number }[]>;
+    remove(key: string, revision: string): Promise<void>;
+  };
   /** Visibility combines the minimized window and browser tab; active work is never cancelled. */
   visibility: {
     readonly hidden: boolean;
@@ -332,7 +344,12 @@ export interface PluginSDK {
   platform: 'linux' | 'windows';
   plugin: { id: string; name: string; version: string };
   /** What this frame shows: one page or one widget of the plugin. */
-  view: { kind: 'page' | 'widget'; id: string; shell?: 'classic' | 'ervisios' };
+  view: {
+    kind: 'page' | 'widget';
+    id: string;
+    shell?: 'classic' | 'ervisios';
+    surface?: 'assistant';
+  };
   react: typeof import('react');
   /** The component kit, same look as the app (Button, Table, Card, StatCard, Dialog, Tabs, Badge, toast, ...). */
   ui: Record<string, unknown>;
@@ -443,6 +460,12 @@ export interface PluginSDK {
   };
   /** Only inside capabilities.files (read: read+write folders; write: write folders), with the user's own rights (admin folders: administrator rights when needed). */
   files: {
+    pick?(options: {
+      mode: 'file' | 'folder' | 'save';
+      title?: string;
+      initialDirectory?: string;
+      initialName?: string;
+    }): Promise<{ path: string } | null>;
     read(path: string, o?: FilesEnvOption): Promise<string>;
     readBytes(path: string, o?: FilesEnvOption): Promise<Uint8Array>;
     write(path: string, data: string | Uint8Array, o?: FilesEnvOption): Promise<void>;
@@ -488,5 +511,4 @@ export interface PluginSDK {
 }
 
 export type PluginModule =
-  | ((sdk: PluginSDK) => void | Promise<void>)
-  | { activate(sdk: PluginSDK): void | Promise<void> };
+  ((sdk: PluginSDK) => void | Promise<void>) | { activate(sdk: PluginSDK): void | Promise<void> };

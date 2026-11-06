@@ -9,6 +9,8 @@ export const setUnlockProbe = (f: () => boolean) => {
 export const isUnlocked = () => unlockedProbe();
 
 export interface RunOpts {
+  /** Dialogs opened by plugins must not trigger an unsolicited root prompt. */
+  noElevate?: boolean;
   /** Run on the root bridge from the start. */
   admin?: boolean;
   /** Called when the call only worked after the user unlocked administrator rights. */
@@ -44,7 +46,7 @@ export async function fcall<T = unknown>(
   try {
     return await call<T>(method, params, { admin: o.admin, noUnlock: true, signal: o.signal });
   } catch (e) {
-    if (e instanceof ApiError && e.code === 'needs_admin') {
+    if (e instanceof ApiError && e.code === 'needs_admin' && !o.noElevate) {
       if (!unlockedProbe()) await requestUnlock(o.reason ?? method);
       const r = await call<T>(method, params, { admin: true, signal: o.signal });
       if (!o.admin) o.onElevate?.();

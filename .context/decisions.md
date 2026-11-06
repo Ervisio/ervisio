@@ -21,3 +21,6 @@
 2026-11-05 · Go lint with golangci-lint (config in server/) · sweep: no linter beyond gofmt/vet; approved by user.
 2026-11-05 · Web formatting with Prettier alongside ESLint, single quotes + semicolons · sweep: 79.9% single quotes, 73.3% semicolons already; approved by user.
 2026-11-05 · Go exported PascalCase and React components PascalCase are not naming findings · sweep analyzer misfires on them.
+
+2026-11-06 · Personal preferences and private plugin documents live in authenticated daemon account namespaces · Import readable legacy preferences once through the user bridge, retain old files, avoid elevation or changing home permissions. Private plugin documents use conditional revisions and short server-timed leases so multiple views cannot silently overwrite chat history.
+2026-11-06 · SDK file chooser returns selected path metadata, without expanding filesystem permissions · One host modal, cancellation on account/frame disposal, active views only, no automatic root prompt.

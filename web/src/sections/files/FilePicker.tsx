@@ -67,7 +67,7 @@ export function FilePicker({
     void fcall<{ path: string; entries: RawEntry[]; truncated?: boolean }>(
       'files.list',
       { path: directory, showHidden: hidden },
-      { admin, signal: controller.signal },
+      { admin, signal: controller.signal, noElevate: true },
     )
       .then(
         (value) => {

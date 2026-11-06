@@ -81,11 +81,13 @@ func (c configAudit) AuditRetentionDays() int { return c.h.get().Audit.Retention
 
 // Server is the daemon.
 type Server struct {
-	opts     Options
-	log      *log.Logger
-	cfg      *configHolder
-	sessions *store
-	limiter  *limiter
+	personalPrefs sync.Map
+	pluginData    sync.Map
+	opts          Options
+	log           *log.Logger
+	cfg           *configHolder
+	sessions      *store
+	limiter       *limiter
 	// audit is the activity log; transfers the one-time plugin transfers.
 	audit     *audit.Log
 	transfers *transferStore

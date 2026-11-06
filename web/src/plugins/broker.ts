@@ -65,6 +65,15 @@ export interface BrokerUser {
 }
 
 export type Plan =
+  | {
+      kind: 'pick';
+      options: {
+        mode: 'file' | 'folder' | 'save';
+        title?: string;
+        initialDirectory?: string;
+        initialName?: string;
+      };
+    }
   | { kind: 'call'; method: string; params: Record<string, unknown>; admin: boolean }
   /** A large transfer: the host asks the daemon for a one-time URL (POST /api/plugins/transfer) with `body`. */
   | {
@@ -620,6 +629,78 @@ export function authorize(
       return { kind: 'call', method: 'plugins.envs.list', params: {}, admin: false };
     case 'network':
       return authorizeNetwork(m, a);
+    case 'pickFile': {
+      if (typeof a.mode !== 'string' || !['file', 'folder', 'save'].includes(a.mode))
+        return deny('Invalid chooser mode.', 'invalid');
+      const title = a.title === undefined ? undefined : str(a.title, 100);
+      const directory =
+        a.initialDirectory === undefined ? undefined : str(a.initialDirectory, 4096);
+      const name = a.initialName === undefined ? undefined : str(a.initialName, 255);
+      if (
+        (a.title !== undefined && typeof title !== 'string') ||
+        (a.initialDirectory !== undefined &&
+          (!directory ||
+            directory.includes('\0') ||
+            !/^(?:\/|[A-Za-z]:[\\/]|\\\\|remote:[a-f0-9]{16}:\/)/i.test(directory))) ||
+        (a.initialName !== undefined && (typeof name !== 'string' || name.includes('/') || name.includes('\0')))
+      )
+        return deny('Invalid chooser options.', 'invalid');
+      return {
+        kind: 'pick',
+        options: {
+          mode: a.mode as 'file' | 'folder' | 'save',
+          ...(title ? { title } : {}),
+          ...(directory ? { initialDirectory: directory } : {}),
+          ...(name ? { initialName: name } : {}),
+        },
+      };
+    }
+    case 'data': {
+      const action = str(a.action, 12);
+      if (!action || !['read', 'write', 'list', 'remove', 'claim', 'release'].includes(action))
+        return deny('Invalid private data action.', 'invalid');
+      const key = action === 'list' ? '' : str(a.key, 160);
+      if (
+        action !== 'list' &&
+        (!key ||
+          !/^[A-Za-z0-9][A-Za-z0-9._/-]{0,159}$/.test(key) ||
+          key.split('/').some((part) => !part || part === '.' || part === '..'))
+      )
+        return deny('Invalid private document key.', 'invalid');
+      if (
+        action === 'write' &&
+        (typeof a.text !== 'string' || new TextEncoder().encode(a.text).length > 4 * 1024 * 1024)
+      )
+        return deny('Private documents are limited to 4 MiB.', 'invalid');
+      const revision = a.revision ?? '';
+      const owner = a.owner ?? '';
+      if (
+        (action === 'claim' || action === 'release' || (action === 'write' && owner !== '')) &&
+        (typeof owner !== 'string' || !/^[a-f0-9]{32}$/.test(owner))
+      )
+        return deny('Invalid private document owner.', 'invalid');
+      if (
+        (action === 'write' || action === 'remove') &&
+        (typeof revision !== 'string' || (revision !== '' && !/^[a-f0-9]{64}$/.test(revision)))
+      )
+        return deny('Invalid private document revision.', 'invalid');
+      return {
+        kind: 'call',
+        method: `plugins.data.${action}`,
+        params: {
+          plugin: m.id,
+          ...(key ? { key } : {}),
+          ...(action === 'write'
+            ? { text: a.text, revision, ...(owner ? { owner } : {}) }
+            : action === 'remove'
+              ? { revision }
+              : action === 'claim' || action === 'release'
+                ? { owner }
+                : {}),
+        },
+        admin: false,
+      };
+    }
     case 'asset':
       if (!validAsset(a.path))
         return deny('Give a relative path inside the plugin folder.', 'invalid');

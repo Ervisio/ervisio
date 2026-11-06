@@ -11,6 +11,7 @@ import { usePrefs, useSession } from '../api';
 import { useShellCommands } from './useShellCommands';
 import { EditorDraftsProvider } from '../sections/editor/DraftsProvider';
 import './shell.css';
+import { FilePickerHost } from '../sections/files/pickerService';
 
 const DesktopShell = lazy(() =>
   import('../desktop/DesktopShell').then((m) => ({ default: m.DesktopShell })),
@@ -91,6 +92,7 @@ export function AppShell() {
       </Suspense>
       <CommandPalette open={palette} onClose={() => setPalette(false)} />
       <UpdateNotifier />
+      <FilePickerHost />
     </EditorDraftsProvider>
   );
 }
