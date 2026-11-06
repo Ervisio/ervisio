@@ -15,6 +15,7 @@ type OSRelease struct {
 	Name       string   `json:"name"`
 	PrettyName string   `json:"prettyName"`
 	VersionID  string   `json:"versionId,omitempty"`
+	VariantID  string   `json:"variantId,omitempty"`
 	Logo       string   `json:"logo,omitempty"`
 	ANSIColor  string   `json:"ansiColor,omitempty"`
 }
@@ -39,6 +40,7 @@ func ParseOSRelease(r io.Reader) OSRelease {
 		Name:       vals["NAME"],
 		PrettyName: vals["PRETTY_NAME"],
 		VersionID:  vals["VERSION_ID"],
+		VariantID:  vals["VARIANT_ID"],
 		Logo:       vals["LOGO"],
 		ANSIColor:  vals["ANSI_COLOR"],
 	}

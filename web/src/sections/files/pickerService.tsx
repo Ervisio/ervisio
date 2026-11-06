@@ -8,6 +8,7 @@ export interface PickFileOptions {
   title?: string;
   initialDirectory?: string;
   initialName?: string;
+  localOnly?: boolean;
 }
 type PickResult = { path: string } | null;
 interface Pending {
@@ -88,6 +89,7 @@ export function FilePickerHost() {
       title={options.title ? `${request.plugin} · ${options.title}` : request.plugin}
       initialDirectory={options.initialDirectory || session?.home || '/'}
       initialName={options.initialName}
+      localOnly={options.localOnly}
       onCancel={() => finish(null)}
       onChoose={(path) => finish({ path })}
     />

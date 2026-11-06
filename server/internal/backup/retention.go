@@ -214,6 +214,7 @@ func publish(ctx context.Context, f remote.FS, c *Config, local, hash string, in
 	// refusal is a warning, never a reason to discard the new good backup.
 	warnings := []string{}
 	if err = retain(ctx, f, c, dir, time.Now(), name); err != nil {
+		retentionLog(ctx, "retention.failed", "WARN", "Retention cleanup was incomplete; inspect the backup history", info.RunID, 0)
 		warnings = append(warnings, "The backup is complete, but retention cleanup was incomplete; existing files were preserved where cleanup failed.")
 	}
 	return path.Join(dir, name), warnings, nil
@@ -291,9 +292,12 @@ func retain(ctx context.Context, f remote.FS, c *Config, dir string, now time.Ti
 			continue
 		}
 		if err = f.Remove(ctx, archivePath, false); err != nil {
+			retentionLog(ctx, "retention.failed", "WARN", "Retention could not delete an expired archive", item.m.RunID, item.m.Bytes)
 			return err
 		}
+		retentionLog(ctx, "retention.deleted", "INFO", "Expired backup archive deleted", item.m.RunID, item.m.Bytes)
 		if err = f.Remove(ctx, archivePath+".manifest.json", false); err != nil {
+			retentionLog(ctx, "retention.failed", "WARN", "Archive deleted, but its provenance manifest could not be removed", item.m.RunID, 0)
 			return err
 		}
 	}

@@ -5,7 +5,8 @@ import { apiUrl, errorMessage, useSession } from '../../api';
 import { useT } from '../../i18n';
 import { formatBytes, formatTime } from '../../lib/format';
 import { useWindowActivity } from '../../lib/windowActivity';
-import { Button, Dialog, Icon, IconButton, Input, Skeleton, registerIcon } from '../../ui';
+import { Button, Dialog, Icon, IconButton, Skeleton, registerIcon } from '../../ui';
+import { FilePicker } from '../files/FilePicker';
 import { fcall, fileDownloadUrl } from '../files/fapi';
 import { remoteTarget } from '../files/remoteLocation';
 import { Thumb } from '../files/Thumb';
@@ -58,8 +59,7 @@ export default function MediaPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [decodeError, setDecodeError] = useState(false);
-  const [open, setOpen] = useState(false),
-    [input, setInput] = useState('');
+  const [open, setOpen] = useState(false);
   const [details, setDetails] = useState(false),
     [strip, setStrip] = useState(true);
   const [natural, setNatural] = useState({ width: 0, height: 0 });
@@ -214,7 +214,6 @@ export default function MediaPage() {
   };
   const openFile = async () => {
     await leaveFullscreen();
-    setInput(path || session?.home || '/');
     setOpen(true);
   };
   const fileInfo = async () => {
@@ -484,38 +483,7 @@ export default function MediaPage() {
           )}
         </div>
       )}
-      <Dialog
-        open={open}
-        title={t('openTitle')}
-        icon="files"
-        onClose={() => setOpen(false)}
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (validMediaPath(input)) {
-            choose(input);
-            setOpen(false);
-          }
-        }}
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setOpen(false)}>
-              {t('cancel')}
-            </Button>
-            <Button type="submit" disabled={!validMediaPath(input)}>
-              {t('open')}
-            </Button>
-          </>
-        }
-      >
-        <Input
-          data-autofocus
-          label={t('path')}
-          value={input}
-          mono
-          onChange={(event) => setInput(event.target.value)}
-          hint={t('pathHint')}
-        />
-      </Dialog>
+      {open && <FilePicker mode="file" title={t('openTitle')} initialDirectory={path?parentPath(path):session?.home||'/'} admin={admin} accept={isMediaEntry} onCancel={()=>setOpen(false)} onChoose={selected=>{if(validMediaPath(selected)){choose(selected);setOpen(false);}}} />}
       <Dialog
         open={details && !!entry}
         title={t('info')}

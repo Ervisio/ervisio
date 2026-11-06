@@ -92,6 +92,9 @@ func (e *engine) run(ctx context.Context, id string, dueOnly bool) (receipt Rece
 	if err = validate(c); err != nil {
 		return receipt, err
 	}
+	if err = validateDestination(&c.Destination, true); err != nil {
+		return receipt, err
+	}
 	if err = cleanOwnedSpools(&e.store, c); err != nil {
 		return receipt, err
 	}
@@ -104,16 +107,35 @@ func (e *engine) run(ctx context.Context, id string, dueOnly bool) (receipt Rece
 	if err = e.store.receipt(receipt); err != nil {
 		return receipt, err
 	}
+	logger := &backupLogger{store: &e.store, config: c}
+	ctx = context.WithValue(ctx, backupLoggerKey{}, logger)
+	logger.emit("backup.started", "INFO", "Backup started", map[string]any{"run_id": receipt.ID})
 	defer func() {
 		receipt.Ended = time.Now().UTC().Format(time.RFC3339)
 		if err != nil {
 			receipt.Status = "failed"
 			receipt.Error = safeRunError(err)
 		}
+		event, level, message := "backup.completed", "INFO", "Backup completed"
+		if receipt.Status == "failed" {
+			event, level, message = "backup.failed", "ERROR", "Backup failed; inspect its local history for details"
+		}
+		logger.emit(event, level, message, map[string]any{"run_id": receipt.ID, "duration_ms": time.Since(now).Milliseconds(), "bytes": receipt.Bytes, "files": receipt.Files, "databases": receipt.Databases, "status": receipt.Status})
+		logger.flush()
+		if logger.warning {
+			receipt.Warnings = append(receipt.Warnings, "ErvisioLogs delivery is pending or its bounded queue is full. The backup result is unchanged; queued events retry on the next run.")
+		}
 		if persistErr := e.store.receipt(receipt); err == nil && persistErr != nil {
 			err = errors.New("The backup finished, but its local history could not be saved.")
 		}
 	}()
+	if c.Destination.kind() == "local" {
+		resolved, resolveErr := filepath.EvalSymlinks(c.Destination.Path)
+		if resolveErr != nil {
+			return receipt, errors.New("The local backup destination cannot be resolved by this account.")
+		}
+		c.Destination.Path = resolved
+	}
 	if err = ctx.Err(); err != nil {
 		return receipt, err
 	}
@@ -142,16 +164,7 @@ func (e *engine) run(ctx context.Context, id string, dueOnly bool) (receipt Rece
 		return receipt, err
 	}
 	var warnings []string
-	err = e.withRemote(ctx, c.Destination.Connection, func(ctx context.Context, f remote.FS) error {
-		journal := &uploadJournal{store: &e.store, config: c}
-		if err := journal.recover(ctx, f); err != nil {
-			return err
-		}
-		ctx = context.WithValue(ctx, journalKey{}, journal)
-		var err error
-		receipt.Archive, warnings, err = publish(ctx, f, c, local, hash, info)
-		return err
-	})
+	receipt.Archive, warnings, err = e.publishDestination(ctx, c, local, hash, info)
 	if err != nil {
 		return receipt, err
 	}

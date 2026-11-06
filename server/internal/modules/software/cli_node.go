@@ -131,16 +131,25 @@ func unpackNode(archive, dest, top string) error {
 		if files > 20000 {
 			return fmt.Errorf("Node archive contains too many entries")
 		}
-		if size < 0 || size > 64<<20 {
-			return fmt.Errorf("Node archive entry is too large")
+		rel, allowed, err := nodeArchivePath(name, top)
+		if err != nil {
+			return err
+		}
+		entryLimit := int64(64 << 20)
+		// Current official LTS executables exceed 64 MiB. Keep a separate
+		// bounded allowance for exactly the executable, not every npm file.
+		if allowed && (rel == "bin/node" || rel == "node.exe") {
+			entryLimit = 256 << 20
+		}
+		if size < 0 || size > entryLimit {
+			return fmt.Errorf("Node archive entry %q exceeds its %d MiB size limit", rel, entryLimit>>20)
 		}
 		total += size
 		if total > 512<<20 {
 			return fmt.Errorf("Expanded Node archive is too large")
 		}
-		rel, allowed, err := nodeArchivePath(name, top)
-		if err != nil || !allowed {
-			return err
+		if !allowed {
+			return nil
 		}
 		if mode&os.ModeSymlink != 0 {
 			return nil
@@ -149,7 +158,7 @@ func unpackNode(archive, dest, top string) error {
 		if mode.IsDir() {
 			return os.MkdirAll(target, 0700)
 		}
-		if !mode.IsRegular() || size < 0 || size > 64<<20 {
+		if !mode.IsRegular() {
 			return fmt.Errorf("Unsupported Node archive entry")
 		}
 		if err := os.MkdirAll(filepath.Dir(target), 0700); err != nil {

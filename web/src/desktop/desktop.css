@@ -355,6 +355,11 @@
   height: 1px;
   background: currentColor;
 }
+.eos-window-body .ui-panel--float {
+  position: absolute;
+  inset: var(--gap) var(--gap) var(--gap) auto;
+  max-width: calc(100% - 2 * var(--gap));
+}
 .eos-window-body {
   position: relative;
   flex: 1;

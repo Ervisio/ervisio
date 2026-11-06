@@ -77,12 +77,13 @@ func excluded(patterns []string, rel string) bool {
 }
 
 type packer struct {
-	ctx     context.Context
-	tw      *tar.Writer
-	info    *archiveInfo
-	limit   int64
-	ownDir  string
-	entries int
+	ctx       context.Context
+	tw        *tar.Writer
+	info      *archiveInfo
+	limit     int64
+	ownDir    string
+	outputDir string
+	entries   int
 }
 
 func (p *packer) entry(root *os.Root, rel, target string, fi os.FileInfo) error {
@@ -154,6 +155,9 @@ func (p *packer) folder(source, target string, patterns []string) error {
 		return errors.New("The source directory cannot be resolved safely.")
 	}
 	source = resolved
+	if p.outputDir != "" && (source == p.outputDir || strings.HasPrefix(source, p.outputDir+string(filepath.Separator))) {
+		return errors.New("A source folder is inside this plan's backup output folder.")
+	}
 	root, err := os.OpenRoot(source)
 	if err != nil {
 		return errors.New("A source folder cannot be opened by this account.")
@@ -189,7 +193,7 @@ func (p *packer) folder(source, target string, patterns []string) error {
 			r := path.Join(rel, e.Name())
 			nativeRel := filepath.FromSlash(r)
 			absolute := filepath.Join(source, nativeRel)
-			if absolute == p.ownDir || strings.HasPrefix(absolute, p.ownDir+string(filepath.Separator)) {
+			if absolute == p.ownDir || strings.HasPrefix(absolute, p.ownDir+string(filepath.Separator)) || p.outputDir != "" && (absolute == p.outputDir || strings.HasPrefix(absolute, p.outputDir+string(filepath.Separator))) {
 				p.info.Excluded++
 				continue
 			}
@@ -291,6 +295,9 @@ func buildArchive(ctx context.Context, c *Config, runID, spool, ownDir string, b
 	}
 	tw := tar.NewWriter(gz)
 	p := packer{ctx: ctx, tw: tw, info: &info, limit: c.MaxBytes, ownDir: ownDir}
+	if c.Destination.kind() == "local" {
+		p.outputDir = filepath.Join(c.Destination.Path, "ervisio-backup-"+c.ID)
+	}
 	if c.Mode != "databases" {
 		for i, source := range c.Folders {
 			name := fmt.Sprintf("folders/%02d-%s", i+1, filepath.Base(source))

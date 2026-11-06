@@ -61,7 +61,7 @@ func dispatch(ctx context.Context, args []string, e *engine) (any, error) {
 		return nil, errors.New("Use --backup status, list, remotes, save, delete, run, tick, history, test or browse.")
 	}
 	method := args[0]
-	needsID := method == "save" || method == "delete" || method == "run" || method == "tick" || method == "history" || method == "test" || method == "browse"
+	needsID := method == "save" || method == "delete" || method == "run" || method == "tick" || method == "history" || method == "test" || method == "browse" || method == "deliver"
 	if needsID && (len(args) != 2 || !idPattern.MatchString(args[1])) {
 		return nil, errors.New("This backup method requires one 32-character hexadecimal ID.")
 	}
@@ -90,7 +90,7 @@ func dispatch(ctx context.Context, args []string, e *engine) (any, error) {
 		if current, err := user.Current(); err == nil {
 			account = current.Username
 		}
-		return map[string]any{"supported": true, "platform": "linux", "account": account, "clients": clients, "spoolFree": free, "spoolReserve": reserveBytes, "maxPlans": maxJobs, "maxFolders": 32, "maxDatabases": 16}, nil
+		return map[string]any{"supported": true, "platform": "linux", "account": account, "clients": clients, "spoolFree": free, "spoolReserve": reserveBytes, "maxPlans": maxJobs, "maxFolders": 32, "maxDatabases": 16, "features": []string{"logs", "destinations", "delivery"}}, nil
 	case "list":
 		items, err := s.list()
 		return map[string]any{"plans": items}, err
@@ -133,6 +133,7 @@ func dispatch(ctx context.Context, args []string, e *engine) (any, error) {
 			return nil, err
 		}
 		_ = os.Remove(filepath.Join(s.dir, "state", args[1]+".history"))
+		_ = os.Remove(filepath.Join(s.dir, "state", args[1]+".logs-outbox"))
 		return map[string]any{"deleted": true, "remoteBackupsPreserved": true}, nil
 	case "test":
 		c, err := s.load(args[1])
@@ -141,17 +142,9 @@ func dispatch(ctx context.Context, args []string, e *engine) (any, error) {
 		}
 		ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 		defer cancel()
-		err = e.withRemote(ctx, c.Destination.Connection, func(ctx context.Context, f remote.FS) error {
-			entry, err := f.Stat(ctx, c.Destination.Path)
-			if err != nil {
-				return err
-			}
-			if entry.Type != "dir" {
-				return errors.New("The destination is not a real directory.")
-			}
-			return nil
-		})
-		return map[string]any{"reachable": err == nil, "path": c.Destination.Path, "writeTested": false}, err
+		return e.probeDestination(ctx, c)
+	case "deliver":
+		return e.deliver(ctx, args[1])
 	case "browse":
 		return e.browse(ctx, args[1])
 	}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useWindowActivity } from '../../lib/windowActivity';
 import { errorMessage } from '../../api';
 import { useT } from '../../i18n';
+import { PathInput } from '../files/PathInput';
 import {
   Badge,
   Button,
@@ -667,11 +668,11 @@ function CredentialsStep({
             onChange={(e) => set({ passphrase: e.target.value })}
             hint={editing && has.passphrase ? t('field.keepSecret') : t('field.passphraseHint')}
           />
-          <Input
+          <PathInput
             label={t('field.socketPath')}
             mono
             value={f.socketPath}
-            onChange={(e) => set({ socketPath: e.target.value })}
+            onPathChange={(value) => set({ socketPath: value })}
             placeholder="/var/run/docker.sock"
             hint={t('field.socketPathHint')}
           />

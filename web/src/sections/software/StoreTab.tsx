@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, call, errorMessage } from '../../api';
-import { useSession } from '../../api';
+import { usePrefs, useSession } from '../../api';
+import { usePrefSave } from '../settings/save';
 import { useT } from '../../i18n';
 import { Badge, Button, Chip, EmptyState, Icon, Input, Skeleton, type IconName } from '../../ui';
 import { AppIcon } from './AppIcon';
@@ -47,6 +48,9 @@ export function StoreTab({ actions, onOpen, goInstalled }: Props) {
   const { host } = useSession();
   const scope = useAccountScope();
   const { summary, updates, installed, apps } = useSoftware();
+  const { prefs } = usePrefs();
+  const save = usePrefSave();
+  const cliOnly = typeof prefs['software.cliOnly'] === 'boolean' ? prefs['software.cliOnly'] : !!summary?.serverProfile;
   const catalogRevision = suggestionsRevision(scope);
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -59,7 +63,7 @@ export function StoreTab({ actions, onOpen, goInstalled }: Props) {
     value: peekSuggestions('', scope) ?? null,
     error: '',
   }));
-  const categoryKey = category ?? '';
+  const categoryKey = category ?? (cliOnly ? 'server-cli' : '');
   const sameSuggestions = suggestions.scope === scope && suggestions.category === categoryKey;
   const popular = sameSuggestions
     ? suggestions.value
@@ -141,7 +145,8 @@ export function StoreTab({ actions, onOpen, goInstalled }: Props) {
   const appsShown = showAllApps ? yourApps : yourApps.slice(0, SHOWN_APPS);
 
   const available = summary?.sources ?? [];
-  const visibleResults = (results ?? []).filter((r) => filters.size === 0 || filters.has(r.kind));
+  const visibleResults = (results ?? []).filter((r) => (!cliOnly || r.cli === true) && (filters.size === 0 || filters.has(r.kind)));
+  const popularVisible = popular?.filter((r) => (!cliOnly || r.cli === true) && (filters.size === 0 || filters.has(r.kind)));
   const toggleFilter = (k: Kind) =>
     setFilters((f) => {
       const n = new Set(f);
@@ -285,6 +290,7 @@ export function StoreTab({ actions, onOpen, goInstalled }: Props) {
         />
       </div>
 
+      <div className="sw-cli-filter"><Chip pressed={cliOnly} onClick={() => save('software.cliOnly', !cliOnly, t('store.cliOnly'))}><Icon name="terminal" />{t('store.cliOnly')}</Chip><small>{t(cliOnly ? 'store.cliHint' : 'store.allKindsHint')}</small></div>
       <CLITools query={q} busy={actions.busy} askInstall={actions.askInstall} onOpen={onOpen} />
       <div className="sw-cats">
         {CATEGORIES.map((c) => (
@@ -336,7 +342,7 @@ export function StoreTab({ actions, onOpen, goInstalled }: Props) {
         </>
       ) : (
         <>
-          {yourApps.length > 0 && !category && (
+          {yourApps.length > 0 && !category && !cliOnly && (
             <>
               <div className="sw-sec">
                 <h3>{t('store.yourApps')}</h3>
@@ -365,7 +371,7 @@ export function StoreTab({ actions, onOpen, goInstalled }: Props) {
             </>
           )}
           <div className="sw-sec">
-            <h3>{category ? t(`store.cat.${category}`) : t('store.popular', { distro })}</h3>
+            <h3>{category ? t(`store.cat.${category}`) : cliOnly ? t('store.serverTools') : t('store.popular', { distro })}</h3>
           </div>
           {popular === null ? (
             <div className="sw-apps">
@@ -373,11 +379,11 @@ export function StoreTab({ actions, onOpen, goInstalled }: Props) {
                 <Skeleton key={i} height={92} style={{ borderRadius: 18 }} />
               ))}
             </div>
-          ) : popular.length === 0 ? (
+          ) : popularVisible?.length === 0 ? (
             <EmptyState icon="info" hue="sw" title={t('store.noSuggest')} />
           ) : (
             <div className="sw-apps">
-              {popular.filter((r) => filters.size === 0 || filters.has(r.kind)).map(resultCard)}
+              {popularVisible?.map(resultCard)}
             </div>
           )}
         </>

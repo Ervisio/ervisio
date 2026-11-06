@@ -1,6 +1,9 @@
 // Icon set ported from docs/design/screens/kit.js (24px grid, 1.7 stroke) plus a few additions.
 // Inner SVG markup is static and trusted.
 export const ICON_PATHS: Record<string, string> = {
+  'assistant': '<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/><path d="m20 2 .7 2.3L23 5l-2.3.7L20 8l-.7-2.3L17 5l2.3-.7z"/>',
+  'window-maximize': '<rect x="4" y="4" width="16" height="16" rx="2"/>',
+  'window-restore': '<rect x="3" y="7" width="14" height="14" rx="2"/><path d="M7 7V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-2"/>',
   'task-manager':
     '<rect x="2.5" y="3.5" width="19" height="14" rx="2.5"/><path d="M6 12h3l2-5 3 8 2-4h2M9 21h6M12 17.5V21"/>',
   overview:

@@ -33,6 +33,7 @@ import { UpdatesBlock } from './Updates';
 import { updateStatus } from './updatesApi';
 import { NativeSettings } from './NativeSettings';
 import { ResetControls } from './ResetControls';
+import { AppVisibility } from './AppVisibility';
 import './settings.css';
 
 export interface RowDef {
@@ -407,6 +408,12 @@ function appearanceGroup(t: TFn, th: ThemeValue, save: Save): GroupDef {
         desc: t('appearance.shell.desc'),
         words: 'ErvisiOS classic desktop interface windows interfaccia classica finestre',
         block: <ShellChoice />,
+      },
+      {
+        id: 'apps',
+        title: t('apps.title'),
+        words: 'hide show apps navigation photos video notepad editor assistant AI chat nascondi applicazioni barra',
+        block: <AppVisibility />,
       },
       {
         id: 'theme',

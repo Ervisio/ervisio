@@ -8,6 +8,9 @@ import (
 )
 
 func privateOwner(fi os.FileInfo) bool { return fi.Mode()&os.ModeSymlink == 0 }
+func linkWithinRoot(_ *os.Root, _, _ string) error {
+	return errors.New("Backup delivery currently supports Linux.")
+}
 func openProtected(p string, flags int, mode os.FileMode) (*os.File, error) {
 	return os.OpenFile(p, flags, mode)
 }

@@ -13,6 +13,7 @@ export const dirname = (p: string): string => {
   const remote = remoteTarget(p);
   if (remote) return remoteLocation(remote.conn, dirname(remote.path));
   const i = p.lastIndexOf('/');
+  if (i === 2 && /^[a-z]:\//i.test(p)) return p.slice(0, 3);
   return i <= 0 ? '/' : p.slice(0, i);
 };
 export const basename = (p: string) => (p === '/' ? '/' : p.slice(p.lastIndexOf('/') + 1));

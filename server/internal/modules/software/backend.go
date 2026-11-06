@@ -52,6 +52,7 @@ type Update struct {
 
 // Result is one search hit.
 type Result struct {
+	CLI         bool   `json:"cli,omitempty"`
 	Name        string `json:"name"`
 	Title       string `json:"title,omitempty"`
 	Version     string `json:"version"`

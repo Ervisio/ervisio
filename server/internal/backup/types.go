@@ -34,8 +34,36 @@ type Period struct {
 }
 
 type Destination struct {
-	Connection string `json:"connection"`
-	Path       string `json:"path"`
+	Kind              string  `json:"kind,omitempty"`
+	Connection        string  `json:"connection"`
+	Path              string  `json:"path"`
+	URL               string  `json:"url,omitempty"`
+	Method            string  `json:"method,omitempty"`
+	UploadMode        string  `json:"uploadMode,omitempty"`
+	Field             string  `json:"field,omitempty"`
+	APIHeader         string  `json:"apiHeader,omitempty"`
+	AuthScheme        string  `json:"authScheme,omitempty"`
+	AllowHTTP         bool    `json:"allowHTTP,omitempty"`
+	Folder            string  `json:"folder,omitempty"`
+	Owner             string  `json:"owner,omitempty"`
+	Repository        string  `json:"repository,omitempty"`
+	Target            string  `json:"target,omitempty"`
+	Bucket            string  `json:"bucket,omitempty"`
+	Region            string  `json:"region,omitempty"`
+	Endpoint          string  `json:"endpoint,omitempty"`
+	PathStyle         bool    `json:"pathStyle,omitempty"`
+	Retention         bool    `json:"retention,omitempty"`
+	CredentialMode    string  `json:"credentialMode,omitempty"`
+	APIKey            *string `json:"apiKey,omitempty"`
+	AccessKey         *string `json:"accessKey,omitempty"`
+	SecretKey         *string `json:"secretKey,omitempty"`
+	SessionToken      *string `json:"sessionToken,omitempty"`
+	HasAPIKey         bool    `json:"hasAPIKey,omitempty"`
+	HasCredentials    bool    `json:"hasCredentials,omitempty"`
+	HasSessionToken   bool    `json:"hasSessionToken,omitempty"`
+	ClearAPIKey       bool    `json:"clearAPIKey,omitempty"`
+	ClearCredentials  bool    `json:"clearCredentials,omitempty"`
+	ClearSessionToken bool    `json:"clearSessionToken,omitempty"`
 }
 
 type Database struct {
@@ -60,6 +88,7 @@ type Config struct {
 	Excludes    []string    `json:"excludes,omitempty"`
 	Databases   []Database  `json:"databases"`
 	Destination Destination `json:"destination"`
+	Logs        *LogConfig  `json:"logs,omitempty"`
 	Frequency   Period      `json:"frequency"`
 	KeepLast    int         `json:"keepLast"`
 	MaxAge      *Period     `json:"maxAge,omitempty"`
@@ -142,6 +171,9 @@ func cleanDestination(s string) (string, error) {
 }
 
 func validate(c *Config) error {
+	if err := validateLogs(c.Logs, false); err != nil {
+		return err
+	}
 	if c.ID != "" && !idPattern.MatchString(c.ID) {
 		return errors.New("Invalid backup ID.")
 	}
@@ -230,18 +262,17 @@ func validate(c *Config) error {
 			}
 		}
 	}
-	if !connectionPattern.MatchString(c.Destination.Connection) {
-		return errors.New("Choose a saved SFTP or SMB connection.")
-	}
-	p, err := cleanDestination(c.Destination.Path)
-	if err != nil {
+	if err := validateDestination(&c.Destination, false); err != nil {
 		return err
 	}
-	c.Destination.Path = p
 	if !c.Frequency.valid() {
 		return errors.New("Choose a backup frequency between one minute and twelve months.")
 	}
-	if c.KeepLast < 1 || c.KeepLast > 365 {
+	if c.Destination.externalHTTP() {
+		c.KeepLast = 0
+		c.MaxAge = nil
+	}
+	if !c.Destination.externalHTTP() && (c.KeepLast < 1 || c.KeepLast > 365) {
 		return errors.New("Keep between 1 and 365 successful backups.")
 	}
 	if c.MaxAge != nil && !c.MaxAge.valid() {

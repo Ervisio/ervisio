@@ -16,9 +16,10 @@ import type { Detail, Pkg, SearchResult } from './types';
 import './software.css';
 import { NativeAppFrame } from '../../ui/NativeAppFrame';
 import { useAccountScope } from '../../lib/accountScope';
+import { TxActivity } from './TxActivity';
 
-type Tab = 'updates' | 'store' | 'installed' | 'history';
-const TABS: Tab[] = ['updates', 'store', 'installed', 'history'];
+type Tab = 'updates' | 'store' | 'installed' | 'history' | 'activity';
+const TABS: Tab[] = ['updates', 'store', 'installed', 'history', 'activity'];
 
 export default function SoftwarePage() {
   const t = useT('software');
@@ -33,8 +34,8 @@ export default function SoftwarePage() {
   const [pkg, setPkg] = useState<PkgTarget | null>(null);
 
   useEffect(() => {
-    registerRuntime(t, nav);
-  }, [t, nav]);
+    registerRuntime(t, nav, scope);
+  }, [t, nav, scope]);
 
   useEffect(() => {
     if (!scope) return;
@@ -130,8 +131,9 @@ export default function SoftwarePage() {
       { id: 'store', label: t('tab.store') },
       { id: 'installed', label: t('tab.installed'), count: installed?.length },
       { id: 'history', label: t('tab.history') },
+      { id: 'activity', label: t('tab.activity'), count: tx.phase === 'running' ? 1 : undefined },
     ],
-    [t, summary, installed],
+    [t, summary, installed, tx.phase],
   );
 
   const unsupported = error?.code === 'unavailable' && !summary;
@@ -143,7 +145,7 @@ export default function SoftwarePage() {
       items={items.map((item) => ({
         ...item,
         icon: (
-          { updates: 'download', store: 'grid', installed: 'software', history: 'clock' } as const
+          { updates: 'download', store: 'grid', installed: 'software', history: 'clock', activity: 'download' } as const
         )[item.id],
       }))}
       active={tab}
@@ -161,6 +163,7 @@ export default function SoftwarePage() {
               aria-label={t('title')}
             />
             <span className="sw-sp" />
+            {tx.phase !== 'idle' && <Button icon="download" onClick={() => { closePanel(); setTab('activity'); }}>{t('tab.activity')}{tx.phase === 'running' && tx.percent !== undefined ? ` · ${tx.percent}%` : ''}</Button>}
             {summary && summary.lastCheck > 0 && (
               <span className="sw-muted sw-checked">
                 {t('checked', { when: relativeTime(summary.lastCheck, lang) })}
@@ -180,7 +183,7 @@ export default function SoftwarePage() {
               </Button>
             </div>
           )}
-          {unsupported && tab !== 'store' ? (
+          {tab === 'activity' ? <TxActivity tx={tx} /> : unsupported && tab !== 'store' ? (
             <EmptyState
               icon="software"
               hue="sw"
@@ -206,7 +209,7 @@ export default function SoftwarePage() {
             <HistoryTab reloadKey={tx.phase === 'done' ? tx.startedAt : 0} />
           )}
         </div>
-        <TxPanel tx={tx} openTerminal={acts.openTerminal} />
+        {tab !== 'activity' && <TxPanel tx={tx} openTerminal={acts.openTerminal} />}
         <PkgPanel
           target={pkg}
           update={pkgUpdate}

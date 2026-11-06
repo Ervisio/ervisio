@@ -6,13 +6,13 @@ import {
   EmptyState,
   Icon,
   IconButton,
-  Input,
   Select,
   Skeleton,
   type IconName,
 } from '../../ui';
 import { call, useSession } from '../../api';
 import { useT } from '../../i18n';
+import { PathInput } from '../files/PathInput';
 import { hueFor } from './helpers';
 import type { Source, SourcesResult, Watcher, WatchFormat } from './types';
 
@@ -184,15 +184,15 @@ function WatchForm({
       }}
     >
       <h4>{t('watch.title')}</h4>
-      <Input
+      <PathInput
         label={t('watch.path')}
         icon="files"
         mono
         compact
         autoFocus
         value={path}
-        onChange={(e) => {
-          setPath(e.target.value);
+        onPathChange={(value) => {
+          setPath(value);
           setError('');
         }}
         placeholder={t('watch.pathPlaceholder')}

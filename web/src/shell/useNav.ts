@@ -4,6 +4,7 @@ import { useT } from '../i18n';
 import { usePlugins } from '../plugins';
 import { SECTIONS, useRailBadges, useSectionBadgeHooks, type RailBadge } from '../sections';
 import type { IconName } from '../ui';
+import { sectionShown } from './appVisibility';
 
 export interface NavEntry {
   key: string;
@@ -42,7 +43,7 @@ export function useNav() {
       kind: s.id === 'settings' ? 'settings' : 'section',
     });
     const main = SECTIONS.filter(
-      (s) => s.rail && (!desktop || !s.desktopHidden) && (!s.platforms || s.platforms.includes(os)),
+      (s) => s.id !== 'settings' && sectionShown(s, prefs, desktop ? 'ervisios' : 'classic') && (!s.platforms || s.platforms.includes(os)),
     ).map(entry);
     const settings = entry(SECTIONS.find((s) => s.id === 'settings')!);
     const plugins: NavEntry[] = railPages.map((p) => ({
@@ -55,5 +56,5 @@ export function useNav() {
       kind: 'plugin',
     }));
     return { main, settings, plugins };
-  }, [t, railPages, registered, fromHooks, os, desktop]);
+  }, [t, railPages, registered, fromHooks, os, desktop, prefs]);
 }

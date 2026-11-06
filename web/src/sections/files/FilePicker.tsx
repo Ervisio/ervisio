@@ -20,6 +20,8 @@ export function FilePicker({
   error = '',
   onChoose,
   onCancel,
+  accept,
+  localOnly = false,
 }: {
   mode: 'file' | 'folder' | 'save';
   title: string;
@@ -30,6 +32,8 @@ export function FilePicker({
   error?: string;
   onChoose(path: string): void;
   onCancel(): void;
+  accept?(entry: FEntry): boolean;
+  localOnly?: boolean;
 }) {
   const t = useT('files');
   const { session } = useSession();
@@ -45,6 +49,7 @@ export function FilePicker({
   const [warning, setWarning] = useState('');
   const [remotes, setRemotes] = useState<{ id: string; name: string; path?: string }[]>([]);
   useEffect(() => {
+    if (localOnly) return;
     const controller = new AbortController();
     void call<{ connections: typeof remotes }>(
       'remote.list',
@@ -55,7 +60,7 @@ export function FilePicker({
       () => {},
     );
     return () => controller.abort();
-  }, []);
+  }, [localOnly]);
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
@@ -64,6 +69,7 @@ export function FilePicker({
     setSelected(null);
     setAddress(directory);
     setQuery('');
+    if (localOnly && directory.startsWith('remote:')) { setFailure(t('picker.localOnly')); setEntries([]); setLoading(false); return () => controller.abort(); }
     void fcall<{ path: string; entries: RawEntry[]; truncated?: boolean }>(
       'files.list',
       { path: directory, showHidden: hidden },
@@ -86,7 +92,7 @@ export function FilePicker({
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [directory, hidden, admin, t]);
+  }, [directory, hidden, admin, t, localOnly]);
   const target =
     mode === 'save'
       ? validFileName(name.trim())
@@ -104,6 +110,7 @@ export function FilePicker({
     if (mode === 'save' && !isDirLike(entry)) setName(entry.name);
   };
   const rows = entries
+    .filter(entry => isDirLike(entry) || !accept || accept(entry))
     .filter((entry) => entry.name.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
     .sort(
       (a, b) =>
@@ -172,7 +179,7 @@ export function FilePicker({
             <Icon name="server" />
             {t('place.root')}
           </button>
-          {remotes.map((remote) => (
+          {!localOnly && remotes.map((remote) => (
             <button
               type="button"
               key={remote.id}
