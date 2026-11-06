@@ -223,6 +223,9 @@ func TestLocalPublicationRetentionAndOutputExclusion(t *testing.T) {
 		}
 		_ = gz.Close()
 		_ = f.Close()
+		if err := os.Remove(local); err != nil {
+			t.Fatal(err)
+		}
 	}
 	namespace := filepath.Join(source, "ervisio-backup-"+c.ID)
 	entries, _ := os.ReadDir(namespace)

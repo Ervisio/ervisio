@@ -1,5 +1,14 @@
 # Changelog
 
+## [7.0.4] - 2026-11-06
+
+- Keep personal preferences and plugin documents in protected account namespaces; preserve readable legacy data and detect concurrent chat changes.
+- Add the optional floating AI panel, per-user app visibility and a server-oriented CLI software filter in both interfaces.
+- Show persistent software activity and notification links, including completed logs after reload; fix extraction of current official Node.js executables.
+- Use the shared file and folder selector in Photos, log sources, widgets, developer tools and local environment socket fields.
+- Support local, SFTP/SMB, HTTP, ErvisioDrive, ErvisioRepo and AWS/S3 backup destinations with protected credentials; optional ErvisioLogs events and conservative, authenticated retention.
+- Add user-level database export delivery with bounded private staging and no automatic deletion or replacement of existing files.
+
 ## [7.0.3] - 2026-11-06
 
 ### Added

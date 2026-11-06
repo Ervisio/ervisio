@@ -133,3 +133,36 @@ CI additionally opts into `TestDisposableDatabaseDumpAndRestore` with
 `ervisio_backup_fixture`. It creates uniquely named fixture tables, dumps,
 restores and queries their data. It never uses saved database connections or a
 production database. No live VPS backup/retention run is part of these tests.
+
+## 7.0.4 destinations and ecosystem services
+
+Backup 0.2.0 requires core 7.0.4. In addition to saved SFTP/SMB connections,
+plans can use an existing local directory, HTTP POST/PUT (raw or multipart),
+ErvisioDrive, ErvisioRepo draft-release assets, or an AWS/S3-compatible bucket.
+The shared chooser selects local and saved network directories; selection never
+expands plugin filesystem permissions. AWS uses the worker account credential
+chain/IAM role or encrypted access/secret/session credentials. Custom endpoints
+and path-style addressing support compatible services.
+
+Local backups use a private plan namespace; S3 uses the selected prefix plus
+`ervisio-backup-<plan-id>/`. HTTP, Drive and Repo never delete uploaded files.
+S3 retention must be explicitly enabled; it only considers authenticated owned
+archive/manifest pairs, and refuses deletion when the endpoint fails a
+conditional-delete probe. Versioned buckets retain old object versions according
+to their own lifecycle rules. HTTP redirects are refused to protect credentials.
+ErvisioRepo receives a draft snapshot release, not a Git mirror or branch update.
+Connection tests report reachability/authentication separately from actual write
+permission, which is checked by the real upload.
+
+Optional ErvisioLogs delivery uses a project `logs:ingest` bearer token. Backup
+starts/results and actual retention deletions/failures can be enabled separately.
+Events omit source paths, database names, raw errors and credentials. A bounded
+private outbox retries stable event IDs; logging failures do not fail backups.
+
+Database exports use the same destinations through user-level `--backup deliver
+<TOKEN>`: at most 64 MiB staged under this account's fixed database export folder,
+never an arbitrary source path supplied by a plugin. They do not run retention,
+and local/network/S3 exports refuse replacement of existing filenames. HTTP
+service overwrite semantics depend on the configured upload endpoint. The
+Database plugin may optionally remember its destination in account-private SDK
+documents. Browser download remains available on Windows; the worker is Linux-only.
