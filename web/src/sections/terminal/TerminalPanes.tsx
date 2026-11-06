@@ -14,15 +14,23 @@ function EmptyPane({
   isActive,
   onActivate,
   onNew,
+  onClose,
 }: {
   isActive: boolean;
   onActivate(): void;
   onNew(): void;
+  onClose(): void;
 }) {
   const t = useT('terminal');
   return (
     <div className="terminal-pane" onMouseDown={onActivate}>
-      <div className={`terminal-pane-h${isActive ? ' act' : ''}`}>{t('emptyPane')}</div>
+      <div className={`terminal-pane-h${isActive ? ' act' : ''}`}>
+        <span className="terminal-pane-t">{t('emptyPane')}</span>
+        <span className="sp" />
+        <button type="button" aria-label={t('closePane')} title={t('closePane')} onClick={onClose}>
+          <Icon name="close" />
+        </button>
+      </div>
       <div className="terminal-pane-empty">
         <Button icon="plus" onClick={onNew}>
           {t('newSession')}
@@ -70,6 +78,7 @@ function TerminalPaneSlot({
   if (!id) {
     return (
       <EmptyPane
+        onClose={() => s.onClosePane(idx)}
         isActive={isActive}
         onActivate={() => s.onActivate(idx)}
         onNew={() => {
