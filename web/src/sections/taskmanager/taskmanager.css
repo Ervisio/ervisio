@@ -24,6 +24,14 @@
 .tm-classic-header h1 {
   margin: 0 0 18px;
 }
+@media (max-width: 859px) {
+  .app:not(.app--focus) .app-content:has(> .tm-root) {
+    flex: none;
+    height: calc(100dvh - 160px);
+    min-height: 0;
+    overflow: hidden;
+  }
+}
 .tm-root .eos-native-content {
   overflow: hidden;
 }
