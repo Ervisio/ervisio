@@ -48,7 +48,7 @@
   background: transparent;
 }
 .terminal-ervisios .terminal-pane,
-.terminal-ervisios .terminal-split .terminal-panes {
+.terminal-ervisios.terminal-split .terminal-panes {
   background: transparent;
 }
 .terminal-ervisios .terminal-panes {

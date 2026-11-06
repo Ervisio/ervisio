@@ -56,7 +56,12 @@ function withoutPane(l: Layout, idx: 0 | 1): Layout {
     panes[0] = panes[1];
     panes[1] = null;
   }
-  return { ...l, panes, open: id && !panes.includes(id) ? l.open.filter((x) => x !== id) : l.open };
+  return {
+    ...l,
+    panes,
+    split: false,
+    open: id && !panes.includes(id) ? l.open.filter((x) => x !== id) : l.open,
+  };
 }
 
 function withoutSession(l: Layout, id: string): Layout {
@@ -193,7 +198,13 @@ export function useTerminalPanes({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessions, loaded, loadError]);
 
-  const closePane = useCallback((idx: 0 | 1) => patch((l) => withoutPane(l, idx)), [patch]);
+  const closePane = useCallback(
+    (idx: 0 | 1) => {
+      patch((l) => withoutPane(l, idx));
+      setActive(0);
+    },
+    [patch],
+  );
   const detach = useCallback((id: string) => patch((l) => withoutSession(l, id)), [patch]);
   const toggleSplit = () => patch((l) => withSplitToggled(l, byId));
 

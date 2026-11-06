@@ -1,5 +1,40 @@
 import { expect, test } from '@playwright/test';
 
+for (const close of [0, 1] as const) {
+  test(`split preserves glass and closes populated pane ${close}`, async ({ page }) => {
+    await page.goto('/terminal');
+    const win = page.getByRole('region', { name: 'Terminal', exact: true });
+    await expect(win.locator('.eos-titlebar [role="tab"]')).toHaveCount(1);
+    await win.locator('.eos-titlebar').getByRole('button', { name: 'New session', exact: true }).click();
+    await expect(win.locator('.eos-titlebar [role="tab"]')).toHaveCount(2);
+    const glass = () => win.locator('.terminal-root').evaluate(node => ({ background: getComputedStyle(node).backgroundColor, blur: getComputedStyle(node).backdropFilter }));
+    const before = await glass();
+    await win.getByRole('button', { name: 'Split', exact: true }).click();
+    await expect(win.locator('.terminal-pane-h button')).toHaveCount(2);
+    expect(await glass()).toEqual(before);
+    expect(await win.locator('.terminal-panes').evaluate(node => getComputedStyle(node).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
+    const ids = await page.evaluate(() => JSON.parse(localStorage.getItem('ervisio.term.layout')!).panes);
+    await win.getByRole('button', { name: 'Close pane', exact: true }).nth(close).click();
+    await expect(win.locator('.terminal-pane')).toHaveCount(1);
+    await expect(win.locator('.terminal-root')).not.toHaveClass(/terminal-split/);
+    const layout = await page.evaluate(() => JSON.parse(localStorage.getItem('ervisio.term.layout')!));
+    expect(layout.split).toBe(false);
+    expect(layout.panes[0]).toBe(ids[1 - close]);
+    expect(layout.open).not.toContain(ids[close]);
+  });
+}
+
+test('empty split pane also has a working close control', async ({ page }) => {
+  await page.goto('/terminal');
+  const win = page.getByRole('region', { name: 'Terminal', exact: true });
+  await expect(win.locator('.eos-titlebar [role="tab"]')).toHaveCount(1);
+  await win.getByRole('button', { name: 'Split', exact: true }).click();
+  await expect(win.getByRole('button', { name: 'Close pane', exact: true })).toHaveCount(2);
+  await win.getByRole('button', { name: 'Close pane', exact: true }).last().click();
+  await expect(win.locator('.terminal-pane')).toHaveCount(1);
+  await expect(win.locator('.terminal-root')).not.toHaveClass(/terminal-split/);
+});
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('ervisio.mock.user', JSON.stringify('alice'));
