@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ApiError, call, errorMessage } from '../../api';
 import { useT } from '../../i18n';
 import { useWindowActivity } from '../../lib/windowActivity';
-import { Button, ConfirmDialog, Dialog, Input, Select, toast } from '../../ui';
+import { Button, ConfirmDialog, Dialog, Input, Select, Switch, toast } from '../../ui';
 import { remoteLocation, remoteTarget } from './remoteLocation';
 import { networkAddress, parseNetworkPath } from './networkPath';
 import type { Remote } from './types';
@@ -82,6 +82,11 @@ export function useRemoteConnections(onOpen: (location: string) => void, activeL
   };
 }
 
+const BOX_HOST = '.your-storagebox.de';
+// A Storage Box is plain SFTP on port 23, at a host named after the user.
+const isStorageBox = (c?: Remote) =>
+  c?.kind === 'sftp' && c.port === 23 && c.host === c.user + BOX_HOST;
+
 interface TestResult {
   ok: boolean;
   path?: string;
@@ -103,7 +108,19 @@ function RemoteConnectionDialog({
 }) {
   const t = useT('files');
   const [name, setName] = useState(connection?.name ?? '');
-  const [kind, setKind] = useState(connection?.kind === 'smb' ? 'smb' : 'sftp');
+  const [kind, setKind] = useState(
+    isStorageBox(connection)
+      ? 'storagebox'
+      : connection?.kind === 'smb' || connection?.kind === 's3'
+        ? connection.kind
+        : 'sftp',
+  );
+  const box = kind === 'storagebox';
+  const proto = box ? 'sftp' : kind;
+  const [endpoint, setEndpoint] = useState(connection?.url ?? '');
+  const [bucket, setBucket] = useState(connection?.bucket ?? '');
+  const [region, setRegion] = useState(connection?.region ?? '');
+  const [pathStyle, setPathStyle] = useState(connection?.pathStyle ?? false);
   const [address, setAddress] = useState(
     connection?.kind === 'smb'
       ? networkAddress(
@@ -136,16 +153,24 @@ function RemoteConnectionDialog({
   const spec = (pin = hostKey) => {
     const network = kind === 'smb' ? parseNetworkPath(address) : null;
     if (kind === 'smb' && !network) throw new Error(t('remote.badNetworkPath'));
+    const place =
+      network ??
+      (box
+        ? { host: user.trim() + BOX_HOST, port: 23, path }
+        : kind === 's3'
+          ? { url: endpoint, bucket, region, pathStyle, path }
+          : { host, port: Number(port), path });
     return {
-      ...(connection && connection.kind === kind ? { id: connection.id } : {}),
+      ...(connection && connection.kind === proto ? { id: connection.id } : {}),
       name,
-      kind,
-      ...(network ?? { host, port: Number(port), path }),
+      kind: proto,
+      ...place,
       user,
-      ...(kind === 'smb' ? { domain } : { auth, hostKey: pin }),
+      ...(kind === 'smb' ? { domain } : {}),
+      ...(proto === 'sftp' ? { auth, hostKey: pin } : {}),
       ...(password ? { password } : {}),
-      ...(kind === 'sftp' && key ? { key } : {}),
-      ...(kind === 'sftp' && (passphrase || key) ? { passphrase } : {}),
+      ...(proto === 'sftp' && key ? { key } : {}),
+      ...(proto === 'sftp' && (passphrase || key) ? { passphrase } : {}),
     };
   };
   const test = async (pin = hostKey, save = false) => {
@@ -209,6 +234,8 @@ function RemoteConnectionDialog({
           options={[
             { value: 'sftp', label: t('remote.sftp') },
             { value: 'smb', label: t('remote.smb') },
+            { value: 's3', label: t('remote.s3') },
+            { value: 'storagebox', label: t('remote.storagebox') },
           ]}
           onChange={(value) => {
             setKind(value);
@@ -243,7 +270,46 @@ function RemoteConnectionDialog({
               invalidate();
             }}
           />
-        ) : (
+        ) : kind === 's3' ? (
+          <>
+            <Input
+              label={t('remote.endpoint')}
+              value={endpoint}
+              placeholder="https://fsn1.your-objectstorage.com"
+              hint={t('remote.endpointHint')}
+              autoComplete="off"
+              spellCheck={false}
+              onChange={(e) => {
+                setEndpoint(e.target.value);
+                invalidate();
+              }}
+            />
+            <div className="files-remote-row">
+              <Input
+                required
+                label={t('remote.bucket')}
+                value={bucket}
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(e) => {
+                  setBucket(e.target.value);
+                  invalidate();
+                }}
+              />
+              <Input
+                label={t('remote.region')}
+                value={region}
+                placeholder="us-east-1"
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(e) => {
+                  setRegion(e.target.value);
+                  invalidate();
+                }}
+              />
+            </div>
+          </>
+        ) : box ? null : (
           <div className="files-remote-row">
             <Input
               required
@@ -274,16 +340,18 @@ function RemoteConnectionDialog({
         )}
         <Input
           required
-          label={t('remote.user')}
+          label={t(kind === 's3' ? 'remote.accessKey' : 'remote.user')}
           value={user}
+          hint={box ? t('remote.storageboxHint') : undefined}
           onChange={(e) => {
             setUser(e.target.value);
+            if (box) setHostKey('');
             invalidate();
           }}
           autoComplete="off"
           spellCheck={false}
         />
-        {kind === 'sftp' && (
+        {proto === 'sftp' && (
           <Select
             label={t('remote.auth')}
             value={auth}
@@ -297,10 +365,10 @@ function RemoteConnectionDialog({
             ]}
           />
         )}
-        {kind === 'smb' || auth === 'password' ? (
+        {proto !== 'sftp' || auth === 'password' ? (
           <Input
             type="password"
-            label={t('remote.password')}
+            label={t(kind === 's3' ? 'remote.secretKey' : 'remote.password')}
             value={password}
             hint={connection?.hasPassword ? t('remote.keepSecret') : undefined}
             autoComplete="new-password"
@@ -352,7 +420,7 @@ function RemoteConnectionDialog({
         ) : (
           <Input
             label={t('remote.startPath')}
-            placeholder={t('remote.loginFolder')}
+            placeholder={t(kind === 's3' ? 'remote.bucketRoot' : 'remote.loginFolder')}
             value={path}
             spellCheck={false}
             onChange={(e) => {
@@ -361,7 +429,17 @@ function RemoteConnectionDialog({
             }}
           />
         )}
-        {kind === 'sftp' && connection?.fingerprint && !trust && (
+        {kind === 's3' && (
+          <Switch
+            label={t('remote.pathStyle')}
+            checked={pathStyle}
+            onChange={(on) => {
+              setPathStyle(on);
+              invalidate();
+            }}
+          />
+        )}
+        {proto === 'sftp' && connection?.fingerprint && !trust && (
           <p className="files-remote-fingerprint">
             <b>{t('remote.trustedKey')}</b>
             <code>{connection.fingerprint}</code>

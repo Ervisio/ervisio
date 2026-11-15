@@ -75,6 +75,8 @@ func dialFS(ctx context.Context, spec *Conn) (FS, error) {
 		return dialSMB(ctx, spec)
 	case KindWebDAV:
 		return dialWebDAV(ctx, spec)
+	case KindS3:
+		return dialS3(ctx, spec)
 	}
 	return nil, rpc.Errorf(rpc.Invalid, "Unknown protocol %q.", spec.Kind)
 }

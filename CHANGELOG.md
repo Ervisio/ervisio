@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+## [7.1.0] - 2026-11-15
+
+- The plugin marketplace is now the public repositories of one GitHub organisation (`plugins.github_org`, default `Ervisio`, `""` turns it off). A repository is a plugin when its name starts with `plugin-` or it has a `plugin.ervisio` file; the package is the latest release asset `<id>-<version>.tar.gz`, or the plugin folder of the branch. No registry, review step or signature.
+- Plugins installed from that organisation run without a signature, are listed as verified and update automatically when the repository gets a new release or push, even when they ask for new permissions. Changing the organisation removes that trust; other plugins keep the signature rules.
+- Only the root daemon reads GitHub (every 15 minutes, one API request per 100 repositories) and writes `plugins-github.json` for the bridges. `plugins.catalog` entries gain `repo`, `path` and `revision`; categories are merged by id.
+- `plugins.catalog_url` now defaults to `""` and is an optional extra signed catalog. The old registry and `ervisio.github.io/plugins` are no longer the default. Moved plugins (Docker) install from the marketplace first.
+- Settings has a "Marketplace organisation" field (`plugins.github_org`); the former catalog field is now "Extra catalog".
+- External storage can be configured from Settings > External storage: the saved connections of your account, with add, edit and forget. They open from Files under Remote, as before.
+- Remote connections gain S3-compatible object storage (`kind: "s3"`: bucket, optional endpoint, region, access key, secret key, path-style), which covers Amazon S3, Hetzner Object Storage and MinIO. Folders are key prefixes, uploads are atomic, rename and move are copy plus delete (5 GiB per object at most).
+- The connection dialog has a Hetzner Storage Box preset (SFTP on port 23 at `<user>.your-storagebox.de`).
+
 ## [7.0.5] - 2026-11-06
 
 - Reduce plugin request CPU and filesystem I/O: scoped authorization locates and verifies only the requested plugin, instead of rehashing every installed plugin for each request. Preserve location precedence and recheck signatures and file integrity on every use.

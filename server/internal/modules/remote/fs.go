@@ -59,6 +59,12 @@ type aborter interface {
 	Abort(err error)
 }
 
+// atomicWriter is implemented by protocols whose Create only shows the
+// file once it is complete, so no temporary name is needed.
+type atomicWriter interface {
+	atomicCreate()
+}
+
 // maxList bounds one folder listing, like files.list.
 const maxList = 50000
 
@@ -206,6 +212,10 @@ func writeFile(ctx context.Context, f FS, ops pathOps, p string, r io.Reader, si
 		return 0, err
 	}
 	tmp := ops.join(ops.dir(p), randName(".ervisio-upload-"))
+	_, direct := f.(atomicWriter)
+	if direct {
+		tmp = p
+	}
 	w, err := f.Create(ctx, tmp, size)
 	if err != nil {
 		return 0, err
@@ -220,12 +230,19 @@ func writeFile(ctx context.Context, f FS, ops pathOps, p string, r io.Reader, si
 		} else {
 			_ = w.Close()
 		}
-		removeTemp(ctx, f, tmp)
+		if !direct {
+			removeTemp(ctx, f, tmp)
+		}
 		return n, err
 	}
 	if err := w.Close(); err != nil {
-		removeTemp(ctx, f, tmp)
+		if !direct {
+			removeTemp(ctx, f, tmp)
+		}
 		return n, err
+	}
+	if direct {
+		return n, nil
 	}
 	if err := replaceTarget(ctx, f, tmp, p, ops.base(p), overwrite); err != nil {
 		removeTemp(ctx, f, tmp)

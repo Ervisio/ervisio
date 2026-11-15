@@ -137,10 +137,14 @@ type Plugins struct {
 	// TrustedKeys adds private/deployment plugin signers to the embedded team
 	// keys. These public keys do not grant authority over marketplace catalogs.
 	TrustedKeys []string `toml:"trusted_keys"`
-	// CatalogURL is the https address of the marketplace catalog shown in
-	// Plugins › Browse (default: the Ervisio registry on GitHub Pages; empty
-	// turns the remote catalog off). The catalog must carry a valid
-	// signature (CatalogURL with .json replaced by .sig).
+	// GitHubOrg is the GitHub organisation whose public repositories are the
+	// marketplace (empty turns it off). Its plugins install and update on
+	// their own and run without a signature: whoever can push to the
+	// organisation is trusted.
+	GitHubOrg string `toml:"github_org"`
+	// CatalogURL is the https address of an extra, private catalog shown in
+	// Plugins › Browse (empty = none). It must carry a valid signature
+	// (CatalogURL with .json replaced by .sig).
 	CatalogURL string `toml:"catalog_url"`
 	// CatalogKey is an extra ed25519 public key (base64) trusted for
 	// catalog signatures, for a private catalog. The team key is always
@@ -186,7 +190,7 @@ func Default() *Config {
 		TLS:     TLS{Mode: "self-signed", Redirect: true},
 		// Only signed plugins by default (security review H2); dev
 		// folders are still loaded in developer mode, marked unsigned.
-		Plugins: Plugins{AllowUnsigned: false, CatalogURL: brand.PluginCatalogURL},
+		Plugins: Plugins{AllowUnsigned: false, GitHubOrg: brand.PluginOrg},
 		Updates: Updates{Channel: "stable", AutoCheck: true, AutoInstall: false, AutoInstallAt: "03:30"},
 		Web:     Web{TrustedProxies: []string{"127.0.0.0/8", "::1/128"}},
 		UI:      UI{DefaultShell: "classic"},

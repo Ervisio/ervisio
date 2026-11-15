@@ -1,10 +1,10 @@
 # Remote hosts and multi-host
-Purpose: reach other machines (SFTP/FTP/SMB/WebDAV file connections, Ervisio-to-Ervisio pairing, plugin network hosts) from one console.
+Purpose: reach other machines (SFTP/FTP/SMB/WebDAV/S3 file connections, Ervisio-to-Ervisio pairing, plugin network hosts) from one console.
 
 ## Entry points and public contracts
 - `server/internal/modules/remote/remote.go:Register`: user-level `remote.list|save|forget|test|start|ls|stat|mkdir|create|rename|remove|readText|writeText`; streams `readStream|writeStream|copy`. All `rpc.User`, none admin.
 - `remote/store.go`: `Conn`, `store` (`~/.config/ervisio/remotes.json` 0600 plus `remotes.key`), `maxConns=200`; `spec.go:build` validates input; `pool.go:pool.with/get` (max 24 open per session, idle close 5 min, FTP up to 4 slots, others 1 shared).
-- Protocol files: `sftp.go` (pinned host key), `ftp.go`, `smb.go`, `webdav.go`; `fs.go:FS` interface; `copy.go` (cross-connection copy, `conn ""` = this machine); `local.go`.
+- Protocol files: `sftp.go` (pinned host key), `ftp.go`, `smb.go`, `webdav.go`, `s3.go` (one bucket, aws-sdk-go-v2); `fs.go:FS` interface; `copy.go` (cross-connection copy, `conn ""` = this machine); `local.go`.
 - Pairing (server side): `server/internal/server/envpair.go` (`registerPair`: `/api/pair/info|redeem|status|revoke|bridge`, `pairAllowed`, `pairUser`) and `envs.go` (`envs.pairToken.create`, `envs.pairings.revoke`); logic in `server/internal/envs/pair.go` (`TokenTTL` 15 min, `CreatePairToken`, `Redeem`, `AuthPair`).
 - Plugin network hosts: `server/internal/modules/plugins/userhosts.go` (`plugins.network.list` user, `plugins.network.revoke` admin), `netcap.go`; manifest `capabilities.network.userHosts`.
 - Public host: `server/internal/server/public.go:publicHost` -> `GET /api/public/host`; web `api/types.ts:PublicHost` (`hostname`, `ip?`, `distro`, `sshKeys?`).
@@ -26,8 +26,11 @@ Purpose: reach other machines (SFTP/FTP/SMB/WebDAV file connections, Ervisio-to-
 - Pairing tokens: single use, 15 min, bounded open count; compare credentials in constant time.
 - Build all API URLs through `api/base.ts`; cookies need `credentials: 'include'` when `API_BASE` is set.
 - `Insecure` (skip TLS verify) exists only for FTP and WebDAV; `build` forces it false elsewhere.
+- S3 (`KindS3`): `URL` = endpoint ("" = AWS), `User`/password = access/secret key, plus `Bucket`, `Region`, `PathStyle`. `s3FS` implements `atomicWriter`, so `writeFile` skips the temp name + rename (rename on S3 is copy + delete, 5 GiB per object).
 
 ## Gotchas
+- Settings > External storage (`settings/Storage.tsx:StorageBlock`) reuses `useRemoteConnections`; connections stay per account (secrets live in the user bridge), not shared server-wide.
+- Hetzner Storage Box is a UI preset in `RemoteConnections.tsx` (`storagebox` -> SFTP, port 23, host `<user>.your-storagebox.de`), not a server kind.
 - Files now uses `remote.*` in both shells: `RemoteConnections.tsx` manages SFTP test/trust/save/forget and SMB network folders. SMB address parser `networkPath.ts` accepts UNC/smb://, rejects credential-bearing addresses and resolves host/share/subpath; no OS mount. Places opens saved connections. `remoteLocation.ts` + `fapi.ts` adapt encoded navigation paths, and `transfers.ts` supports remote uploads/downloads/copy/move. Secrets remain in the account's backend connection store, never prefs.
 - `HostsBlock` edits the `hosts` config key, but `server/internal/config` has no `hosts` field; `supported={server.hasKey('hosts')}` hides the add button ("later").
 - `remotes.key` sits beside `remotes.json` in the same user folder: sealing guards against casual leaks (backups, screenshots of the file), not against the account itself or root.

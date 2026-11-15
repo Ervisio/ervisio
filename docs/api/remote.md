@@ -1,13 +1,37 @@
 # Remote file connections
 
 The `remote.*` methods run in the signed-in user's bridge on Linux and Windows.
-Connections support SFTP, FTP(S), SMB and WebDAV; Files exposes SFTP and SMB connection
-creation and can browse existing connections of every supported protocol.
+Connections support SFTP, FTP(S), SMB, WebDAV and S3-compatible object storage. Files and
+Settings > External storage create SFTP, SMB, S3 and Hetzner Storage Box connections and
+can browse existing connections of every supported protocol.
 Local administrator rights never elevate permissions on another server.
 
 `remote.list` returns `{connections: [...]}`. Each connection has `id`, `name`,
 `kind`, address fields, `path`, and redacted credential flags (`hasPassword`,
 `hasKey`, `hasPassphrase`). Secrets are never returned by any method.
+
+## S3 and object storage
+
+`kind: "s3"` opens one bucket; `/` is the bucket root and folders are key prefixes.
+
+| Field | Meaning |
+|---|---|
+| `bucket` | Bucket name (required). |
+| `url` | Endpoint as `https://server`, without a bucket or path. Empty means Amazon S3. Hetzner Object Storage: `https://fsn1.your-objectstorage.com` (or `nbg1`, `hel1`). |
+| `region` | Default `us-east-1`. |
+| `user`, `password` | Access key and secret key (both required). |
+| `pathStyle` | `true` for stores that address buckets by path (MinIO). |
+| `path` | Optional start folder. |
+
+- An empty folder is a zero-byte object whose key ends in `/`.
+- Uploads go straight to their final key: an object only appears once it is complete.
+- Rename and move copy each object and delete the original. A single object over 5 GiB
+  cannot be renamed or moved inside the store; a folder is not moved atomically.
+- `remote.statfs` reports `supported: false`.
+
+A Hetzner Storage Box is not a separate protocol: it is SFTP on port 23 at
+`<user>.your-storagebox.de` (the Storage Box preset fills this in), or SMB at
+`\\<user>.your-storagebox.de\backup`.
 
 ## Save and verify SFTP
 

@@ -131,6 +131,7 @@ func run(ctx context.Context) {
 	}
 	if !f.dev && bridge.Privileged() {
 		startMovedPluginsMigration(ctx)
+		startPluginSync(ctx)
 	}
 	if err := srv.Run(ctx); err != nil {
 		log.Fatal(err)
@@ -437,6 +438,19 @@ func startMovedPluginsMigration(ctx context.Context) {
 	}()
 }
 
+// startPluginSync follows the GitHub marketplace: its catalog and the updates
+// of the plugins installed from it (internal/modules/plugins/github.go).
+func startPluginSync(ctx context.Context) {
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(20 * time.Second):
+		}
+		plugins.SyncGitHub(ctx, log.Printf)
+	}()
+}
+
 // pluginCommand implements --install-plugin and --skip-moved-plugins.
 func pluginCommand(id string, skip bool) int {
 	if !bridge.Privileged() {
@@ -486,7 +500,7 @@ func installPlugin(id string) int {
 			_ = plugins.SetMoved(id, plugins.MovedInstalled)
 		}
 	}
-	fmt.Printf("installed %s %s (signature verified) in %s\n", in.Name, in.Version, plugins.InstalledDir)
+	fmt.Printf("installed %s %s in %s\n", in.Name, in.Version, plugins.InstalledDir)
 	return 0
 }
 

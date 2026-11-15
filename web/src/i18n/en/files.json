@@ -139,7 +139,18 @@
     "trustHint": "Compare this fingerprint with the server before trusting it. No credentials have been sent to this unverified server.",
     "keyChanged": "The server key has changed",
     "keyChangedHint": "Stop unless you expected this change. Verify the fingerprint with the server owner before replacing the saved key.",
-    "trust": "Trust this fingerprint and test"
+    "trust": "Trust this fingerprint and test",
+    "s3": "S3 / Object Storage",
+    "storagebox": "Hetzner Storage Box (SFTP)",
+    "storageboxHint": "The Storage Box user, for example u123456 or u123456-sub1. It is reached over SFTP on port 23.",
+    "endpoint": "Endpoint (optional)",
+    "endpointHint": "Leave empty for Amazon S3. For Hetzner Object Storage use https://fsn1.your-objectstorage.com (or nbg1, hel1).",
+    "bucket": "Bucket",
+    "region": "Region",
+    "accessKey": "Access key",
+    "secretKey": "Secret key",
+    "pathStyle": "Path-style addresses (MinIO and some self-hosted stores)",
+    "bucketRoot": "Bucket root"
   },
   "new": {
     "label": "New",

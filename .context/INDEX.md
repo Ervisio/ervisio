@@ -5,7 +5,7 @@
 - map/server.md: daemon, bridge, privilege boundaries and server checks. Read before server changes.
 - map/web.md: app providers, API transport, sections, plugins and frontend checks. Read before web changes.
 - map/auth.md: PAM/LogonUser login, sessions, CSRF, SSH-key auth, admin unlock. Read before auth or privilege changes.
-- map/remote-hosts.md: remote connections (sftp/smb/ftp/webdav), host pairing, cross-origin API. Read before remote or hosts work.
+- map/remote-hosts.md: remote connections (sftp/smb/ftp/webdav/s3), external storage settings, host pairing, cross-origin API. Read before remote or hosts work.
 - map/plugins.md: plugin install, signing, trust, frame CSP, broker, capabilities. Read before plugin system changes.
 - map/packaging.md: build scripts, installers, systemd/PAM, Arch, Windows, legacy migration. Read before packaging changes.
 - map/updates.md: release signing, CI release workflow, self-update, Updates UI. Read before release or update work.

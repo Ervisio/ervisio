@@ -1,5 +1,10 @@
 # Plugin signing key
 
+Note: signing is no longer needed for plugins published in the marketplace organisation (`plugins.github_org`,
+default `Ervisio`): they are trusted for where they come from and are not signed (`docs/api/plugins.md`, "Marketplace").
+Signing remains for plugins from anywhere else (the team key or `plugins.trusted_keys`) and for the optional extra
+catalog (`plugins.catalog_url`). The parts below about the registry's `publish` workflow describe the old flow.
+
 Ervisio trusts plugins signed with its embedded ed25519 **team key**, plus any additional plugin signers an administrator configures. The team key also signs the marketplace catalog
 (`catalog.sig`). (Releases of Ervisio itself are signed with a different key, the release key: `docs/RELEASING.md`.) Since `plugins.allow_unsigned = false` is
 the default, a plugin that is not signed with it does not run (except dev folders in developer mode, marked
@@ -49,7 +54,7 @@ an extra marketplace catalog signer separately and never makes its plugin packag
 Use `plugin-sign -verify -pub <public-key> <folder>` to verify a private build before
 deployment. Keep the normal team trust so existing marketplace plugins continue to work.
 
-Normally nobody signs by hand: a plugin is published through the registry (`docs/api/plugins.md`, "Marketplace").
+Old flow (no longer used for the marketplace, see the note at the top): a plugin was published through the registry.
 After a maintainer merges the pull request that adds or updates it, the registry's `publish` workflow signs it, attaches
 the signed tarball to a release `<id>-<version>` of Ervisio/plugins, regenerates and signs `catalog.json` and publishes
 both on GitHub Pages.

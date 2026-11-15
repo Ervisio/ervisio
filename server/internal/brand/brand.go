@@ -29,10 +29,9 @@ const (
 	// RepoURL is the project's home page.
 	RepoURL = "https://github.com/" + GitHubRepo
 
-	// PluginCatalogURL is the default marketplace catalog (config
-	// plugins.catalog_url), built and signed by the Ervisio/plugins registry.
-	// Its signature is at the same address with .sig instead of .json.
-	PluginCatalogURL = "https://ervisio.github.io/plugins/catalog.json"
+	// PluginOrg is the default GitHub organisation whose repositories are the
+	// marketplace (config plugins.github_org).
+	PluginOrg = "Ervisio"
 
 	// PAMService is the PAM service name; PAMFallbackService is used when
 	// /etc/pam.d/<PAMService> does not exist.

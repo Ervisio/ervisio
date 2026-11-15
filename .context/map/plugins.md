@@ -1,5 +1,5 @@
 # Plugins
-Purpose: signed, manifest-scoped third-party UI plugins that run in sandboxed frames and reach the host only through a capability broker and daemon-checked `plugins.*` methods.
+Purpose: manifest-scoped third-party UI plugins that run in sandboxed frames and reach the host only through a capability broker and daemon-checked `plugins.*` methods.
 
 ErvisiOS contract v4 adds optional `contributes.pages[].ervisios.view`, `FrameView.shell`, runtime `sdk.shell.mode` and AI-only `sdk.shell.command`. Native layouts share the existing broker/capabilities; missing native metadata opens the public page unchanged. See `docs/dev/ervisios-plugins.md` and the coordinated SDK branch.
 
@@ -10,16 +10,18 @@ ErvisiOS contract v4 adds optional `contributes.pages[].ervisios.view`, `FrameVi
 - `.../plugins/access.go:trust|authorize`: signature policy + enabled + core compat + `visibleTo`; every plugin-scoped method calls `authorize`. `plugins.access` feeds daemon frame/asset checks.
 - `.../plugins/sign.go`: `TeamPublicKey`, `TrustedKeys`, `Canonical`, `CheckSignature`, `SignFolder`; `catalog.go`: `SignCatalog|VerifyCatalog`, `catalogSigPrefix`; `signkey/signkey.go`: private/public key file parsing.
 - `.../plugins/cmd/plugin-sign`: genkey, sign folder, verify folder, sign/verify catalog.
-- `.../plugins/install.go:install|ExtractTarGz`; `catalog.go` (remote catalog + `.sig`); `moved.go` (docker auto-migration); `corecompat.go` (`minCore` / `requires.ervisio`, `>=` only).
+- `.../plugins/github.go`: marketplace = public repos of `plugins.github_org` (`plugin-` name or `plugin.ervisio`); `SyncGitHub` (ervisiod, +20 s then 15 min) -> `refreshGitHubCatalog` -> `/var/lib/ervisio/plugins-github.json`; `readGitHubCatalog` (bridges), `isUpdate`.
+- `.../plugins/install.go:install|ExtractTarGz` (512 MiB unpacked cap; records `origins`); `catalog.go` (optional extra signed catalog + `.sig`, `mergeCatalogs`); `moved.go:InstallFromCatalog` (GitHub first, then signed catalog; docker auto-migration); `corecompat.go` (`minCore` / `requires.ervisio`, `>=` only).
 - Capabilities: `exec.go`, `pty.go`, `http.go`, `files.go`, `transfer.go`, `netcap.go` + `userhosts.go` (`capabilities.network`, user-approved hosts, `plugins-hosts.json`), `manifest_jobs.go` + `jobsapi.go:Resolve`, `envbridge.go:envCheck`, `platform.go` (linux/windows per-entry filtering), `dev.go|devasset.go`.
 - Daemon: `server/internal/server/pluginframe.go` (`handlePluginFrame`, `pluginFrameCSP`, `setPluginAssetHeaders`, `pluginAccess`), `static.go:handlePlugin|serveDevPlugin`, `transfer.go` (one-time transfer URLs), `jobsglue.go` (`plugins.jobs.*`, `plugins.notify`, `bridgeExecutor`), `envs.go` (`plugins.envs.list`, `plugins.envCheck` call), `audit.go` (plugin action log; `plugins.audit.list`), routes in `server.go` (`/plugins/{id}/{file...}`, `/plugin-frame/{id}`, `/api/plugins/transfer*`, `POST /hooks/{plugin}/{token}`).
 - Web host: `web/src/plugins/PluginsProvider.tsx` (plugins.list -> rail pages/widgets/snippets), `PluginFrame.tsx` (iframe + message loop), `PluginPage.tsx`, `broker.ts` + `brokerJobs.ts` (pure policy: `authorize*` -> `Plan`), `protocol.ts` (`la:'plugin'` messages, `FrameOp`), `types.ts` (`PluginManifest`, `PluginSDK`, contract `version: 3`), `networkApproval.tsx`.
 - Frame runtime: `web/src/plugins/frame/{runtime.tsx,channel.ts,kit.ts,jobs.ts,i18n-shim.ts}`; built by `web/vite.runtime.config.ts` into `web/public/plugin-runtime.js` (single IIFE, `ErvisioPluginRuntime`).
 - Plugins section UI: `web/src/sections/plugins/` (tabs installed/updates/browse/security/developer; `ConsentDialog`, `caps.ts` capability wording, `data.ts` list+catalog, `badge.ts`, `palette.ts`).
-- Docs: `docs/api/plugins.md` (manifest, isolation, methods), `docs/PLUGIN-SIGNING.md`, `web/PLUGIN-SDK.md` (pointer; SDK lives in Ervisio/plugin-sdk), `plugins/README.md` (dev folder).
+- Docs: `docs/api/plugins.md` (marketplace, plugin.ervisio, manifest, isolation, methods), `docs/PLUGIN-SIGNING.md`, `web/PLUGIN-SDK.md` (pointer; SDK lives in Ervisio/plugin-sdk), `plugins/README.md` (dev folder).
 
 ## Flow
-- Install: Browse -> `plugins.catalog` (remote catalog.json + catalog.sig verified) -> ConsentDialog shows capabilities -> `plugins.install{source,sha256,consent}` (admin bridge) -> download (32 MiB cap) -> `ExtractTarGz` -> `LoadManifest` -> `CheckSignature` -> `CoreProblem` -> consent must equal declared caps -> atomic rename into `InstalledDir`, enabled.
+- Install: Browse -> `plugins.catalog` (local + extra signed catalog + plugins-github.json, merged in that order) -> ConsentDialog shows capabilities -> `plugins.install{source,sha256,consent}` (admin bridge) -> download (32 MiB cap) -> `ExtractTarGz` -> `LoadManifest` -> `CheckSignature` (skipped when `source` equals an entry of plugins-github.json) -> `CoreProblem` -> consent must equal declared caps -> atomic rename into `InstalledDir`, enabled; `plugins-state.json` `origins[id]={repo,revision}`.
+- Marketplace sync: each pass (root, under `syncMu`) rereads the org, rewrites plugins-github.json, reinstalls installed plugins whose `revision` changed (release tag, or `pushed_at` for a branch), new permissions included.
 - Load: `PluginsProvider` calls `plugins.list` (filters disabled/blocked) -> page `/p/<id>/<page>` or widget mounts `PluginFrame`.
 - Frame: iframe `sandbox="allow-scripts allow-forms"` -> `GET /plugin-frame/<id>` (daemon asks session user bridge `plugins.access`, else 404; nonce CSP) -> runtime posts `ready` -> host fetches `/plugins/<id>/<entry>` with credentials and posts `init{code,theme,lang,appOrigin,platform}` -> runtime evals via `blob:` module.
 - Broker: frame `req` / `stream-open` / `upload-open` -> `broker.authorize*` (manifest-only, first gate) -> `api.call/stream` of exactly one `plugins.*` method (`needs_admin` -> unlock dialog) -> daemon route -> bridge `authorize` (second gate) -> `sys` exec / unix-socket HTTP / file op as the user (or root bridge when entry is `admin`).
@@ -32,13 +34,17 @@ ErvisiOS contract v4 adds optional `contributes.pages[].ervisios.view`, `FrameVi
 - Plugin files are served inert (`sandbox; default-src 'none'`, nosniff, CORP same-origin) via `os.OpenRoot`; names must pass `fs.ValidPath`, no backslash. Archive extraction rejects symlinks, hardlinks, `..`, absolute paths; caps 16 MiB/file, 64 MiB total, 2000 entries.
 - Two gates always: web broker (UX + first filter) and bridge `authorize`/manifest checks; never loosen only one. Broker maps frame ops to a fixed allowlist (`FrameOp`); no arbitrary RPC.
 - Commands are argv with per-arg `ArgSpec`; HTTP only to declared unix sockets, rules (method+path), header allowlist; files only inside declared folders; `admin` only when declared, skipped for root or `adminUnlessGroup` members.
-- Trust: `plugins.allow_unsigned=false` default. Signature = ed25519 over `"linuxadmin-plugin-v1\n"+canonical(manifest)`; `manifest.files` hashes every file; unlisted/missing/changed file fails. Dev-location folders run unsigned only in dev mode (`devUnsigned` badge).
-- Catalog signature uses a different prefix (`ervisio-catalog-v1\n`); `plugins.catalog_key` trusts a listing only, install still needs a team signature.
+- Only root holds `syncMu` and talks to GitHub; bridges only read plugins-github.json (ignored when its `org` differs from `plugins.github_org`).
+- Trust: `plugins.allow_unsigned=false` default. Plugin whose `origins` repo owner == `plugins.github_org` (`fromOrg`) runs unsigned and shows verified; changing the org drops it. Signature = ed25519 over `"linuxadmin-plugin-v1\n"+canonical(manifest)`; `manifest.files` hashes every file; unlisted/missing/changed file fails. Dev-location folders run unsigned only in dev mode (`devUnsigned` badge).
+- Extra catalog (`plugins.catalog_url`, default empty) signature uses a different prefix (`ervisio-catalog-v1\n`); `plugins.catalog_key` trusts a listing only, install still needs a team signature.
 - Install is all-or-nothing: consent mismatch, bad signature (even with allow_unsigned), too-new core, or replacing a `system` plugin aborts before anything is moved.
 - Network approval is per host and scheme, admin-only (`plugins.network.approve`), UI owned by the app, not the frame.
-- Private signing key never enters the repo; CI secret `PLUGIN_SIGNING_KEY` lives in Ervisio/plugins.
+- Private signing key never enters the repo. Marketplace plugins are unsigned: whoever can push or release in the org controls what runs.
 
 ## Gotchas
+- Branch mode extracts only the plugin folder and runs no build: it must hold built output. Release mode needs the asset `<id>-<version>.tar.gz` (a release without it is not offered yet).
+- Tests fake GitHub with `useGitHub` in `github_test.go`; `setup(t)` points GitHub at an unreachable address.
+- `plugin-` repo without manifest is silently ignored; all `plugin.ervisio` fields are optional.
 - `signaturePrefix` keeps the old `linuxadmin-plugin-v1` name on purpose; renaming invalidates every signed plugin and catalog.
 - Changing broker/protocol/runtime in a plugin-visible way requires the SDK repo update and a contract-version bump (`types.ts` `version: 3`, `runtime.tsx`).
 - `/api/rpc` bodies are capped (`MaxRPCBody`, 16 MiB protocol line): big bodies must use transfers, not `plugins.http`.

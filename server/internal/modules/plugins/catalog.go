@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -44,6 +45,12 @@ type CatalogEntry struct {
 	// Source is the https URL of the .tar.gz; SHA256 its checksum (optional).
 	Source string `json:"source,omitempty"`
 	SHA256 string `json:"sha256,omitempty"`
+	// Repo ("org/name") and Revision (a release tag, or the time of the last
+	// push to a branch) are set for a plugin of the GitHub marketplace; Path
+	// is its folder inside a branch archive ("" for a release package).
+	Repo     string `json:"repo,omitempty"`
+	Path     string `json:"path,omitempty"`
+	Revision string `json:"revision,omitempty"`
 	// Capabilities and Contributes are what the install dialog lists. The
 	// installer refuses the package when its manifest asks for more.
 	Capabilities   Capabilities `json:"capabilities"`
@@ -342,6 +349,8 @@ func fetchSignedCatalog(ctx context.Context, src string, keys []ed25519.PublicKe
 	return parseCatalog(data)
 }
 
+var errNotFound = errors.New("the server answered 404 Not Found")
+
 func fetchSmall(ctx context.Context, src string, limit int64) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -354,6 +363,9 @@ func fetchSmall(ctx context.Context, src string, limit int64) ([]byte, error) {
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, errNotFound
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("the server answered %s", resp.Status)
 	}
@@ -400,13 +412,24 @@ type CatalogItem struct {
 	InstalledVersion string `json:"installedVersion,omitempty"`
 }
 
-// mergeCatalogs adds the remote entries to the local ones (a remote entry
-// replaces a local one with the same id). The remote categories win when
-// it has any.
+// mergeCatalogs adds the entries and categories of remote to the local ones
+// (one of remote replaces a local one with the same id).
 func mergeCatalogs(local, remote *Catalog) *Catalog {
-	out := &Catalog{Categories: local.Categories, Plugins: append([]CatalogEntry(nil), local.Plugins...)}
+	out := &Catalog{Categories: append([]CatalogCategory{}, local.Categories...), Plugins: append([]CatalogEntry(nil), local.Plugins...)}
 	if remote == nil {
 		return out
+	}
+	cats := map[string]int{}
+	for i, c := range out.Categories {
+		cats[c.ID] = i
+	}
+	for _, c := range remote.Categories {
+		if i, ok := cats[c.ID]; ok {
+			out.Categories[i] = c
+		} else {
+			cats[c.ID] = len(out.Categories)
+			out.Categories = append(out.Categories, c)
+		}
 	}
 	byID := map[string]int{}
 	for i, e := range out.Plugins {
@@ -420,10 +443,18 @@ func mergeCatalogs(local, remote *Catalog) *Catalog {
 			out.Plugins = append(out.Plugins, e)
 		}
 	}
-	if len(remote.Categories) > 0 {
-		out.Categories = remote.Categories
-	}
 	return out
+}
+
+// entryProblem says why a catalog entry cannot run on this machine ("" = it can).
+func entryProblem(e *CatalogEntry) string {
+	if msg := platformProblem(e.Name, e.Platforms); msg != "" {
+		return msg
+	}
+	if need, ok := highestCoreReq(e.MinCore, e.Requires.get()); ok {
+		return coreProblem(e.Name, need)
+	}
+	return ""
 }
 
 func catalogView(ctx context.Context) (*CatalogView, error) {
@@ -432,7 +463,7 @@ func catalogView(ctx context.Context) (*CatalogView, error) {
 		return nil, err
 	}
 	remote, rerr := loadRemoteCatalog(ctx)
-	merged := mergeCatalogs(local, remote)
+	merged := mergeCatalogs(mergeCatalogs(local, remote), readGitHubCatalog(readPolicy()))
 	view := &CatalogView{Categories: merged.Categories, Plugins: []CatalogItem{}, Moved: []MovedNotice{}}
 	if rerr != nil {
 		view.Warning = rerr.Error()
@@ -444,12 +475,7 @@ func catalogView(ctx context.Context) (*CatalogView, error) {
 		}
 	}
 	for _, e := range merged.Plugins {
-		if need, ok := highestCoreReq(e.MinCore, e.Requires.get()); ok {
-			e.Incompatible = coreProblem(e.Name, need)
-		}
-		if msg := platformProblem(e.Name, e.Platforms); msg != "" {
-			e.Incompatible = msg
-		}
+		e.Incompatible = entryProblem(&e)
 		e.Platforms = effectivePlatforms(e.Platforms)
 		it := CatalogItem{CatalogEntry: e}
 		it.InstalledVersion, it.Installed = installed[e.ID]

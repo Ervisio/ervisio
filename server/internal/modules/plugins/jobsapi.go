@@ -19,10 +19,11 @@ func Resolve(id string) (*Manifest, error) {
 	if f == nil {
 		return nil, rpc.Errorf(rpc.NotFound, "There is no plugin %q.", id)
 	}
-	if !readState().isEnabled(f.M.ID) {
+	st := readState()
+	if !st.isEnabled(f.M.ID) {
 		return nil, rpc.Errorf(rpc.Forbidden, "%s is turned off. Enable it in Plugins first.", f.M.Name)
 	}
-	if trust(pol, f) == trustBlocked {
+	if trust(pol, st, f) == trustBlocked {
 		return nil, rpc.Errorf(rpc.Forbidden, "%s is not signed and this server only runs signed plugins.", f.M.Name)
 	}
 	if msg := f.M.CoreProblem(); msg != "" {

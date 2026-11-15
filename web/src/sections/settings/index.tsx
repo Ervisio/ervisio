@@ -28,6 +28,7 @@ import { PairingBlock } from './Pairing';
 import type { EnvList } from './envs';
 import { NameList } from './NameList';
 import { PluginJobsBlock } from './PluginJobs';
+import { StorageBlock } from './Storage';
 import { usePrefSave, useServerConfig, type CfgState } from './save';
 import { UpdatesBlock } from './Updates';
 import { updateStatus } from './updatesApi';
@@ -158,6 +159,7 @@ export default function SettingsPage() {
     terminalGroup(t, term, setTerm),
     notificationsGroup(t, notify, setNotify),
     browserGroup(t, recentOn, setRecent),
+    storageGroup(t),
     activityGroup(srv, canSeeAll, session, isAdmin),
   ];
   if (isAdmin) {
@@ -745,6 +747,26 @@ function browserGroup(t: TFn, recentOn: boolean, setRecent: (on: boolean) => voi
   };
 }
 
+function storageGroup(t: TFn): GroupDef {
+  return {
+    id: 'storage',
+    part: 'you',
+    icon: 'server',
+    hue: 'file',
+    title: t('groups.storage'),
+    rows: [
+      {
+        id: 'storagelist',
+        title: t('storage.title'),
+        desc: t('storage.desc'),
+        words:
+          's3 object storage bucket hetzner storage box sftp smb nas network folder cartella di rete',
+        block: <StorageBlock />,
+      },
+    ],
+  };
+}
+
 function activityGroup(
   { t, server, disabled: srvDisabled, set: sv }: ServerRows,
   canSeeAll: boolean,
@@ -1161,6 +1183,21 @@ function pluginPolicyGroup(
         desc: te('hosts.desc'),
         words: 'network hosts approved registry allow rete host approvati',
         block: <NetworkHostsBlock disabled={srvDisabled} />,
+      },
+      {
+        id: 'githubOrg',
+        title: t('plugpol.org'),
+        desc: t('plugpol.orgDesc'),
+        cfgKey: `plugins.github_org = "${server.get('plugins.github_org', '')}"`,
+        control: (
+          <CommitInput
+            disabled={srvDisabled}
+            allowEmpty
+            value={server.get('plugins.github_org', '')}
+            label={t('plugpol.org')}
+            onCommit={(v) => void sv('plugins.github_org', v, t('plugpol.org'))}
+          />
+        ),
       },
       {
         id: 'catalog',

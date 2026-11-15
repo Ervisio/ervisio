@@ -330,8 +330,10 @@ redirect = true
 [plugins]
 allow_unsigned = false
 dev = false
-# The signed marketplace catalog shown in Plugins › Browse ("" turns it off).
-catalog_url = "https://ervisio.github.io/plugins/catalog.json"
+# Marketplace of Plugins › Browse: the public repositories of this GitHub organisation ("" turns it off).
+github_org = "Ervisio"
+# Optional extra signed catalog (private catalogs); "" = none.
+catalog_url = ""
 
 [updates]
 channel = "stable"
@@ -393,10 +395,10 @@ Contributor notes: [server/README.md](server/README.md), [docs/DESIGN-RULES.md](
 
 A plugin is a folder with `manifest.json` and one ES module. The manifest declares pages, widgets, snippets, the commands the plugin may run, and the files and sockets it may touch. Plugin code runs in a sandboxed frame and talks to the app through a small SDK.
 
-Ervisio ships no plugins. They come from the marketplace in Plugins › Browse: a catalog built by the registry [Ervisio/plugins](https://github.com/Ervisio/plugins), where every plugin is reviewed and then signed with the Ervisio team key. Ervisio checks the signature of the catalog and of every plugin it installs.
+Ervisio ships no plugins. They come from the marketplace in Plugins › Browse: the public repositories of the GitHub organisation set by `plugins.github_org` (default `Ervisio`). Plugins installed from it need no signature and update by themselves, so whoever can push there decides what runs; plugins from anywhere else must be signed.
 
 - The Docker plugin (containers, compose stacks, images, volumes, logs, shell, templates, auto-update): [Ervisio/plugin-docker](https://github.com/Ervisio/plugin-docker). Up to 0.3.0 it was part of Ervisio; on a machine that used it, Ervisio installs the marketplace version by itself after the update, and `install.sh` offers it when Docker is installed (`--with-docker-plugin`, `--no-plugins`).
-- Write a plugin: [Ervisio/plugin-sdk](https://github.com/Ervisio/plugin-sdk) (types, Vite preset, template, guide), then publish it through the registry ([CONTRIBUTING](https://github.com/Ervisio/plugins/blob/main/CONTRIBUTING.md)).
+- Write a plugin: [Ervisio/plugin-sdk](https://github.com/Ervisio/plugin-sdk) (types, Vite preset, template, guide), then publish it as a repository in the marketplace organisation (`plugin-` name or a `plugin.ervisio` file, see [docs/api/plugins.md](docs/api/plugins.md)).
 - Manifest, API, isolation and the marketplace: [docs/api/plugins.md](docs/api/plugins.md)
 - Signing: [docs/PLUGIN-SIGNING.md](docs/PLUGIN-SIGNING.md)
 
