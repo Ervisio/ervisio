@@ -15,23 +15,23 @@ import (
 // specParams is what remote.save and remote.test receive. Secrets are
 // pointers: absent keeps the saved one, "" removes it.
 type specParams struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Kind     string `json:"kind"`
-	Host     string `json:"host"`
-	Port     int    `json:"port"`
-	User     string `json:"user"`
-	Path     string `json:"path"`
-	Auth     string `json:"auth"`
-	HostKey  string `json:"hostKey"`
-	TLS      string `json:"tls"`
-	Share    string `json:"share"`
-	Domain   string `json:"domain"`
-	URL      string `json:"url"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Kind      string `json:"kind"`
+	Host      string `json:"host"`
+	Port      int    `json:"port"`
+	User      string `json:"user"`
+	Path      string `json:"path"`
+	Auth      string `json:"auth"`
+	HostKey   string `json:"hostKey"`
+	TLS       string `json:"tls"`
+	Share     string `json:"share"`
+	Domain    string `json:"domain"`
+	URL       string `json:"url"`
 	Bucket    string `json:"bucket"`
 	Region    string `json:"region"`
 	PathStyle bool   `json:"pathStyle"`
-	Insecure bool   `json:"insecure"`
+	Insecure  bool   `json:"insecure"`
 	// ResetHostKey forgets the pinned SFTP key (the server was reinstalled).
 	ResetHostKey bool    `json:"resetHostKey"`
 	Password     *string `json:"password"`
