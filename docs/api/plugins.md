@@ -6,24 +6,55 @@ in `web/src/plugins`). The SDK for plugin authors (types, build preset, template
 
 ## Marketplace
 
-Ervisio ships no plugins. They come from the marketplace:
+Ervisio ships no plugins. They come from the marketplace: the public repositories of one GitHub organisation, set by
+`plugins.github_org` (default `Ervisio`; `""` turns it off). There is no registry, no review step and no signature.
 
-```
-plugin repo (e.g. Ervisio/plugin-docker)      registry Ervisio/plugins                       Ervisio
-  tag vX.Y.Z -> release workflow:               sync (every 6 h, or by hand): PR with the       plugins.catalog:
-  <id>-X.Y.Z.tar.gz (unsigned manifest)  ─────▶  new version and its permission diff  ───▶     catalog.json + catalog.sig
-  + .sha256, no secrets                         maintainers review and merge                    from GitHub Pages, signature
-                                                publish: plugin-sign with the team key,         checked; Install downloads the
-                                                release <id>-X.Y.Z, catalog.json signed,        signed tarball and verifies it
-                                                GitHub Pages                                    again (plugins.install)
+* A repository is a plugin when its name starts with `plugin-` or it has a `plugin.ervisio` file at the root of its
+  default branch. Archived repositories are skipped. A `plugin-` repository with no `manifest.json` is ignored without
+  a message.
+* **Release mode** (the default when the repository has a release): the package is the asset `<id>-<version>.tar.gz` of
+  the latest release; `id` and `version` come from `manifest.json` at that tag. A release is offered only once that
+  asset is attached.
+* **Branch mode** (no release, or `"source": "branch"`): the tarball of the branch from `codeload.github.com`; only the
+  plugin folder is extracted. The folder must already hold the built plugin, because no build step runs. A plugin that
+  needs a build uses releases.
+* Only the root daemon talks to GitHub: `plugins.SyncGitHub`, started by `ervisiod` 20 s after it starts and then every
+  15 minutes. A pass costs one GitHub API request per 100 repositories (the anonymous limit is 60 an hour); everything
+  else goes to `raw.githubusercontent.com`, `codeload.github.com` and `github.com` redirects. The result is written to
+  `/var/lib/ervisio/plugins-github.json`, which the bridges read; `plugins.catalog` merges it with the local catalog and
+  the optional extra catalog.
+* Catalog entries from the marketplace carry `repo` (`org/name`), `path` and `revision` (the release tag, or the
+  repository's `pushed_at` for a branch). They have no `sha256` and are `verified`.
+* **Trust.** A plugin installed from the configured organisation is recorded in `plugins-state.json` under `origins`
+  (`{"<id>": {"repo": "org/name", "revision": "…"}}`) and runs without a signature even with
+  `plugins.allow_unsigned = false`; it is listed as verified. Changing `plugins.github_org` to another organisation
+  removes that trust. Plugins from anywhere else keep the signature rules ("Signing").
+* **Updates are automatic.** Each pass reinstalls every installed plugin whose repository revision changed (a new
+  release tag, or a new push to the branch), including when it asks for new permissions. A plugin not installed from
+  that repository updates only when the catalog version is higher, with the Update button.
+* Unpacked packages are limited to 512 MiB.
+
+**Security trade-off.** Whoever can push to a repository of the organisation, or publish a release there, decides what
+code runs, automatically, on every server that follows it. Protect the organisation: two-factor authentication, branch
+protection and few maintainers.
+
+### plugin.ervisio
+
+Optional JSON file at the root of the repository, at most 16 KiB. Every field is optional and an empty file is valid.
+
+| Field | Meaning |
+|---|---|
+| `path` | the plugin folder inside the repository; `"."` is the root. Default: `plugin/`, then the root |
+| `source` | `"release"`: only releases are offered. `"branch"`: releases are ignored. Default: the latest release if there is one, else the branch |
+| `branch` | a branch to use instead of the default branch |
+| `category` | the Browse category (`Containers`, `Security`, `Networking`, `Storage`, `Databases`, `Monitoring`, `Web servers`, `Games`) |
+| `featured` | `true` marks the plugin as featured |
+
+```json
+{"path": "dist/docker", "source": "release", "category": "Containers"}
 ```
 
-* Plugin repositories hold no secrets: the registry polls their releases. The release contract (asset names, one
-  top-level folder `<id>/`, manifest version = tag) is in the SDK's `docs/publishing.md`.
-* Only registry maintainers merge, and every listed plugin, first-party or third-party, is reviewed and then signed by
-  the team key in the registry's CI, so it is `verified` in the catalog. The private key is only in the registry's
-  secret `PLUGIN_SIGNING_KEY` and on the release maintainer's machine (`docs/PLUGIN-SIGNING.md`).
-* The catalog is `https://ervisio.github.io/plugins/catalog.json`, its signature `catalog.sig` next to it.
+The release contract and the SDK side are in the SDK repository, `docs/publishing.md`.
 
 ### Plugins that left the core
 
@@ -37,7 +68,7 @@ version folder or package has none), so on start the daemon (root, not in `--dev
 | A `docker` plugin is present anywhere (installed, dev) | nothing | `installed` |
 | `plugins-state.json` has it switched off | nothing | `skipped` |
 | No Docker socket (`/var/run/docker.sock`, `/run/docker.sock`) | nothing | `not-needed` |
-| Otherwise | installs it from the signed remote catalog into `/var/lib/ervisio/plugins/docker`, as `plugins.install` with the entry's `sha256` and `capabilities` as consent: the catalog signature, the checksum and the plugin signature (team key) are all checked | `installed`, or `pending` on failure (retried every hour) |
+| Otherwise | installs it into `/var/lib/ervisio/plugins/docker` with `plugins.InstallFromCatalog`: from the GitHub marketplace first (the entry's package, trusted for its organisation, no signature), else from the signed extra catalog as `plugins.install` with the entry's `sha256` and `capabilities` as consent (catalog signature, checksum and plugin signature are all checked) | `installed`, or `pending` on failure (retried every hour) |
 
 Automatic installation is limited to this case because the same plugin, with the same permissions, was already
 installed and enabled on that machine. Everywhere else it is a normal Browse install with the consent dialog. While the
@@ -266,7 +297,7 @@ when a listed file is missing, or when the folder holds a file that is not liste
 
 The embedded trusted key is `plugins.TeamPublicKey` in `sign.go`, the public half of the Ervisio team key. Administrators can add plugin-only public keys with `plugins.trusted_keys` in the server configuration; this does not grant catalog-signing authority. The private key
 is never in the repository: where it lives, who may use it and how to rotate it is in `docs/PLUGIN-SIGNING.md`.
-Marketplace plugins are signed with it by the registry's CI.
+Plugins installed from the marketplace organisation are not signed (see "Marketplace", Trust); the signature rules here apply to every other plugin.
 
 ```sh
 go build -o plugin-sign ./server/internal/modules/plugins/cmd/plugin-sign
@@ -279,6 +310,8 @@ plugin-sign -verify -catalog catalog.json              # checks catalog.sig (or 
 
 ### Catalog signature
 
+This applies to the optional extra catalog (`plugins.catalog_url`). The GitHub marketplace has no catalog signature.
+
 `catalog.sig` holds the base64 ed25519 signature of `"ervisio-catalog-v1\n" + canonical(catalog.json)` (the same
 canonical form as manifests). The different prefix means a plugin signature can never pass for a catalog signature or
 the other way round. Its address is the catalog's with a final `.json` replaced by `.sig` (`.sig` appended otherwise;
@@ -286,8 +319,8 @@ query and fragment dropped). Trusted keys: the team keys plus `plugins.catalog_k
 for a private catalog). A catalog key only makes a catalog's *listing* trusted: the plugins it lists still need a team
 signature to install, unless `plugins.allow_unsigned` is on.
 
-`plugins.allow_unsigned = false` (config, **the default**): only plugins with a valid signature are listed as enabled, run
-commands, are served or install. Exception: plugins in the dev location (the repository's `./plugins` under `ervisiod
+`plugins.allow_unsigned = false` (config, **the default**): only plugins with a valid signature, or installed from the
+marketplace organisation (`origins` in `plugins-state.json`), are listed as enabled, run commands, are served or install. Exception: plugins in the dev location (the repository's `./plugins` under `ervisiod
 --dev`, or folders loaded with `plugins.loadDev`) run unsigned while developer mode is on; `plugins.list` marks them
 `devUnsigned` and the UI shows an "Unsigned, dev" badge. Present-but-invalid signatures are always refused at install
 time.
@@ -304,10 +337,11 @@ Params `{}`. Result: array of
  "unloadable":false,"updateAvailable":{"version":"1.5.0","notes":"…","newPermissions":false,"source":"https://…","sha256":"…"},
  "blocked":false,"error":""}
 ```
-`logo` (omitted when none): the logo file, served at `/plugins/<id>/<logo>`. `capabilities` and `contributes` always carry arrays (never null). `signed` = a manifest.sig exists, `verified` = it is valid.
+`logo` (omitted when none): the logo file, served at `/plugins/<id>/<logo>`. `capabilities` and `contributes` always carry arrays (never null). `signed` = a manifest.sig exists, `verified` = it is valid, or the plugin was installed from the marketplace organisation.
 `blocked` = unsigned/invalid while `allow_unsigned` is off (`enabled` is then false); `devUnsigned` = an unsigned dev
 plugin that runs because developer mode is on. `updateAvailable` comes from the
-local catalog. Folders whose manifest fails validation are listed for admins only, with `error` set and `enabled:false`.
+merged catalog (for a plugin installed from the marketplace repository it means the repository's revision changed, and the
+daemon applies it by itself). Folders whose manifest fails validation are listed for admins only, with `error` set and `enabled:false`.
 Other users only see plugins allowed by `visibleTo`.
 
 ### `plugins.setEnabled` (admin)
@@ -321,35 +355,37 @@ Params `{"source": "https://…/x.tar.gz" | "/abs/path/x.tar.gz", "sha256"?: "<h
 Download: https only (redirects too), 60 s, 32 MiB. The archive is checked and unpacked into a temporary folder: only
 regular files and directories, no absolute or `..` paths, no backslashes, no symlinks/hard links/special files, at most
 2000 entries, 16 MiB per file and 64 MiB in total; one top-level folder is stripped. Then the manifest is validated, the
-signature verified (invalid signature → `forbidden`; unsigned → `forbidden` unless `allow_unsigned`), `consent` (when sent)
+signature verified (invalid signature → `forbidden`; unsigned → `forbidden` unless `allow_unsigned` or the source is a package the root daemon read from the marketplace organisation, which is recorded in `origins`), `consent` (when sent)
 must equal the manifest's `capabilities` exactly (else `conflict`: the user approved different permissions), and the folder is
 moved atomically into place (an existing installed version is replaced = update). Packaged plugins cannot be replaced (`conflict`).
 Errors: `invalid` (bad source, archive, manifest, checksum), `forbidden`, `conflict`, `not_found`, `unavailable` (download).
 
 ### `plugins.catalog` (user)
-Params `{}` → `{"categories":[{id,name,icon,color}], "plugins":[{id,name,version,author,description,icon,logo?,color,category,verified,installs,featured?,notes?,source,sha256?,capabilities,contributes,visibleTo,installed,installedVersion?,minCore?,requires?,platforms,incompatible?}], "warning"?, "moved":[{id,name,version}]}`.
-`logo` is a `data:image/svg+xml;base64,…` or `data:image/png;base64,…` URL of at most 64 KiB, embedded in the signed catalog by the registry; any other value is dropped (the entry keeps its icon).
-Sources:
+Params `{}` → `{"categories":[{id,name,icon,color}], "plugins":[{id,name,version,author,description,icon,logo?,color,category,verified,installs,featured?,notes?,source,sha256?,repo?,path?,revision?,capabilities,contributes,visibleTo,installed,installedVersion?,minCore?,requires?,platforms,incompatible?}], "warning"?, "moved":[{id,name,version}]}`.
+`logo` is a `data:image/svg+xml;base64,…` or `data:image/png;base64,…` URL of at most 64 KiB (the marketplace reads it from the plugin's `logo.svg` or `logo.png`; an extra catalog embeds it); any other value is dropped (the entry keeps its icon).
+Sources, merged in this order (a later source replaces an entry with the same id; categories are the union by id, a later
+one replacing an earlier one with the same id):
 
 1. Local: the first existing `catalog.json` of `./plugins` (dev), `/var/lib/ervisio/plugins`, the packaged folder.
    Local files are trusted as they are (only root writes there). A sample is in
    `server/internal/modules/plugins/testdata/catalog-sample.json`.
-2. Remote: the https URL on the first line of `/etc/ervisio/plugins-catalog.url` when that file exists and the line is
-   not empty, else `plugins.catalog_url` (default `https://ervisio.github.io/plugins/catalog.json`; `""` = no remote
-   catalog). Fetched with its `catalog.sig` (10 s each, 2 MiB / 1 KiB, https only, redirects only to https). It is used
+2. Extra catalog (optional): the https URL on the first line of `/etc/ervisio/plugins-catalog.url` when that file exists
+   and the line is not empty, else `plugins.catalog_url` (default `""` = none). Fetched with its `catalog.sig` (10 s each, 2 MiB / 1 KiB, https only, redirects only to https). It is used
    only when the signature verifies (see "Catalog signature"); otherwise it is ignored and `warning` says why. Results
-   and failures are cached for 5 minutes per bridge. Remote entries replace local ones with the same id; the remote
-   categories replace the local ones when it has any.
+   and failures are cached for 5 minutes per bridge.
+3. Marketplace: `/var/lib/ervisio/plugins-github.json`, written by the root daemon (see "Marketplace"). Bridges only
+   read it, and ignore it when its `org` is not the current `plugins.github_org`. Entries carry `repo`, `path` and
+   `revision` and no `sha256`; Install of one is accepted only for the exact `source` address found in this file.
 
-A catalog entry may carry `minCore` and/or `requires: {"ervisio": ">=X.Y.Z"}` (as in the manifest; the registry should copy
-them from the plugin's manifest when it builds `catalog.json`). The daemon adds `incompatible` (the message) to an entry
+A catalog entry may carry `minCore` and/or `requires: {"ervisio": ">=X.Y.Z"}` (as in the manifest; the marketplace copies
+them from the plugin's manifest, an extra catalog should do the same). The daemon adds `incompatible` (the message) to an entry
 this core is too old for, Browse then shows "Needs a newer Ervisio" instead of an Install button, and the installer
-checks the downloaded manifest anyway. The registry (Ervisio/plugins) needs nothing else: unsigned fields are ignored by
+checks the downloaded manifest anyway. Unknown fields are ignored by
 older cores, and the entry's `capabilities` still have to match the manifest.
 
 Malformed entries are skipped. `moved` lists plugins that left the core and are not installed although the host uses
 them ("Plugins that left the core"). `plugins.list` computes `updateAvailable` from the same merged catalog, with the
-remote part taken from the cache only (a stale cache is refreshed in the background), so listing never waits for the
+extra-catalog part taken from the cache only (a stale cache is refreshed in the background), so listing never waits for the
 network.
 
 ### `plugins.exec` (user; admin commands need the root bridge)

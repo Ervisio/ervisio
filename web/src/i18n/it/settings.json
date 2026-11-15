@@ -25,7 +25,8 @@
       "envs": "Ambienti remoti e connessioni disponibili a Ervisio.",
       "hosts": "Gestisci i server a cui ti colleghi da questa console.",
       "about": "Versione, informazioni sul server e aggiornamenti software.",
-      "reset": "Ripristina le preferenze o azzera configurazione e dati di Ervisio con un backup protetto."
+      "reset": "Ripristina le preferenze o azzera configurazione e dati di Ervisio con un backup protetto.",
+      "storage": "Object storage, Storage Box e cartelle di rete raggiungibili da File."
     }
   },
   "reset": {
@@ -108,7 +109,8 @@
     "browser": "Questo browser",
     "activity": "Registro attività",
     "channels": "Canali di notifica",
-    "pluginjobs": "Attività dei plugin"
+    "pluginjobs": "Attività dei plugin",
+    "storage": "Storage esterno"
   },
   "note": {
     "default": "Predefinito",
@@ -294,8 +296,10 @@
     "unsignedDesc": "Plugin non firmati dal team di {name}.",
     "dev": "Modalità sviluppatore",
     "devDesc": "Carica i plugin da una cartella e ricaricali al salvataggio.",
-    "catalog": "Catalogo del marketplace",
-    "catalogDesc": "Dove Sfoglia trova i plugin. Il catalogo deve essere firmato dal team di Ervisio (o da plugins.catalog_key); lascia vuoto per disattivarlo."
+    "org": "Organizzazione del marketplace",
+    "orgDesc": "L'organizzazione GitHub i cui repository plugin compaiono in Sfoglia. I suoi plugin si installano senza firma e si aggiornano da soli; lascia vuoto per disattivarla.",
+    "catalog": "Catalogo aggiuntivo",
+    "catalogDesc": "Un catalogo firmato offerto accanto al marketplace (firmato dal team di Ervisio o da plugins.catalog_key); lascia vuoto per non usarlo."
   },
   "about": {
     "versionDesc": "Una console web per server Linux (in precedenza LinuxAdmin).",
@@ -692,5 +696,11 @@
     "classicHint": "Scegli le app mostrate nella navigazione classica. Gli strumenti nascosti si aprono comunque quando servono per un file. Le scelte valgono solo per il tuo account.",
     "desktopHint": "Nascondi le app dal desktop, dalle icone fissate e dalla lista applicazioni. I collegamenti restano salvati e le app si aprono comunque per i file. Le scelte valgono solo per il tuo account.",
     "floatingAI": "Chat AI compatta"
+  },
+  "storage": {
+    "title": "Connessioni",
+    "desc": "Object storage compatibile S3, Hetzner Storage Box, SFTP e SMB. Salvate per il tuo account con credenziali cifrate; si aprono da File, sotto Remoto.",
+    "none": "Nessuno storage esterno configurato.",
+    "saved": "Connessione salvata. Aprila da File."
   }
 }

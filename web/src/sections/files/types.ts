@@ -68,7 +68,7 @@ export interface Places {
 export interface Remote {
   id: string;
   name: string;
-  kind: 'sftp' | 'ftp' | 'smb' | 'webdav';
+  kind: 'sftp' | 'ftp' | 'smb' | 'webdav' | 's3';
   host?: string;
   port?: number;
   user?: string;
@@ -81,6 +81,10 @@ export interface Remote {
   hasPassphrase?: boolean;
   share?: string;
   domain?: string;
+  url?: string;
+  bucket?: string;
+  region?: string;
+  pathStyle?: boolean;
   updated?: number;
 }
 

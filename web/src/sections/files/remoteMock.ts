@@ -30,7 +30,7 @@ export function mockRemoteCall(method: string, params: Record<string, any>) {
     case 'remote.list':
       return { connections };
     case 'remote.test':
-      return params.kind === 'smb' || params.hostKey === fixtureKey
+      return params.kind !== 'sftp' || params.hostKey === fixtureKey
         ? { ok: true, path: params.path || '/srv' }
         : {
             ok: false,
@@ -41,14 +41,18 @@ export function mockRemoteCall(method: string, params: Record<string, any>) {
             changed: !!params.hostKey,
           };
     case 'remote.save': {
-      if (params.kind !== 'smb' && params.hostKey !== fixtureKey)
+      if (params.kind === 'sftp' && params.hostKey !== fixtureKey)
         throw new ApiError('invalid', 'Test and trust the server key first.');
       const saved: Remote = {
         id: params.id || '0123456789abcdef',
-        name: params.name || params.host,
+        name: params.name || params.host || params.bucket,
         kind: params.kind,
         share: params.share,
         domain: params.domain,
+        url: params.url,
+        bucket: params.bucket,
+        region: params.region,
+        pathStyle: params.pathStyle,
         host: params.host,
         port: params.port,
         user: params.user,

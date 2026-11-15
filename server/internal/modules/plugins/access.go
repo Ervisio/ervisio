@@ -19,10 +19,11 @@ const (
 // trust applies plugins.allow_unsigned. Folders in the dev location (the
 // repository's ./plugins under a --dev daemon, or folders loaded with
 // plugins.loadDev) can only be scanned when developer mode is on; they may
-// run unsigned so plugin authors can iterate, and the UI marks them.
-func trust(p policy, f *Found) trustLevel {
+// run unsigned so plugin authors can iterate, and the UI marks them. A plugin
+// installed from the marketplace organisation needs no signature.
+func trust(p policy, st state, f *Found) trustLevel {
 	switch {
-	case f.Sig.Verified || p.AllowUnsigned:
+	case f.Sig.Verified || p.AllowUnsigned || fromOrg(p, st, f):
 		return trustOK
 	case f.Location == LocDev && devEnabled(p):
 		return trustDevUnsigned
@@ -43,10 +44,11 @@ func authorize(c *rpc.Call, id string) (*Found, caller, error) {
 		return nil, caller{}, rpc.Errorf(rpc.NotFound, "There is no plugin %q.", id)
 	}
 	m := f.M
-	if !readState().isEnabled(m.ID) {
+	st := readState()
+	if !st.isEnabled(m.ID) {
 		return nil, caller{}, rpc.Errorf(rpc.Forbidden, "%s is turned off. Enable it in Plugins first.", m.Name)
 	}
-	if trust(pol, f) == trustBlocked {
+	if trust(pol, st, f) == trustBlocked {
 		return nil, caller{}, rpc.Errorf(rpc.Forbidden, "%s is not signed and this server only runs signed plugins.", m.Name)
 	}
 	if msg := m.CoreProblem(); msg != "" {

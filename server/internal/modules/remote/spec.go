@@ -3,6 +3,7 @@ package remote
 import (
 	"net"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -27,6 +28,9 @@ type specParams struct {
 	Share    string `json:"share"`
 	Domain   string `json:"domain"`
 	URL      string `json:"url"`
+	Bucket    string `json:"bucket"`
+	Region    string `json:"region"`
+	PathStyle bool   `json:"pathStyle"`
 	Insecure bool   `json:"insecure"`
 	// ResetHostKey forgets the pinned SFTP key (the server was reinstalled).
 	ResetHostKey bool    `json:"resetHostKey"`
@@ -34,6 +38,11 @@ type specParams struct {
 	Key          *string `json:"key"`
 	Pass         *string `json:"passphrase"`
 }
+
+var (
+	bucketRe = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`)
+	regionRe = regexp.MustCompile(`^[a-z0-9-]{1,64}$`)
+)
 
 func defaultPort(c *Conn) int {
 	switch c.Kind {
@@ -111,7 +120,8 @@ func connFromParams(p specParams, old *Conn) *Conn {
 		Name: strings.TrimSpace(p.Name), Kind: p.Kind, Host: strings.TrimSpace(p.Host), Port: p.Port,
 		User: p.User, Path: strings.TrimSpace(p.Path), Auth: p.Auth, HostKey: strings.TrimSpace(p.HostKey),
 		TLS: p.TLS, Share: strings.Trim(strings.TrimSpace(p.Share), `/\`), Domain: strings.TrimSpace(p.Domain),
-		URL: strings.TrimSpace(p.URL), Insecure: p.Insecure, secrets: map[string]string{},
+		URL: strings.TrimSpace(p.URL), Insecure: p.Insecure,
+		Bucket: strings.TrimSpace(p.Bucket), Region: strings.TrimSpace(p.Region), PathStyle: p.PathStyle, secrets: map[string]string{},
 	}
 	if old != nil {
 		c.ID = old.ID
@@ -132,9 +142,9 @@ func connFromParams(p specParams, old *Conn) *Conn {
 
 func validateBasics(c *Conn) error {
 	switch c.Kind {
-	case KindSFTP, KindFTP, KindSMB, KindWebDAV:
+	case KindSFTP, KindFTP, KindSMB, KindWebDAV, KindS3:
 	default:
-		return rpc.Errorf(rpc.Invalid, "Choose a protocol: SFTP, FTP, SMB or WebDAV.")
+		return rpc.Errorf(rpc.Invalid, "Choose a protocol: SFTP, FTP, SMB, WebDAV or S3.")
 	}
 	if !plainText(c.User, 256) || !plainText(c.Domain, 256) {
 		return rpc.Errorf(rpc.Invalid, "The user name contains characters that are not allowed.")
@@ -164,8 +174,11 @@ func validateSecrets(secrets map[string]string) error {
 
 func resolveAddress(c *Conn) error {
 	resolve := resolveHostAddress
-	if c.Kind == KindWebDAV {
+	switch c.Kind {
+	case KindWebDAV:
 		resolve = resolveWebDAVAddress
+	case KindS3:
+		resolve = resolveS3Address
 	}
 	if err := resolve(c); err != nil {
 		return err
@@ -183,6 +196,29 @@ func resolveWebDAVAddress(c *Conn) error {
 	}
 	if len(c.URL) > 2048 || !validHost(u.Hostname()) {
 		return rpc.Errorf(rpc.Invalid, "The WebDAV address is not valid.")
+	}
+	c.Host, c.Port = u.Hostname(), 0
+	if u.Port() != "" {
+		c.Port, _ = strconv.Atoi(u.Port())
+	}
+	return nil
+}
+
+// resolveS3Address: no endpoint means AWS, where the region names the host.
+func resolveS3Address(c *Conn) error {
+	if c.Region == "" {
+		c.Region = "us-east-1"
+	}
+	if !regionRe.MatchString(c.Region) {
+		return rpc.Errorf(rpc.Invalid, "The region is not valid (for example: eu-central-1).")
+	}
+	if c.URL == "" {
+		c.Host, c.Port = "s3."+c.Region+".amazonaws.com", 0
+		return nil
+	}
+	u, err := url.Parse(c.URL)
+	if err != nil || !plainWebDAVURL(u) || strings.Trim(u.Path, "/") != "" || len(c.URL) > 2048 || !validHost(u.Hostname()) {
+		return rpc.Errorf(rpc.Invalid, "Enter the endpoint as https://server (without a bucket, path, user name, query or #).")
 	}
 	c.Host, c.Port = u.Hostname(), 0
 	if u.Port() != "" {
@@ -218,6 +254,13 @@ func applyKindRules(c *Conn) error {
 			c.TLS = "explicit"
 		default:
 			return rpc.Errorf(rpc.Invalid, "Choose how FTP is secured: explicit TLS, implicit TLS or none.")
+		}
+	case KindS3:
+		if !bucketRe.MatchString(c.Bucket) || strings.Contains(c.Bucket, "..") {
+			return rpc.Errorf(rpc.Invalid, "Enter the name of the bucket (lower-case letters, digits, dots and hyphens).")
+		}
+		if c.User == "" || c.secret(secPassword) == "" {
+			return rpc.Errorf(rpc.Invalid, "S3 needs an access key and its secret key.")
 		}
 	case KindSMB:
 		if c.Share == "" || !plainText(c.Share, 80) || strings.ContainsAny(c.Share, `/\:*?"<>|`) {
@@ -261,6 +304,9 @@ func dropUnusedFields(c *Conn) {
 	if c.Kind != KindFTP {
 		c.TLS = ""
 	}
+	if c.Kind != KindS3 {
+		c.Bucket, c.Region, c.PathStyle = "", "", false
+	}
 	if c.Kind != KindFTP && c.Kind != KindWebDAV {
 		c.Insecure = false
 	}
@@ -269,8 +315,11 @@ func dropUnusedFields(c *Conn) {
 func applyName(c *Conn) error {
 	if c.Name == "" {
 		c.Name = c.Host
-		if c.Kind == KindSMB {
+		switch c.Kind {
+		case KindSMB:
 			c.Name = c.Host + "/" + c.Share
+		case KindS3:
+			c.Name = c.Bucket
 		}
 	}
 	if !plainText(c.Name, 64) {

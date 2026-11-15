@@ -166,6 +166,8 @@ var keys = []Key{
 		get: func(c *Config) any { return c.Plugins.Dev }, set: func(c *Config, v any) { c.Plugins.Dev = v.(bool) }, validate: noCheck},
 	{Name: "plugins.trusted_keys", Type: List,
 		get: func(c *Config) any { return c.Plugins.TrustedKeys }, set: func(c *Config, v any) { c.Plugins.TrustedKeys = v.([]string) }, validate: validatePluginKeys},
+	{Name: "plugins.github_org", Type: String,
+		get: func(c *Config) any { return c.Plugins.GitHubOrg }, set: func(c *Config, v any) { c.Plugins.GitHubOrg = v.(string) }, validate: validateGitHubOrg},
 	{Name: "plugins.catalog_url", Type: String,
 		get: func(c *Config) any { return c.Plugins.CatalogURL }, set: func(c *Config, v any) { c.Plugins.CatalogURL = v.(string) }, validate: validateCatalogURL},
 	{Name: "plugins.catalog_key", Type: String,
@@ -251,6 +253,15 @@ func validateCatalogURL(v any) error {
 	u, err := url.Parse(s)
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Fragment != "" || len(s) > 2048 {
 		return errors.New("must be empty or an https:// URL")
+	}
+	return nil
+}
+
+var githubOrgRe = regexp.MustCompile(`^[A-Za-z0-9](-?[A-Za-z0-9]){0,38}$`)
+
+func validateGitHubOrg(v any) error {
+	if s := v.(string); s != "" && !githubOrgRe.MatchString(s) {
+		return errors.New("must be empty or the name of a GitHub organisation")
 	}
 	return nil
 }

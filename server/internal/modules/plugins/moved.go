@@ -120,16 +120,25 @@ func movedNotices(cat *Catalog, installed map[string]string) []MovedNotice {
 	return out
 }
 
-// InstallFromCatalog installs (or updates) id from the signed remote
-// catalog, with the catalog entry's checksum and capabilities as consent.
-// It must run as root (it writes InstalledDir).
+// InstallFromCatalog installs (or updates) id from the GitHub marketplace,
+// else from the signed remote catalog with the entry's checksum and
+// capabilities as consent. It must run as root (it writes InstalledDir).
 func InstallFromCatalog(ctx context.Context, id string) (*Info, error) {
+	syncMu.Lock()
+	defer syncMu.Unlock()
+	github, gerr := refreshGitHubCatalog(ctx, readPolicy(), githubInterval, func(string, ...any) {})
+	if e := github.find(id); e != nil {
+		return install(ctx, installRequest{Source: e.Source})
+	}
 	cat, err := loadRemoteCatalog(ctx)
 	if err != nil {
 		return nil, err
 	}
+	if cat == nil && gerr != nil {
+		return nil, gerr
+	}
 	if cat == nil {
-		return nil, errors.New("no plugin catalog is configured (plugins.catalog_url is empty)")
+		return nil, fmt.Errorf("the plugin marketplace does not offer %q", id)
 	}
 	e := cat.find(id)
 	if e == nil || e.Source == "" {

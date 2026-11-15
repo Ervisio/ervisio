@@ -25,7 +25,8 @@
       "envs": "Remote environments and connections available to Ervisio.",
       "hosts": "Manage the servers you connect to from this console.",
       "about": "Version, host information and software updates.",
-      "reset": "Restore your preferences or reset Ervisio configuration and data with a protected backup."
+      "reset": "Restore your preferences or reset Ervisio configuration and data with a protected backup.",
+      "storage": "Object storage, Storage Boxes and network folders you reach from Files."
     }
   },
   "reset": {
@@ -108,7 +109,8 @@
     "browser": "This browser",
     "activity": "Activity log",
     "channels": "Notification channels",
-    "pluginjobs": "Plugin jobs"
+    "pluginjobs": "Plugin jobs",
+    "storage": "External storage"
   },
   "note": {
     "default": "Default",
@@ -294,8 +296,10 @@
     "unsignedDesc": "Plugins not signed by the {name} team.",
     "dev": "Developer mode",
     "devDesc": "Load plugins from a folder and reload them on save.",
-    "catalog": "Marketplace catalog",
-    "catalogDesc": "Where Browse finds plugins. The catalog must be signed by the Ervisio team (or by plugins.catalog_key); leave empty to turn it off."
+    "org": "Marketplace organisation",
+    "orgDesc": "The GitHub organisation whose plugin repositories Browse offers. Its plugins install without a signature and update on their own; leave empty to turn it off.",
+    "catalog": "Extra catalog",
+    "catalogDesc": "A signed catalog offered next to the marketplace (signed by the Ervisio team or by plugins.catalog_key); leave empty for none."
   },
   "about": {
     "versionDesc": "A web console for Linux servers (formerly LinuxAdmin).",
@@ -692,5 +696,11 @@
     "classicHint": "Choose the apps shown in Classic navigation. Hidden tools still open when needed for a file. These choices are saved only for your account.",
     "desktopHint": "Hide apps from the desktop, pinned launchers and app list. Existing shortcuts are kept and contextual opening still works. These choices are saved only for your account.",
     "floatingAI": "Floating AI chat"
+  },
+  "storage": {
+    "title": "Connections",
+    "desc": "S3-compatible object storage, Hetzner Storage Box, SFTP and SMB. Saved for your account with encrypted credentials; open them from Files under Remote.",
+    "none": "No external storage yet.",
+    "saved": "Connection saved. Open it from Files."
   }
 }

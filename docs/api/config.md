@@ -25,7 +25,8 @@ after a change; keys marked `restart` need a daemon restart.
 | `plugins.allow_unsigned` | bool | `false` | unsigned plugins are blocked (dev folders still run in developer mode, marked "Unsigned, dev") |
 | `plugins.dev` | bool | `false` | |
 | `plugins.trusted_keys` | list of up to 16 base64 ed25519 public keys | `[]` | additional plugin package signers; embedded team keys remain trusted. Does not authorize catalog signatures. Changes apply on the next plugin authorization. Keep this configuration administrator-owned. |
-| `plugins.catalog_url` | string, `""` or an `https://` URL | `https://ervisio.github.io/plugins/catalog.json` | the marketplace catalog of Plugins › Browse; its signature is at the same address with `.sig` instead of `.json`, and an unsigned catalog is ignored (`docs/api/plugins.md`); `""` = no remote catalog |
+| `plugins.github_org` | string, `""` or a GitHub organisation name | `Ervisio` | the marketplace of Plugins › Browse: the public repositories of this organisation (`docs/api/plugins.md`). Plugins installed from it run without a signature and update by themselves. `""` = no GitHub marketplace. Changing it to another organisation removes the trust given to plugins installed from the old one |
+| `plugins.catalog_url` | string, `""` or an `https://` URL | `""` | an optional extra signed catalog (a private catalog), merged with the marketplace; its signature is at the same address with `.sig` instead of `.json`, and an unsigned catalog is ignored (`docs/api/plugins.md`) |
 | `plugins.catalog_key` | string, `""` or a base64 ed25519 public key | `""` | an extra key trusted for catalog signatures (a private catalog); plugins still need the team signature |
 | `audit.enabled` | bool | `true` | record the activity log (sign-ins, administrator unlocks, plugin installs, settings, and every mutating plugin call); see `docs/api/plugins.md`, "Activity log" |
 | `audit.retention_days` | integer 0–3650 | `90` | daily log files older than this are deleted; `0` keeps them forever |
@@ -98,7 +99,7 @@ service and puts the previous file back when it fails.
  "values":{"listen":"0.0.0.0:9090","allow_root":false,"login.show_ip":true,"login.max_failures":5,"auth.ssh_keys":true,"auth.allow_users":[],"auth.allow_groups":[],"auth.admins_only":false,
            "session.timeout":"12h","session.admin_unlock":"5m","tls.mode":"self-signed","tls.redirect":true,
            "tls.cert":"","tls.key":"","plugins.allow_unsigned":false,"plugins.dev":false,
-           "plugins.catalog_url":"https://ervisio.github.io/plugins/catalog.json","plugins.catalog_key":"",
+           "plugins.github_org":"Ervisio","plugins.catalog_url":"","plugins.catalog_key":"",
            "audit.enabled":true,"audit.retention_days":90,
            "updates.channel":"stable","updates.auto_check":true,"updates.auto_install":false,"updates.auto_install_at":"03:30"},
  "defaults":{…same shape…},

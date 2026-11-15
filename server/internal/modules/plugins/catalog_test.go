@@ -96,6 +96,11 @@ func newMarket(t *testing.T) *market {
 			http.NotFound(w, r)
 			return
 		}
+		// GitHub answers the latest release with a redirect to its tag.
+		if strings.HasSuffix(r.URL.Path, "/releases/latest") {
+			http.Redirect(w, r, string(b), http.StatusFound)
+			return
+		}
 		_, _ = w.Write(b)
 	}))
 	t.Cleanup(m.srv.Close)

@@ -139,7 +139,18 @@
     "trustHint": "Confronta questa impronta con il server prima di accettarla. Nessuna credenziale è stata inviata al server non verificato.",
     "keyChanged": "La chiave del server è cambiata",
     "keyChangedHint": "Interrompi se il cambio non era previsto. Verifica l'impronta con il proprietario prima di sostituire la chiave salvata.",
-    "trust": "Accetta questa impronta e verifica"
+    "trust": "Accetta questa impronta e verifica",
+    "s3": "S3 / Object Storage",
+    "storagebox": "Hetzner Storage Box (SFTP)",
+    "storageboxHint": "L'utente dello Storage Box, ad esempio u123456 o u123456-sub1. Il collegamento avviene via SFTP sulla porta 23.",
+    "endpoint": "Endpoint (facoltativo)",
+    "endpointHint": "Lascia vuoto per Amazon S3. Per Hetzner Object Storage usa https://fsn1.your-objectstorage.com (oppure nbg1, hel1).",
+    "bucket": "Bucket",
+    "region": "Regione",
+    "accessKey": "Access key",
+    "secretKey": "Secret key",
+    "pathStyle": "Indirizzi path-style (MinIO e alcuni storage self-hosted)",
+    "bucketRoot": "Radice del bucket"
   },
   "new": {
     "label": "Nuovo",

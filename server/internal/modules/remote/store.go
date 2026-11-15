@@ -25,6 +25,7 @@ const (
 	KindFTP    = "ftp"
 	KindSMB    = "smb"
 	KindWebDAV = "webdav"
+	KindS3     = "s3"
 )
 
 // Secret names.
@@ -58,8 +59,12 @@ type Conn struct {
 	// SMB.
 	Share  string `json:"share,omitempty"`
 	Domain string `json:"domain,omitempty"`
-	// WebDAV: the base URL (http or https).
+	// WebDAV: the base URL (http or https). S3: the endpoint ("" = AWS).
 	URL string `json:"url,omitempty"`
+	// S3: User is the access key id, the password its secret key.
+	Bucket    string `json:"bucket,omitempty"`
+	Region    string `json:"region,omitempty"`
+	PathStyle bool   `json:"pathStyle,omitempty"`
 	// Insecure accepts a TLS certificate that cannot be verified (FTP, WebDAV).
 	Insecure bool `json:"insecure,omitempty"`
 	// Updated changes on every save, so open connections notice an edit

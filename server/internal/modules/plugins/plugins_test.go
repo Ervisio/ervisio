@@ -332,6 +332,10 @@ func setup(t *testing.T) (system, installed string) {
 	DevDirs = []string{}
 	MovedStatePath = filepath.Join(root, "moved.json")
 	noRemoteCatalog = true
+	GitHubCatalogPath = filepath.Join(root, "github.json")
+	githubSeen = map[string]repoSeen{}
+	// Nothing listens here: a test that does not fake GitHub never reaches it.
+	githubAPI, githubRaw, githubWeb, githubCodeload = "https://127.0.0.1:1", "https://127.0.0.1:1", "https://127.0.0.1:1", "https://127.0.0.1:1"
 	configmod.Path = filepath.Join(root, "ervisio.conf")
 	_ = os.MkdirAll(SystemDir, 0o755)
 	_ = os.MkdirAll(InstalledDir, 0o755)

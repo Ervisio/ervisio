@@ -58,6 +58,8 @@ type policy struct {
 	Dev           bool
 	CatalogURL    string
 	CatalogKey    string
+	// GitHubOrg is the organisation whose repositories are the marketplace.
+	GitHubOrg string
 }
 
 func readPolicy() policy {
@@ -65,7 +67,7 @@ func readPolicy() policy {
 	if err != nil || c == nil {
 		c = cfg.Default()
 	}
-	return policy{AllowUnsigned: c.Plugins.AllowUnsigned, Dev: c.Plugins.Dev, CatalogURL: c.Plugins.CatalogURL, CatalogKey: c.Plugins.CatalogKey}
+	return policy{AllowUnsigned: c.Plugins.AllowUnsigned, Dev: c.Plugins.Dev, CatalogURL: c.Plugins.CatalogURL, CatalogKey: c.Plugins.CatalogKey, GitHubOrg: c.Plugins.GitHubOrg}
 }
 
 // devDirs returns the folders scanned as "dev" plugin locations: the
@@ -227,6 +229,25 @@ func find(p policy, id string) *Found {
 
 type state struct {
 	Enabled map[string]bool `json:"enabled"`
+	// Origins says which marketplace repository each installed plugin came from.
+	Origins map[string]origin `json:"origins,omitempty"`
+}
+
+// origin is the marketplace repository ("org/name") a plugin was installed
+// from and the revision that was installed.
+type origin struct {
+	Repo     string `json:"repo"`
+	Revision string `json:"revision"`
+}
+
+// fromOrg says whether an installed plugin came from the configured
+// marketplace organisation, which makes it trusted without a signature.
+func fromOrg(p policy, st state, f *Found) bool {
+	if p.GitHubOrg == "" || f.Location != LocInstalled || f.M == nil {
+		return false
+	}
+	owner, _, ok := strings.Cut(st.Origins[f.M.ID].Repo, "/")
+	return ok && strings.EqualFold(owner, p.GitHubOrg)
 }
 
 var stateMu sync.Mutex
@@ -238,6 +259,9 @@ func readState() state {
 	}
 	if s.Enabled == nil {
 		s.Enabled = map[string]bool{}
+	}
+	if s.Origins == nil {
+		s.Origins = map[string]origin{}
 	}
 	return s
 }
@@ -344,9 +368,9 @@ func list(adminBridge bool) []Info {
 	if err != nil {
 		local = &Catalog{}
 	}
-	// Updates come from the local and the signed remote catalog; the remote
-	// one only from the cache, so listing never waits for the network.
-	cat := mergeCatalogs(local, cachedRemoteCatalog())
+	// Updates come from the local, the signed remote and the GitHub catalog;
+	// the last two only from their caches, so listing never waits for the network.
+	cat := mergeCatalogs(mergeCatalogs(local, cachedRemoteCatalog()), readGitHubCatalog(p))
 	out := []Info{}
 	for _, f := range scan(p) {
 		if f.M == nil {
@@ -386,7 +410,10 @@ func pluginInfo(p policy, st state, cat *Catalog, f *Found) Info {
 	if in.Color == "" {
 		in.Color = "plg"
 	}
-	switch trust(p, f) {
+	if fromOrg(p, st, f) {
+		in.Verified, in.SignatureError = true, ""
+	}
+	switch trust(p, st, f) {
 	case trustBlocked:
 		in.Blocked = true
 		in.Enabled = false
@@ -397,7 +424,7 @@ func pluginInfo(p policy, st state, cat *Catalog, f *Found) Info {
 		in.Incompatible = msg
 		in.Enabled = false
 	}
-	if e := cat.find(m.ID); e != nil && compareSemver(e.Version, m.Version) > 0 && f.Location != LocDev {
+	if e := cat.find(m.ID); e != nil && f.Location != LocDev && isUpdate(e, m, st.Origins[m.ID]) {
 		in.UpdateAvailable = &UpdateInfo{Version: e.Version, Notes: e.Notes, NewPermissions: !sameJSON(e.Capabilities, m.declared), Source: e.Source, SHA256: e.SHA256}
 	}
 	return in

@@ -24,6 +24,8 @@ const (
 	maxFileBytes    = 16 << 20 // one extracted file
 	maxTotalBytes   = 64 << 20 // all extracted files
 	maxEntries      = 2000
+	// maxUnpackedBytes bounds a repository archive, plugin folder or not.
+	maxUnpackedBytes = 512 << 20
 )
 
 // ExtractTarGz unpacks a .tar.gz into dest (which must exist and be empty).
@@ -31,18 +33,26 @@ const (
 // backslashes, symlinks, hard links and special files are errors. Files get
 // mode 0644 (0755 when the archive marks them executable), directories 0755.
 // A single top-level folder shared by every entry is stripped.
-func ExtractTarGz(r io.Reader, dest string) error {
+func ExtractTarGz(r io.Reader, dest string) error { return extractTarGz(r, dest, "") }
+
+// extractTarGz unpacks only the folder sub of a repository archive (whose
+// entries all live under one top-level folder) when sub is not "".
+func extractTarGz(r io.Reader, dest, sub string) error {
 	gz, err := gzip.NewReader(r)
 	if err != nil {
 		return fmt.Errorf("the file is not a .tar.gz archive")
 	}
 	defer func() { _ = gz.Close() }()
 
-	entries, err := readArchiveEntries(tar.NewReader(gz))
+	// The rest of a repository is skipped, not counted: bound what is read.
+	entries, err := readArchiveEntries(tar.NewReader(io.LimitReader(gz, maxUnpackedBytes)), sub)
 	if err != nil {
 		return err
 	}
-	top, strip := sharedTopFolder(entries)
+	top, strip := "", ""
+	if sub == "" {
+		top, strip = sharedTopFolder(entries)
+	}
 	for _, e := range entries {
 		name := e.name
 		if strip != "" {
@@ -66,8 +76,10 @@ type archiveEntry struct {
 }
 
 // readArchiveEntries reads everything into memory first (bounded) so the
-// top-level folder can be detected before anything is written.
-func readArchiveEntries(tr *tar.Reader) ([]archiveEntry, error) {
+// top-level folder can be detected before anything is written. With sub it
+// keeps only what is inside that folder of a repository archive, named
+// relative to it.
+func readArchiveEntries(tr *tar.Reader, sub string) ([]archiveEntry, error) {
 	var entries []archiveEntry
 	var total int64
 	for {
@@ -88,6 +100,14 @@ func readArchiveEntries(tr *tar.Reader) ([]archiveEntry, error) {
 		if skip {
 			continue
 		}
+		if sub != "" {
+			_, inRepo, _ := strings.Cut(clean, "/")
+			rest, inside := strings.CutPrefix(inRepo, sub+"/")
+			if !inside || rest == "" {
+				continue
+			}
+			clean = rest
+		}
 		switch h.Typeflag {
 		case tar.TypeDir:
 			entries = append(entries, archiveEntry{name: clean, dir: true})
@@ -102,6 +122,9 @@ func readArchiveEntries(tr *tar.Reader) ([]archiveEntry, error) {
 		default:
 			return nil, fmt.Errorf("archive entry %q is a link or special file, which plugins may not contain", h.Name)
 		}
+	}
+	if len(entries) == 0 && sub != "" {
+		return nil, fmt.Errorf("the archive has no folder %q", sub)
 	}
 	if len(entries) == 0 {
 		return nil, fmt.Errorf("the archive is empty")
@@ -213,7 +236,10 @@ func install(ctx context.Context, req installRequest) (*Info, error) {
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
 
-	stage, m, err := stagePlugin(ctx, req, tmp, p)
+	// A marketplace package is trusted for where it comes from, so the
+	// address must be exactly the one the root daemon read from GitHub.
+	entry := readGitHubCatalog(p).bySource(req.Source)
+	stage, m, err := stagePlugin(ctx, req, tmp, p, entry)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +250,14 @@ func install(ctx context.Context, req installRequest) (*Info, error) {
 	st := readState()
 	if _, ok := st.Enabled[m.ID]; !ok {
 		st.Enabled[m.ID] = true
-		_ = writeState(st)
+	}
+	if entry != nil {
+		st.Origins[m.ID] = origin{Repo: entry.Repo, Revision: entry.Revision}
+	} else {
+		delete(st.Origins, m.ID)
+	}
+	if err := writeState(st); err != nil {
+		return nil, rpc.Errorf(rpc.Internal, "Installed, but the plugin state could not be saved: %v", cleanErr(err))
 	}
 	for _, in := range list(true) {
 		if in.ID == m.ID {
@@ -245,8 +278,9 @@ func validateInstallRequest(req installRequest) error {
 }
 
 // stagePlugin fetches and unpacks the package into tmp/stage and runs every
-// check that must pass before anything is installed.
-func stagePlugin(ctx context.Context, req installRequest, tmp string, p policy) (string, *Manifest, error) {
+// check that must pass before anything is installed. entry is the marketplace
+// entry the package belongs to (nil for any other source).
+func stagePlugin(ctx context.Context, req installRequest, tmp string, p policy, entry *CatalogEntry) (string, *Manifest, error) {
 	archive, err := fetchArchive(ctx, req.Source, req.SHA256)
 	if err != nil {
 		return "", nil, err
@@ -256,22 +290,31 @@ func stagePlugin(ctx context.Context, req installRequest, tmp string, p policy) 
 	if err := os.Mkdir(stage, 0o755); err != nil {
 		return "", nil, err
 	}
-	if err := ExtractTarGz(archive, stage); err != nil {
+	sub := ""
+	if entry != nil {
+		sub = entry.Path
+	}
+	if err := extractTarGz(archive, stage, sub); err != nil {
 		return "", nil, rpc.Errorf(rpc.Invalid, "%v", err)
 	}
 	m, err := LoadManifest(stage)
 	if err != nil {
 		return "", nil, rpc.Errorf(rpc.Invalid, "This is not a valid plugin: %v", err)
 	}
-	if err := checkInstallable(req, m, stage, p); err != nil {
+	if entry != nil && m.ID != entry.ID {
+		return "", nil, rpc.Errorf(rpc.Conflict, "The package of %s holds the plugin %q instead. Nothing was installed.", entry.Repo, m.ID)
+	}
+	if err := checkInstallable(req, m, stage, p, entry != nil); err != nil {
 		return "", nil, err
 	}
 	return stage, m, nil
 }
 
-func checkInstallable(req installRequest, m *Manifest, stage string, p policy) error {
+// checkInstallable applies the signature policy (not to a marketplace
+// package), compatibility and the consent the user gave.
+func checkInstallable(req installRequest, m *Manifest, stage string, p policy, marketplace bool) error {
 	sig := CheckSignature(stage, pluginSigningKeys())
-	if !sig.Verified {
+	if !sig.Verified && !marketplace {
 		if sig.Signed {
 			return rpc.Errorf(rpc.Forbidden, "The signature of %s is not valid (%s). It was not installed.", m.Name, sig.Err)
 		}
@@ -419,6 +462,7 @@ func uninstall(id string) error {
 	}
 	st := readState()
 	delete(st.Enabled, id)
+	delete(st.Origins, id)
 	_ = writeState(st)
 	return nil
 }
