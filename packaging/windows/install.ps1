@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Installs, upgrades or removes the Ervisio service on Windows.
+  Installs, upgrades or removes the Ervisio Console service on Windows.
 
 .DESCRIPTION
   Run from an elevated PowerShell, from the folder that holds ervisiod.exe,
@@ -89,7 +89,7 @@ if ($Uninstall) {
     if (Test-Path $InstallDir) { Remove-Item -Recurse -Force $InstallDir }
     if ($PurgeData -and (Test-Path $DataDir)) { Remove-Item -Recurse -Force $DataDir }
     elseif (Test-Path $DataDir) { Write-Host "Kept $DataDir (configuration, certificate, data). Use -PurgeData to delete it." }
-    Write-Host 'Ervisio removed.'
+    Write-Host 'Ervisio Console removed.'
     return
 }
 
@@ -140,10 +140,10 @@ $binPath = "`"$exe`""
 if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
     & sc.exe config $ServiceName binPath= $binPath start= auto obj= LocalSystem | Out-Null
 } else {
-    & sc.exe create $ServiceName binPath= $binPath start= auto obj= LocalSystem DisplayName= 'Ervisio web console' | Out-Null
+    & sc.exe create $ServiceName binPath= $binPath start= auto obj= LocalSystem DisplayName= 'Ervisio Console' | Out-Null
 }
 if ($LASTEXITCODE -ne 0) { throw "sc.exe failed ($LASTEXITCODE)" }
-& sc.exe description $ServiceName 'Ervisio web administration console' | Out-Null
+& sc.exe description $ServiceName 'Ervisio Console web administration' | Out-Null
 & sc.exe failure $ServiceName reset= 86400 actions= restart/5000/restart/30000// | Out-Null
 
 # Firewall.
@@ -152,5 +152,5 @@ Remove-ErvisioFirewallRule
 if ($LASTEXITCODE -ne 0) { throw "netsh failed ($LASTEXITCODE)" }
 
 Start-Service -Name $ServiceName
-Write-Host "Ervisio is running: https://localhost:$Port (self-signed certificate, created on first start in $DataDir\tls)."
+Write-Host "Ervisio Console is running: https://localhost:$Port (self-signed certificate, created on first start in $DataDir\tls)."
 Write-Host "Configuration: $conf"

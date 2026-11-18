@@ -19,7 +19,7 @@ import (
 	cfg "github.com/ervisio/ervisio/server/internal/config"
 )
 
-// Pairing is the server side (B) of a pairing: another Ervisio server holds
+// Pairing is the server side (B) of a pairing: another Ervisio Console server holds
 // a credential whose hash is stored here.
 type Pairing struct {
 	ID string `json:"id"`

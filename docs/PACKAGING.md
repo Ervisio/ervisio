@@ -1,20 +1,20 @@
 # Packaging and distribution
 
-Ervisio 0.7.0 and later include the optional ErvisiOS desktop in stable release downloads. See [interface setup and compatibility](ERVISIOS.md); unattended installations keep the classic console unless explicitly changed.
+Ervisio Console 0.7.0 and later include the optional ErvisiOS desktop in stable release downloads. See [interface setup and compatibility](ERVISIOS.md); unattended installations keep the classic console unless explicitly changed.
 
-How Ervisio reaches machines, what each way installs, and how to publish it in more places. Building and
+How Ervisio Console reaches machines, what each way installs, and how to publish it in more places. Building and
 signing a release is in [RELEASING.md](RELEASING.md).
 
 ## Ways to install
 
 | Way | Who builds it | Layout | Updated by |
 |---|---|---|---|
-| `install.sh` (one-line install) | release workflow (archive) | versioned | Ervisio itself (Settings > About) |
+| `install.sh` (one-line install) | release workflow (archive) | versioned | Ervisio Console itself (Settings > About) |
 | `.deb` from the release page | release workflow (nfpm) | flat, managed (`apt`) | the user, with apt/dpkg |
 | `.rpm` from the release page | release workflow (nfpm) | flat, managed (`dnf` or `zypper`) | the user, with dnf/zypper |
 | AUR `ervisio-bin` | `packaging/arch/ervisio-bin/PKGBUILD` (release archive) | flat, managed (`pacman`) | pacman / AUR helper |
 | AUR `ervisio` | `packaging/arch/ervisio/PKGBUILD` (tagged source) | flat, managed (`pacman`) | pacman / AUR helper |
-| From source | `make build` + `packaging/install-dev.sh` | versioned | Ervisio itself |
+| From source | `make build` + `packaging/install-dev.sh` | versioned | Ervisio Console itself |
 
 The `.deb` and `.rpm` files on the release page are not in any repository yet, so `apt upgrade` and `dnf upgrade`
 do not see new versions: users download the new package and install it over the old one. The console still checks
@@ -105,7 +105,7 @@ A package writes `/usr/lib/ervisio/managed` containing the name of its package m
 ### Restarts from package scripts
 
 Upgrading the package restarts `ervisio.service` (deb, rpm and Arch alike), removing it stops the service. The
-package manager may have been started from Ervisio itself, from its terminal or the Software section; it then
+package manager may have been started from Ervisio Console itself, from its terminal or the Software section; it then
 runs as a descendant of `ervisiod`, and a restart would kill it halfway. `/usr/lib/ervisio/package-service`
 (from `packaging/package-service.sh`) checks the process tree: in that case it hands the restart to a transient
 systemd unit that waits until the package manager has exited. Everyone signs in again afterwards.
@@ -169,8 +169,8 @@ renamed, because a single file mounted into a container must keep its inode. The
 
 ### Replacing LinuxAdmin
 
-Ervisio was called LinuxAdmin up to 0.2.0; its packages were `linuxadmin` (`.deb`, `.rpm`) and `linuxadmin-bin` /
-`linuxadmin` (AUR). The Ervisio packages take their place (`docs/RELEASING.md`, "Rename transition"):
+Ervisio Console was called LinuxAdmin up to 0.2.0; its packages were `linuxadmin` (`.deb`, `.rpm`) and `linuxadmin-bin` /
+`linuxadmin` (AUR). The Ervisio Console packages take their place (`docs/RELEASING.md`, "Rename transition"):
 
 - `.deb`: `Replaces`, `Conflicts` and `Provides: linuxadmin`. `apt install ./ervisio_<v>_amd64.deb` removes
   `linuxadmin` (not purged: `/etc/linuxadmin` and `/var/lib/linuxadmin` stay) and the post-install script copies them
@@ -184,8 +184,8 @@ Ervisio was called LinuxAdmin up to 0.2.0; its packages were `linuxadmin` (`.deb
   package of the same kind. pacman asks to remove the LinuxAdmin package (its `pre_remove` stops it); `post_install`
   copies the data. Then `systemctl enable --now ervisio`.
 - A LinuxAdmin installed with its `install.sh`: the `.deb` and `.rpm` scripts also remove its programs and unit
-  (`ervisiod --remove-legacy`) once `ervisio.service` runs; Ervisio's `install.sh` does the same.
-  Ervisio's `install.sh` refuses a LinuxAdmin installed from a package: install the `ervisio` package instead.
+  (`ervisiod --remove-legacy`) once `ervisio.service` runs; Ervisio Console's `install.sh` does the same.
+  Ervisio Console's `install.sh` refuses a LinuxAdmin installed from a package: install the `ervisio` package instead.
 
 ## Distribution details
 
@@ -289,7 +289,7 @@ git push                                                    # the AUR branch is 
 ```
 
 Repeat with `ervisio` (`ssh://aur@aur.archlinux.org/ervisio.git`). The PKGBUILDs in this repository have
-`SKIP` checksums until `update-pkgbuild.sh` has run for the first Ervisio release. If `linuxadmin-bin` and
+`SKIP` checksums until `update-pkgbuild.sh` has run for the first Ervisio Console release. If `linuxadmin-bin` and
 `linuxadmin` were published, file a merge request on the AUR for each (into `ervisio-bin` and `ervisio`) once the
 new packages exist, so their users get them. Always commit `.SRCINFO` together with the
 `PKGBUILD`; the AUR rejects pushes where they disagree. Once published, users install with `yay -S ervisio-bin`
@@ -368,7 +368,7 @@ What every distribution expects before a package enters its official repositorie
 
 - **A license** approved by OSI and acceptable to the distribution (Debian: DFSG-free). This is the first blocker.
 - **Builds from source without network access**, with every dependency either packaged in the distribution or
-  declared as bundled. For Ervisio that means the Go modules (packaged as `golang-*` in Debian/Fedora, or vendored
+  declared as bundled. For Ervisio Console that means the Go modules (packaged as `golang-*` in Debian/Fedora, or vendored
   with a bundling declaration) and the npm dependencies of the web app, which is the hard part.
 - **No self-update**: the managed marker already turns it off.
 - **Distribution conventions**: systemd presets (services are not enabled by default on Fedora and Debian unless
@@ -384,7 +384,7 @@ What every distribution expects before a package enters its official repositorie
 
 ## Windows
 
-Ervisio runs on Windows as a service (`ervisiod.exe`, registered as `Ervisio`, LocalSystem, automatic start).
+Ervisio Console runs on Windows as a service (`ervisiod.exe`, registered as `Ervisio`, LocalSystem, automatic start).
 
 ```sh
 make build-windows        # server/bin/windows-{amd64,arm64}/{ervisiod,ervisio-bridge}.exe (CGO off)

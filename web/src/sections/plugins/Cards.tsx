@@ -71,7 +71,7 @@ export function PluginCard({
   );
 }
 
-/** "Docker moved to the marketplace": a plugin that used to ship with Ervisio is not installed here. */
+/** "Docker moved to the marketplace": a plugin that used to ship with Ervisio Console is not installed here. */
 export function MovedCard({
   entry,
   busy,

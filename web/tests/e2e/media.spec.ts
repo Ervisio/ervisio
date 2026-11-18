@@ -78,7 +78,7 @@ for (const shell of ['classic', 'ervisios']) {
     );
     if (shell === 'ervisios') {
       expect(new URL(page.url()).pathname).toBe('/');
-      await expect(page).toHaveTitle('Ervisio');
+      await expect(page).toHaveTitle('Ervisio Console');
     }
     await page.screenshot({ path: `../.qa/media-${shell}.png` });
   });

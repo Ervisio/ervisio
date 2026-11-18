@@ -1,5 +1,5 @@
 # Packaging
-Purpose: build, install and migrate Ervisio on Linux (release archive, install.sh, deb/rpm/AUR) and Windows, including the LinuxAdmin rename path.
+Purpose: build, install and migrate Ervisio Console on Linux (release archive, install.sh, deb/rpm/AUR) and Windows, including the LinuxAdmin rename path.
 
 ## Entry points and public contracts
 - `install.sh` (repo root, ~2600 lines, POSIX sh): downloads/verifies a release (`RELEASE_KEY_PEM`), installs versioned layout; `--from DIR`, `--uninstall [--purge]`, `--dry-run`, `--version`; `refuse_managed` blocks install/uninstall on packaged hosts.

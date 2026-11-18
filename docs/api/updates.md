@@ -16,7 +16,7 @@ hour. 15 s timeout.
 ```json
 {"current":"1.0.0","channel":"stable","autoCheck":true,"checkedAt":1790000000000,"arch":"amd64",
  "newer":true,
- "latest":{"version":"1.1.0","tag":"v1.1.0","name":"Ervisio 1.1.0","publishedAt":1789900000000,
+ "latest":{"version":"1.1.0","tag":"v1.1.0","name":"Ervisio Console 1.1.0","publishedAt":1789900000000,
            "notes":"## Changes\n- …","url":"https://github.com/…/releases/tag/v1.1.0","prerelease":false,
            "asset":"ervisio-1.1.0-linux-amd64.tar.gz","size":16432392}}
 ```

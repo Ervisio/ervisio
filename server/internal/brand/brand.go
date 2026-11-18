@@ -3,7 +3,12 @@
 package brand
 
 // Name is the product name shown to users.
-const Name = "Ervisio"
+const Name = "Ervisio Console"
+
+// WindowsName names the Windows service, the Program Files / ProgramData
+// folders and the Task Scheduler folder. It kept the product's earlier name
+// "Ervisio" so existing installations keep working; never derive it from Name.
+const WindowsName = "Ervisio"
 
 // Version is the build version. It is overridden at link time with
 // -ldflags "-X github.com/ervisio/ervisio/server/internal/brand.Version=…".

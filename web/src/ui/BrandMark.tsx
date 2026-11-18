@@ -1,7 +1,7 @@
 import { Name } from '../brand';
 
 /**
- * The Ervisio mark: a window that is also an eye, the pupil a terminal cursor (design round 033, variant a).
+ * The Ervisio Console mark: a window that is also an eye, the pupil a terminal cursor (design round 033, variant a).
  * Colours come from --brand-frame / --brand-cursor (ui.css), darker on light themes.
  */
 export function BrandMark({ size = 24, title }: { size?: number; title?: string }) {

@@ -76,7 +76,7 @@ for (const shell of ['classic', 'ervisios']) {
     expect(sessions.at(-1).cmd).toBeUndefined();
     if (shell === 'ervisios') {
       await expect(page).toHaveURL('/');
-      await expect(page).toHaveTitle('Ervisio');
+      await expect(page).toHaveTitle('Ervisio Console');
     }
   });
 }

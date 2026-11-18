@@ -9,7 +9,7 @@ const EVERY = 6 * 60 * 60_000;
 
 /**
  * Mounted once by the app shell: for administrators, when updates.auto_check is on, asks updates.check (cached
- * an hour on the server) at sign-in and every 6 hours, and puts "Ervisio X is available" in the bell menu,
+ * an hour on the server) at sign-in and every 6 hours, and puts "Ervisio Console X is available" in the bell menu,
  * linking to Settings › About. Renders nothing.
  */
 export function UpdateNotifier() {

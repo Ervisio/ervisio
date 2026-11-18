@@ -52,7 +52,7 @@ come from LDAP).
 Refusals: password sign-in gives the generic `unauthenticated` "wrong user name or password" (no password oracle;
 the reason is in the log); SSH-key sign-in, after the signature verified and the key is listed in
 `authorized_keys`, gives `403 forbidden`, `data.reason:"not_allowed"`, "This account may not sign in to
-Ervisio". Mind that you can lock yourself out: keep your own account allowed.
+Ervisio Console". Mind that you can lock yourself out: keep your own account allowed.
 
 ### Plain HTTP behind a reverse proxy (`tls.mode = "http"`)
 

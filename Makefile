@@ -1,4 +1,4 @@
-# Ervisio — top-level build. Server targets build into server/bin/.
+# Ervisio Console — top-level build. Server targets build into server/bin/.
 GO      ?= go
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -X github.com/ervisio/ervisio/server/internal/brand.Version=$(VERSION)

@@ -1,4 +1,4 @@
-// Package maintenance implements an explicitly planned, backed-up Ervisio data reset.
+// Package maintenance implements an explicitly planned, backed-up Ervisio Console data reset.
 package maintenance
 
 import "context"

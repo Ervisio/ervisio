@@ -319,13 +319,13 @@ test('ErvisiOS consumes plugin deep links, isolates app navigation and keeps bro
   await page.goto('/p/minecraft/servers');
   await expect(page.getByRole('region', { name: 'Minecraft', exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\/$/);
-  await expect(page).toHaveTitle('Ervisio');
+  await expect(page).toHaveTitle('Ervisio Console');
   const before = await page.evaluate(() => history.length);
   await page.locator('.eos-task-app[aria-label="Settings"]').click();
   await page.locator('[data-settings-category="language"]').click();
   await expect(page.locator('.os-settings-category[data-gid="language"]')).toBeVisible();
   await expect(page).toHaveURL(/\/$/);
-  await expect(page).toHaveTitle('Ervisio');
+  await expect(page).toHaveTitle('Ervisio Console');
   expect(await page.evaluate(() => history.length)).toBe(before);
   await page.evaluate(async () => {
     const module = '/src/shell/commands.ts';
@@ -349,7 +349,7 @@ test('ErvisiOS consumes plugin deep links, isolates app navigation and keeps bro
   await expect(page).toHaveURL(/\/$/);
   await page.goBack();
   await expect(page).toHaveURL(/\/$/);
-  await expect(page).toHaveTitle('Ervisio');
+  await expect(page).toHaveTitle('Ervisio Console');
   await expect(page.locator('.eos-window')).toHaveCount(5);
 });
 
@@ -358,7 +358,7 @@ test('Classic retains normal URLs and section titles', async ({ page }) => {
   await page.goto('/editor?folder=%2Fsrv%2Fprojects');
   await expect(page.locator('.editor-workspace--code')).toBeVisible();
   await expect(page).toHaveURL(/\/editor/);
-  await expect(page).toHaveTitle('Code editor · Ervisio');
+  await expect(page).toHaveTitle('Code editor · Ervisio Console');
 });
 
 for (const shell of ['classic', 'ervisios']) {
@@ -381,7 +381,7 @@ for (const shell of ['classic', 'ervisios']) {
         await (await import(module)).runShellCommand('Open task manager');
       });
       await expect(page.locator('.tm-root')).toBeVisible();
-      await expect(page).toHaveTitle('Ervisio');
+      await expect(page).toHaveTitle('Ervisio Console');
     } else {
       await expect(page).toHaveURL(/\/taskmanager$/);
       await expect(page.getByRole('link', { name: 'Task Manager', exact: true })).toBeVisible();

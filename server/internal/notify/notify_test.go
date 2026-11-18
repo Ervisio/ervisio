@@ -154,7 +154,7 @@ func TestSendFiltersByLevelAndEvent(t *testing.T) {
 	if d.Channels != 1 || d.Delivered != 1 || len(got["/all"]) != 1 {
 		t.Fatalf("warn/plugins: %+v %v", d, got)
 	}
-	if got["/all"][0]["title"] != "Hello" || got["/all"][0]["_hdr"] != "hv-all" || got["/all"][0]["source"] != "Ervisio" {
+	if got["/all"][0]["title"] != "Hello" || got["/all"][0]["_hdr"] != "hv-all" || got["/all"][0]["source"] != "Ervisio Console" {
 		t.Errorf("payload: %v", got["/all"][0])
 	}
 	d = svc.Send(context.Background(), Message{Title: "Boom", Level: "error"}, EventJobs)
@@ -233,7 +233,7 @@ func TestMessageClean(t *testing.T) {
 }
 
 func TestEmailHeadersCannotBeInjected(t *testing.T) {
-	s := Spec{Name: "m", Type: TypeEmail, Host: "smtp.example.org", From: "Ervisio <a@example.org>", To: []string{"b@example.org"}}
+	s := Spec{Name: "m", Type: TypeEmail, Host: "smtp.example.org", From: "Ervisio Console <a@example.org>", To: []string{"b@example.org"}}
 	msg := string(buildEmail(&s, Message{Title: "Hi\r\nBcc: evil@example.org", Body: "body"}.Clean(), time.Unix(0, 0)))
 	head, _, _ := strings.Cut(msg, "\r\n\r\n")
 	for _, l := range strings.Split(head, "\r\n") {
@@ -316,7 +316,7 @@ func TestEmailThroughSMTP(t *testing.T) {
 	}
 	select {
 	case m := <-got:
-		if !strings.HasPrefix(m, "AUTH PLAIN ") || !strings.Contains(m, "Subject: Ervisio test notification") || !strings.Contains(m, "works.") {
+		if !strings.HasPrefix(m, "AUTH PLAIN ") || !strings.Contains(m, "Subject: Ervisio Console test notification") || !strings.Contains(m, "works.") {
 			t.Fatalf("message: %q", m)
 		}
 	case <-time.After(5 * time.Second):

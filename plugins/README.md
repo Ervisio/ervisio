@@ -1,6 +1,6 @@
 # plugins/ (developer folder)
 
-Ervisio ships no plugins. Plugins come from the marketplace (Plugins › Browse), which lists the public repositories of the
+Ervisio Console ships no plugins. Plugins come from the marketplace (Plugins › Browse), which lists the public repositories of the
 GitHub organisation in `plugins.github_org` (default `Ervisio`). The Docker plugin, which shipped here up to Ervisio 0.3.0,
 now lives at https://github.com/Ervisio/plugin-docker.
 

@@ -1240,7 +1240,7 @@
   }
 }
 
-/* Ervisio mark (BrandMark.tsx): fixed brand colours, darker on light themes. */
+/* Ervisio Console mark (BrandMark.tsx): fixed brand colours, darker on light themes. */
 :root {
   --brand-frame: #8b93ff;
   --brand-cursor: #3ddc97;

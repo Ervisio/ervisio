@@ -1,4 +1,4 @@
-# Windows: runs the server tests natively, installs Ervisio with install.ps1 on
+# Windows: runs the server tests natively, installs Ervisio Console with install.ps1 on
 # a real Windows runner, then checks that the service answers and that a local
 # account can sign in. The binaries are kept as a workflow artifact.
 # Manual only: Actions > Windows > Run workflow.

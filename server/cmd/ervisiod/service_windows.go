@@ -21,7 +21,7 @@ const exeSuffix = ".exe"
 
 // serviceName is the name the installer registers with the service manager
 // (packaging/windows/install.ps1).
-const serviceName = brand.Name
+const serviceName = brand.WindowsName
 
 // stopTimeout bounds how long a Stop request waits for the server to wind
 // down before the service reports stopped anyway.

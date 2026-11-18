@@ -21,8 +21,8 @@
       "upgrade": "Update {name}?",
       "remove": "Uninstall {name}?"
     },
-    "removeText": "Remove only program files managed by Ervisio. Keep credentials, settings and project files.",
-    "installText": "Install from the official npm package into a private folder of your account, without administrator rights. Login is completed by you in the terminal; Ervisio does not read API keys.",
+    "removeText": "Remove only program files managed by Ervisio Console. Keep credentials, settings and project files.",
+    "installText": "Install from the official npm package into a private folder of your account, without administrator rights. Login is completed by you in the terminal; Ervisio Console does not read API keys.",
     "nodeDependency": "Also install the official Node.js LTS runtime for this account. Its download is checked against the official SHA-256 manifest.",
     "claudeMemory": "Claude Code officially requires 4 GB or more RAM; a smaller server may not run it reliably.",
     "desc": {

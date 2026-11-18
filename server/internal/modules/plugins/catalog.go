@@ -34,7 +34,7 @@ type CatalogEntry struct {
 	Installs int    `json:"installs"`
 	Featured bool   `json:"featured,omitempty"`
 	Notes    string `json:"notes,omitempty"`
-	// MinCore and Requires (as in the manifest) say which Ervisio the
+	// MinCore and Requires (as in the manifest) say which Ervisio Console the
 	// plugin needs; Browse shows it and the installer enforces it.
 	MinCore  string    `json:"minCore,omitempty"`
 	Requires *Requires `json:"requires,omitempty"`
@@ -399,7 +399,7 @@ type CatalogView struct {
 	// Warning is set when the remote catalog could not be read or was not
 	// signed by a trusted key (the local one is still shown).
 	Warning string `json:"warning,omitempty"`
-	// Moved lists plugins that used to ship with Ervisio, are offered by
+	// Moved lists plugins that used to ship with Ervisio Console, are offered by
 	// the catalog and are not installed on this machine although it looks
 	// like they are wanted (moved.go). The UI shows an "Install" card.
 	Moved []MovedNotice `json:"moved"`

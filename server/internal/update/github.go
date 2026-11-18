@@ -104,7 +104,7 @@ type cached struct {
 	release *Release // nil: no release published yet
 }
 
-// NewChecker returns a checker for the Ervisio repository.
+// NewChecker returns a checker for the Ervisio Console repository.
 func NewChecker() *Checker {
 	return &Checker{API: "https://api.github.com", Repo: brand.GitHubRepo,
 		Client: &http.Client{Timeout: apiTimeout}}

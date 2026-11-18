@@ -15,7 +15,7 @@ export function PathInput({value,onPathChange,mode='file',...props}:Omit<InputPr
     const expanded=value.startsWith('~/')&&session?.home?session.home+value.slice(1):value;
     const title=typeof props.label==='string'?props.label:t('picker.choose');
     try {
-      const picked=await requestFilePicker('Ervisio',{mode,title,localOnly:true,initialDirectory:mode==='folder'?expanded||session?.home:expanded?dirname(expanded.replaceAll('\\','/')):session?.home,...(mode==='save'?{initialName:expanded.split(/[\\/]/).at(-1)||''}:{})},controller.signal);
+      const picked=await requestFilePicker('Ervisio Console',{mode,title,localOnly:true,initialDirectory:mode==='folder'?expanded||session?.home:expanded?dirname(expanded.replaceAll('\\','/')):session?.home,...(mode==='save'?{initialName:expanded.split(/[\\/]/).at(-1)||''}:{})},controller.signal);
       if(picked&&!controller.signal.aborted)onPathChange(picked.path);
     }catch(error){if(!controller.signal.aborted)toast.err(title,errorMessage(error));}
   };

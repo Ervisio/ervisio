@@ -1,4 +1,4 @@
-/** Only local Ervisio UI caches: never browser cookies, authentication, mock data or other apps. */
+/** Only local Ervisio Console UI caches: never browser cookies, authentication, mock data or other apps. */
 export function resetBrowserPreferences(storage: Pick<Storage, 'length' | 'key' | 'removeItem'>) {
   const exact = new Set([
     'ervisio.prefs',

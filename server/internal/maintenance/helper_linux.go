@@ -168,7 +168,7 @@ func LaunchHelper(ctx context.Context, id string) error {
 		return err
 	}
 	if !strings.HasPrefix(exe, brand.LibDir+"/") && exe != brand.BinLink {
-		return errors.New("Factory reset requires an installed Ervisio daemon.")
+		return errors.New("Factory reset requires an installed Ervisio Console daemon.")
 	}
 	return sys.Run(ctx, "systemd-run", "--unit=ervisio-reset-"+id, "--collect", "--property=Type=exec", "--", exe, HelperFlag, id)
 }
@@ -179,7 +179,7 @@ type installedService struct {
 }
 
 // Also cover package work launched in a terminal or SSH, outside Software's
-// transaction marker. Stopping Ervisio must not kill a package manager's PTY.
+// transaction marker. Stopping Ervisio Console must not kill a package manager's PTY.
 func packageProcessRunning(ctx context.Context, procDir string) (bool, error) {
 	entries, err := os.ReadDir(procDir)
 	if err != nil {
@@ -283,7 +283,7 @@ func RunHelper(args []string) int {
 	}
 	defer release()
 	if updates.Running() {
-		FailPrepared(id, errors.New("Finish the running Ervisio update or package transaction before factory reset."))
+		FailPrepared(id, errors.New("Finish the running Ervisio Console update or package transaction before factory reset."))
 		return 1
 	}
 	guardCtx, guardCancel := context.WithTimeout(context.Background(), 10*time.Second)

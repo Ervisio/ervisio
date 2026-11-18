@@ -55,7 +55,7 @@ type Manifest struct {
 	Icon        string `json:"icon,omitempty"`
 	Color       string `json:"color,omitempty"`
 	Entry       string `json:"entry"`
-	// MinCore and Requires say which Ervisio the plugin needs (corecompat.go).
+	// MinCore and Requires say which Ervisio Console the plugin needs (corecompat.go).
 	MinCore  string   `json:"minCore,omitempty"`
 	Requires Requires `json:"requires,omitempty"`
 	// Platforms: "linux" and/or "windows"; empty = Linux only (platform.go).

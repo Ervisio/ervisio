@@ -468,7 +468,7 @@ function ChannelDialog({
               label={t('channels.email.from')}
               value={d.from}
               onChange={(e) => set({ from: e.target.value })}
-              placeholder="Ervisio <ervisio@example.org>"
+              placeholder="Ervisio Console <ervisio@example.org>"
             />
             <Input
               label={t('channels.email.to')}

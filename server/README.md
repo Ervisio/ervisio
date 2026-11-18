@@ -1,4 +1,4 @@
-# Ervisio server
+# Ervisio Console server
 
 Go module `github.com/ervisio/ervisio/server`. Read `docs/ARCHITECTURE.md` first.
 

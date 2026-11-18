@@ -1,4 +1,4 @@
-// Command ervisiod is the Ervisio web console daemon. It runs as
+// Command ervisiod is the Ervisio Console daemon. It runs as
 // root, signs users in with PAM, and routes their requests to per-user
 // ervisio-bridge processes. See docs/ARCHITECTURE.md.
 package main
@@ -68,7 +68,7 @@ func run(ctx context.Context) {
 		log.Fatal("--dev-insecure-noauth refuses to run as root")
 	}
 	// A machine that ran LinuxAdmin: its configuration, certificate, plugins
-	// and state are copied to the Ervisio locations before they are read
+	// and state are copied to the Ervisio Console locations before they are read
 	// (once; a no-op afterwards). See internal/legacy.
 	if !f.dev && bridge.Privileged() && f.configPath == brand.ConfigPath {
 		importLegacyData()
@@ -161,13 +161,13 @@ func runInternalMode() {
 	// in a transient systemd unit, never by hand).
 	if mode == update.HelperFlag {
 		// Started by LinuxAdmin's updater from its own layout: this release
-		// moves the installation to Ervisio instead of a plain switch.
+		// moves the installation to Ervisio Console instead of a plain switch.
 		if _, ok := legacyExe(); ok {
 			os.Exit(legacy.RunHelper(os.Args[2:]))
 		}
 		os.Exit(update.RunHelper(os.Args[2:]))
 	}
-	// Internal mode: move a LinuxAdmin installation to Ervisio (started in a
+	// Internal mode: move a LinuxAdmin installation to Ervisio Console (started in a
 	// transient unit by a daemon that runs from LinuxAdmin's layout).
 	if mode == legacy.TransitionFlag {
 		os.Exit(legacy.RunHelper(os.Args[2:]))
@@ -373,7 +373,7 @@ func sessionHelperPath() string {
 }
 
 // startUpdates runs automatic update checks and installs ([updates] in the
-// config), and moves a LinuxAdmin-layout installation to Ervisio.
+// config), and moves a LinuxAdmin-layout installation to Ervisio Console.
 func startUpdates(ctx context.Context, srv *server.Server) {
 	u := update.New(update.NewChecker())
 	u.ConfigPath = configmod.Path

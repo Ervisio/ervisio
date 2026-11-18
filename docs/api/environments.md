@@ -35,7 +35,7 @@ browser ── /api/rpc, /api/ws ──▶ ervisiod (root)
   `admin`/`adminUnlessGroup` check of the capability (those protect the local socket). What a user may do on the remote
   host is limited by the capability's rules (methods, paths, headers) and by what the remote account may do.
 * Commands run **on this machine** against the remote engine: compose files, build contexts and bind mounts are
-  resolved here, the containers run there. For an Ervisio environment the call runs **on the other server**.
+  resolved here, the containers run there. For an Ervisio Console environment the call runs **on the other server**.
 
 ## Kinds
 
@@ -44,7 +44,7 @@ browser ── /api/rpc, /api/ws ──▶ ervisiod (root)
 | `tcp-tls` | TCP and TLS to `host:port`, client certificate | `dockerd --tlsverify -H tcp://…:2376` |
 | `ssh` | `golang.org/x/crypto/ssh`, channel `direct-streamlocal@openssh.com` to the Docker socket | sshd with a key for a user who may use Docker; **no Docker CLI** |
 | `portainer-agent` | HTTPS to the agent (port 9001), requests signed | the Portainer agent |
-| `ervisio` | another Ervisio server, paired with a token | Ervisio, the plugin installed |
+| `ervisio` | another Ervisio Console server, paired with a token | Ervisio Console, the plugin installed |
 
 Every kind has: a name, an access list, a health check every 45 seconds (`GET /version`: engine and API version,
 latency, error text) and an on-demand check (`envs.test`). Connections have a 10 s connect timeout; SSH keeps one
@@ -105,7 +105,7 @@ Limit: the agent's proxy **drops upgraded connections** (the agent answers 101, 
 and a foreground `docker run` do not work through it. The tunnel answers those with a `501` at once instead of
 hanging. Use SSH or TLS when interactive streams are needed; everything else (API calls, logs, `compose up -d`) works.
 
-### `ervisio`: another Ervisio server
+### `ervisio`: another Ervisio Console server
 
 Calls from A execute on B, by B's own daemon, under B's rules. The plugin must be installed on B.
 
@@ -114,7 +114,7 @@ Calls from A execute on B, by B's own daemon, under B's rules. The plugin must b
 1. An admin on B opens Settings > Environments > Pair another server, picks the **Linux user** the pairing will run as
    (default: themselves) and creates a **token**: `ept_…`, 160 bits, single use, valid 15 minutes, kept in memory
    only. The dialog shows B's TLS certificate fingerprint (plain-http servers have none).
-2. An admin on A adds an environment of kind Ervisio: B's address, "Check connection" (A connects and shows the
+2. An admin on A adds an environment of kind Ervisio Console: B's address, "Check connection" (A connects and shows the
    fingerprint it sees; the admin compares it with the one B showed and confirms), then pastes the token.
 3. A POSTs `/api/pair/redeem {token, name}` to B over the **pinned** TLS connection. B returns a **credential**
    (`epc_…`, 192 bits) and its pairing id. B stores only `sha256(credential)` with the user, who created the token,
@@ -123,7 +123,7 @@ Calls from A execute on B, by B's own daemon, under B's rules. The plugin must b
    (which also tells B, best effort). A revoked pairing fails with a clear message on the other side.
 
 HTTP endpoints on B (no session; rate limited: 10 failures per address per 15 minutes):
-`GET /api/pair/info` (is this Ervisio, name, version), `POST /api/pair/redeem`, `GET /api/pair/status` (Bearer: is my
+`GET /api/pair/info` (is this Ervisio Console, name, version), `POST /api/pair/redeem`, `GET /api/pair/status` (Bearer: is my
 credential still valid, no bridge started), `POST /api/pair/revoke` (Bearer), `GET /api/pair/bridge` (Bearer,
 `Upgrade: ervisio-bridge/1`, below). http to a non-loopback address is refused unless the admin ticks "Allow plain
 http" (the credential and calls would travel unencrypted).
@@ -187,8 +187,8 @@ Answered by the daemon. Admin unless noted. Errors: `invalid` (message fit for t
 | `envs.probe` | `{kind, address, user?, insecure?}` | `{fingerprint, hostKey?, plain?, kind}`: connects and shows what to confirm |
 | `envs.create` | `Input` (below) | the View with its first status. Saved even if the host is down (the status says why) |
 | `envs.update` | `{id, ...Input}` | the View; empty secrets stay; closes tunnels |
-| `envs.delete` | `{id}` | `{id}`; Ervisio kind: revokes on the other server |
-| `envs.test` | `{id}` | the Status now (for Ervisio: connects through a bridge and asks Docker's version there) |
+| `envs.delete` | `{id}` | `{id}`; Ervisio Console kind: revokes on the other server |
+| `envs.test` | `{id}` | the Status now (for Ervisio Console: connects through a bridge and asks Docker's version there) |
 | `envs.pairToken.create` | `{user?}` | `{token, expires, user, fingerprint, server, ttlMinutes}` |
 | `envs.pairings.revoke` | `{id}` | `{id}` |
 
@@ -232,7 +232,7 @@ for a capability or command that does not declare `remote` fails with `forbidden
   output matters. (The tunnel itself had a related fault, fixed: Go's chunked reader waits to fill its whole buffer
   inside an HTTP chunk, and the agent sends a stream as one big chunk, so the 32 KiB copy buffer added up to 32 KiB of
   extra delay on top of the agent's. It now copies with a 1 KiB buffer; `TestAgentTunnelFlushesEachChunk`.)
-* The remote bridge of an Ervisio environment is started on first use and closed after 5 minutes without calls.
+* The remote bridge of an Ervisio Console environment is started on first use and closed after 5 minutes without calls.
 * Docker Swarm node targeting (`X-PortainerAgent-Target`) is not supported.
 
 ## Windows notes

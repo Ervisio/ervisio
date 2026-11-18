@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- The product is now called **Ervisio Console**; "Ervisio" stays the name of the ecosystem (GitHub organisation, marketplace, team key). Only the name shown to people changes (web UI in English and Italian, page title, messages, notifications, installer and package texts, documentation). Binaries (`ervisiod`, `ervisio-bridge`), paths (`/etc/ervisio`, `/usr/lib/ervisio`, `%ProgramFiles%\Ervisio`), the systemd unit, the Windows service name `Ervisio`, the PAM service, cookies, packages and signature domains are unchanged, so existing installations update as usual.
+
 ## [7.1.0] - 2026-11-15
 
 - The plugin marketplace is now the public repositories of one GitHub organisation (`plugins.github_org`, default `Ervisio`, `""` turns it off). A repository is a plugin when its name starts with `plugin-` or it has a `plugin.ervisio` file; the package is the latest release asset `<id>-<version>.tar.gz`, or the plugin folder of the branch. No registry, review step or signature.

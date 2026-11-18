@@ -20,7 +20,7 @@ import (
 	"github.com/ervisio/ervisio/server/internal/sys"
 )
 
-// pairAllowed lists what another Ervisio server may ask this one's bridge
+// pairAllowed lists what another Ervisio Console server may ask this one's bridge
 // for: the plugin capabilities and commands, nothing else.
 // maxPairConns bounds the bridges one pairing may hold open on this server.
 const maxPairConns = 16

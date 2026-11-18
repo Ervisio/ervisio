@@ -41,7 +41,7 @@ function loadDismissed(): string[] {
   }
 }
 
-/** Plugins that left Ervisio (Docker) and are not installed here; "Not now" is remembered in this browser. */
+/** Plugins that left Ervisio Console (Docker) and are not installed here; "Not now" is remembered in this browser. */
 function useMovedPlugins(catalog: PluginData['catalog']) {
   const [dismissed, setDismissed] = useState<string[]>(loadDismissed);
   const moved = useMemo(

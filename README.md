@@ -1,14 +1,14 @@
-<h1><picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/ervisio-dark.png"><img src="docs/brand/ervisio-light.png" alt="Ervisio" width="280"></picture></h1>
+<h1><picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/ervisio-dark.png"><img src="docs/brand/ervisio-light.png" alt="Ervisio Console" width="280"></picture></h1>
 
 A web console for managing a Linux or Windows server from the browser, in the spirit of Cockpit. You sign in with your Linux or Windows account and get an overview, a terminal, a file manager, logs, services, software updates, user management and a plugin system.
 
-Ervisio was called LinuxAdmin up to version 0.2.0. An existing LinuxAdmin moves to Ervisio with its settings, certificate and plugins: through its own updater (Settings > About), with `install.sh`, or by installing the `ervisio` package (see [Coming from LinuxAdmin](#coming-from-linuxadmin)).
+Ervisio Console was called LinuxAdmin up to version 0.2.0. An existing LinuxAdmin moves to Ervisio Console with its settings, certificate and plugins: through its own updater (Settings > About), with `install.sh`, or by installing the `ervisio` package (see [Coming from LinuxAdmin](#coming-from-linuxadmin)).
 
 ![Overview](docs/screenshots/overview.png)
 
 ## Status
 
-Ervisio is early software. It runs and I use it on my own machine, but it has had little exposure.
+Ervisio Console is early software. It runs and I use it on my own machine, but it has had little exposure.
 
 - Tested by hand on Arch Linux: PAM sign-in, admin unlock through `sudo`, every section in the screenshots below.
 - Admin actions (package transactions, user and group changes, file operations as root, config changes) are covered mostly by unit tests, with limited manual testing.
@@ -16,7 +16,7 @@ Ervisio is early software. It runs and I use it on my own machine, but it has ha
 - Installing, sign-in and admin unlock were tested in containers on Debian 12, Ubuntu 24.04, Fedora 44 and openSUSE Tumbleweed, with the install script and with the `.deb` and `.rpm` packages. The sections themselves were not tested there.
 - Releases are published on GitHub with signed archives and, from 0.1.1, `.deb` and `.rpm` packages. The AUR packages are written but not published yet.
 - Self-update from GitHub releases is implemented (Settings > About) but has not yet been exercised on a live install.
-- The move from LinuxAdmin to Ervisio was tested in containers: the transition started the way LinuxAdmin 0.2.0's updater starts it (on Debian 12, including a failed start that rolled back), `install.sh` over LinuxAdmin 0.2.0, and the `.deb` (Debian 12), `.rpm` (Fedora) and AUR (Arch) packages replacing `linuxadmin`.
+- The move from LinuxAdmin to Ervisio Console was tested in containers: the transition started the way LinuxAdmin 0.2.0's updater starts it (on Debian 12, including a failed start that rolled back), `install.sh` over LinuxAdmin 0.2.0, and the `.deb` (Debian 12), `.rpm` (Fedora) and AUR (Arch) packages replacing `linuxadmin`.
 - Windows (from 0.6.0) is built and tested on GitHub's Windows Server runners: native tests, install with `install.ps1`, sign-in and the main sections. It has had little use on real machines.
 - A security review of the code is in [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md). It lists each finding and how it was fixed. It is a self review, not an external audit.
 
@@ -24,7 +24,7 @@ Ervisio is early software. It runs and I use it on my own machine, but it has ha
 
 ### ErvisiOS (from 0.7.0)
 
-An optional desktop interface with real applications in windows, per-user virtual folders, taskbar and native Terminal appearance settings. Choose it during installation or switch between it and the classic console in Appearance. Every authorized installed plugin page opens as an app; plugins can opt into a native layout with a release requiring Ervisio 0.7.0 or later. See [ErvisiOS setup, plugin compatibility and verification](docs/ERVISIOS.md).
+An optional desktop interface with real applications in windows, per-user virtual folders, taskbar and native Terminal appearance settings. Choose it during installation or switch between it and the classic console in Appearance. Every authorized installed plugin page opens as an app; plugins can opt into a native layout with a release requiring Ervisio Console 0.7.0 or later. See [ErvisiOS setup, plugin compatibility and verification](docs/ERVISIOS.md).
 
 ### Overview
 
@@ -118,7 +118,7 @@ Details are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and the per-section 
 ## Security model
 
 - **Authentication** is PAM, through the service `ervisio` (falls back to `login`). Accounts with a `nologin` or `false` shell, a restricted shell, or a shell missing from `/etc/shells` cannot sign in. Failed attempts are rate limited per client address.
-- **Authorization** is `sudo`. Ervisio has no user database and no role system of its own. A user can do as root what sudoers lets them do, and nothing more.
+- **Authorization** is `sudo`. Ervisio Console has no user database and no role system of its own. A user can do as root what sudoers lets them do, and nothing more.
 - **Root login is off** unless `allow_root = true` is set in the configuration.
 - **Sessions** use 256-bit random tokens stored only as SHA-256 hashes, an `HttpOnly`, `SameSite=Strict` cookie, an idle timeout and an absolute lifetime. Accounts are re-checked periodically, so removing a user from a group or locking an account ends the session.
 - **CSRF**: every POST needs the header `X-Requested-With: ervisio`, and a present `Origin` must match the host.
@@ -142,7 +142,7 @@ To build:
 
 ## Install
 
-Ervisio needs Linux with systemd on x86-64 or ARM64, and glibc 2.17 or newer (Amazon Linux 2, RHEL 8, Debian 10, Ubuntu 20.04, or newer).
+Ervisio Console needs Linux with systemd on x86-64 or ARM64, and glibc 2.17 or newer (Amazon Linux 2, RHEL 8, Debian 10, Ubuntu 20.04, or newer).
 
 On Windows, see [Windows](#windows): one command in an Administrator PowerShell.
 
@@ -152,7 +152,7 @@ On Windows, see [Windows](#windows): one command in an Administrator PowerShell.
 curl -fsSL https://raw.githubusercontent.com/ervisio/ervisio/main/install.sh | sudo sh
 ```
 
-The script downloads the latest release from GitHub, checks its signature and checksum, installs it in `/usr/lib/ervisio`, writes the PAM file for your distribution and the systemd unit, installs `sudo` if it is missing, and starts the service. At the end it prints the addresses to open and the SHA-256 fingerprint of the certificate, so you can compare it with what the browser shows before you accept the warning. Ervisio installed this way updates itself from Settings > About. Running the script again repairs or upgrades the installation and keeps your configuration.
+The script downloads the latest release from GitHub, checks its signature and checksum, installs it in `/usr/lib/ervisio`, writes the PAM file for your distribution and the systemd unit, installs `sudo` if it is missing, and starts the service. At the end it prints the addresses to open and the SHA-256 fingerprint of the certificate, so you can compare it with what the browser shows before you accept the warning. Ervisio Console installed this way updates itself from Settings > About. Running the script again repairs or upgrades the installation and keeps your configuration.
 
 To read the script before running it:
 
@@ -165,8 +165,8 @@ sudo sh install.sh
 **Questions.** On a first install the script asks a few things and shows the default in brackets; press Enter to accept it. The questions are read from the terminal, so they also work when the script is piped into `sh`. With `--yes`, or when there is no terminal (a provisioning script), nothing is asked and every default is used.
 
 1. Port (default 9090). If something already listens there, the script says what (Cockpit's `cockpit.socket` uses 9090 too) and asks for another port, suggesting the next free one.
-2. Caddy, if it finds one (see below), or whether Ervisio sits behind another reverse proxy.
-3. Who can reach Ervisio: all interfaces (default) or only this machine (`127.0.0.1`). A reverse proxy decides this by itself.
+2. Caddy, if it finds one (see below), or whether Ervisio Console sits behind another reverse proxy.
+3. Who can reach Ervisio Console: all interfaces (default) or only this machine (`127.0.0.1`). A reverse proxy decides this by itself.
 4. TLS: a self-signed certificate (default) or your own certificate and key files.
 5. Allow signing in as root (default: no).
 6. Who may sign in: every local account (default), only administrators (members of `sudo`, `wheel` or `admin`), or only users and groups you name.
@@ -177,12 +177,12 @@ Then it prints a summary and asks for confirmation before it changes anything, a
 
 On a machine that is already configured, the existing file is kept as it is. `--reconfigure` (or any configuration option below) changes the keys the questions cover, keeps the rest of the file, and saves a backup next to it first.
 
-**Caddy.** If the script finds Caddy, either installed on this machine (`caddy` or `caddy.service`, with `/etc/caddy/Caddyfile`) or in a running Docker container whose image name contains `caddy`, it asks whether to put Ervisio behind it:
+**Caddy.** If the script finds Caddy, either installed on this machine (`caddy` or `caddy.service`, with `/etc/caddy/Caddyfile`) or in a running Docker container whose image name contains `caddy`, it asks whether to put Ervisio Console behind it:
 
-- If the Caddyfile has a site whose address contains `cockpit` (for example `cockpit.example.org { reverse_proxy localhost:9090 }`), it offers to point that site to Ervisio.
+- If the Caddyfile has a site whose address contains `cockpit` (for example `cockpit.example.org { reverse_proxy localhost:9090 }`), it offers to point that site to Ervisio Console.
 - Otherwise it asks for a (sub)domain, suggesting `ervisio.` plus the domain of your other sites, and adds a new site block at the end of the Caddyfile.
-- For Caddy on this machine the block is just `reverse_proxy 127.0.0.1:PORT`: Ervisio is set to plain HTTP on `127.0.0.1` (`tls.mode = "http"`), which is only allowed on loopback, and Caddy adds HTTPS. Browsers see Caddy's own certificate. WebSockets work through `reverse_proxy` without extra settings.
-- Caddy in Docker cannot reach `127.0.0.1` of the host. The script then keeps HTTPS: `reverse_proxy https://HOST:PORT` with `transport http { tls_insecure_skip_verify }` (the self-signed certificate is not checked on that local hop). It points Caddy at the gateway address of the container's network (for example `172.17.0.1`), and Ervisio listens on that address only, starting after `docker.service` (a systemd drop-in, `ervisio.service.d/docker-bridge.conf`). Requests through the Docker network are trusted as proxied, so other containers on Caddy's network can reach Ervisio too. With `network_mode: host` the loopback address is used. Allow the Docker subnet in your firewall if it blocks container-to-host traffic (ufw does by default); the script prints the command. The container's Caddyfile has to be a bind mount from this machine, so the script can edit it.
+- For Caddy on this machine the block is just `reverse_proxy 127.0.0.1:PORT`: Ervisio Console is set to plain HTTP on `127.0.0.1` (`tls.mode = "http"`), which is only allowed on loopback, and Caddy adds HTTPS. Browsers see Caddy's own certificate. WebSockets work through `reverse_proxy` without extra settings.
+- Caddy in Docker cannot reach `127.0.0.1` of the host. The script then keeps HTTPS: `reverse_proxy https://HOST:PORT` with `transport http { tls_insecure_skip_verify }` (the self-signed certificate is not checked on that local hop). It points Caddy at the gateway address of the container's network (for example `172.17.0.1`), and Ervisio Console listens on that address only, starting after `docker.service` (a systemd drop-in, `ervisio.service.d/docker-bridge.conf`). Requests through the Docker network are trusted as proxied, so other containers on Caddy's network can reach Ervisio Console too. With `network_mode: host` the loopback address is used. Allow the Docker subnet in your firewall if it blocks container-to-host traffic (ufw does by default); the script prints the command. The container's Caddyfile has to be a bind mount from this machine, so the script can edit it.
 - `web.allowed_origins` is set to `https://<domain>` and `web.trusted_proxies` to loopback (plus the Docker subnet for Caddy in Docker).
 - Before editing, the script validates the Caddyfile, saves a copy as `Caddyfile.ervisio-backup-<date>` next to it, edits it in place, validates again and restores the copy if Caddy rejects the result. Then it reloads Caddy (`systemctl reload caddy`, or `docker exec ... caddy reload`). If the Caddyfile has something its small parser does not follow (a heredoc, a single-site file without braces, several `reverse_proxy` lines in the Cockpit block, unusual braces), nothing is edited and the block to paste is printed.
 - With `--yes` Caddy is only changed when you pass `--caddy`.
@@ -200,19 +200,19 @@ Options (after `sh -s --` when piping, for example `curl ... | sudo sh -s -- --v
 | `--allow-users a,b`, `--allow-groups g1,g2`, `--admins-only` | restrict who may sign in; they add up, and replace the lists in an existing file (none of them: every local account) |
 | `--admin-unlock D` | `5m` (default), `15m`, `1h`, any time from `30s` to `24h`, or `signout` |
 | `--tls-cert FILE --tls-key FILE` | use your own certificate instead of the self-signed one |
-| `--behind-proxy` | another reverse proxy on this machine fronts Ervisio: plain HTTP on `127.0.0.1` (point the proxy at `http://127.0.0.1:PORT`, send `X-Forwarded-Proto` and the original `Host`) |
+| `--behind-proxy` | another reverse proxy on this machine fronts Ervisio Console: plain HTTP on `127.0.0.1` (point the proxy at `http://127.0.0.1:PORT`, send `X-Forwarded-Proto` and the original `Host`) |
 | `--origin URL` | add a browser origin to `web.allowed_origins` (repeatable) |
 | `--trusted-proxy ADDR` | add an address or CIDR to `web.trusted_proxies` (repeatable) |
 | `--caddy`, `--no-caddy` | set up, or never touch, a Caddy found on this machine or in Docker |
-| `--domain NAME` | the domain Caddy serves Ervisio on (implies `--caddy`; an existing site with that address is pointed to Ervisio) |
+| `--domain NAME` | the domain Caddy serves Ervisio Console on (implies `--caddy`; an existing site with that address is pointed to Ervisio Console) |
 | `--reconfigure` | ask the configuration questions again on an installed system |
 | `--no-enable`, `--no-start` | do not enable at boot, do not start the service |
 | `--with-docker-plugin` | install the Docker plugin from the marketplace (asked when Docker is installed; `--yes` then installs it) |
-| `--no-plugins` | install no plugin, and keep Ervisio from adding the Docker plugin by itself |
+| `--no-plugins` | install no plugin, and keep Ervisio Console from adding the Docker plugin by itself |
 | `--open-firewall` | open the port in ufw or firewalld when one is active (otherwise the script only tells you the command) |
 | `--dry-run` | show what would be done and change nothing |
 | `--yes` | do not ask questions; every answer is the default |
-| `--uninstall` | remove Ervisio, keeping `/etc/ervisio` and installed plugins (`--purge` removes those too) |
+| `--uninstall` | remove Ervisio Console, keeping `/etc/ervisio` and installed plugins (`--purge` removes those too) |
 
 The signature check uses OpenSSL 3 when the system has it. Older systems (Amazon Linux 2, CentOS 7: OpenSSL 1.0.2 or 1.1.1, which cannot verify Ed25519) use a small Python 2.7 or 3 verifier that the script carries; both of those systems have Python. It has to pass the RFC 8032 test vector before it is used. If neither is available the script stops; `--insecure-skip-signature` installs anyway, checking only the checksum.
 
@@ -226,7 +226,7 @@ sudo dnf install ./ervisio-0.3.0-1.x86_64.rpm
 sudo zypper install ./ervisio-0.3.0-1.x86_64.rpm
 ```
 
-The package enables and starts the service. A packaged Ervisio does not update itself: Settings > About says which package manager installs updates, and you install the next package the same way. The packages are listed in the signed `SHA256SUMS` of the release. There is no apt or dnf repository yet.
+The package enables and starts the service. A packaged Ervisio Console does not update itself: Settings > About says which package manager installs updates, and you install the next package the same way. The packages are listed in the signed `SHA256SUMS` of the release. There is no apt or dnf repository yet.
 
 ### Arch Linux (AUR)
 
@@ -245,13 +245,13 @@ sudo ./packaging/install-dev.sh     # installs and starts the systemd service
 
 ### Coming from LinuxAdmin
 
-Every way of installing Ervisio moves a LinuxAdmin (0.1.x or 0.2.0) that is already on the machine:
+Every way of installing Ervisio Console moves a LinuxAdmin (0.1.x or 0.2.0) that is already on the machine:
 
-- **Self-update.** Settings > About in LinuxAdmin offers the Ervisio release like any other update. After the download and signature check, the new version installs itself as Ervisio (`/usr/lib/ervisio`, `ervisio.service`), copies the configuration, certificate, installed plugins and update settings, starts `ervisio.service` in place of `linuxadmin.service` and reloads the page. If Ervisio does not answer within 30 seconds, LinuxAdmin is started again and nothing is left behind.
-- **`install.sh`** copies the same data, then removes LinuxAdmin's programs and unit once Ervisio runs.
+- **Self-update.** Settings > About in LinuxAdmin offers the Ervisio Console release like any other update. After the download and signature check, the new version installs itself as Ervisio Console (`/usr/lib/ervisio`, `ervisio.service`), copies the configuration, certificate, installed plugins and update settings, starts `ervisio.service` in place of `linuxadmin.service` and reloads the page. If Ervisio Console does not answer within 30 seconds, LinuxAdmin is started again and nothing is left behind.
+- **`install.sh`** copies the same data, then removes LinuxAdmin's programs and unit once Ervisio Console runs.
 - **Packages.** The `ervisio` `.deb` replaces the `linuxadmin` package, the `.rpm` obsoletes it, and the AUR packages conflict with and replace `linuxadmin` and `linuxadmin-bin`. Their install scripts copy the data (on Arch, then run `systemctl enable --now ervisio`).
 
-What moves: `/etc/linuxadmin/linuxadmin.conf` becomes `/etc/ervisio/ervisio.conf` (with `tls/`, so the certificate fingerprint stays the same), `/var/lib/linuxadmin` becomes `/var/lib/ervisio`, `/etc/pam.d/linuxadmin` becomes `/etc/pam.d/ervisio`, drop-ins of `linuxadmin.service` and the scheduled update timer move to their Ervisio names, each user's `~/.config/linuxadmin` is copied to `~/.config/ervisio` at their next sign-in, and the browser keeps its settings. The port and the address stay the same. Everyone signs in again once.
+What moves: `/etc/linuxadmin/linuxadmin.conf` becomes `/etc/ervisio/ervisio.conf` (with `tls/`, so the certificate fingerprint stays the same), `/var/lib/linuxadmin` becomes `/var/lib/ervisio`, `/etc/pam.d/linuxadmin` becomes `/etc/pam.d/ervisio`, drop-ins of `linuxadmin.service` and the scheduled update timer move to their Ervisio Console names, each user's `~/.config/linuxadmin` is copied to `~/.config/ervisio` at their next sign-in, and the browser keeps its settings. The port and the address stay the same. Everyone signs in again once.
 
 LinuxAdmin's own files are copied, not moved. `/etc/linuxadmin` and `/var/lib/linuxadmin` stay, with a note (`MOVED-TO-ERVISIO.txt`) explaining where everything went. After a self-update you can go back with `systemctl disable --now ervisio && systemctl enable --now linuxadmin`. When you no longer need them, `sudo ervisiod --remove-legacy` removes LinuxAdmin's programs and unit, and `sudo ervisiod --remove-legacy --purge` removes its data too. The details are in [docs/RELEASING.md](docs/RELEASING.md#rename-transition).
 
@@ -263,7 +263,7 @@ Where things are installed, for each method, and how to publish more packages: [
 
 ## Windows
 
-Ervisio also runs on Windows 10 1809 / Windows Server 2019 or newer (x86-64 or ARM64), from version 0.6.0. Windows support is new: it is built and tested on GitHub's Windows runners, but has had little use on real servers.
+Ervisio Console also runs on Windows 10 1809 / Windows Server 2019 or newer (x86-64 or ARM64), from version 0.6.0. Windows support is new: it is built and tested on GitHub's Windows runners, but has had little use on real servers.
 
 The sections adapt to Windows: services come from the Service Control Manager, logs from the Event Log, software from winget, users and groups are the local accounts, the terminal is PowerShell (ConPTY), and the console shows the Windows 11, 10, 8 or 7 mark of the machine (Server editions included).
 
@@ -397,7 +397,7 @@ A plugin is a folder with `manifest.json` and one ES module. The manifest declar
 
 Ervisio ships no plugins. They come from the marketplace in Plugins › Browse: the public repositories of the GitHub organisation set by `plugins.github_org` (default `Ervisio`). Plugins installed from it need no signature and update by themselves, so whoever can push there decides what runs; plugins from anywhere else must be signed.
 
-- The Docker plugin (containers, compose stacks, images, volumes, logs, shell, templates, auto-update): [Ervisio/plugin-docker](https://github.com/Ervisio/plugin-docker). Up to 0.3.0 it was part of Ervisio; on a machine that used it, Ervisio installs the marketplace version by itself after the update, and `install.sh` offers it when Docker is installed (`--with-docker-plugin`, `--no-plugins`).
+- The Docker plugin (containers, compose stacks, images, volumes, logs, shell, templates, auto-update): [Ervisio/plugin-docker](https://github.com/Ervisio/plugin-docker). Up to 0.3.0 it was part of Ervisio Console; on a machine that used it, Ervisio Console installs the marketplace version by itself after the update, and `install.sh` offers it when Docker is installed (`--with-docker-plugin`, `--no-plugins`).
 - Write a plugin: [Ervisio/plugin-sdk](https://github.com/Ervisio/plugin-sdk) (types, Vite preset, template, guide), then publish it as a repository in the marketplace organisation (`plugin-` name or a `plugin.ervisio` file, see [docs/api/plugins.md](docs/api/plugins.md)).
 - Manifest, API, isolation and the marketplace: [docs/api/plugins.md](docs/api/plugins.md)
 - Signing: [docs/PLUGIN-SIGNING.md](docs/PLUGIN-SIGNING.md)

@@ -22,13 +22,13 @@ if [ -f /etc/systemd/system/$unit ] && head -n 1 /etc/systemd/system/$unit | gre
 	rm -f /etc/systemd/system/$unit
 fi
 
-# Ervisio was called LinuxAdmin: copy its configuration, certificate and
+# Ervisio Console was called LinuxAdmin: copy its configuration, certificate and
 # data (the linuxadmin package itself was removed by dpkg, Conflicts/Replaces;
-# an install made by LinuxAdmin's install.sh is removed below once Ervisio runs).
+# an install made by LinuxAdmin's install.sh is removed below once Ervisio Console runs).
 legacy=0
 if [ -d /etc/linuxadmin ] || [ -d /var/lib/linuxadmin ] || [ -d /usr/lib/linuxadmin ]; then
 	legacy=1
-	/usr/bin/ervisiod --migrate-legacy || echo "Ervisio: copying LinuxAdmin's configuration failed; see above." >&2
+	/usr/bin/ervisiod --migrate-legacy || echo "Ervisio Console: copying LinuxAdmin's configuration failed; see above." >&2
 fi
 
 if [ -x /usr/bin/deb-systemd-helper ]; then
@@ -61,9 +61,9 @@ fi
 
 if [ -z "$2" ]; then
 	if systemctl is-active --quiet $unit 2>/dev/null; then
-		echo "Ervisio is running on https://$(uname -n):9090 (self-signed certificate)."
+		echo "Ervisio Console is running on https://$(uname -n):9090 (self-signed certificate)."
 	else
-		echo "Start Ervisio with: systemctl enable --now $unit   (then open https://$(uname -n):9090)"
+		echo "Start Ervisio Console with: systemctl enable --now $unit   (then open https://$(uname -n):9090)"
 	fi
 	if [ "$legacy" = 1 ]; then
 		echo "Ervisio was called LinuxAdmin: its settings were copied to /etc/ervisio (see /etc/linuxadmin/MOVED-TO-ERVISIO.txt)."

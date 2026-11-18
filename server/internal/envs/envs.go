@@ -1,9 +1,9 @@
 // Package envs manages environments: admin-configured remote Docker hosts
-// (tcp+TLS, SSH, Portainer agent, another Ervisio server) that a plugin's
+// (tcp+TLS, SSH, Portainer agent, another Ervisio Console server) that a plugin's
 // HTTP capability or declared command can target instead of its local unix
 // socket. The daemon (root) owns the configuration, the secrets and the
 // connections; a user's bridge only ever sees a per-user unix socket
-// ("tunnel") the daemon serves, or, for another Ervisio server, a remote
+// ("tunnel") the daemon serves, or, for another Ervisio Console server, a remote
 // bridge. See docs/api/environments.md.
 package envs
 
@@ -502,7 +502,7 @@ func (in *Input) applyErvisio(e *Env, pin string, isNew bool) error {
 	return nil
 }
 
-// ParseServerURL checks the base URL of another Ervisio server: https, or
+// ParseServerURL checks the base URL of another Ervisio Console server: https, or
 // http only for a loopback address or when insecure is set. Returns
 // scheme://host[:port] without a trailing slash.
 func ParseServerURL(raw string, insecure bool) (string, error) {

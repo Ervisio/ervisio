@@ -39,8 +39,8 @@
       "addressHint": "Host and port of the agent, usually 9001."
     },
     "ervisio": {
-      "name": "Another Ervisio server",
-      "desc": "Another server running Ervisio. Calls run there, with its own plugins and rules, as a user you choose when you pair.",
+      "name": "Another Ervisio Console server",
+      "desc": "Another server running Ervisio Console. Calls run there, with its own plugins and rules, as a user you choose when you pair.",
       "addressPlaceholder": "https://server.lan:9090",
       "addressHint": "The address of the other server's web console.",
       "plain": "Allow plain http (insecure)",
@@ -78,7 +78,7 @@
     "ca": "My CA",
     "pin": "Pin its certificate",
     "skip": "Don't check",
-    "pinHint": "Check the connection below and confirm the certificate fingerprint. Ervisio then refuses any other certificate.",
+    "pinHint": "Check the connection below and confirm the certificate fingerprint. Ervisio Console then refuses any other certificate.",
     "skipWarn": "Without a check, anyone between this server and the host can pretend to be it. Prefer a CA or a pinned certificate."
   },
   "probe": {
@@ -146,11 +146,11 @@
   },
   "pair": {
     "title": "Pair another server",
-    "desc": "Let another Ervisio server use this server's plugins, such as Docker, through a pairing.",
+    "desc": "Let another Ervisio Console server use this server's plugins, such as Docker, through a pairing.",
     "none": "No server is paired with this one.",
     "create": "Create pairing token",
     "dialogTitle": "Pair another server",
-    "dialogText": "Create a one-time token, then paste it on the other server in Settings > Environments > Add environment > Another Ervisio server.",
+    "dialogText": "Create a one-time token, then paste it on the other server in Settings > Environments > Add environment > Another Ervisio Console server.",
     "user": "Run calls as this user",
     "userHint": "Every call from the other server runs on this machine as this Linux user, with that user's rights and under this server's rules. It never gets administrator rights.",
     "securityNote": "Whoever holds the pairing can do on this machine what {user} can do through the plugins installed here, such as managing Docker. Pair only servers you control. You can revoke it at any time.",

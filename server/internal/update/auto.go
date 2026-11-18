@@ -77,7 +77,7 @@ func (a *Auto) Tick(ctx context.Context) {
 		a.lastCheck = now
 		a.checkForUpdate(ctx, cfg.Updates.Channel)
 	}
-	// A package manager installs the updates of a packaged Ervisio.
+	// A package manager installs the updates of a packaged Ervisio Console.
 	if !cfg.Updates.AutoInstall || a.Updater.Layout.ManagedBy() != "" {
 		return
 	}

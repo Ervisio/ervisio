@@ -447,7 +447,7 @@ export async function mockCall(method: string, params: any, _admin?: boolean): P
           current: '1.0.0',
           install: 'flat',
           canUpdate: false,
-          reason: `Ervisio was installed by a package manager, which installs its updates (${managedBy})`,
+          reason: `Ervisio Console was installed by a package manager, which installs its updates (${managedBy})`,
           previous: '',
           installed: [],
           last: null,
@@ -501,7 +501,7 @@ export async function mockCall(method: string, params: any, _admin?: boolean): P
           latest: {
             version: '1.1.0',
             tag: 'v1.1.0',
-            name: 'Ervisio 1.1.0',
+            name: 'Ervisio Console 1.1.0',
             publishedAt: Date.now() - 86400e3 * 2,
             prerelease: false,
             asset: 'ervisio-1.1.0-linux-amd64.tar.gz',

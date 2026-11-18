@@ -197,7 +197,7 @@ func regexpFileID(id string) bool {
 func uploadRepoArtifact(ctx context.Context, client *http.Client, d Destination, artifact uploadArtifact) (string, error) {
 	base := serviceAPI(d.URL) + "/repos/" + url.PathEscape(d.Owner) + "/" + url.PathEscape(d.Repository) + "/releases"
 	// Drafts do not create tags or change a repository's branch history.
-	input, _ := json.Marshal(map[string]any{"tag": "ervisio-backup-" + newID(), "name": artifact.Name, "body": "Ervisio snapshot. SHA-256: " + artifact.SHA256, "draft": true, "prerelease": false, "target": d.Target})
+	input, _ := json.Marshal(map[string]any{"tag": "ervisio-backup-" + newID(), "name": artifact.Name, "body": "Ervisio Console snapshot. SHA-256: " + artifact.SHA256, "draft": true, "prerelease": false, "target": d.Target})
 	response, err := uploadDo(ctx, client, d, "POST", base, "application/json", bytes.NewReader(input), int64(len(input)))
 	if err != nil {
 		return "", err

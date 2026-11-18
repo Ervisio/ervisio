@@ -29,7 +29,7 @@ type responseError struct {
 }
 
 // RunCLI is a standalone user-level worker, not a daemon or another scheduler.
-// The caller must dispatch this before starting Ervisio's server flags.
+// The caller must dispatch this before starting Ervisio Console's server flags.
 func RunCLI(args []string) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

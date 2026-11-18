@@ -345,7 +345,7 @@ type Info struct {
 	DevUnsigned bool `json:"devUnsigned,omitempty"`
 	// Platforms: where the plugin runs ("linux", "windows"); never empty.
 	Platforms []string `json:"platforms"`
-	// Incompatible: the plugin cannot run here (another OS, or it needs a newer Ervisio); the message says why.
+	// Incompatible: the plugin cannot run here (another OS, or it needs a newer Ervisio Console); the message says why.
 	Incompatible string `json:"incompatible,omitempty"`
 	// Error: the folder holds a plugin that could not be loaded.
 	Error string `json:"error,omitempty"`

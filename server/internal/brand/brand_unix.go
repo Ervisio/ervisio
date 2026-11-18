@@ -13,7 +13,7 @@ const (
 	// and the `current` / `previous` symlinks used by self-update. See
 	// internal/update and docs/RELEASING.md.
 	LibDir = "/usr/lib/" + Slug
-	// ManagedMarker exists when a package manager installed Ervisio
+	// ManagedMarker exists when a package manager installed Ervisio Console
 	// (.deb, .rpm, PKGBUILD). It holds the manager's name ("apt", "dnf",
 	// "zypper", "pacman"); self-update is then off, the package manager
 	// installs new versions. Packages use the flat layout: BinLink is the

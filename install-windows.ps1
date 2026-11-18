@@ -1,15 +1,15 @@
 <#
 .SYNOPSIS
-  One-command install of Ervisio on Windows.
+  One-command install of Ervisio Console on Windows.
 
 .DESCRIPTION
   From an elevated (Administrator) PowerShell:
 
     irm https://raw.githubusercontent.com/ervisio/ervisio/main/install-windows.ps1 | iex
 
-  Downloads the latest Ervisio release for this machine (amd64 or arm64) from
+  Downloads the latest Ervisio Console release for this machine (amd64 or arm64) from
   GitHub, checks the archive against the release's SHA256SUMS, extracts it and
-  runs its install.ps1, which installs the Ervisio service, keeps
+  runs its install.ps1, which installs the Ervisio Console service (service name Ervisio), keeps
   configuration and data in %ProgramData%\Ervisio and opens port 9090.
   Running it again upgrades and keeps the configuration.
 
@@ -43,7 +43,7 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 
 if ($Uninstall) {
     $installed = Join-Path $env:ProgramFiles 'Ervisio\install.ps1'
-    if (-not (Test-Path $installed)) { throw "Ervisio is not installed (no $installed)." }
+    if (-not (Test-Path $installed)) { throw "Ervisio Console is not installed (no $installed)." }
     & $installed -Uninstall -PurgeData:$PurgeData
     return
 }
@@ -71,7 +71,7 @@ if (-not $sumAsset) { throw "Release $($release.tag_name) has no SHA256SUMS." }
 $work = Join-Path ([IO.Path]::GetTempPath()) ("ervisio-install-" + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $work | Out-Null
 try {
-    Write-Host "Downloading Ervisio $ver ($arch)..."
+    Write-Host "Downloading Ervisio Console $ver ($arch)..."
     $zip = Join-Path $work $zipName
     $sums = Join-Path $work 'SHA256SUMS'
     Invoke-WebRequest $zipAsset.browser_download_url -OutFile $zip -Headers $headers -UseBasicParsing
@@ -95,7 +95,7 @@ try {
         Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } |
         Select-Object -ExpandProperty IPAddress
     Write-Host ''
-    Write-Host "Ervisio $ver is installed. Open:"
+    Write-Host "Ervisio Console $ver is installed. Open:"
     Write-Host "  https://localhost:$Port"
     foreach ($ip in $ips) { Write-Host "  https://${ip}:$Port" }
     Write-Host 'Sign in with a Windows account of this machine. The certificate is self-signed.'

@@ -97,7 +97,7 @@ func changeCLI(ctx context.Context, root string, s cliSpec, op string, run *txRu
 			target = filepath.Join(root, "node")
 		}
 		if _, err := os.Lstat(target); os.IsNotExist(err) {
-			return rpc.Errorf(rpc.Invalid, "This CLI is not managed by Ervisio; remove it with its original package manager")
+			return rpc.Errorf(rpc.Invalid, "This CLI is not managed by Ervisio Console; remove it with its original package manager")
 		}
 		if err := checkTrustedDir(target, os.Geteuid()); err != nil {
 			return err

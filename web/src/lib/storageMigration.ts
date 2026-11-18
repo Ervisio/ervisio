@@ -1,5 +1,5 @@
 /**
- * Ervisio was called LinuxAdmin, and its web app kept this browser's settings (theme cache, language, cached
+ * Ervisio Console was called LinuxAdmin, and its web app kept this browser's settings (theme cache, language, cached
  * preferences, remembered accounts, terminal layout…) in localStorage keys starting with "la.". They now start
  * with "ervisio.". migrateStorage copies them over once, without overwriting a key that already has a value, then
  * removes the old ones. It runs before anything reads storage (main.tsx; public/theme-boot.js reads the theme

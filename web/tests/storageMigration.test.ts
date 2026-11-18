@@ -1,4 +1,4 @@
-// Moving this browser's LinuxAdmin settings ("la.*") to Ervisio's keys ("ervisio.*"): `npm --prefix web test`.
+// Moving this browser's LinuxAdmin settings ("la.*") to Ervisio Console's keys ("ervisio.*"): `npm --prefix web test`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { migrateStorage, MIGRATED_KEY } from '../src/lib/storageMigration.ts';
@@ -45,7 +45,7 @@ test('copies la.* keys to ervisio.* once and removes them', () => {
   assert.equal(s.getItem('ervisio.lang'), 'it');
 });
 
-test('never overwrites a value Ervisio already has', () => {
+test('never overwrites a value Ervisio Console already has', () => {
   const s = new MemStorage();
   s.setItem('ervisio.lang', 'en');
   s.setItem('la.lang', 'it');

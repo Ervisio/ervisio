@@ -1,6 +1,6 @@
 # Maintainer: Fonlogen <info.fonlogen@gmail.com>
 #
-# Ervisio (formerly LinuxAdmin) built from the tagged source. Prebuilt
+# Ervisio Console (formerly LinuxAdmin) built from the tagged source. Prebuilt
 # binaries: the "ervisio-bin" package.
 
 pkgname=ervisio

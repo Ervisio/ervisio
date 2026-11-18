@@ -7,7 +7,7 @@
 #                             (which stops linuxadmin.service: same port)
 #   package-service stop      before removal: stop it
 #
-# The package manager may have been started from Ervisio (or LinuxAdmin)
+# The package manager may have been started from Ervisio Console (or LinuxAdmin)
 # itself (its terminal, or the Software section): then it is a descendant of
 # ervisiod or linuxadmind, and restarting, starting or stopping the service
 # now would end it halfway through.
@@ -25,7 +25,7 @@ restart | start | stop) ;;
 esac
 [ -d /run/systemd/system ] || exit 0
 
-# Walk up the process tree: is Ervisio or LinuxAdmin an ancestor, and which package
+# Walk up the process tree: is Ervisio Console or LinuxAdmin an ancestor, and which package
 # manager process is the outermost one?
 under=0 pm_pid='' pm_comm=''
 p=$$
@@ -71,7 +71,7 @@ stop) verb=stop ;;
 esac
 [ "$verb" = start ] || systemctl is-active --quiet "$unit" || exit 0
 if [ -z "$pm_pid" ]; then
-	echo "Ervisio: run 'systemctl $verb $unit' when the package transaction has finished."
+	echo "Ervisio Console: run 'systemctl $verb $unit' when the package transaction has finished."
 	exit 0
 fi
 # The waiting script is passed inline: on removal this file is gone by then.
@@ -84,10 +84,10 @@ while [ "$(cat "/proc/$pid/comm" 2>/dev/null)" = "$comm" ] && [ $n -lt 1800 ]; d
 done
 exec systemctl "$verb" "$unit"'
 if systemd-run --quiet --collect --no-block --unit="ervisio-package-$action-$$" \
-	--description="Ervisio: $action after the package transaction" \
+	--description="Ervisio Console: $action after the package transaction" \
 	/bin/sh -c "$wait_script" sh "$pm_pid" "$pm_comm" "$verb" "$unit" 2>/dev/null; then
-	echo "Ervisio: the service will $action when $pm_comm has finished (sign in again afterwards)."
+	echo "Ervisio Console: the service will $action when $pm_comm has finished (sign in again afterwards)."
 else
-	echo "Ervisio: run 'systemctl $verb $unit' when the package transaction has finished."
+	echo "Ervisio Console: run 'systemctl $verb $unit' when the package transaction has finished."
 fi
 exit 0

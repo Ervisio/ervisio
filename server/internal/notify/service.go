@@ -126,7 +126,7 @@ func (s *Service) Test(ctx context.Context, in Spec) error {
 	if err := in.Validate(); err != nil {
 		return err
 	}
-	err := send(ctx, &in, Message{Title: "Ervisio test notification", Body: "If you can read this, the channel " + in.Name + " works.", Level: "info", Source: "Ervisio"}.Clean())
+	err := send(ctx, &in, Message{Title: "Ervisio Console test notification", Body: "If you can read this, the channel " + in.Name + " works.", Level: "info", Source: "Ervisio Console"}.Clean())
 	if in.ID != "" {
 		s.record(in.ID, err)
 	}
@@ -158,7 +158,7 @@ type Delivery struct {
 func (s *Service) Send(ctx context.Context, msg Message, event string) Delivery {
 	msg = msg.Clean()
 	if msg.Source == "" {
-		msg.Source = "Ervisio"
+		msg.Source = "Ervisio Console"
 	}
 	list, err := s.Store.Load()
 	if err != nil {

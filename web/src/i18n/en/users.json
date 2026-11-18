@@ -234,7 +234,7 @@
     "refresh": "Refresh accounts",
     "accessSummary": "Account access",
     "accessCounts": "{admins} administrators, {restricted} accounts with known restrictions, {total} people",
-    "securityText": "Open an account to manage its permissions, SSH keys or sessions. Every change uses the account permissions enforced by Ervisio.",
+    "securityText": "Open an account to manage its permissions, SSH keys or sessions. Every change uses the account permissions enforced by Ervisio Console.",
     "accountCounts": "{people} people, {system} system accounts, {groups} groups",
     "loading": "Reading accounts…",
     "description": {

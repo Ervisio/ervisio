@@ -80,18 +80,18 @@ test('factory reset shows exact paths and backup first, requires typed confirmat
   });
   await page.goto('/settings#reset');
   await page.getByRole('button', { name: 'Review full reset', exact: true }).click();
-  const preview = page.getByRole('dialog', { name: 'Review Ervisio reset', exact: true });
+  const preview = page.getByRole('dialog', { name: 'Review Ervisio Console reset', exact: true });
   await expect(preview).toContainText('/fixture/ervisio/profiles');
   await expect(preview).toContainText('/fixture/protected-backups');
   await expect(preview).toContainText('/fixture/recovery.swap');
   expect(await page.evaluate(() => localStorage.getItem('ervisio.mock.resetApplied'))).toBeNull();
   await preview.getByRole('button', { name: 'Continue to confirmation', exact: true }).click();
-  const confirm = page.getByRole('alertdialog', { name: 'Reset all Ervisio data?', exact: true });
-  const action = confirm.getByRole('button', { name: 'Back up and reset Ervisio', exact: true });
+  const confirm = page.getByRole('alertdialog', { name: 'Reset all Ervisio Console data?', exact: true });
+  const action = confirm.getByRole('button', { name: 'Back up and reset Ervisio Console', exact: true });
   await expect(action).toBeDisabled();
   await confirm.getByRole('textbox').fill('RESET ERVISIO');
   await action.click();
-  await expect(page.getByText('Ervisio reset completed', { exact: true })).toBeVisible();
+  await expect(page.getByText('Ervisio Console reset completed', { exact: true })).toBeVisible();
   expect(statusRequests).toBeGreaterThan(0);
   await expect(
     page.getByRole('link', { name: 'Open the console address', exact: true }),

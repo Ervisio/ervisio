@@ -5,8 +5,8 @@ default `Ervisio`): they are trusted for where they come from and are not signed
 Signing remains for plugins from anywhere else (the team key or `plugins.trusted_keys`) and for the optional extra
 catalog (`plugins.catalog_url`). The parts below about the registry's `publish` workflow describe the old flow.
 
-Ervisio trusts plugins signed with its embedded ed25519 **team key**, plus any additional plugin signers an administrator configures. The team key also signs the marketplace catalog
-(`catalog.sig`). (Releases of Ervisio itself are signed with a different key, the release key: `docs/RELEASING.md`.) Since `plugins.allow_unsigned = false` is
+Ervisio Console trusts plugins signed with its embedded ed25519 **team key**, plus any additional plugin signers an administrator configures. The team key also signs the marketplace catalog
+(`catalog.sig`). (Releases of Ervisio Console itself are signed with a different key, the release key: `docs/RELEASING.md`.) Since `plugins.allow_unsigned = false` is
 the default, a plugin that is not signed with it does not run (except dev folders in developer mode, marked
 "Unsigned, dev"). The signature format is in `docs/api/plugins.md`, "Signing".
 
@@ -26,7 +26,7 @@ Rules:
   Without a backup, losing the laptop means rotating the key and re-signing every first-party plugin.
 * Only release maintainers hold a copy, plus the registry's CI secret. The `publish` workflow writes the secret to a
   temporary file with mode 0600 that the job deletes, never passes it on the command line, and checks every signature
-  it makes against the key embedded in Ervisio (a wrong secret fails the job). Set or replace the secret with
+  it makes against the key embedded in Ervisio Console (a wrong secret fails the job). Set or replace the secret with
   `gh secret set PLUGIN_SIGNING_KEY --repo Ervisio/plugins < ~/.config/linuxadmin-signing/team.key` (from the
   maintainer's machine; nothing is printed). Protect `main` of the registry (pull requests and a review required):
   whoever can push there can get a plugin signed.
@@ -80,7 +80,7 @@ Rotate when the private key may have leaked, when a maintainer with a copy leave
    adding it to `TrustedKeys` in `sign.go`; after a leak, remove it at once.
 3. Update `PLUGIN_SIGNING_KEY` and `team.pub` in Ervisio/plugins, then re-run its `publish` workflow so that every
    listed plugin and the catalog are signed again (delete the old `<id>-<version>` releases first, or bump the
-   versions), and release Ervisio with the new key.
+   versions), and release Ervisio Console with the new key.
 4. Destroy the old private key and its backups (after a leak), and say in the release notes that plugins signed with
    the old key stop verifying.
 
@@ -88,5 +88,5 @@ Rotate when the private key may have leaked, when a maintainer with a copy leave
 
 * 2026-10-01: first real team key generated (replaced the placeholder whose private key had been thrown away);
   `plugins/docker` 1.4.1 signed with it.
-* Ervisio 0.4.0 (unreleased): the Docker plugin left the core; plugins and the marketplace catalog are signed by the
+* Ervisio Console 0.4.0 (unreleased): the Docker plugin left the core; plugins and the marketplace catalog are signed by the
   registry's CI with the team key (secret `PLUGIN_SIGNING_KEY` of Ervisio/plugins).

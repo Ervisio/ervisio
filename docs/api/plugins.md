@@ -6,7 +6,7 @@ in `web/src/plugins`). The SDK for plugin authors (types, build preset, template
 
 ## Marketplace
 
-Ervisio ships no plugins. They come from the marketplace: the public repositories of one GitHub organisation, set by
+Ervisio Console ships no plugins. They come from the marketplace: the public repositories of one GitHub organisation, set by
 `plugins.github_org` (default `Ervisio`; `""` turns it off). There is no registry, no review step and no signature.
 
 * A repository is a plugin when its name starts with `plugin-` or it has a `plugin.ervisio` file at the root of its
@@ -229,10 +229,10 @@ Strict: unknown fields are rejected.
   Linux and/or Windows mark next to Install. The catalog entry carries the same field. In the frame, `sdk.platform` is
   `"linux"` or `"windows"`: commands, paths and sockets differ, so a plugin for both picks them from it (Windows has no
   unix-socket services such as Docker's; commands run without a shell, e.g. `["powershell.exe", "-NoProfile", ...]`).
-* `minCore` / `requires` (core 0.5): the Ervisio version the plugin needs, `"minCore": "0.5.0"` or
+* `minCore` / `requires` (core 0.5): the Ervisio Console version the plugin needs, `"minCore": "0.5.0"` or
   `"requires": {"ervisio": ">=0.5.0"}` (the same thing; give either or both, the higher counts; only `>=` or a bare
   `X.Y.Z` is understood, anything else is refused when the manifest is read). A core older than that refuses to install
-  the plugin (`conflict`, "<Name> needs Ervisio 0.5.0 or newer; this server runs 0.4.0. Update Ervisio first. Nothing was
+  the plugin (`conflict`, "<Name> needs Ervisio Console 0.5.0 or newer; this server runs 0.4.0. Update Ervisio Console first. Nothing was
   installed."), will not enable it (`plugins.setEnabled`) and refuses every call to an already installed one (`forbidden`,
   same text); `plugins.list` shows it off with `incompatible: "<message>"`. A `--dev` daemon built from a checkout
   (version `vX.Y.Z-N-g<hash>`, i.e. between releases) accepts every plugin, so the next release can be tried before it
@@ -379,7 +379,7 @@ one replacing an earlier one with the same id):
 
 A catalog entry may carry `minCore` and/or `requires: {"ervisio": ">=X.Y.Z"}` (as in the manifest; the marketplace copies
 them from the plugin's manifest, an extra catalog should do the same). The daemon adds `incompatible` (the message) to an entry
-this core is too old for, Browse then shows "Needs a newer Ervisio" instead of an Install button, and the installer
+this core is too old for, Browse then shows "Needs a newer Ervisio Console" instead of an Install button, and the installer
 checks the downloaded manifest anyway. Unknown fields are ignored by
 older cores, and the entry's `capabilities` still have to match the manifest.
 
@@ -580,7 +580,7 @@ off stops recording immediately, nothing already written is removed.
 | `result` | `ok`; `failed` (the call ran, but the command exited non-zero or the service answered 400 or more); `denied` (refused by the rules or the user's rights); `error` (could not run) |
 | `code`, `bytes` | exit code or HTTP status; size transferred (uploads, downloads, file writes) |
 | `admin`, `detail` | ran with administrator rights; the error message when `result` is not `ok` |
-| `env`, `origin` | the environment a call was for when it was not this machine; `via <server> by <user>` when a paired Ervisio server proxied the call (`user` is then the account on this machine), `job <name>` or `webhook` for what a background job did. `env` and `origin` come from the `env` and `via` params of the call; the paired server records what it runs for another one |
+| `env`, `origin` | the environment a call was for when it was not this machine; `via <server> by <user>` when a paired Ervisio Console server proxied the call (`user` is then the account on this machine), `job <name>` or `webhook` for what a background job did. `env` and `origin` come from the `env` and `via` params of the call; the paired server records what it runs for another one |
 
 What is recorded: every command (`plugins.exec`, `execStream`, `pty` at its first output), every HTTP request that is
 not `GET` or `HEAD`, uploads, file writes, folders and removals, downloads (as read entries), and the core actions of

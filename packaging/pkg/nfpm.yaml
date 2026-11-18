@@ -10,7 +10,7 @@
 #   /usr/share/ervisio/plugins         packaged plugins (empty: plugins come from the marketplace)
 #   /usr/lib/ervisio/managed           "apt" / "dnf" / "zypper": self-update is off
 #
-# Ervisio was called LinuxAdmin up to 0.2.0: the package replaces the
+# Ervisio Console was called LinuxAdmin up to 0.2.0: the package replaces the
 # linuxadmin package (deb: Replaces/Conflicts/Provides, rpm: Obsoletes/
 # Provides), and the install scripts copy its configuration and data
 # (ervisiod --migrate-legacy, docs/RELEASING.md "Rename transition").

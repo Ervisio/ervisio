@@ -90,7 +90,7 @@ export interface PluginInfo {
   blocked?: boolean;
   /** Systems the plugin works on ('linux', 'windows'). */
   platforms?: string[];
-  /** The plugin cannot run here (another system, or it needs a newer Ervisio): the daemon's message says why. */
+  /** The plugin cannot run here (another system, or it needs a newer Ervisio Console): the daemon's message says why. */
   incompatible?: string;
   /** Unsigned dev-folder plugin running only because developer mode is on. */
   devUnsigned?: boolean;
@@ -120,7 +120,7 @@ export interface CatalogEntry {
   installedVersion?: string;
   /** Systems the plugin works on ('linux', 'windows'); the daemon fills in ['linux'] when the entry does not say. */
   platforms?: string[];
-  /** Set by the daemon when the plugin cannot run here: another system, or an Ervisio older than it needs (minCore / requires). */
+  /** Set by the daemon when the plugin cannot run here: another system, or an Ervisio Console older than it needs (minCore / requires). */
   incompatible?: string;
 }
 export interface CatalogCategory {
@@ -129,7 +129,7 @@ export interface CatalogCategory {
   icon: string;
   color: string;
 }
-/** A plugin that used to ship with Ervisio and now comes from the marketplace (plugins.catalog "moved"). */
+/** A plugin that used to ship with Ervisio Console and now comes from the marketplace (plugins.catalog "moved"). */
 export interface MovedNotice {
   id: string;
   name: string;

@@ -15,7 +15,7 @@ import (
 	"github.com/ervisio/ervisio/server/internal/update"
 )
 
-// Transition moves a running LinuxAdmin to Ervisio version Version, whose
+// Transition moves a running LinuxAdmin to Ervisio Console version Version, whose
 // files LinuxAdmin's updater (or installer) put in
 // /usr/lib/linuxadmin/versions/<Version>. It runs outside both services (a
 // transient systemd unit):
@@ -130,7 +130,7 @@ func (t *Transition) Run(ctx context.Context) update.Result {
 		return finish(update.StateRolledBack, fmt.Errorf("%s %s did not start (%v); %s is running again", brand.Name, v, err, brand.LegacyName))
 	}
 
-	// Ervisio answers: make it permanent.
+	// Ervisio Console answers: make it permanent.
 	t.makePermanent(ctx, enabled)
 	t.logf("%s %s runs as %s; %s's files are kept for a rollback (see %s/%s)", brand.Name, v, brand.ServiceUnit, brand.LegacyName, brand.LegacyConfigDir, NoteFile)
 	return finish(update.StateOK, nil)
@@ -147,7 +147,7 @@ func (t *Transition) finish(r *update.Result, state string, err error) update.Re
 	}
 	for _, st := range []*update.State{lst, t.newState()} {
 		if state != update.StateOK && st != lst {
-			continue // the Ervisio state folder was taken back
+			continue // the Ervisio Console state folder was taken back
 		}
 		if werr := st.WriteLast(*r); werr != nil {
 			t.logf("write %s/last.json: %v", st.Dir, werr)
@@ -193,7 +193,7 @@ func (t *Transition) prepare(ctx context.Context, src string, u *undo) error {
 	return t.Systemd.Systemctl(ctx, "daemon-reload")
 }
 
-// makePermanent switches the enabled unit to Ervisio and finishes the
+// makePermanent switches the enabled unit to Ervisio Console and finishes the
 // import and the scheduled update; failures are only logged.
 func (t *Transition) makePermanent(ctx context.Context, enabled bool) {
 	if enabled {
@@ -212,7 +212,7 @@ func (t *Transition) makePermanent(ctx context.Context, enabled bool) {
 	}
 }
 
-// installLayout copies the release folder to the Ervisio versioned layout.
+// installLayout copies the release folder to the Ervisio Console versioned layout.
 func (t *Transition) installLayout(src string, u *undo) error {
 	v := t.Version
 	nl := t.newLayout()
@@ -261,7 +261,7 @@ func (t *Transition) installVersion(src string, u *undo) error {
 	return nil
 }
 
-// renameBinaries gives the LinuxAdmin binaries in partial their Ervisio
+// renameBinaries gives the LinuxAdmin binaries in partial their Ervisio Console
 // names and checks both are there.
 func renameBinaries(src, partial string) error {
 	for old, nw := range map[string]string{brand.LegacyDaemonBinary: brand.DaemonBinary, brand.LegacyBridgeBinary: brand.BridgeBinary} {
@@ -280,7 +280,7 @@ func renameBinaries(src, partial string) error {
 	return nil
 }
 
-// rollback stops Ervisio (when it was started), starts LinuxAdmin again
+// rollback stops Ervisio Console (when it was started), starts LinuxAdmin again
 // and removes what this transition created.
 func (t *Transition) rollback(ctx context.Context, u *undo, started bool) {
 	if started {
@@ -302,7 +302,7 @@ func (t *Transition) rollback(ctx context.Context, u *undo, started bool) {
 	_ = t.Systemd.Systemctl(ctx, "daemon-reload")
 }
 
-// restartLegacy stops Ervisio and starts LinuxAdmin again.
+// restartLegacy stops Ervisio Console and starts LinuxAdmin again.
 func (t *Transition) restartLegacy(ctx context.Context) {
 	_ = t.Systemd.Systemctl(ctx, "stop", brand.ServiceUnit)
 	if err := t.Systemd.Systemctl(ctx, "start", brand.LegacyServiceUnit); err != nil {

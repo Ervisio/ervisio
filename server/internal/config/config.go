@@ -280,7 +280,7 @@ func readLimited(r io.Reader, limit int64) ([]byte, error) {
 // Encode renders cfg as TOML.
 func Encode(cfg *Config) ([]byte, error) {
 	var buf bytes.Buffer
-	buf.WriteString("# Ervisio server configuration. Edited from Settings; a backup of the\n# previous version is kept next to this file with the .bak suffix.\n\n")
+	buf.WriteString("# Ervisio Console server configuration. Edited from Settings; a backup of the\n# previous version is kept next to this file with the .bak suffix.\n\n")
 	enc := toml.NewEncoder(&buf)
 	enc.Indent = ""
 	if err := enc.Encode(cfg); err != nil {

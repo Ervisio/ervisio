@@ -128,6 +128,6 @@ func (s *Server) scanAlerts(ctx context.Context, w *alertWatch) {
 		if a.Severity == "err" {
 			level = "error"
 		}
-		s.notifier.Send(ctx, notify.Message{Title: a.Title, Body: a.Detail, Level: level, Source: "Ervisio", Link: "/overview"}, notify.EventAlerts)
+		s.notifier.Send(ctx, notify.Message{Title: a.Title, Body: a.Detail, Level: level, Source: "Ervisio Console", Link: "/overview"}, notify.EventAlerts)
 	}
 }

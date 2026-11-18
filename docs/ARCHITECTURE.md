@@ -1,6 +1,6 @@
 # Architecture
 
-Working name: **Ervisio**. The brand string lives in one place per side
+Working name: **Ervisio Console**. The brand string lives in one place per side
 (`server/internal/brand/brand.go`, `web/src/brand.ts`) so a rename is a small change.
 Identifiers: Go module `github.com/ervisio/ervisio/server`, binaries `ervisiod` and
 `ervisio-bridge`, config `/etc/ervisio/ervisio.conf`, per-user data `~/.config/ervisio/`.
@@ -189,7 +189,7 @@ Key table, types and the `config.*` methods: `docs/api/config.md`.
 
 A plugin is a folder with `manifest.json`, a frontend ES module and optional assets, installed in
 `/var/lib/ervisio/plugins/<id>` from the marketplace (Plugins › Browse), or in the packaged folder
-(`/usr/share/ervisio/plugins/<id>`, empty since 0.4.0). Ervisio ships no plugins: they are built in their own
+(`/usr/share/ervisio/plugins/<id>`, empty since 0.4.0). Ervisio Console ships no plugins: they are built in their own
 repositories with the SDK (https://github.com/Ervisio/plugin-sdk); Browse lists the public repositories of the GitHub
 organisation in `plugins.github_org`, read by the root daemon (`plugins.SyncGitHub`) and updated automatically
 (`docs/api/plugins.md`, "Marketplace"). The Docker plugin, part of the core up to 0.3.0, is
@@ -222,9 +222,9 @@ SDK repository). Signed plugins carry `manifest.sig` (ed25519, team key: `docs/P
 blocked by default, except plugins installed from the marketplace organisation, which are trusted for their origin. An optional extra catalog (`plugins.catalog_url`) must be signed by the same key (`catalog.sig`), or it is ignored.
 
 **Environments** are the one place where the daemon itself keeps credentials and connections for users: remote Docker
-hosts (tcp+TLS, SSH, Portainer agent, another Ervisio server) that a plugin capability can target. The daemon
+hosts (tcp+TLS, SSH, Portainer agent, another Ervisio Console server) that a plugin capability can target. The daemon
 (`server/internal/envs`, `server/internal/server/envs.go`) answers `envs.*` and `plugins.envs.list` itself, hands the
-user's bridge a `0600` tunnel socket owned by the user (or, for another Ervisio server, a bridge running there over a
+user's bridge a `0600` tunnel socket owned by the user (or, for another Ervisio Console server, a bridge running there over a
 pinned, upgraded connection) and the bridge never sees a secret. Full design and security model:
 `docs/api/environments.md`. Hosts a plugin may reach beyond its manifest are approved one by one by an administrator
 (`capabilities.network.userHosts`, `plugins.network.*`).

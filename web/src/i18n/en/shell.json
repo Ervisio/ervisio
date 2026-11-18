@@ -129,7 +129,7 @@
     "resize": "Resize window",
     "snapLeft": "Snap to left half",
     "showDesktop": "Show desktop",
-    "assistant": "Ervisio AI",
+    "assistant": "Ervisio Console AI",
     "classic": "Switch to classic interface",
     "signOut": "Sign out",
     "lockAdmin": "Lock administrator access",
@@ -195,7 +195,7 @@
     "done": "Done."
   },
   "assistant": {
-    "title": "Ervisio AI",
+    "title": "Ervisio Console AI",
     "toggle": "Open or minimize AI chat",
     "minimize": "Minimize AI chat",
     "expand": "Expand AI chat",

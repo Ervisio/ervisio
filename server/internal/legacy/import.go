@@ -11,8 +11,8 @@ import (
 	"github.com/ervisio/ervisio/server/internal/brand"
 )
 
-// Import copies LinuxAdmin's system data to the Ervisio locations. A
-// location that already holds Ervisio data is left alone; LinuxAdmin's
+// Import copies LinuxAdmin's system data to the Ervisio Console locations. A
+// location that already holds Ervisio Console data is left alone; LinuxAdmin's
 // files are never changed.
 type Import struct {
 	Paths Paths
@@ -85,7 +85,7 @@ func (im *Import) Run() (*Result, error) {
 	return res, err
 }
 
-// copyDir copies the folder old to new unless new already holds Ervisio
+// copyDir copies the folder old to new unless new already holds Ervisio Console
 // data (files, and no import marker of an unfinished import).
 func (im *Import) copyDir(old, new string, skip func(string) bool, edit func(string) error) (bool, error) {
 	oldP, newP := im.Paths.At(old), im.Paths.At(new)
@@ -98,7 +98,7 @@ func (im *Import) copyDir(old, new string, skip func(string) bool, edit func(str
 			return false, fmt.Errorf("%s exists and is not a folder", newP)
 		}
 		if hasFiles(newP) && !exists(filepath.Join(newP, importMarker)) {
-			return false, nil // Ervisio data: keep it
+			return false, nil // Ervisio Console data: keep it
 		}
 	}
 	err := installTree(oldP, newP, skip, func(tmp string) error {

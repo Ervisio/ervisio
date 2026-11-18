@@ -6,7 +6,7 @@ These changes make server administration more convenient. The classic console an
 
 In File Explorer, right-click a directory or the empty space inside the current directory and choose **Open in Terminal**. For a file, the action opens its containing directory. This is available in both interfaces.
 
-Ervisio starts a real terminal session with that directory as its working directory. For example, open a project folder, choose **Open in Terminal**, then run `claude` if Claude Code is installed and configured for that server account. Ervisio does not install or authenticate external command-line tools through this action.
+Ervisio Console starts a real terminal session with that directory as its working directory. For example, open a project folder, choose **Open in Terminal**, then run `claude` if Claude Code is installed and configured for that server account. Ervisio Console does not install or authenticate external command-line tools through this action.
 
 An elevated local file view uses the normal administrator unlock flow. The directory is passed to the terminal backend as session metadata, rather than concatenated into a `cd` command. Remote network folders do not offer this local-terminal action.
 
@@ -26,7 +26,7 @@ Double-clicking a small text file opens the appropriate editor. The file's conte
 - **Ctrl+O** opens a server file; **Ctrl+S** saves; **Ctrl+Shift+S** opens Save as. **Ctrl+F** opens search.
 - Changes are saved to the server file, including files opened from a saved network connection. To open a network file, browse to it in File Explorer first.
 - Document tabs keep separate text and saved states. Closing an edited tab or ErvisiOS window asks whether to keep editing or discard changes; reloading or leaving the browser page invokes the browser's unsaved-changes protection.
-- Saving an existing file checks its modification time. If it changed on the server, Ervisio reports the conflict; copy the edits or save another file before reloading.
+- Saving an existing file checks its modification time. If it changed on the server, Ervisio Console reports the conflict; copy the edits or save another file before reloading.
 - New documents use UTF-8. Opened files retain the detected encoding and LF/CRLF line ending. Large previews are read-only; binary files are not text-editable. File Explorer's direct editing threshold is 2 MiB.
 
 Code editor is a small file editor, with no language server, project build service or extension host. Unsaved documents are held in the current browser session; save them before switching interfaces or signing out.
@@ -86,11 +86,11 @@ smb://storage.example.net/backups/projects
 
 Both examples identify host `storage.example.net`, share `backups` and initial folder `/projects` inside that share. Enter the account's username and password; use the optional domain when the SMB server requires it. SMB normally uses port 445. These are generic examples, not live storage-provider credentials or a claim of testing a particular provider.
 
-The connection is made **from the Ervisio server**. That server must be able to reach the network target. Ervisio exposes the saved connection inside its file manager; it does not create an operating-system mount, a Windows drive letter or a new local server directory.
+The connection is made **from the Ervisio Console server**. That server must be able to reach the network target. Ervisio Console exposes the saved connection inside its file manager; it does not create an operating-system mount, a Windows drive letter or a new local server directory.
 
 ### Files, transfers and saved credentials
 
-Browse directories, create files/folders, rename, edit supported text files, upload, download, and copy or move through the file manager's existing controls and transfer queue. Split view can show the local server on one side and network storage on the other. The transfer runs through the Ervisio server, including transfers between network connections.
+Browse directories, create files/folders, rename, edit supported text files, upload, download, and copy or move through the file manager's existing controls and transfer queue. Split view can show the local server on one side and network storage on the other. The transfer runs through the Ervisio Console server, including transfers between network connections.
 
 Connections belong to the signed-in account. Passwords, private keys and passphrases are stored in that account's server-side connection store, sealed at rest; subsequent API responses expose only whether a secret is present. Credentials are not saved in desktop preferences. The account and the server administrator can still access that account's stored connection material.
 

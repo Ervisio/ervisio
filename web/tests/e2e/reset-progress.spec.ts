@@ -33,7 +33,7 @@ for (const scenario of ['expired authentication', 'page reload']) {
     await expect.poll(() => page.evaluate(() => location.hash)).toBe('');
     if (scenario === 'page reload') await page.reload();
     ready = true;
-    await expect(page.getByText('Ervisio reset completed', { exact: true })).toBeVisible();
+    await expect(page.getByText('Ervisio Console reset completed', { exact: true })).toBeVisible();
     await expect(page).toHaveURL(/\/maintenance\/reset$/);
     await expect(
       page.getByRole('link', { name: 'Open the console address', exact: true }),

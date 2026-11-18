@@ -1,10 +1,10 @@
 # ErvisiOS
 
-ErvisiOS is an optional windowed interface for the same Ervisio server console. The classic console stays available. It uses the existing authenticated APIs, file manager, PTYs, plugin sandbox and administrator unlock.
+ErvisiOS is an optional windowed interface for the same Ervisio Console server console. The classic console stays available. It uses the existing authenticated APIs, file manager, PTYs, plugin sandbox and administrator unlock.
 
 ## Choose the interface
 
-ErvisiOS is included in stable Ervisio releases starting with **0.7.0**. Install or upgrade normally, then choose the interface during installation or in Settings. Classic remains the default for unattended fresh installations.
+ErvisiOS is included in stable Ervisio Console releases starting with **0.7.0**. Install or upgrade normally, then choose the interface during installation or in Settings. Classic remains the default for unattended fresh installations.
 
 To build from source instead:
 
@@ -29,11 +29,11 @@ After sign-in, **Settings → Appearance → Interface** changes your own interf
 - Open several applications, minimize, maximize, resize, or snap a window to either side. Dragging to the top maximizes; dragging a maximized or snapped titlebar restores its previous normal size under the pointer. Start search selects its first result; arrows change selection and Enter opens it. The taskbar restores running windows. Alt+Tab cycles apps, Alt+F4 closes the active window, Ctrl+Alt+D shows the desktop and Ctrl+K opens the existing command palette.
 - Use an app's menu to add a desktop shortcut or pin it to the taskbar. Drag shortcuts into virtual folders, including nested folders. The keyboard-accessible Move to folder action offers the same organization.
 - Desktop folders organize app and directory shortcuts. Removing an organizer promotes its contents; it never deletes server files or uninstalls applications.
-- Right-click the desktop and choose **New folder shortcut** to link an existing directory on this server or a saved network connection. Choose the location, enter its absolute path and optionally give it a name. Ervisio checks access before saving. Opening the shortcut shows that exact directory in File Explorer; removing it only removes the link. These links are separate from virtual desktop organizers.
+- Right-click the desktop and choose **New folder shortcut** to link an existing directory on this server or a saved network connection. Choose the location, enter its absolute path and optionally give it a name. Ervisio Console checks access before saving. Opening the shortcut shows that exact directory in File Explorer; removing it only removes the link. These links are separate from virtual desktop organizers.
 - Wallpaper, folders, shortcuts, taskbar pins and window bounds persist through the existing per-user preferences API. They follow the account between browsers. Failed preference loads block editing and offer Retry, preventing defaults from replacing an unreadable saved desktop.
 - This PC opens real home/system locations through File Explorer. File Explorer retains tabs, split views, uploads, downloads, permissions, SFTP configuration and transfer progress. Dropping files or folders from the computer onto the desktop asks for a real server destination and uses the same transfer queue; dropping directly into Explorer uses its current folder.
 - Moving an Explorer item within its existing directory does nothing, including Ctrl-drag. Cross-folder dragging still copies or moves normally. Shift+Delete opens the permanent-delete confirmation with its confirm button selected for Enter; administrator operations retain their typed-name check.
-- ErvisiOS keeps the browser at the server's base URL with **Ervisio** as the tab title. App navigation belongs to each window. Existing direct links still open their intended app once; reloading the base URL returns to the desktop. Classic retains its normal section URLs and titles.
+- ErvisiOS keeps the browser at the server's base URL with **Ervisio Console** as the tab title. App navigation belongs to each window. Existing direct links still open their intended app once; reloading the base URL returns to the desktop. Classic retains its normal section URLs and titles.
 
 ## Terminal
 
@@ -62,7 +62,7 @@ Radio changes call the operating system through `system.connectivity.set`, requi
 
 The assistant uses [plugin-ai](https://github.com/Ervisio/plugin-ai). Its ErvisiOS-aware release handles exact local navigation/theme/window commands immediately without a provider or engine; other requests use its existing provider and tool flow. API keys, provider support, permissions, tool policies and administrator unlock retain their plugin behavior. Conversations are discovered from each user's server transcript files, restored on reopening and checkpointed before requests and after completed exchanges. Closing a browser during a streaming reply can still interrupt unfinished output; previously saved exchanges remain.
 
-Native layouts are supported for AI, Docker, Minecraft and Caddy through their corresponding plugin releases. Existing plugin releases keep working inside desktop windows. Plugin authors should follow [the native page contract](dev/ervisios-plugins.md) and [the SDK tutorial](https://github.com/Ervisio/plugin-sdk/blob/main/docs/ervisios.md). A manifest declaring `contributes.pages[].ervisios` must set **`minCore: "0.7.0"` or later**; older cores reject the new manifest field. Publish and validate each native plugin release against Ervisio 0.7.0 or later before advertising it in the signed marketplace.
+Native layouts are supported for AI, Docker, Minecraft and Caddy through their corresponding plugin releases. Existing plugin releases keep working inside desktop windows. Plugin authors should follow [the native page contract](dev/ervisios-plugins.md) and [the SDK tutorial](https://github.com/Ervisio/plugin-sdk/blob/main/docs/ervisios.md). A manifest declaring `contributes.pages[].ervisios` must set **`minCore: "0.7.0"` or later**; older cores reject the new manifest field. Publish and validate each native plugin release against Ervisio Console 0.7.0 or later before advertising it in the signed marketplace.
 
 ## Verification
 

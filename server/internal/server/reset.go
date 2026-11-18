@@ -36,7 +36,7 @@ func (s *Server) resetHTTPGate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mutation := r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions
 		if mutation && r.URL.Path != "/api/rpc" && r.URL.Path != "/api/auth/logout" && s.resetInProgress() {
-			writeError(w, rpc.Errorf(rpc.Unavailable, "Ervisio is preparing a factory reset. Wait until it finishes."))
+			writeError(w, rpc.Errorf(rpc.Unavailable, "Ervisio Console is preparing a factory reset. Wait until it finishes."))
 			return
 		}
 		next.ServeHTTP(w, r)

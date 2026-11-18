@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { resetBrowserPreferences } from '../src/sections/settings/resetBrowser.ts';
 
-test('browser reset removes Ervisio UI caches without clearing auth, fixture data, or unrelated applications', () => {
+test('browser reset removes Ervisio Console UI caches without clearing auth, fixture data, or unrelated applications', () => {
   const values = new Map([
     ['ervisio.prefs:["alice"]', '{}'],
     ['ervisio.login-shell:["alice"]', 'ervisios'],

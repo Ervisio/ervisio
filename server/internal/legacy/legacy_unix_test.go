@@ -102,7 +102,7 @@ func legacySystem(t *testing.T) Paths {
 	return Paths{Root: root}
 }
 
-// addRelease puts the Ervisio compatibility archive's contents where
+// addRelease puts the Ervisio Console compatibility archive's contents where
 // LinuxAdmin's updater installs it.
 func addRelease(t *testing.T, p Paths, v string) {
 	t.Helper()
@@ -130,7 +130,7 @@ func TestImportCopiesEverything(t *testing.T) {
 	}
 	conf := read(t, p.At("/etc/ervisio/ervisio.conf"))
 	for _, want := range []string{
-		"# Ervisio server configuration", "systemctl restart ervisio.", "as ervisio.conf.bak",
+		"# Ervisio Console server configuration", "systemctl restart ervisio.", "as ervisio.conf.bak",
 		`cert = "/etc/ervisio/certs/site.pem"`, `key = "/etc/ervisio/certs/site.key"`, `listen = "0.0.0.0:9443"`,
 	} {
 		if !strings.Contains(conf, want) {
@@ -159,7 +159,7 @@ func TestImportCopiesEverything(t *testing.T) {
 		!strings.Contains(pam, "auth      include   system-login") {
 		t.Errorf("PAM file:\n%s", pam)
 	}
-	if d := read(t, p.At("/etc/systemd/system/ervisio.service.d/docker-bridge.conf")); !strings.Contains(d, "Ervisio listens") || !strings.Contains(d, "After=docker.service") {
+	if d := read(t, p.At("/etc/systemd/system/ervisio.service.d/docker-bridge.conf")); !strings.Contains(d, "Ervisio Console listens") || !strings.Contains(d, "After=docker.service") {
 		t.Errorf("drop-in:\n%s", d)
 	}
 	if exists(p.At("/etc/systemd/system/ervisio.service.d/notes.txt")) {
@@ -196,7 +196,7 @@ func TestImportKeepsErvisioData(t *testing.T) {
 		t.Fatalf("result %+v", res)
 	}
 	if read(t, p.At("/etc/ervisio/ervisio.conf")) != "listen = \"127.0.0.1:1\"\n" || read(t, p.At("/etc/pam.d/ervisio")) != "# admin's own\n" {
-		t.Error("Ervisio's own files were replaced")
+		t.Error("Ervisio Console's own files were replaced")
 	}
 	if !isRegular(p.At("/var/lib/ervisio/plugins/docker/manifest.json")) {
 		t.Error("state not imported into the empty folders")
@@ -256,7 +256,7 @@ func TestMarkedImportUndoRetryFinalize(t *testing.T) {
 	if !strings.Contains(read(t, p.At("/etc/linuxadmin/"+NoteFile)), "systemctl enable --now linuxadmin.service") {
 		t.Error("no note in /etc/linuxadmin")
 	}
-	// Final now: LinuxAdmin's later changes are not copied over Ervisio's.
+	// Final now: LinuxAdmin's later changes are not copied over Ervisio Console's.
 	put(t, p.Root, map[string]string{"/etc/linuxadmin/linuxadmin.conf": "listen = \"0.0.0.0:7002\"\n"})
 	if r, err := (&Import{Paths: p, Mark: true}).Run(); err != nil || r.Config {
 		t.Fatalf("finalized import replaced: %+v %v", r, err)
@@ -314,7 +314,7 @@ func TestMigrateUserDir(t *testing.T) {
 		t.Fatalf("second run moved: %v %v", moved, err)
 	}
 	if read(t, filepath.Join(home, ".config/ervisio/prefs.json")) != `{"theme":"oled"}` {
-		t.Error("second run overwrote Ervisio's preferences")
+		t.Error("second run overwrote Ervisio Console's preferences")
 	}
 	// A symlinked old folder is not followed.
 	home2 := t.TempDir()
@@ -379,7 +379,7 @@ func TestTransition(t *testing.T) {
 	tr := &Transition{Paths: p, Version: "0.3.0", Systemd: sd,
 		Health: func(_ context.Context, want string) error {
 			healthWant = want
-			// While Ervisio starts, the data is there and still marked.
+			// While Ervisio Console starts, the data is there and still marked.
 			if !Pending(p) || !isRegular(p.At("/etc/ervisio/ervisio.conf")) {
 				return errors.New("data missing at start")
 			}
@@ -397,7 +397,7 @@ func TestTransition(t *testing.T) {
 	if !reflect.DeepEqual(sd.calls, wantCalls) {
 		t.Errorf("systemctl calls\n got %q\nwant %q", sd.calls, wantCalls)
 	}
-	// The Ervisio layout.
+	// The Ervisio Console layout.
 	if l, _ := os.Readlink(p.At("/usr/lib/ervisio/current")); l != "versions/0.3.0" {
 		t.Errorf("current -> %q", l)
 	}
@@ -419,7 +419,7 @@ func TestTransition(t *testing.T) {
 	if Pending(p) || !isRegular(p.At("/etc/linuxadmin/"+NoteFile)) {
 		t.Error("import not finalized")
 	}
-	if tm := read(t, p.At("/etc/systemd/system/ervisio-update.timer")); !strings.Contains(tm, "Description=Ervisio scheduled system update") || !strings.Contains(tm, "03:30:00") {
+	if tm := read(t, p.At("/etc/systemd/system/ervisio-update.timer")); !strings.Contains(tm, "Description=Ervisio Console scheduled system update") || !strings.Contains(tm, "03:30:00") {
 		t.Errorf("timer:\n%s", tm)
 	}
 	if exists(p.At("/etc/systemd/system/linuxadmin-update.timer")) {
@@ -437,7 +437,7 @@ func TestTransition(t *testing.T) {
 			t.Errorf("%s: %+v", f, r)
 		}
 	}
-	// Ervisio's own updater works from here: the layout is a normal one.
+	// Ervisio Console's own updater works from here: the layout is a normal one.
 	nl := &update.Layout{LibDir: p.At(brand.LibDir), BinLink: p.At(brand.BinLink)}
 	if nl.Kind() != update.KindVersioned || nl.Previous() != "" {
 		t.Errorf("layout kind %s previous %q", nl.Kind(), nl.Previous())
@@ -516,7 +516,7 @@ func TestTransitionRefusals(t *testing.T) {
 	addRelease(t, p, "0.3.0")
 	sd.active["ervisio.service"] = true
 	if res := (&Transition{Paths: p, Version: "0.3.0", Systemd: sd, Health: ok}).Run(context.Background()); res.State != update.StateFailed {
-		t.Errorf("Ervisio running already: %+v", res)
+		t.Errorf("Ervisio Console running already: %+v", res)
 	}
 	if len(sd.calls) != 0 {
 		t.Errorf("refusals called systemctl: %q", sd.calls)

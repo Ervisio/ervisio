@@ -19,7 +19,7 @@
 # folder. It holds the same files, with the binaries under those names, plus
 # packaging/linuxadmin.service and pam.d/linuxadmin.* for LinuxAdmin's
 # install.sh. The new binary, started from there, moves the installation to
-# Ervisio (docs/RELEASING.md, "Rename transition").
+# Ervisio Console (docs/RELEASING.md, "Rename transition").
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -79,9 +79,9 @@ mv "$L/bin/ervisiod" "$L/bin/linuxadmind"
 mv "$L/bin/ervisio-bridge" "$L/bin/linuxadmin-bridge"
 # For LinuxAdmin's install.sh (--version VERSION): the unit it writes runs
 # /usr/bin/linuxadmind, which then moves itself to ervisio.service.
-sed -e 's/^Description=Ervisio web console/Description=LinuxAdmin web console (moving to Ervisio)/' \
+sed -e 's/^Description=Ervisio Console/Description=LinuxAdmin web console (moving to Ervisio Console)/' \
   -e 's#^ExecStart=/usr/bin/ervisiod#ExecStart=/usr/bin/linuxadmind#' \
-  -e '/^Conflicts=/d' -e '/^# Ervisio was called LinuxAdmin/,/^# going back to it/d' \
+  -e '/^Conflicts=/d' -e '/^# Ervisio Console was called LinuxAdmin/,/^# going back to it/d' \
   packaging/ervisio.service > "$L/packaging/linuxadmin.service"
 for f in packaging/pam.d/ervisio.*; do
   sed -e 's#PAM service for Ervisio sign-in (/etc/pam.d/ervisio)#PAM service for LinuxAdmin sign-in (/etc/pam.d/linuxadmin)#' \

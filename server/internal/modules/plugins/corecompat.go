@@ -9,7 +9,7 @@ import (
 	"github.com/ervisio/ervisio/server/internal/brand"
 )
 
-// A plugin may say which Ervisio it needs:
+// A plugin may say which Ervisio Console it needs:
 //
 //	"minCore": "0.5.0"
 //	"requires": {"ervisio": ">=0.5.0"}
@@ -40,7 +40,7 @@ func (r *Requires) get() string {
 func parseCoreReq(s string) ([3]int, error) {
 	m := coreReqRe.FindStringSubmatch(strings.TrimSpace(s))
 	if m == nil {
-		return [3]int{}, fmt.Errorf("%q is not a version Ervisio understands: write 0.5.0 or >=0.5.0", s)
+		return [3]int{}, fmt.Errorf("%q is not a version Ervisio Console understands: write 0.5.0 or >=0.5.0", s)
 	}
 	var v [3]int
 	for i := range v {
@@ -135,7 +135,7 @@ func coreProblem(name, need string) string {
 	if cmpVer3(have, want) >= 0 {
 		return ""
 	}
-	return fmt.Sprintf("%s needs Ervisio %d.%d.%d or newer; this server runs %d.%d.%d. Update Ervisio first.", name, want[0], want[1], want[2], have[0], have[1], have[2])
+	return fmt.Sprintf("%s needs Ervisio Console %d.%d.%d or newer; this server runs %d.%d.%d. Update Ervisio Console first.", name, want[0], want[1], want[2], have[0], have[1], have[2])
 }
 
 // CoreProblem says why the plugin cannot run here: another operating system

@@ -90,7 +90,7 @@ type Entry struct {
 	// Env is the environment (endpoint) the call went to, when it was not
 	// this machine.
 	Env string `json:"env,omitempty"`
-	// Origin says that another Ervisio server proxied the call, as
+	// Origin says that another Ervisio Console server proxied the call, as
 	// "via <server> by <user>"; User is then the account on this machine.
 	Origin string `json:"origin,omitempty"`
 }

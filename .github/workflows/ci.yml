@@ -166,12 +166,12 @@ jobs:
       - name: install.sh dry run with dash (downloads and verifies a real release)
         run: |
           # The releases before 0.3.0 are LinuxAdmin ones (other asset names):
-          # until an Ervisio release exists, only the offline checks run.
+          # until an Ervisio Console release exists, only the offline checks run.
           if curl -fsSL --proto '=https' https://github.com/ervisio/ervisio/releases/latest/download/SHA256SUMS | grep -q ' ervisio-'; then
             dash install.sh --dry-run | tee "$RUNNER_TEMP/dry.log"
             grep -q 'Signature of SHA256SUMS: good' "$RUNNER_TEMP/dry.log"
           else
-            echo "::notice::No Ervisio release yet: install.sh dry run against a release skipped."
+            echo "::notice::No Ervisio Console release yet: install.sh dry run against a release skipped."
           fi
           dash install.sh --help >/dev/null
           dash install.sh --uninstall --dry-run --yes >/dev/null

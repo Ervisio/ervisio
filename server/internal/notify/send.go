@@ -30,7 +30,7 @@ type Message struct {
 	Level string `json:"level,omitempty"`
 	// Link is an http(s) address or an app path ("/p/docker/stacks").
 	Link string `json:"link,omitempty"`
-	// Source says where it comes from: "Ervisio" or a plugin name.
+	// Source says where it comes from: "Ervisio Console" or a plugin name.
 	Source string `json:"source,omitempty"`
 }
 
@@ -230,7 +230,7 @@ func sendTelegram(ctx context.Context, s *Spec, m Message) error {
 var webhookVarRe = regexp.MustCompile(`\{(title|body|level|link|source|time)\}`)
 
 func sampleVars() map[string]string {
-	return map[string]string{"title": "Title \"quoted\"", "body": "Line 1\nLine 2", "level": "info", "link": "https://example.org/x", "source": "Ervisio", "time": "2026-01-01T00:00:00Z"}
+	return map[string]string{"title": "Title \"quoted\"", "body": "Line 1\nLine 2", "level": "info", "link": "https://example.org/x", "source": "Ervisio Console", "time": "2026-01-01T00:00:00Z"}
 }
 
 // renderWebhook replaces the placeholders with JSON-escaped text (without
@@ -327,7 +327,7 @@ func buildEmail(s *Spec, m Message, now time.Time) []byte {
 	h("MIME-Version", "1.0")
 	h("Content-Type", `text/plain; charset="utf-8"`)
 	h("Content-Transfer-Encoding", "quoted-printable")
-	h("X-Mailer", "Ervisio")
+	h("X-Mailer", "Ervisio Console")
 	b.WriteString("\r\n")
 	w := quotedprintable.NewWriter(&b)
 	text := strings.ReplaceAll(m.text(), "\n", "\r\n")

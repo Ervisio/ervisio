@@ -82,7 +82,7 @@ are copied into `versions/<its version>` before the new one is installed.)
    version:
 
    ```sh
-   git tag -a v1.2.0 -m "Ervisio 1.2.0" -m "- Self-update from Settings › About"
+   git tag -a v1.2.0 -m "Ervisio Console 1.2.0" -m "- Self-update from Settings › About"
    git push origin v1.2.0
    gh run watch          # follow the Release workflow
    ```
@@ -183,7 +183,7 @@ The automatic install runs in the daemon (root) with the same code as the button
 ## Rename transition
 
 The product was called **LinuxAdmin** up to 0.2.0 and lived in `Fonlogen/LinuxAdmin`. From 0.3.0 it is
-**Ervisio**, in `ervisio/ervisio`: new names for the binaries (`ervisiod`, `ervisio-bridge`), the unit
+**Ervisio** (now Ervisio Console), in `ervisio/ervisio`: new names for the binaries (`ervisiod`, `ervisio-bridge`), the unit
 (`ervisio.service`), the PAM service and every folder (`/etc/ervisio`, `/usr/lib/ervisio`, `/var/lib/ervisio`,
 `/usr/share/ervisio`, `~/.config/ervisio`). Machines running LinuxAdmin must get there without anyone logging in to
 them, and must be able to go back. The code is `server/internal/legacy`; its tests run the whole move in a fake
@@ -203,7 +203,7 @@ root (`legacy_test.go`).
   installed plugins and existing containers use them.
 * **The port, address, certificate and configuration**: everything is copied.
 
-### How LinuxAdmin's updater reaches Ervisio
+### How LinuxAdmin's updater reaches Ervisio Console
 
 A LinuxAdmin console (0.1.x or 0.2.0) asks `api.github.com/repos/Fonlogen/LinuxAdmin/releases/latest`. After the
 repository moves to `ervisio/ervisio`, GitHub answers that with `301` to `/repositories/<id>/releases/latest`; Go's
@@ -219,7 +219,7 @@ systemd-run --unit=linuxadmin-update-<v>-<time> /usr/lib/linuxadmin/versions/<v>
 ```
 
 So every release publishes a **compatibility archive**, `linuxadmin-<v>-linux-<arch>.tar.gz`
-(`packaging/build-release.sh`): the same files as the Ervisio archive with the binaries named `linuxadmind` and
+(`packaging/build-release.sh`): the same files as the Ervisio Console archive with the binaries named `linuxadmind` and
 `linuxadmin-bridge`, plus `packaging/linuxadmin.service` and `packaging/pam.d/linuxadmin.*` for LinuxAdmin's
 `install.sh --version <v>`. It is listed in `SHA256SUMS`. Keep publishing it for as long as LinuxAdmin consoles may
 still be around: one that was offline for a year updates to whatever is latest then. (The 0.2.0 updater was run
@@ -238,7 +238,7 @@ transient unit, outside both services:
    `/etc/linuxadmin` → `/etc/ervisio` (`linuxadmin.conf` → `ervisio.conf`, paths inside `/etc/linuxadmin/` and
    comments rewritten, `tls/` as it is), `/var/lib/linuxadmin` → `/var/lib/ervisio` (without the download staging
    folder), `/etc/pam.d/linuxadmin` → `/etc/pam.d/ervisio` (comments renamed when LinuxAdmin wrote it, as it is
-   otherwise), `linuxadmin.service.d/*.conf` → `ervisio.service.d/`. A destination that already holds Ervisio files
+   otherwise), `linuxadmin.service.d/*.conf` → `ervisio.service.d/`. A destination that already holds Ervisio Console files
    is never overwritten; empty folders (what a package creates) do not count.
 3. Writes `/etc/systemd/system/ervisio.service` from the release (with install.sh's header), `daemon-reload`.
 4. Stops `linuxadmin.service`, starts `ervisio.service` (it also has `Conflicts=linuxadmin.service`: one port, one
@@ -252,7 +252,7 @@ transient unit, outside both services:
    `last.json`, which its Settings › About shows.
 
 LinuxAdmin's page in the browser polls `/api/health` until it answers `<v>` (the same port), then reloads and gets
-Ervisio's page. Sessions live in memory, so everyone signs in again, as after any update. Each user's bridge copies
+Ervisio Console's page. Sessions live in memory, so everyone signs in again, as after any update. Each user's bridge copies
 `~/.config/linuxadmin` to `~/.config/ervisio` at their next sign-in (preferences, the Docker plugin's settings), and
 the page moves the browser's `la.*` localStorage keys to `ervisio.*` once.
 
@@ -261,7 +261,7 @@ service, as root, before anything is switched, and it is the code that decides w
 back. Keeping LinuxAdmin's files untouched (copy, never move; `current` of the LinuxAdmin layout is not changed)
 makes the rollback a plain `systemctl start linuxadmin`, and makes every step safe to repeat:
 
-* Power cut or crash in the middle: `linuxadmin.service` is still enabled (it is disabled only after Ervisio
+* Power cut or crash in the middle: `linuxadmin.service` is still enabled (it is disabled only after Ervisio Console
   answered), so the machine boots LinuxAdmin; the marked copies are replaced by the next attempt, and a daemon that
   starts meanwhile leaves a marked import alone.
 * After a failure LinuxAdmin's updater offers the release again; the next attempt starts from scratch.
@@ -273,8 +273,8 @@ makes the rollback a plain `systemctl start linuxadmin`, and makes every step sa
   starts the same transition in a transient unit (`ervisiod --transition <v>`). A failed transition is recorded in
   `/var/lib/linuxadmin/updates/ervisio-transition-failed.json` and not retried on every start for that version; run
   `ervisiod --transition <v>` as root to retry.
-* **Ervisio's `install.sh`** on a machine with LinuxAdmin: reads LinuxAdmin's configuration for its questions,
-  installs Ervisio, runs `ervisiod --migrate-legacy` (the copy above, final at once, plus the timer), disables
+* **Ervisio Console's `install.sh`** on a machine with LinuxAdmin: reads LinuxAdmin's configuration for its questions,
+  installs Ervisio Console, runs `ervisiod --migrate-legacy` (the copy above, final at once, plus the timer), disables
   `linuxadmin.service`, starts `ervisio.service`, and once it runs removes LinuxAdmin's programs, unit and links with
   `ervisiod --remove-legacy` (data kept). A packaged LinuxAdmin is refused with a pointer to the `ervisio` package.
 * **Packages:** the `ervisio` `.deb` has `Replaces/Conflicts/Provides: linuxadmin` (dpkg removes `linuxadmin`,
@@ -294,10 +294,10 @@ sudo ervisiod --remove-legacy            # LinuxAdmin's programs, unit, links, P
 sudo ervisiod --remove-legacy --purge    # also /etc/linuxadmin and /var/lib/linuxadmin
 ```
 
-Changes made in Ervisio are not copied back. `--remove-legacy` refuses while `linuxadmin.service` runs, while a
+Changes made in Ervisio Console are not copied back. `--remove-legacy` refuses while `linuxadmin.service` runs, while a
 transition is unfinished, and for a packaged LinuxAdmin (its package manager removes it).
 
-### Checklist for the first Ervisio release
+### Checklist for the first Ervisio Console release
 
 1. Transfer `Fonlogen/LinuxAdmin` to the `ervisio` organization and rename it `ervisio` (Settings › Transfer). GitHub
    keeps redirecting the old web, git, raw and API URLs as long as no new repository takes the old name: **never

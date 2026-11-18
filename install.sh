@@ -1,5 +1,5 @@
 #!/bin/sh
-# Ervisio installer.
+# Ervisio Console installer.
 #
 #   curl -fsSL https://raw.githubusercontent.com/ervisio/ervisio/main/install.sh | sudo sh
 #   curl -fsSL https://raw.githubusercontent.com/ervisio/ervisio/main/install.sh | sudo sh -s -- --version 0.1.0
@@ -26,11 +26,11 @@
 # admin unlock time, TLS, Caddy) and writes /etc/ervisio/ervisio.conf; answers come from the
 # terminal even when the script is piped, and --yes or no terminal means the
 # defaults. Running it again upgrades or repairs the installation and keeps the
-# configuration. Ervisio was called LinuxAdmin up to 0.2.0: on a machine with
+# configuration. Ervisio Console was called LinuxAdmin up to 0.2.0: on a machine with
 # LinuxAdmin, its configuration, certificate, plugins and state are copied to
-# the Ervisio locations (ervisiod --migrate-legacy), then LinuxAdmin's
+# the Ervisio Console locations (ervisiod --migrate-legacy), then LinuxAdmin's
 # programs and unit are removed; /etc/linuxadmin and /var/lib/linuxadmin stay
-# until you delete them. Ervisio installed this way
+# until you delete them. Ervisio Console installed this way
 # updates itself from Settings > About. Installs made by a distribution
 # package (.deb, .rpm, AUR) are left alone: update those with the package
 # manager.
@@ -41,7 +41,7 @@
 #   --from DIR                 install a release folder already on disk (an extracted
 #                              archive, or the folder packaging/install-dev.sh builds);
 #                              nothing is downloaded or signature-checked
-#   --uninstall                remove Ervisio (keeps /etc/ervisio and installed plugins)
+#   --uninstall                remove Ervisio Console (keeps /etc/ervisio and installed plugins)
 #   --purge                    with --uninstall: also remove /etc/ervisio and /var/lib/ervisio
 #   --open-firewall            open the port in ufw or firewalld when one of them is active
 #   --dry-run                  show what would be done, change nothing (can run without root)
@@ -60,11 +60,11 @@
 #   --admin-unlock D           how long administrator rights stay unlocked: 5m (default), 15m, 1h,
 #                              any 30s-24h, or signout (until sign-out)
 #   --tls-cert F --tls-key F   use your own certificate instead of the self-signed one
-#   --behind-proxy             a reverse proxy on this machine fronts Ervisio (plain HTTP on 127.0.0.1)
+#   --behind-proxy             a reverse proxy on this machine fronts Ervisio Console (plain HTTP on 127.0.0.1)
 #   --origin URL               browser origin to accept (web.allowed_origins), e.g. https://admin.example.org
 #   --trusted-proxy ADDR       address or CIDR of a reverse proxy to trust (web.trusted_proxies)
 #   --caddy | --no-caddy       set up (or never touch) a Caddy found on this machine or in Docker
-#   --domain NAME              the (sub)domain Caddy serves Ervisio on; implies --caddy
+#   --domain NAME              the (sub)domain Caddy serves Ervisio Console on; implies --caddy
 #   --reconfigure              ask the configuration questions again on an installed system
 #   --no-enable, --no-start    do not enable at boot / do not start the service
 #   --with-docker-plugin       install the Docker plugin from the Ervisio marketplace (signed catalog);
@@ -93,7 +93,7 @@ MANAGED_MARKER=/usr/lib/ervisio/managed
 # remove a unit file that starts with it (they ship their own).
 UNIT_HEADER='# Installed by the Ervisio installer (install.sh); removed by install.sh --uninstall.'
 
-# LinuxAdmin, the product's name up to 0.2.0 (moved to Ervisio by this script).
+# LinuxAdmin, the product's name up to 0.2.0 (moved to Ervisio Console by this script).
 LEGACY_LIB=/usr/lib/linuxadmin
 LEGACY_UNIT=linuxadmin.service
 LEGACY_CONF_DIR=/etc/linuxadmin
@@ -101,7 +101,7 @@ LEGACY_CONF_FILE=/etc/linuxadmin/linuxadmin.conf
 LEGACY_STATE_DIR=/var/lib/linuxadmin
 LEGACY_MANAGED=/usr/lib/linuxadmin/managed
 
-# The Ervisio release key (ReleasePublicKey in server/internal/update/sign.go,
+# The Ervisio Console release key (ReleasePublicKey in server/internal/update/sign.go,
 # as an SPKI PEM). SHA256SUMS.sig is an ed25519 signature over
 # "linuxadmin-release-v1\n" followed by SHA256SUMS (the prefix keeps the
 # product's former name on purpose: every console verifies with it). A Go test
@@ -284,7 +284,7 @@ opt_set() {
 
 usage() {
 	cat <<'USAGE'
-Ervisio installer
+Ervisio Console installer
 
   curl -fsSL https://raw.githubusercontent.com/ervisio/ervisio/main/install.sh | sudo sh -s -- [options]
   sudo sh install.sh [options]
@@ -293,7 +293,7 @@ Options:
   --version X.Y.Z            install this release instead of the latest stable one
   --prerelease               install the newest release, pre-releases included
   --from DIR                 install a release folder already on disk (no download, no signature check)
-  --uninstall                remove Ervisio (keeps /etc/ervisio and installed plugins)
+  --uninstall                remove Ervisio Console (keeps /etc/ervisio and installed plugins)
   --purge                    with --uninstall: also remove /etc/ervisio and /var/lib/ervisio
   --open-firewall            open the port in ufw or firewalld when one of them is active
   --dry-run                  show what would be done, change nothing (can run without root)
@@ -313,11 +313,11 @@ Configuration (first install; asked unless given here, --yes takes the defaults)
                              (these three add up; none of them = every local account)
   --admin-unlock D           5m (default), 15m, 1h, any 30s-24h, or signout (until sign-out)
   --tls-cert F --tls-key F   use your own certificate instead of the self-signed one
-  --behind-proxy             a reverse proxy on this machine fronts Ervisio (plain HTTP on 127.0.0.1)
+  --behind-proxy             a reverse proxy on this machine fronts Ervisio Console (plain HTTP on 127.0.0.1)
   --origin URL               browser origin to accept (web.allowed_origins)
   --trusted-proxy ADDR       address or CIDR of a reverse proxy to trust (web.trusted_proxies)
   --caddy | --no-caddy       set up (or never touch) a Caddy found on this machine or in Docker
-  --domain NAME              the (sub)domain Caddy serves Ervisio on (implies --caddy)
+  --domain NAME              the (sub)domain Caddy serves Ervisio Console on (implies --caddy)
   --reconfigure              ask the configuration questions again on an installed system
   --no-enable, --no-start    do not enable at boot / do not start the service
 
@@ -417,7 +417,7 @@ detect_arch() {
 	case $(uname -m) in
 	x86_64 | amd64) ARCH=amd64 ;;
 	aarch64 | arm64) ARCH=arm64 ;;
-	*) die "Ervisio is built for x86-64 and ARM64; this machine is $(uname -m)." ;;
+	*) die "Ervisio Console is built for x86-64 and ARM64; this machine is $(uname -m)." ;;
 	esac
 }
 
@@ -637,16 +637,16 @@ refuse_managed() {
 	if [ -e "$MANAGED_MARKER" ]; then
 		rm_by="$(head -c 64 "$MANAGED_MARKER" 2>/dev/null | tr -cd 'a-z0-9._+-')"
 		[ -n "$rm_by" ] || rm_by="a package manager"
-		die "Ervisio on this machine was installed by $rm_by (the ervisio package). Update or remove it with $rm_by; this script only manages installs it made."
+		die "Ervisio Console on this machine was installed by $rm_by (the ervisio package). Update or remove it with $rm_by; this script only manages installs it made."
 	fi
 	if [ -e "$LEGACY_MANAGED" ] && [ "$UNINSTALL" = 0 ]; then
 		rm_by="$(head -c 64 "$LEGACY_MANAGED" 2>/dev/null | tr -cd 'a-z0-9._+-')"
 		[ -n "$rm_by" ] || rm_by="a package manager"
-		die "LinuxAdmin (Ervisio's former name) was installed here by $rm_by (the linuxadmin package). Install the ervisio package instead: it replaces linuxadmin and keeps its settings. Or remove linuxadmin with $rm_by first (/etc/linuxadmin stays), then run this script: it copies the settings."
+		die "LinuxAdmin (Ervisio Console's former name) was installed here by $rm_by (the linuxadmin package). Install the ervisio package instead: it replaces linuxadmin and keeps its settings. Or remove linuxadmin with $rm_by first (/etc/linuxadmin stays), then run this script: it copies the settings."
 	fi
 }
 
-# Sets LEGACY=1 when LinuxAdmin (Ervisio's name up to 0.2.0) is installed or
+# Sets LEGACY=1 when LinuxAdmin (Ervisio Console's name up to 0.2.0) is installed or
 # left its configuration here, and LEGACY_VERSION to its running version.
 legacy_detect() {
 	LEGACY=0
@@ -661,13 +661,13 @@ legacy_detect() {
 }
 
 # migrate_legacy: copies LinuxAdmin's configuration, certificate, state, PAM
-# file, unit drop-ins and scheduled update to the Ervisio locations (the
-# new ervisiod does it), then stops and disables linuxadmin.service: Ervisio
-# takes its port. LinuxAdmin's files are removed only once Ervisio runs
+# file, unit drop-ins and scheduled update to the Ervisio Console locations (the
+# new ervisiod does it), then stops and disables linuxadmin.service: Ervisio Console
+# takes its port. LinuxAdmin's files are removed only once Ervisio Console runs
 # (legacy_cleanup), so "systemctl enable --now linuxadmin" still goes back.
 migrate_legacy() {
 	[ "$LEGACY" = 1 ] || return 0
-	step "Moving LinuxAdmin${LEGACY_VERSION:+ $LEGACY_VERSION} to Ervisio"
+	step "Moving LinuxAdmin${LEGACY_VERSION:+ $LEGACY_VERSION} to Ervisio Console"
 	if [ "$DRY" = 1 ]; then
 		say "  [dry-run] $BIN_LINK --migrate-legacy: copy $LEGACY_CONF_DIR to $CONF_DIR, $LEGACY_STATE_DIR to $STATE_DIR,"
 		say "            /etc/pam.d/linuxadmin, the drop-ins of $LEGACY_UNIT and the scheduled update"
@@ -684,7 +684,7 @@ migrate_legacy() {
 		systemctl is-enabled --quiet "$LEGACY_UNIT" 2>/dev/null && LEGACY_ENABLED=1
 		systemctl disable --quiet --now "$LEGACY_UNIT" 2>/dev/null || true
 	fi
-	# LinuxAdmin did not start at boot: neither does Ervisio, unless asked.
+	# LinuxAdmin did not start at boot: neither does Ervisio Console, unless asked.
 	if [ "$LEGACY_ENABLED" = 0 ] && [ -n "$LEGACY_VERSION" ] && [ "$CFG_MODE" = keep ]; then
 		ENABLE=0
 	fi
@@ -803,7 +803,7 @@ PAM
 # is replaced; one written by the administrator is kept.
 install_pam() {
 	if [ "$FAMILY" = unknown ]; then
-		warn "Unknown distribution: no $PAM_FILE written. Ervisio then uses the 'login' PAM service; see packaging/README.md to write one."
+		warn "Unknown distribution: no $PAM_FILE written. Ervisio Console then uses the 'login' PAM service; see packaging/README.md to write one."
 		return 0
 	fi
 	if [ -f "$1/packaging/pam.d/ervisio.$FAMILY" ]; then
@@ -817,7 +817,7 @@ install_pam() {
 			return 0
 		fi
 		if ! grep -q 'PAM service for Ervisio' "$PAM_FILE"; then
-			say "Keeping your own $PAM_FILE (not written by Ervisio)."
+			say "Keeping your own $PAM_FILE (not written by Ervisio Console)."
 			return 0
 		fi
 		run cp -p "$PAM_FILE" "$CONF_DIR/pam.d-ervisio.bak"
@@ -830,8 +830,8 @@ install_pam() {
 
 ensure_sudo() {
 	if ! have sudo; then
-		say "sudo is not installed; Ervisio uses it for administrator rights. Installing it."
-		pkg_install sudo || warn "Could not install sudo. Install it yourself: administrator rights in Ervisio need it."
+		say "sudo is not installed; Ervisio Console uses it for administrator rights. Installing it."
+		pkg_install sudo || warn "Could not install sudo. Install it yourself: administrator rights in Ervisio Console need it."
 	fi
 }
 
@@ -850,12 +850,12 @@ report_admin_group() {
 		[ -f "$rg_f" ] && grep -Eq "^[[:space:]]*%${ADMIN_GROUP}[[:space:]]" "$rg_f" 2>/dev/null && rg_rule=1
 	done
 	step "Administrator rights"
-	say "Ervisio unlocks administrator rights with sudo, using your own password."
+	say "Ervisio Console unlocks administrator rights with sudo, using your own password."
 	if [ -n "$rg_user" ]; then
 		if id -nG "$rg_user" 2>/dev/null | tr ' ' '\n' | grep -qx "$ADMIN_GROUP"; then
 			say "Your account '$rg_user' is in the '$ADMIN_GROUP' group."
 		else
-			say "Your account '$rg_user' is NOT in the '$ADMIN_GROUP' group. To manage the system from Ervisio:"
+			say "Your account '$rg_user' is NOT in the '$ADMIN_GROUP' group. To manage the system from Ervisio Console:"
 			say "  ${rg_new}usermod -aG $ADMIN_GROUP $rg_user      (then sign out and in again)"
 		fi
 	else
@@ -868,7 +868,7 @@ report_admin_group() {
 	fi
 	if grep -Eqs '^[[:space:]]*Defaults[[:space:]]+targetpw' /etc/sudoers /usr/etc/sudoers &&
 		! cat /etc/sudoers.d/* /usr/etc/sudoers.d/* 2>/dev/null | grep -Eq "^[[:space:]]*Defaults:%${ADMIN_GROUP}[[:space:]]+!targetpw"; then
-		say "sudo asks for the root password here (Defaults targetpw). Ervisio sends your own password,"
+		say "sudo asks for the root password here (Defaults targetpw). Ervisio Console sends your own password,"
 		say "so administrator rights will not unlock until that changes. On openSUSE:"
 		say "  zypper install sudo-policy-wheel-auth-self      (wheel members use their own password)"
 	fi
@@ -880,7 +880,7 @@ firewall() {
 	read_listen
 	case $LISTEN_HOST in 127.* | localhost | '[::1]') return 0 ;; esac
 	if [ -n "$PROXY" ]; then
-		say "Ervisio sits behind a reverse proxy: the firewall is not changed for port $PORT."
+		say "Ervisio Console sits behind a reverse proxy: the firewall is not changed for port $PORT."
 		return 0
 	fi
 	fw=
@@ -894,10 +894,10 @@ firewall() {
 	fi
 	[ -n "$fw" ] || return 0
 	step "Firewall"
-	say "$fw is active and port $PORT/tcp is closed: other machines cannot reach Ervisio yet."
+	say "$fw is active and port $PORT/tcp is closed: other machines cannot reach Ervisio Console yet."
 	if [ "$OPEN_FW" = 1 ] || ask "Open port $PORT/tcp in $fw? [y/N]" n; then
 		if [ "$fw" = ufw ]; then
-			run ufw allow "$PORT/tcp" comment Ervisio
+			run ufw allow "$PORT/tcp" comment "Ervisio Console"
 		else
 			run firewall-cmd --quiet --permanent --add-port="$PORT/tcp"
 			run firewall-cmd --quiet --add-port="$PORT/tcp"
@@ -1018,7 +1018,7 @@ choose_port() {
 			cp_next="$(next_free_port $((cp_try + 1)))"
 			if [ "$TTY_OK" = 1 ]; then
 				say "Port $cp_try is in use${PORT_OWNER:+ by $PORT_OWNER}."
-				if ask "Use it anyway (free it before the service starts, or Ervisio will not start)? [y/N]" n; then
+				if ask "Use it anyway (free it before the service starts, or Ervisio Console will not start)? [y/N]" n; then
 					break
 				fi
 				say "Pick another one; $cp_next is free."
@@ -1221,7 +1221,7 @@ auth_warnings() {
 	fi
 	aw_me="${SUDO_USER:-}"
 	if [ -n "$aw_me" ] && [ "$aw_me" != root ] && ! auth_covers "$aw_me"; then
-		say "  Note: your own account '$aw_me' is not covered, so you could not sign in to Ervisio yourself."
+		say "  Note: your own account '$aw_me' is not covered, so you could not sign in to Ervisio Console yourself."
 	fi
 	return 0
 }
@@ -1258,7 +1258,7 @@ CONF
 # Writes the commented configuration file (stdout) for a first install.
 render_config() {
 	cat <<CONF
-# Ervisio server configuration, written by the installer on $(date +%Y-%m-%d).
+# Ervisio Console server configuration, written by the installer on $(date +%Y-%m-%d).
 # Every key and its default is described in docs/api/config.md. Settings that
 # say "restart" need: systemctl restart ervisio. Saving from Settings in the
 # web interface rewrites this file without the comments (a backup stays next
@@ -1311,7 +1311,7 @@ default_shell = "$C_UI"
 
 [web]
 # Browser origins accepted besides the address in the Host header, for
-# reaching Ervisio through a reverse proxy.
+# reaching Ervisio Console through a reverse proxy.
 CONF
 	if [ -n "$C_ORIGINS" ]; then
 		# shellcheck disable=SC2086
@@ -1425,11 +1425,11 @@ check_config() {
 
 # ---------------------------------------------------------------- Caddy
 #
-# Without a proxy Ervisio serves HTTPS (self-signed by default). Behind a
+# Without a proxy Ervisio Console serves HTTPS (self-signed by default). Behind a
 # proxy on this machine it serves plain HTTP on 127.0.0.1 (tls.mode = "http"):
 # the hop never leaves the machine, and the proxy provides the certificate the
 # browser sees. A Caddy in a Docker container cannot reach the host's
-# 127.0.0.1, so Ervisio then listens on the Docker bridge or on all
+# 127.0.0.1, so Ervisio Console then listens on the Docker bridge or on all
 # interfaces and keeps HTTPS: Caddy connects with TLS and does not check the
 # certificate (tls_insecure_skip_verify). A container with host networking
 # counts as this machine.
@@ -1460,7 +1460,7 @@ caddy_detect() {
 	fi
 	if [ -n "$cd_native" ] && [ -n "$cd_ctrs" ] && [ "$TTY_OK" = 1 ]; then
 		cd_first="$(printf '%s\n' "$cd_ctrs" | head -n 1)"
-		ask_choice "Caddy runs here and in Docker. Which one should serve Ervisio?" 1 "Caddy on this machine ($cd_native)" "Caddy in the container $cd_first"
+		ask_choice "Caddy runs here and in Docker. Which one should serve Ervisio Console?" 1 "Caddy on this machine ($cd_native)" "Caddy in the container $cd_first"
 		[ "$CHOICE" = 2 ] && cd_native=
 	fi
 	if [ -n "$cd_native" ]; then
@@ -1595,7 +1595,7 @@ caddy_find_proxy() {
 	}' "$1"
 }
 
-# caddy_directive: the reverse_proxy directive for Ervisio.
+# caddy_directive: the reverse_proxy directive for Ervisio Console.
 caddy_directive() {
 	if [ "$C_TLS" = http ]; then
 		printf 'reverse_proxy %s:%s\n' "$UPHOST" "$C_PORT"
@@ -1622,14 +1622,14 @@ caddy_plan() {
 			C_TLS=http
 		elif [ -n "$CD_GW" ]; then
 			# Inside the container 127.0.0.1 is the container itself: Caddy has to
-			# reach the host through the Docker bridge, so Ervisio listens on the
+			# reach the host through the Docker bridge, so Ervisio Console listens on the
 			# bridge's gateway address only (not on every interface, where other
 			# machines could reach it). The bridge exists once docker.service has
 			# started: a drop-in orders ervisio.service after it.
 			C_HOST=$CD_GW
 			DOCKER_DROPIN=1
 			# Not host.docker.internal: host-gateway is docker0's address, which may
-			# not be the gateway of Caddy's network that Ervisio listens on.
+			# not be the gateway of Caddy's network that Ervisio Console listens on.
 			UPHOST=$CD_GW
 			[ -n "$CD_SUBNET" ] && C_PROXIES="$(list_add "$C_PROXIES" "$CD_SUBNET")"
 		else
@@ -1667,7 +1667,7 @@ caddy_plan() {
 			cp_addr="$(printf '%s\n' "$cp_hit" | cut -f4)"
 			say "The Caddyfile has a site for Cockpit: $cp_addr (Cockpit listens on port 9090 by default)."
 			if [ "$TTY_OK" = 1 ]; then
-				ask "Point $cp_addr to Ervisio (port $C_PORT) instead? [Y/n]" y || {
+				ask "Point $cp_addr to Ervisio Console (port $C_PORT) instead? [Y/n]" y || {
 					cp_hit=
 					cp_addr=
 				}
@@ -1683,7 +1683,7 @@ caddy_plan() {
 		[ -n "$cp_base" ] && cp_def="ervisio.$cp_base"
 		if [ "$TTY_OK" = 1 ]; then
 			while :; do
-				ask_value "Domain for Ervisio, such as ervisio.example.org (it must point to this Caddy)" "${cp_def:-ervisio.example.org}"
+				ask_value "Domain for Ervisio Console, such as ervisio.example.org (it must point to this Caddy)" "${cp_def:-ervisio.example.org}"
 				valid_domain "$REPLY" && break
 				say "'$REPLY' is not a domain name."
 			done
@@ -1698,7 +1698,7 @@ caddy_plan() {
 		fi
 		cp_hit="$(awk -F'\t' -v d="$cp_addr" '$1 == "BLOCK" && ($4 == d || $4 == "https://" d || $4 == "http://" d) { print; exit }' "$cp_blocks")"
 		if [ -n "$cp_hit" ] && [ "$TTY_OK" = 1 ]; then
-			ask "The Caddyfile already has a site $cp_addr. Point it to Ervisio? [y/N]" n || cp_hit=skip
+			ask "The Caddyfile already has a site $cp_addr. Point it to Ervisio Console? [y/N]" n || cp_hit=skip
 		fi
 	fi
 	case $cp_addr in
@@ -1785,7 +1785,7 @@ caddy_print_manual() {
 	esac
 }
 
-# caddy_apply: edits the Caddyfile (after the Ervisio side is in place).
+# caddy_apply: edits the Caddyfile (after the Ervisio Console side is in place).
 caddy_apply() {
 	[ -n "$CADDY_KIND" ] && [ "$PROXY" = caddy ] || return 0
 	step "Caddy"
@@ -1821,7 +1821,7 @@ caddy_apply() {
 		{
 			cat "$ca_bak"
 			[ -n "$(tail -c 1 "$ca_bak")" ] && printf '\n'
-			printf '\n# Ervisio (added by install.sh)\n%s {\n' "$CADDY_DOMAIN"
+			printf '\n# Ervisio Console (added by install.sh)\n%s {\n' "$CADDY_DOMAIN"
 			sed "s/^/$TAB/" "$TMPD/caddy.directive"
 			printf '}\n'
 		} >"$TMPD/caddy.new"
@@ -1835,13 +1835,13 @@ caddy_apply() {
 		return 0
 	fi
 	if caddy_reload; then
-		say "Caddy reloaded: https://$CADDY_DOMAIN now goes to Ervisio."
+		say "Caddy reloaded: https://$CADDY_DOMAIN now goes to Ervisio Console."
 		CADDY_DONE=1
 	else
 		say "The Caddyfile is edited and valid, but Caddy was not reloaded. https://$CADDY_DOMAIN works once Caddy runs with it."
 	fi
 	if [ "$CADDY_KIND" = docker ] && [ -n "$CD_SUBNET" ]; then
-		say "Caddy reaches Ervisio at $UPHOST:$C_PORT from the Docker network $CD_SUBNET. If a firewall blocks that"
+		say "Caddy reaches Ervisio Console at $UPHOST:$C_PORT from the Docker network $CD_SUBNET. If a firewall blocks that"
 		say "(ufw does by default), allow it: ufw allow from $CD_SUBNET to any port $C_PORT proto tcp"
 	fi
 	say "The domain $CADDY_DOMAIN must point to this machine for Caddy to get its certificate."
@@ -1865,7 +1865,7 @@ decide_config() {
 		if [ "$CFG_REQUESTED" = 1 ] || [ "$RECONF" = 1 ]; then
 			CFG_MODE=change
 		elif [ "$TTY_OK" = 1 ]; then
-			say "Ervisio is configured already ($CFG_SHOWN, listening on $D_HOST:$D_PORT); the configuration is kept."
+			say "Ervisio Console is configured already ($CFG_SHOWN, listening on $D_HOST:$D_PORT); the configuration is kept."
 			ask "Change settings now? [y/N]" n && CFG_MODE=change
 		fi
 		if [ "$CFG_MODE" = keep ]; then
@@ -1885,7 +1885,7 @@ decide_config() {
 		C_UI=$F_UI
 	elif [ "$TTY_OK" = 1 ]; then
 		if [ "$C_UI" = ervisios ]; then ui_def=2; else ui_def=1; fi
-		ask_choice "Initial Ervisio interface (each user can switch later):" "$ui_def" "Classic console" "ErvisiOS desktop with app windows"
+		ask_choice "Initial Ervisio Console interface (each user can switch later):" "$ui_def" "Classic console" "ErvisiOS desktop with app windows"
 		if [ "$CHOICE" = 2 ]; then C_UI=ervisios; else C_UI=classic; fi
 	fi
 
@@ -1905,14 +1905,14 @@ decide_config() {
 		if [ "$CADDY_MODE" = yes ]; then
 			PROXY=caddy
 		elif [ "$TTY_OK" = 1 ]; then
-			ask "Put Ervisio behind it, with its own (sub)domain? [Y/n]" y && PROXY=caddy
+			ask "Put Ervisio Console behind it, with its own (sub)domain? [Y/n]" y && PROXY=caddy
 		else
 			say "Caddy is not changed unless you pass --caddy."
 		fi
 	fi
 	if [ "$PROXY" = caddy ]; then
 		caddy_plan
-	elif [ "$F_PROXY" = 1 ] || { [ "$TTY_OK" = 1 ] && [ -z "$F_LISTEN" ] && ask "Will Ervisio sit behind another reverse proxy (nginx, Apache, Traefik...)? [y/N]" n; }; then
+	elif [ "$F_PROXY" = 1 ] || { [ "$TTY_OK" = 1 ] && [ -z "$F_LISTEN" ] && ask "Will Ervisio Console sit behind another reverse proxy (nginx, Apache, Traefik...)? [y/N]" n; }; then
 		PROXY=other
 		C_TLS=http
 		C_HOST=127.0.0.1
@@ -1924,7 +1924,7 @@ decide_config() {
 		fi
 		if [ "$TTY_OK" = 1 ] && [ -z "$F_ORIGINS" ]; then
 			while :; do
-				ask_value "Public address of Ervisio, as typed in the browser" "https://ervisio.example.org"
+				ask_value "Public address of Ervisio Console, as typed in the browser" "https://ervisio.example.org"
 				valid_origin "$REPLY" && break
 				say "'$REPLY' must look like https://host or https://host:port."
 			done
@@ -1943,7 +1943,7 @@ decide_config() {
 		'')
 			if [ "$TTY_OK" = 1 ]; then
 				if [ "$C_HOST" = 127.0.0.1 ]; then cl_def=2; else cl_def=1; fi
-				ask_choice "Who can reach Ervisio?" "$cl_def" "every machine that can reach this one (all interfaces, 0.0.0.0)" "only this machine (127.0.0.1: for an SSH tunnel or a proxy)"
+				ask_choice "Who can reach Ervisio Console?" "$cl_def" "every machine that can reach this one (all interfaces, 0.0.0.0)" "only this machine (127.0.0.1: for an SSH tunnel or a proxy)"
 				if [ "$CHOICE" = 1 ]; then C_HOST=0.0.0.0; else C_HOST=127.0.0.1; fi
 			fi
 			;;
@@ -1978,7 +1978,7 @@ decide_config() {
 		case $C_HOST in
 		127.* | '[::1]') ;;
 		*)
-			say "Plain HTTP is only possible on 127.0.0.1; with this listen address Ervisio keeps HTTPS (self-signed)."
+			say "Plain HTTP is only possible on 127.0.0.1; with this listen address Ervisio Console keeps HTTPS (self-signed)."
 			C_TLS=self-signed
 			;;
 		esac
@@ -2051,7 +2051,7 @@ decide_config() {
 	fi
 
 	if [ "$TTY_OK" = 1 ]; then
-		[ "$NO_ENABLE" = 1 ] || { ask "Start Ervisio at boot? [Y/n]" y || ENABLE=0; }
+		[ "$NO_ENABLE" = 1 ] || { ask "Start Ervisio Console at boot? [Y/n]" y || ENABLE=0; }
 		[ "$NO_START" = 1 ] || { ask "Start it now? [Y/n]" y || START=0; }
 	fi
 
@@ -2070,7 +2070,7 @@ decide_config() {
 			say "  Caddy:             $CADDY_ACTION $CADDY_DOMAIN -> https://$UPHOST:$C_PORT (certificate not checked: it is this machine)"
 		fi
 		case $CADDY_ACTION in manual) say "                     (the Caddyfile is not edited: ${CADDY_WHY:-the snippet is printed})" ;; *) say "                     ($CADDY_CF is backed up, validated, rolled back on errors, then Caddy is reloaded)" ;; esac
-		[ "${DOCKER_DROPIN:-0}" = 1 ] && say "                     (Caddy is in Docker: Ervisio listens on the Docker bridge $CD_GW and starts after docker.service)"
+		[ "${DOCKER_DROPIN:-0}" = 1 ] && say "                     (Caddy is in Docker: Ervisio Console listens on the Docker bridge $CD_GW and starts after docker.service)"
 	elif [ "$PROXY" = other ]; then
 		if [ "$C_TLS" = http ]; then
 			say "  Reverse proxy:     yes; point it at http://127.0.0.1:$C_PORT (plain HTTP) and let it send X-Forwarded-Proto and X-Forwarded-Host"
@@ -2090,7 +2090,7 @@ decide_config() {
 
 # ---------------------------------------------------------------- plugins
 #
-# The Docker plugin shipped inside Ervisio up to 0.3.0 and now comes from the
+# The Docker plugin shipped inside Ervisio Console up to 0.3.0 and now comes from the
 # marketplace (the signed catalog of github.com/Ervisio/plugins). ervisiod
 # installs it with --install-plugin, which checks the catalog signature, the
 # package checksum and the plugin signature against the team key. On start,
@@ -2131,7 +2131,7 @@ docker_plugin_decide() {
 docker_plugin_apply() {
 	[ "$DP_ACTION" = none ] && return 0
 	if [ "$DRY" = 0 ] && ! "$BIN_LINK" --help 2>&1 | grep -q -- '-install-plugin'; then
-		warn "Ervisio $VERSION cannot install plugins from the marketplace on its own; use Plugins > Browse."
+		warn "Ervisio Console $VERSION cannot install plugins from the marketplace on its own; use Plugins > Browse."
 		return 0
 	fi
 	step "Plugins"
@@ -2142,7 +2142,7 @@ docker_plugin_apply() {
 	fi
 	say "Installing the Docker plugin from the Ervisio marketplace (signature checked)."
 	if ! run "$BIN_LINK" --install-plugin docker; then
-		warn "The Docker plugin could not be installed now. Ervisio retries on start when Docker is present; you can also install it from Plugins > Browse."
+		warn "The Docker plugin could not be installed now. Ervisio Console retries on start when Docker is present; you can also install it from Plugins > Browse."
 	fi
 	return 0
 }
@@ -2153,7 +2153,7 @@ docker_plugin_apply() {
 download_release() {
 	ASSET="ervisio-$VERSION-linux-$ARCH.tar.gz"
 	BASE="https://github.com/$REPO/releases/download/v$VERSION"
-	step "Downloading Ervisio $VERSION ($ARCH)"
+	step "Downloading Ervisio Console $VERSION ($ARCH)"
 	for dl_f in SHA256SUMS SHA256SUMS.sig "$ASSET"; do
 		say "  $BASE/$dl_f"
 		fetch "$BASE/$dl_f" "$TMPD/$dl_f" || die "Download of $dl_f failed. Does release v$VERSION exist, with a build for $ARCH?"
@@ -2165,12 +2165,12 @@ download_release() {
 		printf 'linuxadmin-release-v1\n' >"$TMPD/signed.msg"
 		cat "$TMPD/SHA256SUMS" >>"$TMPD/signed.msg"
 		if ! ed25519_verify "$TMPD/release.pem" "$TMPD/signed.msg" "$TMPD/SHA256SUMS.sig"; then
-			die "The signature of SHA256SUMS does not match the Ervisio release key. The download was corrupted or tampered with; nothing was installed."
+			die "The signature of SHA256SUMS does not match the Ervisio Console release key. The download was corrupted or tampered with; nothing was installed."
 		fi
 		if [ "$VERIFIER" = python ]; then
-			say "Signature of SHA256SUMS: good (Ervisio release key; checked with the built-in Ed25519 verifier on $VBIN, because this openssl is older than 3)."
+			say "Signature of SHA256SUMS: good (Ervisio Console release key; checked with the built-in Ed25519 verifier on $VBIN, because this openssl is older than 3)."
 		else
-			say "Signature of SHA256SUMS: good (Ervisio release key, checked with $VBIN)."
+			say "Signature of SHA256SUMS: good (Ervisio Console release key, checked with $VBIN)."
 		fi
 	else
 		warn "No tool here can verify ed25519 signatures (OpenSSL 3, python3 or python2 is needed): SHA256SUMS is NOT verified. Continuing because of --insecure-skip-signature."
@@ -2194,7 +2194,7 @@ download_release() {
 # check_release_folder DIR: sets VERSION from DIR/VERSION and checks the folder.
 check_release_folder() {
 	for cr_f in bin/ervisiod bin/ervisio-bridge web/index.html VERSION; do
-		[ -f "$1/$cr_f" ] || die "$1 is not a Ervisio release folder (no $cr_f)."
+		[ -f "$1/$cr_f" ] || die "$1 is not an Ervisio Console release folder (no $cr_f)."
 	done
 	if [ -n "$(find "$1" ! -type f ! -type d | head -n 1)" ]; then
 		die "$1 contains symlinks or special files: refused."
@@ -2297,12 +2297,12 @@ install_unit() {
 	fi
 }
 
-# docker_dropin writes or removes the drop-in that starts Ervisio after
+# docker_dropin writes or removes the drop-in that starts Ervisio Console after
 # Docker, needed when it listens on a Docker bridge address.
 docker_dropin() {
 	dd_f="$UNIT_FILE.d/docker-bridge.conf"
 	if [ "${DOCKER_DROPIN:-0}" = 1 ]; then
-		printf '%s\n' '# Written by install.sh: Ervisio listens on a Docker bridge address,' \
+		printf '%s\n' '# Written by install.sh: Ervisio Console listens on a Docker bridge address,' \
 			'# which exists only once Docker has started.' \
 			'[Unit]' 'After=docker.service' 'Wants=docker.service' >"$TMPD/dropin"
 		say "Writing $dd_f."
@@ -2349,7 +2349,7 @@ print_access() {
 	read_listen
 	pa_s=https
 	[ "$(tls_mode)" = http ] && pa_s=http
-	step "Open Ervisio"
+	step "Open Ervisio Console"
 	[ "$START" = 0 ] && say "(after you start the service)"
 	if [ "$CADDY_DONE" = 1 ]; then
 		say "  https://$CADDY_DOMAIN"
@@ -2371,7 +2371,7 @@ print_access() {
 	say "Sign in with a Linux account."
 	[ "$DRY" = 1 ] && return 0
 	if [ "$(tls_mode)" = http ]; then
-		say "Ervisio serves plain HTTP on $LISTEN_HOST for the reverse proxy; the proxy provides HTTPS."
+		say "Ervisio Console serves plain HTTP on $LISTEN_HOST for the reverse proxy; the proxy provides HTTPS."
 		return 0
 	fi
 	if [ "$(tls_mode)" != self-signed ]; then
@@ -2402,11 +2402,11 @@ do_install() {
 	else
 		resolve_version
 		if [ -n "$INSTALLED" ] && [ -z "$WANT_VERSION" ] && [ "$(ver_cmp "$INSTALLED" "$VERSION")" = 1 ]; then
-			die "Ervisio $INSTALLED is installed, newer than $VERSION. To install $VERSION anyway: --version $VERSION"
+			die "Ervisio Console $INSTALLED is installed, newer than $VERSION. To install $VERSION anyway: --version $VERSION"
 		fi
 	fi
 
-	say "Ervisio installer"
+	say "Ervisio Console installer"
 	say "  System:   $DISTRO_NAME ($FAMILY, $ARCH)"
 	if [ -n "$INSTALLED" ] && [ "$INSTALLED" = "$VERSION" ]; then
 		say "  Version:  $VERSION (installed: repairing)"
@@ -2416,8 +2416,8 @@ do_install() {
 		say "  Version:  $VERSION"
 	fi
 	if [ "$LEGACY" = 1 ]; then
-		say "  Moving:   LinuxAdmin${LEGACY_VERSION:+ $LEGACY_VERSION} (Ervisio's former name) is here: its settings, certificate"
-		say "            and plugins are copied to Ervisio, then its programs are removed"
+		say "  Moving:   LinuxAdmin${LEGACY_VERSION:+ $LEGACY_VERSION} (Ervisio Console's former name) is here: its settings, certificate"
+		say "            and plugins are copied to Ervisio Console, then its programs are removed"
 	fi
 	[ -n "$FROM" ] && say "  From:     $SRC"
 	[ "$DRY" = 1 ] && say "  Dry run:  nothing will be changed"
@@ -2469,7 +2469,7 @@ do_install() {
 	if [ "$DRY" = 1 ]; then
 		say "Dry run finished: nothing was changed."
 	else
-		say "Ervisio $VERSION is installed${PREVIOUS:+ (version $PREVIOUS is kept for rollback)}."
+		say "Ervisio Console $VERSION is installed${PREVIOUS:+ (version $PREVIOUS is kept for rollback)}."
 		say "It updates itself from Settings > About. Uninstall: sh install.sh --uninstall"
 	fi
 }
@@ -2478,10 +2478,10 @@ do_uninstall() {
 	refuse_managed
 	installed_version
 	if [ -z "$INSTALLED" ] && [ ! -e "$UNIT_FILE" ] && [ ! -e "$LIB" ]; then
-		say "Ervisio is not installed."
+		say "Ervisio Console is not installed."
 		[ "$PURGE" = 1 ] || exit 0
 	fi
-	say "Removing Ervisio${INSTALLED:+ $INSTALLED}."
+	say "Removing Ervisio Console${INSTALLED:+ $INSTALLED}."
 	if [ "$PURGE" = 1 ]; then
 		say "--purge: the configuration ($CONF_DIR, including the TLS certificate) and $STATE_DIR (installed plugins) are removed too."
 	fi
@@ -2517,9 +2517,9 @@ do_uninstall() {
 	if [ "$DRY" = 1 ]; then
 		say "Dry run finished: nothing was changed."
 	elif [ "$PURGE" = 1 ]; then
-		say "Ervisio was removed. Per-user preferences stay in each user's ~/.config/ervisio."
+		say "Ervisio Console was removed. Per-user preferences stay in each user's ~/.config/ervisio."
 	else
-		say "Ervisio was removed. Kept: $CONF_DIR (configuration, TLS certificate) and $STATE_DIR (installed plugins); --purge removes them."
+		say "Ervisio Console was removed. Kept: $CONF_DIR (configuration, TLS certificate) and $STATE_DIR (installed plugins); --purge removes them."
 	fi
 }
 
@@ -2609,9 +2609,9 @@ main() {
 		[ "$DRY" = 1 ] || die "Run it as root: curl -fsSL https://raw.githubusercontent.com/$REPO/main/install.sh | sudo sh"
 		warn "Not running as root: dry run only."
 	fi
-	[ "$(uname -s)" = Linux ] || die "Ervisio runs on Linux only."
+	[ "$(uname -s)" = Linux ] || die "Ervisio Console runs on Linux only."
 	if [ ! -d /run/systemd/system ]; then
-		[ "$DRY" = 1 ] || die "systemd is not running on this machine; Ervisio needs it."
+		[ "$DRY" = 1 ] || die "systemd is not running on this machine; Ervisio Console needs it."
 		warn "systemd is not running here (dry run continues)."
 	fi
 	detect_arch

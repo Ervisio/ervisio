@@ -1,8 +1,8 @@
 # Maintainer: Fonlogen <info.fonlogen@gmail.com>
 #
-# Ervisio (formerly LinuxAdmin) from the signed release archives on GitHub.
+# Ervisio Console (formerly LinuxAdmin) from the signed release archives on GitHub.
 # The checksums come from the release's SHA256SUMS, whose ed25519 signature
-# is checked by packaging/arch/update-pkgbuild.sh in the Ervisio repository
+# is checked by packaging/arch/update-pkgbuild.sh in the Ervisio Console repository
 # before they are written here. Source build: the "ervisio" package.
 
 pkgname=ervisio-bin

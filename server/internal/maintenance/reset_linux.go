@@ -89,7 +89,7 @@ func walk(ctx context.Context, fd int, name, rel string, visit visitor, count *i
 	}
 	*count++
 	if *count > maxEntries {
-		return errors.New("Too many Ervisio files to reset safely (limit 200000).")
+		return errors.New("Too many Ervisio Console files to reset safely (limit 200000).")
 	}
 	st, err := statAt(fd, name)
 	if err != nil {
@@ -97,7 +97,7 @@ func walk(ctx context.Context, fd int, name, rel string, visit visitor, count *i
 	}
 	kind := st.Mode & unix.S_IFMT
 	if kind != unix.S_IFDIR && kind != unix.S_IFREG && kind != unix.S_IFLNK {
-		return fmt.Errorf("Cannot reset special file %s; move it outside Ervisio data first.", rel)
+		return fmt.Errorf("Cannot reset special file %s; move it outside Ervisio Console data first.", rel)
 	}
 	if err = visit(fd, name, rel, st); err != nil {
 		return err
@@ -116,7 +116,7 @@ func walk(ctx context.Context, fd int, name, rel string, visit visitor, count *i
 		return err
 	}
 	if opened.Ino != st.Ino || opened.Dev != st.Dev {
-		return errors.New("Ervisio data changed while it was inspected. Preview again.")
+		return errors.New("Ervisio Console data changed while it was inspected. Preview again.")
 	}
 	names, err := namesBounded(d)
 	if err != nil {
@@ -158,7 +158,7 @@ func inspect(ctx context.Context, paths []Target, records map[string]identity) (
 				out[i].Bytes += st.Size
 			}
 			if bytes > maxBytes {
-				return errors.New("Ervisio data exceeds the 64 GiB reset limit.")
+				return errors.New("Ervisio Console data exceeds the 64 GiB reset limit.")
 			}
 			return nil
 		}, &count)
@@ -194,7 +194,7 @@ func ownedHome(home string) bool {
 func homeDirs(ctx context.Context) ([]string, error) {
 	output, err := sys.Output(ctx, "getent", "passwd")
 	if err != nil {
-		return nil, fmt.Errorf("Cannot enumerate every local/NSS Ervisio profile: %w", err)
+		return nil, fmt.Errorf("Cannot enumerate every local/NSS Ervisio Console profile: %w", err)
 	}
 	homes := []string{}
 	for _, line := range strings.Split(string(output), "\n") {
@@ -277,10 +277,10 @@ func Preview(ctx context.Context, o Options) (*Plan, error) {
 	}
 	configurationInfo, err := os.Lstat(o.ConfigPath)
 	if err != nil {
-		return nil, fmt.Errorf("A regular existing Ervisio configuration is required: %w", err)
+		return nil, fmt.Errorf("A regular existing Ervisio Console configuration is required: %w", err)
 	}
 	if !configurationInfo.Mode().IsRegular() {
-		return nil, errors.New("The Ervisio configuration must be a regular file, not a symbolic link.")
+		return nil, errors.New("The Ervisio Console configuration must be a regular file, not a symbolic link.")
 	}
 	homes := o.Homes
 	if homes == nil {
@@ -301,7 +301,7 @@ func Preview(ctx context.Context, o Options) (*Plan, error) {
 	}
 	for _, path := range protected {
 		if path == filepath.Dir(o.ConfigPath) || path == o.ConfigPath || path == o.StateDir {
-			return nil, errors.New("The Ervisio configuration or state root is an active mount/swap. Factory reset cannot safely replace it.")
+			return nil, errors.New("The Ervisio Console configuration or state root is an active mount/swap. Factory reset cannot safely replace it.")
 		}
 	}
 	protected = append(protected, filepath.Join(o.StateDir, "plugins"), filepath.Join(o.StateDir, "updates"), filepath.Join(o.StateDir, "audit"), filepath.Join(o.StateDir, ".factory-reset"))
@@ -690,7 +690,7 @@ func Apply(ctx context.Context, p *Plan, service Service, phase func(string)) (r
 		return nil, err
 	}
 	if fresh.Fingerprint != p.Fingerprint || string(fresh.Config) != string(p.Config) {
-		return nil, errors.New("Ervisio data or configuration changed. Create a fresh preview.")
+		return nil, errors.New("Ervisio Console data or configuration changed. Create a fresh preview.")
 	}
 	phase("backup")
 	archive, err := backup(ctx, p)
@@ -771,7 +771,7 @@ func Apply(ctx context.Context, p *Plan, service Service, phase func(string)) (r
 		return result, err
 	}
 	if fingerprint != p.Fingerprint {
-		return result, errors.New("Ervisio data changed during backup. It was not reset; create a fresh preview.")
+		return result, errors.New("Ervisio Console data changed during backup. It was not reset; create a fresh preview.")
 	}
 	phase("resetting")
 	for i, target := range p.Paths {
@@ -833,7 +833,7 @@ func Apply(ctx context.Context, p *Plan, service Service, phase func(string)) (r
 	}
 	marker := filepath.Join(p.Options.StateDir, ".factory-reset")
 	if _, e := os.Lstat(marker); errors.Is(e, os.ErrNotExist) {
-		if err = cfg.WriteAtomic(marker, []byte("Ervisio factory reset completed\n"), 0600); err != nil {
+		if err = cfg.WriteAtomic(marker, []byte("Ervisio Console factory reset completed\n"), 0600); err != nil {
 			return result, err
 		}
 		markerCreated = true

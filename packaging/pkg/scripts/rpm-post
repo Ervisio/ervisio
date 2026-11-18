@@ -2,13 +2,13 @@
 # %post of the ervisio .rpm (nfpm). $1: 1 = first install, 2+ = upgrade.
 unit=ervisio.service
 
-# Ervisio was called LinuxAdmin: when the linuxadmin package is replaced
+# Ervisio Console was called LinuxAdmin: when the linuxadmin package is replaced
 # (Obsoletes), its scripts run after these ones, but its configuration and
 # data are still here to copy.
 legacy=0
 if [ -d /etc/linuxadmin ] || [ -d /var/lib/linuxadmin ] || [ -d /usr/lib/linuxadmin ]; then
 	legacy=1
-	/usr/bin/ervisiod --migrate-legacy || echo "Ervisio: copying LinuxAdmin's configuration failed; see above." >&2
+	/usr/bin/ervisiod --migrate-legacy || echo "Ervisio Console: copying LinuxAdmin's configuration failed; see above." >&2
 fi
 
 # The PAM service for this family (Fedora/RHEL: password-auth;
@@ -59,9 +59,9 @@ if [ -d /run/systemd/system ]; then
 			/usr/bin/ervisiod --remove-legacy >/dev/null || true
 		fi
 		if systemctl is-active --quiet $unit; then
-			echo "Ervisio is running on https://$(uname -n):9090 (self-signed certificate)."
+			echo "Ervisio Console is running on https://$(uname -n):9090 (self-signed certificate)."
 		else
-			echo "Ervisio is not running yet: systemctl status $unit"
+			echo "Ervisio Console is not running yet: systemctl status $unit"
 		fi
 		if [ "$legacy" = 1 ]; then
 			echo "Ervisio was called LinuxAdmin: its settings were copied to /etc/ervisio (see /etc/linuxadmin/MOVED-TO-ERVISIO.txt)."

@@ -21,7 +21,7 @@ import (
 	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
-// Pairing protocol (see docs/api/environments.md, "Another Ervisio server").
+// Pairing protocol (see docs/api/environments.md, "Another Ervisio Console server").
 //
 //	B (the server whose Docker is used) creates a one-time token: an admin of B
 //	picks the Linux user the pairing runs as. A's admin pastes B's address and
@@ -194,7 +194,7 @@ func hostPort(base string) (scheme, host, hp string, err error) {
 	return u.Scheme, host, hp, nil
 }
 
-// serverTransport dials another Ervisio server: plain, or TLS pinned to pin
+// serverTransport dials another Ervisio Console server: plain, or TLS pinned to pin
 // (when pin is empty and seen is non-nil the certificate is recorded).
 func serverTransport(base, pin string, seen *string) (*http.Transport, error) {
 	scheme, host, hp, err := hostPort(base)
@@ -239,7 +239,7 @@ func probeServer(ctx context.Context, base string) (*ProbeResult, error) {
 	}
 	b, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 	if resp.StatusCode != 200 || json.Unmarshal(b, &info) != nil || info.Service != "ervisio" {
-		return nil, errf("%s does not look like an Ervisio server (or it is too old to be paired).", base)
+		return nil, errf("%s does not look like an Ervisio Console server (or it is too old to be paired).", base)
 	}
 	return &ProbeResult{Kind: KindErvisio, Fingerprint: seen, Plain: strings.HasPrefix(base, "http://")}, nil
 }

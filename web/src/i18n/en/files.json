@@ -115,7 +115,7 @@
     "forget": "Forget connection",
     "forgetTitle": "Forget {name}?",
     "forgetHint": "Removes the saved connection and its credentials. Files on the server are kept.",
-    "description": "Connect from this server to another host. Saved credentials are encrypted for your Ervisio account.",
+    "description": "Connect from this server to another host. Saved credentials are encrypted for your Ervisio Console account.",
     "name": "Connection name",
     "host": "Host or IP address",
     "port": "Port",

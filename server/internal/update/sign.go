@@ -28,7 +28,7 @@ const ReleasePublicKey = "eYuaHtzKiE4ofn2sX/p7tSNX/p5+sGV9EJT0aKSmNU8="
 // Historical constant: it keeps the product's former name (LinuxAdmin) on
 // purpose. Consoles of every earlier version and install.sh verify releases
 // with it, including the release that moves a LinuxAdmin installation to
-// Ervisio, so changing it would make new releases unverifiable for them.
+// Ervisio Console, so changing it would make new releases unverifiable for them.
 // Only change it together with a release key rotation (docs/RELEASING.md).
 const sigPrefix = "linuxadmin-release-v1\n"
 
@@ -70,7 +70,7 @@ func VerifySums(sums, sig []byte, keys []ed25519.PublicKey) error {
 			return nil
 		}
 	}
-	return errors.New("the release signature does not match the Ervisio release key")
+	return errors.New("the release signature does not match the Ervisio Console release key")
 }
 
 var sumLineRe = regexp.MustCompile(`^([0-9a-f]{64}) [ *]([A-Za-z0-9][A-Za-z0-9._+-]{0,200})$`)

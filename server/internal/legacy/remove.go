@@ -12,7 +12,7 @@ import (
 	"github.com/ervisio/ervisio/server/internal/brand"
 )
 
-// RemoveLegacy deletes what is left of LinuxAdmin once Ervisio runs: its
+// RemoveLegacy deletes what is left of LinuxAdmin once Ervisio Console runs: its
 // programs (/usr/lib/linuxadmin, /usr/bin/linuxadmind, /usr/share/linuxadmin),
 // the unit and drop-ins install.sh wrote, its PAM file when LinuxAdmin wrote
 // it, and its cache. purge also deletes /etc/linuxadmin and

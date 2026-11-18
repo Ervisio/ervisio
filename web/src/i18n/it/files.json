@@ -115,7 +115,7 @@
     "forget": "Dimentica connessione",
     "forgetTitle": "Dimenticare {name}?",
     "forgetHint": "Rimuove la connessione salvata e le credenziali. I file sul server vengono conservati.",
-    "description": "Collegati da questo server a un altro host. Le credenziali salvate sono cifrate per il tuo account Ervisio.",
+    "description": "Collegati da questo server a un altro host. Le credenziali salvate sono cifrate per il tuo account Ervisio Console.",
     "name": "Nome connessione",
     "host": "Host o indirizzo IP",
     "port": "Porta",

@@ -347,7 +347,7 @@ var envMethods = map[string]bool{
 	"plugins.http": true, "plugins.httpStream": true,
 	"plugins.exec": true, "plugins.execStream": true, "plugins.pty": true,
 	"plugins.httpDownload": true, "plugins.httpUpload": true, "plugins.execDownload": true,
-	// The plugin files capability: only for an Ervisio environment (the
+	// The plugin files capability: only for an Ervisio Console environment (the
 	// bridge's plugins.envCheck refuses the tunnel kinds: files are local there).
 	"plugins.readFile": true, "plugins.writeFile": true, "plugins.listDir": true,
 	"plugins.mkdir": true, "plugins.remove": true,
@@ -358,7 +358,7 @@ var envMethods = map[string]bool{
 //   - for tcp-tls, ssh and portainer-agent hands the user's bridge a tunnel
 //     socket in the "envSocket" param (the daemon removes any "envSocket" the
 //     browser sent), or
-//   - for another Ervisio server returns the bridge running there.
+//   - for another Ervisio Console server returns the bridge running there.
 //
 // release must be called when the call or stream ends.
 func (s *Server) routeWithEnv(ctx context.Context, sess *Session, method string, params json.RawMessage, admin bool) (p *bridge.Proc, isAdmin bool, out json.RawMessage, release func(), e *rpc.Error) {

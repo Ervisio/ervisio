@@ -409,7 +409,7 @@ func (m *Manager) Briefs(user string, groups []string) []Brief {
 	return out
 }
 
-// Create validates and stores a new environment. For an Ervisio server it
+// Create validates and stores a new environment. For an Ervisio Console server it
 // first redeems the pairing token.
 func (m *Manager) Create(ctx context.Context, in Input, by string) (*View, error) {
 	e, err := in.Validate(nil)
@@ -456,7 +456,7 @@ func (m *Manager) Update(ctx context.Context, id string, in Input) (*View, error
 	return &View{Env: e, HasSecrets: e.Has(), Status: st}, nil
 }
 
-// Delete removes an environment, closes its tunnels and, for an Ervisio
+// Delete removes an environment, closes its tunnels and, for an Ervisio Console
 // server, revokes the pairing there (best effort).
 func (m *Manager) Delete(ctx context.Context, id string) error {
 	e, err := m.st.remove(id)

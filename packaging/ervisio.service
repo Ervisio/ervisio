@@ -1,9 +1,9 @@
 [Unit]
-Description=Ervisio web console
+Description=Ervisio Console
 Documentation=https://github.com/ervisio/ervisio
 After=network-online.target
 Wants=network-online.target
-# Ervisio was called LinuxAdmin: both listen on the same port, so starting
+# Ervisio Console was called LinuxAdmin: both listen on the same port, so starting
 # one stops the other (the move from LinuxAdmin relies on it, and so does
 # going back to it: systemctl start linuxadmin).
 Conflicts=linuxadmin.service

@@ -234,7 +234,7 @@
     "refresh": "Aggiorna account",
     "accessSummary": "Accesso agli account",
     "accessCounts": "{admins} amministratori, {restricted} account con limitazioni note, {total} persone",
-    "securityText": "Apri un account per gestire permessi, chiavi SSH o sessioni. Ogni modifica rispetta i permessi applicati da Ervisio.",
+    "securityText": "Apri un account per gestire permessi, chiavi SSH o sessioni. Ogni modifica rispetta i permessi applicati da Ervisio Console.",
     "accountCounts": "{people} persone, {system} account di sistema, {groups} gruppi",
     "loading": "Lettura degli account…",
     "description": {

@@ -129,7 +129,7 @@
     "resize": "Ridimensiona finestra",
     "snapLeft": "Affianca a sinistra",
     "showDesktop": "Mostra desktop",
-    "assistant": "Ervisio AI",
+    "assistant": "Ervisio Console AI",
     "classic": "Passa all’interfaccia classica",
     "signOut": "Esci",
     "lockAdmin": "Blocca accesso amministratore",
@@ -195,7 +195,7 @@
     "done": "Fatto."
   },
   "assistant": {
-    "title": "Ervisio AI",
+    "title": "Ervisio Console AI",
     "toggle": "Apri o riduci la chat AI",
     "minimize": "Riduci la chat AI",
     "expand": "Espandi la chat AI",

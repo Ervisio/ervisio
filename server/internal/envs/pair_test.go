@@ -59,7 +59,7 @@ func TestPairingOverPinnedTLS(t *testing.T) {
 	if _, err := m.redeemRemote(context.Background(), env, "ept_good", "admin"); err == nil || !strings.Contains(err.Error(), "changed") || gotName != "" {
 		t.Fatalf("pin mismatch: %v (server saw %q)", err, gotName)
 	}
-	// Something that is not an Ervisio server is not paired.
+	// Something that is not an Ervisio Console server is not paired.
 	other := httptest.NewServer(http.NotFoundHandler())
 	defer other.Close()
 	if _, err := probeServer(context.Background(), other.URL); err == nil {

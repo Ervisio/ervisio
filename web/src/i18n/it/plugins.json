@@ -77,8 +77,8 @@
   },
   "cap": {
     "root": "Eseguire comandi come root",
-    "rootText_one": "Solo l'unico comando fisso che dichiara, tramite l'helper di Ervisio.",
-    "rootText_other": "Solo i {count} comandi fissi che dichiara, tramite l'helper di Ervisio.",
+    "rootText_one": "Solo l'unico comando fisso che dichiara, tramite l'helper di Ervisio Console.",
+    "rootText_other": "Solo i {count} comandi fissi che dichiara, tramite l'helper di Ervisio Console.",
     "rootGroup": "Senza root se fai parte del gruppo {groups}.",
     "user": "Eseguire comandi come te",
     "userText_one": "Solo l'unico comando fisso che dichiara.",
@@ -184,7 +184,7 @@
   },
   "moved": {
     "title": "{name} ora è nel marketplace",
-    "text": "{name} non è più incluso in Ervisio. Installalo dal marketplace per continuare a usarlo qui; è firmato dal team di Ervisio.",
+    "text": "{name} non è più incluso in Ervisio Console. Installalo dal marketplace per continuare a usarlo qui; è firmato dal team Ervisio.",
     "dismiss": "Non ora"
   },
   "platformLinux": "Funziona solo su Linux",

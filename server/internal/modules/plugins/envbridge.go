@@ -16,7 +16,7 @@ import (
 // capability or command must opt in with "remote"), and finally hands the
 // bridge the path of a tunnel socket in the "envSocket" param. The bridge
 // then talks to that socket instead of the capability's own, or puts it in
-// the command's {env} item. For another Ervisio server the call goes to the
+// the command's {env} item. For another Ervisio Console server the call goes to the
 // bridge running there and none of this is used.
 
 // envSocketOK accepts a tunnel socket path: absolute and clean, an actual
@@ -115,11 +115,11 @@ func envCheckQuery(params json.RawMessage) (q struct {
 }
 
 // fileFamily is the family for a files call. Files are not tunnelled: only
-// another Ervisio server can run them (its bridge applies its own
+// another Ervisio Console server can run them (its bridge applies its own
 // manifest). The plugin must be one that uses environments at all.
 func fileFamily(m *Manifest, kind string) (string, error) {
 	if kind != envs.KindErvisio {
-		return "", rpc.Errorf(rpc.Invalid, "Files are local for this kind of environment: leave out env for files calls (only an environment of kind Ervisio, a paired server, can read and write files).")
+		return "", rpc.Errorf(rpc.Invalid, "Files are local for this kind of environment: leave out env for files calls (only an environment of kind Ervisio Console, a paired server, can read and write files).")
 	}
 	if len(m.Capabilities.Files.Read)+len(m.Capabilities.Files.Write) == 0 {
 		return "", rpc.Errorf(rpc.Forbidden, "%s declares no files.", m.Name)

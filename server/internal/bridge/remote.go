@@ -12,7 +12,7 @@ import (
 	"github.com/ervisio/ervisio/server/internal/rpc"
 )
 
-// NewRemote wraps the connection to a bridge that runs on another Ervisio
+// NewRemote wraps the connection to a bridge that runs on another Ervisio Console
 // server (a paired environment): the bridge protocol flows over conn, whose
 // first line is the other bridge's hello. Closing the Proc closes conn.
 func NewRemote(ctx context.Context, conn io.ReadWriteCloser, tag string) (*Proc, error) {

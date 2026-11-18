@@ -107,7 +107,7 @@ type auditCallParams struct {
 	Key     string   `json:"key"`
 	Value   any      `json:"value"`
 	// Env is the environment a call is for, Via says that a paired
-	// Ervisio server proxied it ("via <server> by <user>").
+	// Ervisio Console server proxied it ("via <server> by <user>").
 	Env string `json:"env"`
 	Via string `json:"via"`
 }

@@ -33,7 +33,7 @@ func TestCoreRequirement(t *testing.T) {
 			t.Fatalf("%s: %v", c.doc, err)
 		}
 		msg := m.CoreProblem()
-		if !strings.Contains(msg, "needs Ervisio") || !strings.Contains(msg, "Update Ervisio") {
+		if !strings.Contains(msg, "needs Ervisio Console") || !strings.Contains(msg, "Update Ervisio Console") {
 			t.Errorf("%s on %s: %q", c.doc, c.core, msg)
 		}
 	}
@@ -94,7 +94,7 @@ func TestInstallRefusesAPluginForANewerCore(t *testing.T) {
 	arch := filepath.Join(t.TempDir(), "demo.tar.gz")
 	_ = os.WriteFile(arch, makeTar(t, []tent{{name: "demo/manifest.json", body: doc}, {name: "demo/index.js", body: "export default () => {}"}}), 0o644)
 	_, err := install(context.Background(), installRequest{Source: arch})
-	if !rpc.IsCode(err, rpc.Conflict) || !strings.Contains(err.Error(), "needs Ervisio 0.5.0 or newer") {
+	if !rpc.IsCode(err, rpc.Conflict) || !strings.Contains(err.Error(), "needs Ervisio Console 0.5.0 or newer") {
 		t.Fatalf("%v", err)
 	}
 	if _, err := os.Stat(filepath.Join(installed, "demo")); err == nil {

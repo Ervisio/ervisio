@@ -1,6 +1,6 @@
 # LinuxAdmin security review: remediation checklist
 
-> Written when the product was called LinuxAdmin (now Ervisio). File names, paths, the cookie (`la_session`) and the
+> Written when the product was called LinuxAdmin (now Ervisio Console). File names, paths, the cookie (`la_session`) and the
 > header value (`X-Requested-With: linuxadmin`) below are the names of that time; the code is the same under the new
 > names (`docs/RELEASING.md`, "Rename transition").
 
@@ -318,7 +318,7 @@ pairing, approved hosts). Fixed on `fix/0.5-security`; each fix has a regression
   the mapped user to be root or in `adminUnlessGroup`, else `needs_admin`; checked live, nothing escalates). `envCheck`
   refuses the tunnel kinds for files (`TestEnvCheckFiles`). Writes, folders and removals are audited on both servers (the
   paired side with `origin` = `via <server> by <user>`); reads are not audited anywhere, as before.
-* **`plugins.envs.list` address**: `host:port`, `user@host:port` (ssh) or the URL host of an Ervisio server, never a path,
+* **`plugins.envs.list` address**: `host:port`, `user@host:port` (ssh) or the URL host of an Ervisio Console server, never a path,
   credential or secret (`TestDisplayAddressIsNonSecret`). Shown only to users who may use the environment (the access list
   already filters the list).
 * **Download status** is bound to the session that started the transfer (another session, an unknown token and an upload all

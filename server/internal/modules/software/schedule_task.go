@@ -17,7 +17,7 @@ import (
 // task definition is rendered as XML (platform-neutral, so it is testable
 // everywhere) and registered with `schtasks /Create /XML`.
 const (
-	taskFolder = `\` + brand.Name               //nolint:unused // used by the windows build
+	taskFolder = `\` + brand.WindowsName        //nolint:unused // used by the windows build
 	taskName   = taskFolder + `\SoftwareUpdate` //nolint:unused // used by the windows build
 )
 

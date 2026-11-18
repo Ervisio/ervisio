@@ -46,7 +46,7 @@ function initialJob(): ResetStatus | null {
   return null;
 }
 
-/** Kept outside RequireAuth so restarting Ervisio cannot unmount the progress watcher. */
+/** Kept outside RequireAuth so restarting Ervisio Console cannot unmount the progress watcher. */
 export function ResetProgressPage() {
   const t = useT('settings');
   const [job, setJob] = useState(initialJob);

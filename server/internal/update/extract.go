@@ -20,7 +20,7 @@ type Limits struct {
 	MaxTotal   int64 // bytes of all files
 }
 
-// DefaultLimits fit an Ervisio release (two ~20 MB binaries, a few MB of
+// DefaultLimits fit an Ervisio Console release (two ~20 MB binaries, a few MB of
 // web assets) with a wide margin.
 var DefaultLimits = Limits{MaxEntries: 20000, MaxFile: 256 << 20, MaxTotal: 1 << 30}
 

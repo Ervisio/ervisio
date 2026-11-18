@@ -1,5 +1,5 @@
 // Package backup implements the account-owned, bounded worker used by the
-// official Backup plugin. Scheduling remains in Ervisio's existing job manager.
+// official Backup plugin. Scheduling remains in Ervisio Console's existing job manager.
 package backup
 
 import (

@@ -77,8 +77,8 @@
   },
   "cap": {
     "root": "Run commands as root",
-    "rootText_one": "Only the 1 fixed command it declares, through the Ervisio helper.",
-    "rootText_other": "Only the {count} fixed commands it declares, through the Ervisio helper.",
+    "rootText_one": "Only the 1 fixed command it declares, through the Ervisio Console helper.",
+    "rootText_other": "Only the {count} fixed commands it declares, through the Ervisio Console helper.",
     "rootGroup": "Without root if you are in the {groups} group.",
     "user": "Run commands as you",
     "userText_one": "Only the 1 fixed command it declares.",

@@ -67,7 +67,7 @@ func (s *Server) initJobs() error {
 	return nil
 }
 
-// NotifyCore sends a core notification (a new Ervisio release...) to the
+// NotifyCore sends a core notification (a new Ervisio Console release...) to the
 // channels that subscribe to the event.
 func (s *Server) NotifyCore(msg notify.Message, event string) {
 	if s.notifier == nil {

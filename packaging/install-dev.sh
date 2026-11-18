@@ -1,5 +1,5 @@
 #!/bin/bash
-# Installs a locally built Ervisio for testing on this machine, with the
+# Installs a locally built Ervisio Console for testing on this machine, with the
 # same installer and layout as a release (install.sh, docs/RELEASING.md).
 # Build first as your user:  make build            (VERSION=1.2.3 to stamp a version)
 # Then:                      sudo ./packaging/install-dev.sh          (install or update)

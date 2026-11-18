@@ -1,6 +1,6 @@
 // Package legacy moves an installation of LinuxAdmin (the product's name up
-// to version 0.2.0) to Ervisio. Nothing is moved: the LinuxAdmin files are
-// copied to the Ervisio locations and left where they are, so going back to
+// to version 0.2.0) to Ervisio Console. Nothing is moved: the LinuxAdmin files are
+// copied to the Ervisio Console locations and left where they are, so going back to
 // LinuxAdmin stays possible until they are removed (RemoveLegacy).
 //
 //	/etc/linuxadmin/linuxadmin.conf      -> /etc/ervisio/ervisio.conf (with tls/ and the rest)
@@ -15,7 +15,7 @@
 //
 //   - Self-update from LinuxAdmin: its updater installs the compatibility
 //     archive into /usr/lib/linuxadmin/versions/<v> and starts that
-//     version's daemon binary as the switch helper. That binary is Ervisio:
+//     version's daemon binary as the switch helper. That binary is Ervisio Console:
 //     it notices it was started from the LinuxAdmin layout and runs
 //     Transition instead of a switch.
 //   - install.sh and the distribution packages: ervisiod --migrate-legacy
@@ -64,7 +64,7 @@ const (
 	importMarker = ".imported-from-" + brand.LegacySlug
 
 	// NoteFile is written into the LinuxAdmin configuration folder once the
-	// data lives in the Ervisio locations.
+	// data lives in the Ervisio Console locations.
 	NoteFile = "MOVED-TO-ERVISIO.txt"
 
 	// InstallerUnitHeader is the first line install.sh writes into the unit

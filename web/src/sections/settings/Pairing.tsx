@@ -12,7 +12,7 @@ const when = (iso: string) => {
   return Number.isNaN(d.getTime()) || d.getFullYear() < 2000 ? '' : formatDateTime(d);
 };
 
-/** Pairing, server side: lets another Ervisio server use the Docker of this one (its Environments > Ervisio server). */
+/** Pairing, server side: lets another Ervisio Console server use the Docker of this one (its Environments > Ervisio Console server). */
 export function PairingBlock({
   pairings,
   onChange,

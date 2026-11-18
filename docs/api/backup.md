@@ -1,7 +1,7 @@
 # Backup worker and official plugin
 
 The optional [Backup plugin](https://github.com/Ervisio/plugin-backup) requires
-Ervisio **7.0.3 or later** and currently runs on Linux. Its Classic and ErvisiOS
+Ervisio Console **7.0.3 or later** and currently runs on Linux. Its Classic and ErvisiOS
 pages configure the same account-owned plans. The existing plugin job manager
 executes them after sign-out and across daemon restarts; no second daemon,
 browser timer or cron service is installed.

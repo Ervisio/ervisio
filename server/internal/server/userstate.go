@@ -171,7 +171,7 @@ func (s *Server) handlePersonalPreferences(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		error := rpc.ToError(err, true)
 		if error.Code == rpc.NeedsAdmin {
-			error = rpc.Errorf(rpc.Forbidden, "The account preferences could not be read. Check access to the account's Ervisio configuration directory.")
+			error = rpc.Errorf(rpc.Forbidden, "The account preferences could not be read. Check access to the account's Ervisio Console configuration directory.")
 		}
 		writeError(w, error)
 		return true

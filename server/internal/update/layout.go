@@ -15,7 +15,7 @@ import (
 	"github.com/ervisio/ervisio/server/internal/sys"
 )
 
-// Layout describes where Ervisio is installed:
+// Layout describes where Ervisio Console is installed:
 //
 //	LibDir/versions/<v>/{bin/ervisiod, bin/ervisio-bridge, web/, plugins/, packaging/, VERSION}
 //	LibDir/current  -> versions/<v>   (the running version)
@@ -45,7 +45,7 @@ func DefaultLayout() *Layout {
 
 var managerRe = regexp.MustCompile(`^[a-z][a-z0-9._+-]{0,31}$`)
 
-// ManagedBy returns the package manager that installed Ervisio, read
+// ManagedBy returns the package manager that installed Ervisio Console, read
 // from the marker file ("" when there is none: an install.sh or source
 // install that updates itself). A marker whose content is not a plain name
 // still counts and reads as "unknown".
@@ -231,7 +231,7 @@ func (l *Layout) Migrate(name string) (string, error) {
 		cur, _ := l.Current()
 		return cur, l.ensureEntryLinks()
 	case KindNone:
-		return "", errors.New("Ervisio is not installed in " + l.LibDir)
+		return "", errors.New("Ervisio Console is not installed in " + l.LibDir)
 	}
 	if !ValidDirName(name) {
 		name = "legacy"
@@ -358,7 +358,7 @@ func RunningVersionDir() (string, bool) {
 		return d, true
 	}
 	// The compatibility archive run from LinuxAdmin's layout, until the
-	// move to Ervisio (internal/legacy) has happened.
+	// move to Ervisio Console (internal/legacy) has happened.
 	return versionDirOf(exe, brand.LegacyLibDir)
 }
 

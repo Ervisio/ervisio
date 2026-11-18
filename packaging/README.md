@@ -1,8 +1,8 @@
 # Packaging
 
-Ervisio is installed in one of two layouts (details and publishing: `docs/PACKAGING.md`):
+Ervisio Console is installed in one of two layouts (details and publishing: `docs/PACKAGING.md`):
 
-- **Versioned**, by `install.sh` (repository root) and `install-dev.sh`. Ervisio updates itself
+- **Versioned**, by `install.sh` (repository root) and `install-dev.sh`. Ervisio Console updates itself
   (`docs/RELEASING.md`).
 - **Flat**, by the `.deb`, `.rpm` and AUR packages. The package manager installs updates; the marker
   `/usr/lib/ervisio/managed` turns self-update off.
@@ -28,7 +28,7 @@ Files here:
 | `build-release.sh VERSION ARCH OUTDIR` | Packs a built tree into `ervisio-VERSION-linux-ARCH.tar.gz` (release workflow, `make dist`). |
 | `build-packages.sh RELEASE_DIR ARCH OUTDIR` | Builds `ervisio_VERSION_ARCH.deb` and `ervisio-VERSION-1.RPMARCH.rpm` from an extracted release archive with nfpm. |
 | `pkg/nfpm.yaml`, `pkg/scripts/` | nfpm configuration and the deb/rpm install scripts. |
-| `package-service.sh` | Restarts or stops the service from package scripts; defers it when the package manager runs inside Ervisio. |
+| `package-service.sh` | Restarts or stops the service from package scripts; defers it when the package manager runs inside Ervisio Console. |
 | `pam.d/ervisio.{arch,debian,fedora,suse}` | PAM service per distribution family. |
 | `arch/ervisio-bin`, `arch/ervisio` | AUR packages (PKGBUILD, .SRCINFO, install script, copies of the PAM file and `package-service.sh`). |
 | `arch/update-pkgbuild.sh VERSION` | Points both PKGBUILDs at a release: verified checksums, pkgver, `.SRCINFO`. |

@@ -1,5 +1,5 @@
 // Command release-sign signs and verifies the SHA256SUMS file of a
-// Ervisio release (see docs/RELEASING.md).
+// Ervisio Console release (see docs/RELEASING.md).
 //
 //	release-sign -genkey FILE                 create a release key (prints the public key to embed)
 //	release-sign -key FILE [-out SIG] SUMS    write SUMS.sig (or SIG)

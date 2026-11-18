@@ -157,7 +157,7 @@ Failures:
 | 401 | `unauthenticated`, `data.reason:"challenge_invalid"` |
 | 400 | `invalid`, `data.reason:"unsupported_key"` |
 | 403 | `forbidden`, `data.reason:"ssh_keys_disabled"` / `"root_disabled"` / `"dev_mode_user"` |
-| 403 | `forbidden`, `data.reason:"not_allowed"`: "This account may not sign in to Ervisio": the key signature verified and the key is listed, but the sign-in allowlist refuses the account. Only someone holding a key of the account sees it. |
+| 403 | `forbidden`, `data.reason:"not_allowed"`: "This account may not sign in to Ervisio Console": the key signature verified and the key is listed, but the sign-in allowlist refuses the account. Only someone holding a key of the account sees it. |
 | 429 / 503 | as for `/api/auth/login` (rate limit shared with password attempts, PAM slots) |
 
 Every refused key sign-in counts as a failed attempt in the same per-client limiter as passwords

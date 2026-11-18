@@ -215,7 +215,7 @@ export interface AuditEntry {
   detail?: string;
   /** The environment the call was for, when it was not this machine. */
   env?: string;
-  /** "via <server> by <user>" when a paired Ervisio server proxied the call. */
+  /** "via <server> by <user>" when a paired Ervisio Console server proxied the call. */
   origin?: string;
 }
 

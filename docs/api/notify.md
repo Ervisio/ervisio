@@ -25,7 +25,7 @@ notifications the channel gets:
 | event | sent when |
 |---|---|
 | `alerts` | the Overview alerts (`overview.alerts`: a failed service, pending updates, failed SSH sign-ins, disk, swap) show a new warning or error, or a warning gets worse. The daemon asks a root bridge every 5 minutes while a channel subscribes; the first scan after a start only records. |
-| `updates` | a new Ervisio release is found by the automatic update check (`updates.auto_check`) |
+| `updates` | a new Ervisio Console release is found by the automatic update check (`updates.auto_check`) |
 | `plugins` | a plugin calls `plugins.notify`, or a job `notify` step runs |
 | `jobs` | a plugin job starts failing, and when it works again |
 

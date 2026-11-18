@@ -1427,7 +1427,7 @@ export function DesktopShell() {
                             ? app.native
                               ? t('desktop.nativeApp')
                               : t('desktop.classicApp')
-                            : 'Ervisio'}
+                            : 'Ervisio Console'}
                         </small>
                       </span>
                     </button>

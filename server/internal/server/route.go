@@ -157,7 +157,7 @@ func (s *Server) handleRPC(w http.ResponseWriter, r *http.Request, sess *Session
 		return
 	}
 	if s.resetInProgress() {
-		writeError(w, rpc.Errorf(rpc.Unavailable, "Ervisio maintenance is in progress. Wait for it to finish."))
+		writeError(w, rpc.Errorf(rpc.Unavailable, "Ervisio Console maintenance is in progress. Wait for it to finish."))
 		return
 	}
 	// The activity log is read by the daemon itself (it is root's).

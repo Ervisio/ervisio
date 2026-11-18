@@ -19,7 +19,7 @@ import { UnlockHost } from './shell/UnlockHost';
 import { ThemeProvider } from './theme';
 import { ToastViewport } from './ui';
 
-// This browser's settings from LinuxAdmin (Ervisio's former name) move to Ervisio's keys once, before anything reads them.
+// This browser's settings from LinuxAdmin (Ervisio Console's former name) move to Ervisio Console's keys once, before anything reads them.
 migrateStorage(typeof localStorage === 'undefined' ? null : localStorage);
 
 createRoot(document.getElementById('root')!).render(

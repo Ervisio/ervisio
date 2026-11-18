@@ -34,7 +34,7 @@ const (
 
 // Events a channel can subscribe to.
 const (
-	// EventUpdates: a new Ervisio release is available.
+	// EventUpdates: a new Ervisio Console release is available.
 	EventUpdates = "updates"
 	// EventPlugins: notifications sent by plugins (plugins.notify, job notify steps).
 	EventPlugins = "plugins"

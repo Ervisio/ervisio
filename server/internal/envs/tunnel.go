@@ -97,7 +97,7 @@ func (m *Manager) Tunnel(e *Env, uid, gid int) (string, error) {
 // and SYSTEM only.
 func (m *Manager) TunnelAs(e *Env, uid, gid int, sid string) (string, error) {
 	if e.Kind == KindErvisio {
-		return "", errf("An Ervisio environment has no tunnel; its calls run on the other server.")
+		return "", errf("An Ervisio Console environment has no tunnel; its calls run on the other server.")
 	}
 	key := e.ID + ":" + strconv.Itoa(uid) + sid
 	m.mu.Lock()

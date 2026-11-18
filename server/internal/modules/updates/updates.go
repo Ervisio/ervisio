@@ -1,4 +1,4 @@
-// Package updates exposes Ervisio's self-update to the Settings section:
+// Package updates exposes Ervisio Console's self-update to the Settings section:
 // updates.check and updates.status (any user), updates.apply (admin,
 // stream) and updates.rollback (admin). The work is done by
 // internal/update; see docs/api/updates.md.
@@ -117,7 +117,7 @@ type CheckResult struct {
 	Newer     bool    `json:"newer"`
 	Arch      string  `json:"arch"`
 	// ManagedBy names the package manager that installs updates of a
-	// packaged Ervisio ("" = self-update).
+	// packaged Ervisio Console ("" = self-update).
 	ManagedBy string `json:"managedBy,omitempty"`
 }
 

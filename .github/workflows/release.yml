@@ -1,6 +1,6 @@
 # Builds, signs and publishes a release when a version tag is pushed:
 #
-#   git tag -a v1.2.0 -m "Ervisio 1.2.0" && git push origin v1.2.0
+#   git tag -a v1.2.0 -m "Ervisio Console 1.2.0" && git push origin v1.2.0
 #
 # vX.Y.Z      -> stable release ("latest"): offered to every machine on the stable channel
 # vX.Y.Z-rc.1 -> pre-release: offered only to machines on the prerelease channel
@@ -8,7 +8,7 @@
 # Assets: ervisio-<version>-linux-{amd64,arm64}.tar.gz, ervisio-<version>-windows-{amd64,arm64}.zip, the packages
 # ervisio_<version>_{amd64,arm64}.deb and ervisio-<version>-1.{x86_64,aarch64}.rpm
 # (nfpm), the compatibility archives linuxadmin-<version>-linux-{amd64,arm64}.tar.gz
-# that consoles still running LinuxAdmin (Ervisio's name up to 0.2.0) update
+# that consoles still running LinuxAdmin (Ervisio Console's name up to 0.2.0) update
 # from (docs/RELEASING.md, "Rename transition"), SHA256SUMS over all of them
 # and SHA256SUMS.sig (ed25519, secret RELEASE_SIGNING_KEY). Installed consoles and install.sh refuse anything
 # that does not verify against the release key embedded in
@@ -257,7 +257,7 @@ jobs:
             git tag -l --format='%(contents:subject)%0a%0a%(contents:body)' "$TAG" > "$notes"
           fi
           if ! grep -q '[^[:space:]]' "$notes"; then
-            echo "Ervisio $VERSION." > "$notes"
+            echo "Ervisio Console $VERSION." > "$notes"
           fi
           cat >> "$notes" <<'EOF'
 
@@ -266,7 +266,7 @@ jobs:
           Windows (10 1809+ / Server 2019+), in an elevated PowerShell: `irm https://raw.githubusercontent.com/ervisio/ervisio/main/install-windows.ps1 | iex`.
           Packages: the `.deb` (Debian 12+, Ubuntu 22.04+) and `.rpm` (Fedora, RHEL 9+, openSUSE) below; a packaged install is updated by its package manager.
           Consoles installed with `install.sh` update from **Settings › About › Check for updates**.
-          Ervisio was called LinuxAdmin: LinuxAdmin consoles update to Ervisio the same way (they use the `linuxadmin-*.tar.gz` archives), and `install.sh` or the packages move an existing LinuxAdmin with its settings.
+          Ervisio Console was called LinuxAdmin: LinuxAdmin consoles update to Ervisio Console the same way (they use the `linuxadmin-*.tar.gz` archives), and `install.sh` or the packages move an existing LinuxAdmin with its settings.
           `SHA256SUMS` lists every file of the release and is signed with the release key (`SHA256SUMS.sig`, ed25519); consoles and `install.sh` verify it before installing.
           EOF
           cat "$notes"
@@ -274,7 +274,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          flags=(--verify-tag --title "Ervisio $VERSION" --notes-file "$RUNNER_TEMP/notes.md")
+          flags=(--verify-tag --title "Ervisio Console $VERSION" --notes-file "$RUNNER_TEMP/notes.md")
           if [ "$PRERELEASE" = true ]; then flags+=(--prerelease --latest=false); else flags+=(--latest); fi
           gh release create "$TAG" "${flags[@]}" \
             dist/ervisio-"$VERSION"-linux-*.tar.gz dist/ervisio_"$VERSION"_*.deb dist/ervisio-"$VERSION"-1.*.rpm \

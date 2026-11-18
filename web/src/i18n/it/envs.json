@@ -39,8 +39,8 @@
       "addressHint": "Host e porta dell'agente, di solito 9001."
     },
     "ervisio": {
-      "name": "Un altro server Ervisio",
-      "desc": "Un altro server con Ervisio. Le chiamate vengono eseguite là, con i suoi plugin e le sue regole, come un utente scelto durante l'abbinamento.",
+      "name": "Un altro server Ervisio Console",
+      "desc": "Un altro server con Ervisio Console. Le chiamate vengono eseguite là, con i suoi plugin e le sue regole, come un utente scelto durante l'abbinamento.",
       "addressPlaceholder": "https://server.lan:9090",
       "addressHint": "L'indirizzo della console web dell'altro server.",
       "plain": "Consenti http semplice (non sicuro)",
@@ -78,7 +78,7 @@
     "ca": "La mia CA",
     "pin": "Fissa il certificato",
     "skip": "Non verificare",
-    "pinHint": "Verifica la connessione qui sotto e conferma l'impronta del certificato. Ervisio rifiuterà qualsiasi altro certificato.",
+    "pinHint": "Verifica la connessione qui sotto e conferma l'impronta del certificato. Ervisio Console rifiuterà qualsiasi altro certificato.",
     "skipWarn": "Senza verifica, chiunque sia tra questo server e l'host può spacciarsi per esso. Meglio una CA o un certificato fissato."
   },
   "probe": {
@@ -149,11 +149,11 @@
   },
   "pair": {
     "title": "Abbina un altro server",
-    "desc": "Permetti a un altro server Ervisio di usare i plugin di questo server, come Docker, tramite un abbinamento.",
+    "desc": "Permetti a un altro server Ervisio Console di usare i plugin di questo server, come Docker, tramite un abbinamento.",
     "none": "Nessun server è abbinato a questo.",
     "create": "Crea token di abbinamento",
     "dialogTitle": "Abbina un altro server",
-    "dialogText": "Crea un token monouso, poi incollalo sull'altro server in Impostazioni > Ambienti > Aggiungi ambiente > Un altro server Ervisio.",
+    "dialogText": "Crea un token monouso, poi incollalo sull'altro server in Impostazioni > Ambienti > Aggiungi ambiente > Un altro server Ervisio Console.",
     "user": "Esegui le chiamate come questo utente",
     "userHint": "Ogni chiamata dell'altro server viene eseguita su questa macchina come questo utente Linux, con i suoi permessi e con le regole di questo server. Non ottiene mai diritti di amministratore.",
     "securityNote": "Chi possiede l'abbinamento può fare su questa macchina ciò che {user} può fare con i plugin installati qui, per esempio gestire Docker. Abbina solo server che controlli. Puoi revocarlo in qualsiasi momento.",

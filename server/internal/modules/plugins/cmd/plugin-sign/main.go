@@ -1,4 +1,4 @@
-// Command plugin-sign signs an Ervisio plugin folder.
+// Command plugin-sign signs an Ervisio Console plugin folder.
 //
 //	plugin-sign -genkey key.pem            create a new ed25519 key (prints the public key to embed)
 //	plugin-sign -key key.pem <folder>      hash every file into manifest.json "files" and write manifest.sig

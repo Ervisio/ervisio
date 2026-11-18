@@ -95,7 +95,7 @@ func (f *fakeGitHub) publish(v string, sk ed25519.PrivateKey, mutate func(files 
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	rel := Release{Tag: "v" + v, Name: "Ervisio " + v, Body: "## Changes\n- things", PublishedAt: time.Unix(1700000000, 0).UTC()}
+	rel := Release{Tag: "v" + v, Name: "Ervisio Console " + v, Body: "## Changes\n- things", PublishedAt: time.Unix(1700000000, 0).UTC()}
 	for name, b := range files {
 		f.files[name] = b
 		rel.Assets = append(rel.Assets, Asset{Name: name, Size: int64(len(b)), URL: f.srv.URL + "/dl/" + name})

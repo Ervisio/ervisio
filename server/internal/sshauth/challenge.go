@@ -15,7 +15,7 @@ import (
 )
 
 // Prefix starts every signed message (domain separation: a signature made
-// for Ervisio can never be a valid SSH user-auth or SSHSIG signature,
+// for Ervisio Console can never be a valid SSH user-auth or SSHSIG signature,
 // whose first bytes are a length or "SSHSIG").
 const Prefix = "ervisio-ssh-auth-v1"
 
